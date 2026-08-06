@@ -18,12 +18,18 @@ This skill enables automated, safe version control operations for the **Enlogada
 - `scripts/Create-Checkpoint.ps1`: Creates a git snapshot & pushes to GitHub.
 - `scripts/Rollback-Checkpoint.ps1`: Reverts workspace to a previous checkpoint.
 - `scripts/Sync-GitHub.ps1`: Syncs local git state with GitHub remote.
+- `scripts/Pull-Latest.ps1`: Checks for collaborator updates on GitHub and pulls them automatically.
 
 ## Usage Guide
 
 To create a safety checkpoint before making code changes:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .agents/skills/version_control_agent/scripts/Create-Checkpoint.ps1 -Message "Pre-overhaul snapshot"
+```
+
+To pull the latest updates pushed by collaborators on GitHub:
+```powershell
+powershell -ExecutionPolicy Bypass -File .agents/skills/version_control_agent/scripts/Pull-Latest.ps1
 ```
 
 To rollback to the latest working checkpoint:
