@@ -3,10 +3,14 @@ const db = require('../config/database');
 class UserRepository {
   async findByEmail(email) {
     const queryText = `
-      SELECT u.*, COALESCE(ARRAY_AGG(r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles
+      SELECT u.*, 
+             COALESCE(ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles,
+             COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}') as permissions
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = TRUE
       LEFT JOIN roles r ON ur.role_id = r.id
+      LEFT JOIN role_permissions rp ON r.id = rp.role_id
+      LEFT JOIN permissions p ON rp.permission_id = p.id
       WHERE u.email = $1
       GROUP BY u.id
     `;
@@ -17,10 +21,13 @@ class UserRepository {
   async findById(id) {
     const queryText = `
       SELECT u.id, u.first_name, u.last_name, u.email, u.contact_number, u.status, u.created_at, 
-             COALESCE(ARRAY_AGG(r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles
+             COALESCE(ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles,
+             COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}') as permissions
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = TRUE
       LEFT JOIN roles r ON ur.role_id = r.id
+      LEFT JOIN role_permissions rp ON r.id = rp.role_id
+      LEFT JOIN permissions p ON rp.permission_id = p.id
       WHERE u.id = $1
       GROUP BY u.id
     `;

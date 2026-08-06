@@ -67,8 +67,19 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const hasPermission = (permissionName) => {
+    if (!user) return false;
+    if (user.roles?.includes('SuperAdmin') || user.roles?.includes('Admin')) return true;
+    return (user.permissions || []).includes(permissionName);
+  };
+
+  const hasRole = (...roleNames) => {
+    if (!user || !user.roles) return false;
+    return user.roles.some(r => roleNames.includes(r));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, hasPermission, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

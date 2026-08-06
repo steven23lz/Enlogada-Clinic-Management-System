@@ -44,7 +44,36 @@ const authorizeRoles = (...allowedRoles) => {
   };
 };
 
+const authorizePermissions = (...requiredPermissions) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Access forbidden.'
+      });
+    }
+
+    // SuperAdmin or Admin bypass permission checks
+    if (req.user.roles && (req.user.roles.includes('SuperAdmin') || req.user.roles.includes('Admin'))) {
+      return next();
+    }
+
+    const userPermissions = req.user.permissions || [];
+    const hasPermission = requiredPermissions.every((perm) => userPermissions.includes(perm));
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        status: 'error',
+        message: `Access forbidden. Required permissions: ${requiredPermissions.join(', ')}`
+      });
+    }
+
+    next();
+  };
+};
+
 module.exports = {
   verifyToken,
-  authorizeRoles
+  authorizeRoles,
+  authorizePermissions
 };

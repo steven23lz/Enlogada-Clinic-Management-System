@@ -51,11 +51,13 @@ class AuthService {
 
     // Filter out null values in array_agg if user has no role or is newly created
     const cleanRoles = (user.roles || []).filter(role => role !== null);
+    const cleanPermissions = (user.permissions || []).filter(p => p !== null);
 
     // 3. Generate JWT Token
     const payload = {
       userId: user.id,
-      roles: cleanRoles
+      roles: cleanRoles,
+      permissions: cleanPermissions
     };
 
     const token = jwt.sign(payload, env.JWT_SECRET, {
@@ -70,7 +72,8 @@ class AuthService {
         lastName: user.last_name,
         email: user.email,
         contactNumber: user.contact_number,
-        roles: cleanRoles
+        roles: cleanRoles,
+        permissions: cleanPermissions
       }
     };
   }
@@ -85,13 +88,15 @@ class AuthService {
     
     // Filter out null from array_agg
     const cleanRoles = (user.roles || []).filter(role => role !== null);
+    const cleanPermissions = (user.permissions || []).filter(p => p !== null);
     return {
       id: user.id,
       firstName: user.first_name,
       lastName: user.last_name,
       email: user.email,
       contactNumber: user.contact_number,
-      roles: cleanRoles
+      roles: cleanRoles,
+      permissions: cleanPermissions
     };
   }
 }
