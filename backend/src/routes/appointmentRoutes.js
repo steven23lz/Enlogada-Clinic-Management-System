@@ -1,0 +1,23 @@
+const express = require('express');
+const appointmentController = require('../controllers/appointmentController');
+const { verifyToken, authorizeRoles } = require('../middlewares/auth');
+
+const router = express.Router();
+
+// Client or Receptionist creates an appointment
+router.post('/', verifyToken, appointmentController.create);
+
+// Client views their own bookings
+router.get('/my-bookings', verifyToken, appointmentController.getMyBookings);
+
+// Receptionist verifies appointment by reference (QR scan or manual entry)
+router.get('/verify/:reference', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), appointmentController.verifyReference);
+
+// Client cancels their appointment
+router.put('/:id/cancel', verifyToken, appointmentController.cancel);
+
+// Staff updates appointment status (Confirmed, Completed, No Show)
+router.put('/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), appointmentController.updateStatus);
+router.patch('/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), appointmentController.updateStatus);
+
+module.exports = router;

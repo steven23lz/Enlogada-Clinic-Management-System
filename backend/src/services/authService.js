@@ -1,0 +1,99 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const userRepository = require('../repositories/userRepository');
+const env = require('../config/environment');
+
+class AuthService {
+  async registerClient({ firstName, lastName, email, password, contactNumber }) {
+    // 1. Check if user already exists
+    const existingUser = await userRepository.findByEmail(email);
+    if (existingUser) {
+      const error = new Error('Email is already registered');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 2. Hash password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    // 3. Save user to database
+    const user = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
+
+    // 4. Assign default 'Client' role
+    const clientRoleId = await userRepository.findRoleIdByName('Client');
+    if (clientRoleId) {
+      await userRepository.assignRoleToUser(user.id, clientRoleId);
+    }
+
+    return {
+      ...user,
+      roles: ['Client']
+    };
+  }
+
+  async login({ email, password }) {
+    // 1. Find user by email
+    const user = await userRepository.findByEmail(email);
+    if (!user || !user.status) {
+      const error = new Error('Invalid email or password');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    // 2. Check password match
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) {
+      const error = new Error('Invalid email or password');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    // Filter out null values in array_agg if user has no role or is newly created
+    const cleanRoles = (user.roles || []).filter(role => role !== null);
+
+    // 3. Generate JWT Token
+    const payload = {
+      userId: user.id,
+      roles: cleanRoles
+    };
+
+    const token = jwt.sign(payload, env.JWT_SECRET, {
+      expiresIn: env.JWT_EXPIRES_IN
+    });
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        email: user.email,
+        contactNumber: user.contact_number,
+        roles: cleanRoles
+      }
+    };
+  }
+
+  async getUserProfile(userId) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      const error = new Error('User not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    
+    // Filter out null from array_agg
+    const cleanRoles = (user.roles || []).filter(role => role !== null);
+    return {
+      id: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      email: user.email,
+      contactNumber: user.contact_number,
+      roles: cleanRoles
+    };
+  }
+}
+
+module.exports = new AuthService();

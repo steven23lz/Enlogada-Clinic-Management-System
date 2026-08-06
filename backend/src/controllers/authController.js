@@ -1,0 +1,73 @@
+const authService = require('../services/authService');
+
+class AuthController {
+  async register(req, res, next) {
+    try {
+      const { firstName, lastName, email, password, contactNumber } = req.body;
+
+      // Simple validations
+      if (!firstName || !lastName || !email || !password) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'First name, last name, email, and password are required fields.'
+        });
+      }
+
+      const user = await authService.registerClient({
+        firstName,
+        lastName,
+        email,
+        password,
+        contactNumber
+      });
+
+      return res.status(201).json({
+        status: 'success',
+        message: 'Registration successful.',
+        data: { user }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async login(req, res, next) {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Email and password are required fields.'
+        });
+      }
+
+      const result = await authService.login({ email, password });
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Login successful.',
+        data: result
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getProfile(req, res, next) {
+    try {
+      // req.user is set by auth middleware
+      const userId = req.user.userId;
+      const user = await authService.getUserProfile(userId);
+
+      return res.status(200).json({
+        status: 'success',
+        data: { user }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+}
+
+module.exports = new AuthController();

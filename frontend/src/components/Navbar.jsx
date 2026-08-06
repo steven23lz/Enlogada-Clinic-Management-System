@@ -1,0 +1,55 @@
+import React from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import Logo from './Logo';
+import { Button } from './ui/button';
+import { LogOut, User } from 'lucide-react';
+
+const Navbar = () => {
+  const { user, logout } = useAuth();
+
+  return (
+    <header className="w-full bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+      {/* Clinic Identity (Logo + Name) */}
+      <div className="flex items-center space-x-3">
+        <Logo className="w-11 h-11" />
+        <div className="flex flex-col">
+          <span className="font-bold text-lg leading-tight tracking-wider text-dark-slate">ENLOGADA</span>
+          <span className="text-[10px] text-gray-500 font-medium tracking-wide uppercase">Ultrasound & Diagnostic Clinic</span>
+        </div>
+      </div>
+
+      {/* Navigation and User Actions */}
+      <div className="flex items-center space-x-8">
+        <nav className="flex items-center space-x-6">
+          <span className="text-[#769046] font-semibold text-sm cursor-pointer border-b-2 border-[#769046] pb-1">
+            Dashboard
+          </span>
+        </nav>
+
+        {user && (
+          <div className="flex items-center space-x-4">
+            {/* User Badge */}
+            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-100 rounded-full px-4 py-2 text-sm text-gray-700 font-medium shadow-sm">
+              <div className="w-6 h-6 bg-primary-navy/15 rounded-full flex items-center justify-center text-primary-navy">
+                <User className="w-3.5 h-3.5" />
+              </div>
+              <span>{user.firstName} {user.lastName}</span>
+            </div>
+
+            {/* Log Off Button */}
+            <Button
+              variant="ghost"
+              onClick={logout}
+              className="text-red-500 hover:text-red-600 hover:bg-red-50/50 flex items-center space-x-2 font-medium text-sm transition-colors rounded-full"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Log Off</span>
+            </Button>
+          </div>
+        )}
+      </div>
+    </header>
+  );
+};
+
+export default Navbar;
