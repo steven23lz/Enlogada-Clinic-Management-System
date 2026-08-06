@@ -68,6 +68,28 @@ class AuthController {
       next(err);
     }
   }
+
+  async googleLogin(req, res, next) {
+    try {
+      const { idToken } = req.body;
+      if (!idToken) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Google idToken is required.'
+        });
+      }
+
+      const result = await authService.googleLogin(idToken);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Google login successful.',
+        data: result
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new AuthController();
