@@ -10,6 +10,7 @@ import ReceptionistDashboard from './pages/ReceptionistDashboard';
 import CashierDashboard from './pages/CashierDashboard';
 import DiagnosticDashboard from './pages/DiagnosticDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import ServicesCatalog from './pages/ServicesCatalog';
 
 const MainApp = () => {
   const { user, loading } = useAuth();
@@ -56,6 +57,7 @@ const MainApp = () => {
       return <Home onNavigate={handleNavigate} />;
     }
 
+    if (activeNav === 'services-cat') return <ServicesCatalog activeNav={activeNav} onSelectNav={setActiveNav} />;
     if (activeNav === 'reception-ops') return <ReceptionistDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
     if (activeNav === 'cashier-ops') return <CashierDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
     if (activeNav === 'lab-ops' || activeNav === 'ultrasound-ops' || activeNav === 'xray-ops') {

@@ -1,12 +1,13 @@
 const db = require('../config/database');
 
 class TestRepository {
-  async findAllTests() {
+  async findAllTests(includeInactive = false) {
+    const whereClause = includeInactive ? '' : 'WHERE t.is_active = TRUE';
     const queryText = `
       SELECT t.*, tc.name as category_name
       FROM tests t
       JOIN test_categories tc ON t.category_id = tc.id
-      WHERE t.is_active = TRUE
+      ${whereClause}
       ORDER BY tc.name, t.name
     `;
     const result = await db.query(queryText);

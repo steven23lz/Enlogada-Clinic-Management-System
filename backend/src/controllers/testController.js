@@ -3,7 +3,8 @@ const testService = require('../services/testService');
 class TestController {
   async getAll(req, res, next) {
     try {
-      const tests = await testService.getAllTests();
+      const includeInactive = req.query.includeInactive === 'true';
+      const tests = await testService.getAllTests(includeInactive);
       return res.status(200).json({
         status: 'success',
         data: { tests }

@@ -222,12 +222,14 @@ INSERT INTO patient_types (name) VALUES
 INSERT INTO test_categories (name) VALUES
 ('Laboratory'),
 ('Xray'),
-('Ultrasound');
+('Ultrasound'),
+('2D Echo'),
+('ECG');
 
 INSERT INTO hmo_providers (name) VALUES
 ('1CoopHealth');
 
--- Seed Diagnostic Tests
+-- Seed Diagnostic Tests (Human Patients Only)
 INSERT INTO tests (category_id, name, price) VALUES
 -- Laboratory Tests
 (1, 'Complete Blood Count (CBC)', 350.00),
@@ -243,4 +245,9 @@ INSERT INTO tests (category_id, name, price) VALUES
 (3, 'Pelvic Ultrasound', 1200.00),
 (3, 'Abdominal Ultrasound', 1500.00),
 (3, 'Thyroid Ultrasound', 1000.00),
-(3, 'Breast Ultrasound', 1200.00);
+(3, 'Breast Ultrasound', 1200.00),
+-- 2D Echo Tests
+(4, 'Plain 2D Echo with Doppler', 2580.00),
+(4, 'Pediatric 2D Echo', 3080.00),
+-- ECG Tests
+(5, '12 Lead ECG', 480.00);

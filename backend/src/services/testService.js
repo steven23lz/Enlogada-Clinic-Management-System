@@ -1,8 +1,8 @@
 const testRepository = require('../repositories/testRepository');
 
 class TestService {
-  async getAllTests() {
-    return await testRepository.findAllTests();
+  async getAllTests(includeInactive = false) {
+    return await testRepository.findAllTests(includeInactive);
   }
 
   async getTestById(id) {

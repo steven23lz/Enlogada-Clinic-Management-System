@@ -4,10 +4,10 @@ const { verifyToken, authorizeRoles } = require('../middlewares/auth');
 
 const router = express.Router();
 
-// Public test catalog (logged-in users can browse)
-router.get('/', verifyToken, testController.getAll);
-router.get('/categories', verifyToken, testController.getCategories);
-router.get('/:id', verifyToken, testController.getById);
+// Public test catalog (browsable by all website visitors and patients)
+router.get('/', testController.getAll);
+router.get('/categories', testController.getCategories);
+router.get('/:id', testController.getById);
 
 // SuperAdmin manages tests
 router.post('/', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), testController.create);
