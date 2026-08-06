@@ -1,9 +1,12 @@
 param (
-    [string]$Message = "Automated System Checkpoint"
+    [string]$Message = "Automated System Checkpoint",
+    [string]$TagName = ""
 )
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$tagName = "checkpoint-$timestamp"
+if (-not $TagName) {
+    $TagName = "checkpoint-$timestamp"
+}
 
 Write-Host "Creating Version Control Checkpoint: $tagName..." -ForegroundColor Green
 

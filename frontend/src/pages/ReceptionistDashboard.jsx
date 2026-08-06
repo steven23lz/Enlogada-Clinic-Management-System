@@ -18,13 +18,13 @@ import {
   FilePlus, 
   UserPlus, 
   QrCode, 
-  Volume2, 
-  Calendar, 
+  PlusCircle, 
   Clock, 
-  ArrowRight,
-  ShieldCheck,
-  CheckCircle2,
-  AlertCircle
+  Volume2, 
+  Printer,
+  AlertCircle, 
+  CheckCircle,
+  Users
 } from 'lucide-react';
 
 const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => {
@@ -436,6 +436,13 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
                                 className="p-1 text-gray-400 hover:text-[#769046] border-0 bg-transparent cursor-pointer"
                               >
                                 <Volume2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => window.print()}
+                                title="Print Queue Ticket Slip"
+                                className="p-1 text-gray-400 hover:text-indigo-600 border-0 bg-transparent cursor-pointer"
+                              >
+                                <Printer className="w-4 h-4" />
                               </button>
                             </div>
                           </TableCell>

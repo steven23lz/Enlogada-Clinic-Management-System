@@ -360,23 +360,54 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
                       </div>
                     </div>
 
+                    {billDetails?.patientType === 'HMO' && (
+                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
+                        <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span><strong>HMO Partner Accredited</strong> — Full coverage approved (₱0.00 Out of Pocket).</span>
+                      </div>
+                    )}
+
                     {paymentMethod === 'Cash' ? (
-                      <div className="grid grid-cols-2 gap-3 bg-white p-3 rounded-xl border border-gray-200">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-gray-500 uppercase">Cash Tendered (₱)</label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            value={amountTendered}
-                            onChange={e => setAmountTendered(e.target.value)}
-                            className="text-sm font-bold"
-                            required
-                          />
+                      <div className="space-y-2 bg-white p-3 rounded-xl border border-gray-200">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Cash Tendered (₱)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={amountTendered}
+                              onChange={e => setAmountTendered(e.target.value)}
+                              className="text-sm font-bold"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase block">Change Due</span>
+                            <span className="text-base font-extrabold text-emerald-600">₱{calculateChange().toFixed(2)}</span>
+                          </div>
                         </div>
-                        <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase block">Change Due</span>
-                          <span className="text-base font-extrabold text-emerald-600">₱{calculateChange().toFixed(2)}</span>
+
+                        {/* Quick Cash Presets */}
+                        <div className="flex items-center space-x-1.5 pt-1">
+                          <span className="text-[10px] font-extrabold text-slate-400 uppercase mr-1">Presets:</span>
+                          {['100', '500', '1000'].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setAmountTendered(val)}
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-[#769046] hover:text-white rounded-md text-[10px] font-bold text-slate-700 transition-all border border-slate-200 cursor-pointer"
+                            >
+                              ₱{val}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setAmountTendered((billDetails?.totalAmount ?? 0).toString())}
+                            className="px-2 py-0.5 bg-[#769046]/10 text-[#769046] hover:bg-[#769046] hover:text-white rounded-md text-[10px] font-bold transition-all border border-[#769046]/30 cursor-pointer"
+                          >
+                            Exact
+                          </button>
                         </div>
                       </div>
                     ) : (

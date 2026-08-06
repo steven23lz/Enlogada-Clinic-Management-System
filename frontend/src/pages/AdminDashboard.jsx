@@ -24,6 +24,16 @@ const AdminDashboard = ({ activeNav = 'dashboard', onSelectNav }) => {
   const [newPrice, setNewPrice] = useState('');
   const [showPriceModal, setShowPriceModal] = useState(false);
 
+  // Catalog Filter State
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [catalogCategoryFilter, setCatalogCategoryFilter] = useState('All');
+
+  const filteredCatalog = testCatalog.filter(test => {
+    const matchesSearch = test.name.toLowerCase().includes(catalogSearch.toLowerCase());
+    const matchesCategory = catalogCategoryFilter === 'All' || test.category_name?.toLowerCase() === catalogCategoryFilter.toLowerCase();
+    return matchesSearch && matchesCategory;
+  });
+
   // Add Service State
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
   const [newServiceData, setNewServiceData] = useState({
@@ -214,10 +224,33 @@ const AdminDashboard = ({ activeNav = 'dashboard', onSelectNav }) => {
 
         {/* Services Catalog & Pricing Table */}
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-gray-100 py-4 px-6">
+          <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <CardTitle className="text-base font-bold text-slate-900 m-0">
               Diagnostic Services Catalog & Price Management
             </CardTitle>
+            <div className="flex items-center space-x-3 w-full md:w-auto">
+              <div className="relative flex-1 md:w-56">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search examination..."
+                  value={catalogSearch}
+                  onChange={e => setCatalogSearch(e.target.value)}
+                  className="pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus:outline-none focus:ring-1 focus:ring-[#769046]"
+                />
+              </div>
+              <Select value={catalogCategoryFilter} onValueChange={setCatalogCategoryFilter}>
+                <SelectTrigger className="w-32 text-xs rounded-xl">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Categories</SelectItem>
+                  <SelectItem value="Laboratory">Laboratory</SelectItem>
+                  <SelectItem value="Ultrasound">Ultrasound</SelectItem>
+                  <SelectItem value="Xray">X-Ray</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -231,8 +264,8 @@ const AdminDashboard = ({ activeNav = 'dashboard', onSelectNav }) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {testCatalog.length > 0 ? (
-                  testCatalog.map(test => (
+                {filteredCatalog.length > 0 ? (
+                  filteredCatalog.map(test => (
                     <TableRow key={test.id} className="hover:bg-gray-50/50 transition-colors">
                       <TableCell className="py-3 font-mono text-xs text-gray-400">#{test.id}</TableCell>
                       <TableCell className="py-3 font-bold text-xs text-slate-900">{test.name}</TableCell>
