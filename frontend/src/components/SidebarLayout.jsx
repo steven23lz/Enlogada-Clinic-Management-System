@@ -21,13 +21,15 @@ import {
   ChevronDown,
   Activity,
   CheckCircle2,
-  X
+  X,
+  Menu
 } from 'lucide-react';
 
 const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectNav, children }) => {
   const { user, logout } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const userRoles = user?.roles || [];
   const isSuperOrAdmin = userRoles.includes('SuperAdmin') || userRoles.includes('Admin');
@@ -54,84 +56,87 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
     { id: 'xray-ops', label: 'X-Ray Ops', icon: Scan, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
   ];
 
-  // Dummy notifications list for realistic UI
   const notifications = [
     { id: 1, title: 'New Appointment Booked', desc: 'Patient Juan Dela Cruz scheduled Ultrasound for tomorrow', time: '10m ago', type: 'info' },
     { id: 2, title: 'Payment Confirmed', desc: 'Receipt #OR-8921 processed by Cashier', time: '25m ago', type: 'success' },
     { id: 3, title: 'Result Ready for Release', desc: 'Complete Blood Count ready for PT-104', time: '1h ago', type: 'warning' },
   ];
 
+  const renderNavContent = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl p-3 shadow-sm flex items-center space-x-3 border border-gray-100 transition-all hover:shadow-md">
+        <Logo className="w-9 h-9 flex-shrink-0" />
+        <div className="flex flex-col overflow-hidden">
+          <span className="font-bold text-xs leading-tight tracking-wide text-slate-900 truncate">Enlogada Ultrasound</span>
+          <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider truncate">& Diagnostic Clinic</span>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-3">Main Navigation</span>
+        <nav className="space-y-1 pt-1">
+          {mainNavItems.map(item => {
+            const Icon = item.icon;
+            const isActive = activeNav === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  onSelectNav && onSelectNav(item.id);
+                  setMobileOpen(false);
+                }}
+                className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border-0 cursor-pointer ${
+                  isActive 
+                    ? 'bg-[#769046] text-white shadow-md shadow-[#769046]/20 font-bold' 
+                    : 'text-gray-300 hover:bg-slate-800/80 hover:text-white'
+                }`}
+              >
+                <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      <div className="space-y-1 pt-2">
+        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-3">Clinical Operations</span>
+        <nav className="space-y-1 pt-1">
+          {opsNavItems
+            .filter(item => !item.roleRequired || item.roleRequired.some(r => userRoles.includes(r)))
+            .map(item => {
+              const Icon = item.icon;
+              const isActive = activeNav === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onSelectNav && onSelectNav(item.id);
+                    setMobileOpen(false);
+                  }}
+                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border-0 cursor-pointer ${
+                    isActive 
+                      ? 'bg-[#769046] text-white shadow-md shadow-[#769046]/20 font-bold' 
+                      : 'text-gray-300 hover:bg-slate-800/80 hover:text-white'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+        </nav>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-[#f8f9fa] flex text-slate-800 font-sans">
       
-      {/* Dark Left Sidebar */}
-      <aside className="w-64 bg-[#192534] text-gray-300 flex flex-col justify-between p-4 shadow-xl z-20 flex-shrink-0">
-        
-        <div className="space-y-6">
-          {/* Top Branding Card */}
-          <div className="bg-white rounded-xl p-3 shadow-sm flex items-center space-x-3 border border-gray-100 transition-all hover:shadow-md">
-            <Logo className="w-9 h-9 flex-shrink-0" />
-            <div className="flex flex-col overflow-hidden">
-              <span className="font-bold text-xs leading-tight tracking-wide text-slate-900 truncate">Enlogada Ultrasound</span>
-              <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider truncate">& Diagnostic Clinic</span>
-            </div>
-          </div>
-
-          {/* MAIN Navigation Section */}
-          <div className="space-y-1">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-3">Main Navigation</span>
-            <nav className="space-y-1 pt-1">
-              {mainNavItems.map(item => {
-                const Icon = item.icon;
-                const isActive = activeNav === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => onSelectNav && onSelectNav(item.id)}
-                    className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border-0 cursor-pointer ${
-                      isActive 
-                        ? 'bg-[#769046] text-white shadow-md shadow-[#769046]/20 font-bold' 
-                        : 'text-gray-300 hover:bg-slate-800/80 hover:text-white'
-                    }`}
-                  >
-                    <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* CLINICAL OPERATIONS Navigation Section */}
-          <div className="space-y-1 pt-2">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-3">Clinical Operations</span>
-            <nav className="space-y-1 pt-1">
-              {opsNavItems
-                .filter(item => !item.roleRequired || item.roleRequired.some(r => userRoles.includes(r)))
-                .map(item => {
-                  const Icon = item.icon;
-                  const isActive = activeNav === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => onSelectNav && onSelectNav(item.id)}
-                      className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border-0 cursor-pointer ${
-                        isActive 
-                          ? 'bg-[#769046] text-white shadow-md shadow-[#769046]/20 font-bold' 
-                          : 'text-gray-300 hover:bg-slate-800/80 hover:text-white'
-                      }`}
-                    >
-                      <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-            </nav>
-          </div>
-        </div>
-
-        {/* Bottom User Profile Card */}
-        <div className="bg-slate-800/90 rounded-xl p-3 flex items-center justify-between border border-slate-700/60 shadow-inner">
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex w-64 bg-[#192534] text-gray-300 flex-col justify-between p-4 shadow-xl z-20 flex-shrink-0">
+        {renderNavContent()}
+        <div className="bg-slate-800/90 rounded-xl p-3 flex items-center justify-between border border-slate-700/60 shadow-inner mt-4">
           <div className="flex items-center space-x-2.5 min-w-0">
             <div className="w-8 h-8 rounded-full bg-[#769046] text-white flex items-center justify-center font-bold text-xs shadow-xs flex-shrink-0">
               {user?.firstName ? user.firstName.charAt(0) : 'U'}
@@ -142,19 +147,49 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
             </div>
           </div>
         </div>
-
       </aside>
+
+      {/* Mobile Drawer Overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={() => setMobileOpen(false)} />
+          <div className="relative flex-1 max-w-xs w-full bg-[#192534] text-gray-300 p-4 flex flex-col justify-between z-10 shadow-2xl">
+            <button 
+              onClick={() => setMobileOpen(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-white p-1"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            {renderNavContent()}
+            <div className="bg-slate-800/90 rounded-xl p-3 flex items-center justify-between border border-slate-700/60 shadow-inner mt-4">
+              <div className="flex items-center space-x-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-[#769046] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                  {user?.firstName ? user.firstName.charAt(0) : 'U'}
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold text-white truncate">{user?.firstName} {user?.lastName}</span>
+                  <span className="text-[10px] text-gray-400 truncate">{userRoles.join(', ')}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        
-        {/* Top Header Bar */}
-        <header className="bg-white border-b border-gray-100 px-8 py-3.5 flex items-center justify-between shadow-2xs sticky top-0 z-30">
+        <header className="bg-white border-b border-gray-100 px-4 lg:px-8 py-3.5 flex items-center justify-between shadow-2xs sticky top-0 z-30">
           <div className="flex items-center space-x-3">
+            <button 
+              onClick={() => setMobileOpen(true)}
+              className="lg:hidden text-slate-600 hover:text-slate-900 p-1.5 rounded-lg border border-gray-200"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
             <div className="w-8 h-8 rounded-lg bg-[#769046]/10 text-[#769046] flex items-center justify-center">
               <Activity className="w-4.5 h-4.5" />
             </div>
-            <h1 className="text-lg font-bold text-slate-900 m-0 tracking-tight">{title}</h1>
+            <h1 className="text-base lg:text-lg font-bold text-slate-900 m-0 tracking-tight">{title}</h1>
           </div>
 
           <div className="flex items-center space-x-4">

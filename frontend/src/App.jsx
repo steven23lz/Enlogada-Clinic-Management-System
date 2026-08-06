@@ -51,7 +51,7 @@ const MainApp = () => {
     if (currentTab === 'services') {
       return <ServicesPage onNavigate={handleNavigate} />;
     }
-    if (currentTab === 'about' || currentTab === 'home') {
+    if (currentTab === 'about') {
       return <Home onNavigate={handleNavigate} />;
     }
 

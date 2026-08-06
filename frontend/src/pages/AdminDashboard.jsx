@@ -7,7 +7,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Calendar, DollarSign, Clock, Users, TrendingUp, UserCheck, Shield, FileText, PlusCircle, Edit, CheckCircle2 } from 'lucide-react';
+import { Calendar, DollarSign, Clock, Users, TrendingUp, UserCheck, Shield, FileText, PlusCircle, Edit, CheckCircle2, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../config/api';
 
