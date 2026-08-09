@@ -32,7 +32,8 @@ import {
   Printer,
   Sparkles,
   XCircle,
-  CalendarClock
+  CalendarClock,
+  Pencil
 } from 'lucide-react';
 
 const ClientDashboard = () => {
@@ -62,6 +63,21 @@ const ClientDashboard = () => {
   });
   const [isAddingProfile, setIsAddingProfile] = useState(false);
   const [addProfileError, setAddProfileError] = useState('');
+
+  // Edit Profile Form (Module 4: Patient Management)
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editProfileData, setEditProfileData] = useState({
+    firstName: '',
+    lastName: '',
+    birthdate: '',
+    sex: 'Male',
+    address: '',
+    contactNumber: '',
+    emergencyContact: '',
+    patientTypeId: ''
+  });
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editProfileError, setEditProfileError] = useState('');
 
   // Appointment Booking Wizard State
   const [showBooking, setShowBooking] = useState(false);
@@ -225,6 +241,55 @@ const ClientDashboard = () => {
       setAddProfileError(err.response?.data?.message || 'Failed to create patient profile');
     } finally {
       setIsAddingProfile(false);
+    }
+  };
+
+  // pg returns birthdate as a full ISO instant string (see Module 3 report for why) — convert
+  // to the local calendar date an <input type="date"> expects, without a UTC day-shift.
+  const toDateInputValue = (value) => {
+    if (!value) return '';
+    const d = new Date(value);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const handleOpenEditProfile = () => {
+    if (!selectedProfile) return;
+    setEditProfileError('');
+    setEditProfileData({
+      firstName: selectedProfile.first_name || '',
+      lastName: selectedProfile.last_name || '',
+      birthdate: toDateInputValue(selectedProfile.birthdate),
+      sex: selectedProfile.sex || 'Male',
+      address: selectedProfile.address || '',
+      contactNumber: selectedProfile.contact_number || '',
+      emergencyContact: selectedProfile.emergency_contact || '',
+      patientTypeId: selectedProfile.patient_type_id ? selectedProfile.patient_type_id.toString() : ''
+    });
+    setShowEditProfile(true);
+  };
+
+  const handleEditProfile = async (e) => {
+    e.preventDefault();
+    setEditProfileError('');
+
+    const validationError = validatePatientProfile(editProfileData);
+    if (validationError) {
+      setEditProfileError(validationError);
+      return;
+    }
+
+    setIsEditingProfile(true);
+    try {
+      await api.put(`/patients/${selectedProfile.id}`, editProfileData);
+      setShowEditProfile(false);
+      await fetchProfiles();
+    } catch (err) {
+      setEditProfileError(err.response?.data?.message || 'Failed to update patient profile');
+    } finally {
+      setIsEditingProfile(false);
     }
   };
 
@@ -419,7 +484,7 @@ const ClientDashboard = () => {
               </DialogHeader>
               <form onSubmit={handleAddProfile} className="space-y-4 pt-2">
                 {addProfileError && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{addProfileError}</span>
                   </div>
@@ -531,6 +596,135 @@ const ClientDashboard = () => {
                   <Button type="button" variant="outline" onClick={() => setShowAddProfile(false)} disabled={isAddingProfile}>Cancel</Button>
                   <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white" disabled={isAddingProfile}>
                     {isAddingProfile ? 'Saving...' : 'Save Profile'}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Profile Dialog (Module 4: Patient Management) */}
+          <Dialog open={showEditProfile} onOpenChange={(open) => { setShowEditProfile(open); if (!open) setEditProfileError(''); }}>
+            <DialogContent className="max-w-lg rounded-2xl">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-bold text-slate-900">Edit Patient Profile</DialogTitle>
+                <DialogDescription className="text-xs">
+                  Update {selectedProfile?.first_name}'s details.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleEditProfile} className="space-y-4 pt-2">
+                {editProfileError && (
+                  <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{editProfileError}</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
+                    <Input
+                      placeholder="Juan"
+                      value={editProfileData.firstName}
+                      onChange={e => setEditProfileData({...editProfileData, firstName: e.target.value})}
+                      disabled={isEditingProfile}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
+                    <Input
+                      placeholder="Dela Cruz"
+                      value={editProfileData.lastName}
+                      onChange={e => setEditProfileData({...editProfileData, lastName: e.target.value})}
+                      disabled={isEditingProfile}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
+                    <Input
+                      type="date"
+                      value={editProfileData.birthdate}
+                      onChange={e => setEditProfileData({...editProfileData, birthdate: e.target.value})}
+                      disabled={isEditingProfile}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-600 uppercase">Sex <span className="text-rose-600">*</span></label>
+                    <Select
+                      value={editProfileData.sex}
+                      onValueChange={val => setEditProfileData({...editProfileData, sex: val})}
+                      disabled={isEditingProfile}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-600 uppercase">Contact Number</label>
+                    <Input
+                      placeholder="09171234567"
+                      value={editProfileData.contactNumber}
+                      onChange={e => setEditProfileData({...editProfileData, contactNumber: e.target.value})}
+                      disabled={isEditingProfile}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-600 uppercase">Patient Billing Category <span className="text-rose-600">*</span></label>
+                    <Select
+                      value={editProfileData.patientTypeId}
+                      onValueChange={val => setEditProfileData({...editProfileData, patientTypeId: val})}
+                      disabled={isEditingProfile}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {patientTypes.map(type => (
+                          <SelectItem key={type.id} value={type.id.toString()}>
+                            {type.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-600 uppercase">Address</label>
+                  <Input
+                    placeholder="Barangay, City, Province"
+                    value={editProfileData.address}
+                    onChange={e => setEditProfileData({...editProfileData, address: e.target.value})}
+                    disabled={isEditingProfile}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-600 uppercase">Emergency Contact</label>
+                  <Input
+                    placeholder="Name & Contact Number"
+                    value={editProfileData.emergencyContact}
+                    onChange={e => setEditProfileData({...editProfileData, emergencyContact: e.target.value})}
+                    disabled={isEditingProfile}
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+                  <Button type="button" variant="outline" onClick={() => setShowEditProfile(false)} disabled={isEditingProfile}>Cancel</Button>
+                  <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white" disabled={isEditingProfile}>
+                    {isEditingProfile ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
               </form>
@@ -981,11 +1175,20 @@ const ClientDashboard = () => {
           <div className="space-y-6">
             {selectedProfile && (
               <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-                <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
+                <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5 flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
                     <User className="w-4 h-4 text-[#769046]" />
                     <span>Patient Profile Summary</span>
                   </CardTitle>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleOpenEditProfile}
+                    aria-label="Edit patient profile"
+                    className="h-7 w-7 p-0 border-gray-200 text-gray-500 hover:text-[#769046] hover:border-[#769046] rounded-lg"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
                 </CardHeader>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex justify-between items-center text-xs border-b border-gray-50 pb-2">
