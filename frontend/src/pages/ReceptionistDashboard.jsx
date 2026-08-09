@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import api from '../config/api';
 import { validatePatientProfile } from '../validations/patientValidation';
+import QrScanner from '../components/QrScanner';
 import {
   Check,
   ClipboardList,
@@ -26,7 +27,9 @@ import {
   AlertCircle,
   CheckCircle,
   CheckCircle2,
-  Users
+  Users,
+  Camera,
+  Keyboard
 } from 'lucide-react';
 
 const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => {
@@ -43,6 +46,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
   const [verifyResult, setVerifyResult] = useState(null);
   const [verifyError, setVerifyError] = useState('');
   const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [scanMode, setScanMode] = useState(false);
 
   // Assign Tests Dialog State
   const [selectedVisitId, setSelectedVisitId] = useState(null);
@@ -104,19 +108,25 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
     fetchStaticData();
   }, [fetchActiveVisits, fetchStaticData]);
 
-  const handleVerifyReference = async (e) => {
-    e.preventDefault();
+  const handleVerifyReference = async (e, refOverride) => {
+    e?.preventDefault?.();
     setVerifyError('');
     setVerifyResult(null);
 
-    if (!searchRef) return;
+    const ref = refOverride ?? searchRef;
+    if (!ref) return;
 
     try {
-      const response = await api.get(`/appointments/verify/${searchRef}`);
+      const response = await api.get(`/appointments/verify/${ref}`);
       setVerifyResult(response.data.data.appointment);
     } catch (err) {
       setVerifyError(err.response?.data?.message || 'Appointment reference lookup failed.');
     }
+  };
+
+  const handleQrScan = (decodedText) => {
+    setSearchRef(decodedText);
+    handleVerifyReference(null, decodedText);
   };
 
   const handleCheckIn = async (visitId, appointmentId) => {
@@ -318,7 +328,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
           
           <div className="flex items-center space-x-3">
-            <Dialog open={showVerifyModal} onOpenChange={setShowVerifyModal}>
+            <Dialog open={showVerifyModal} onOpenChange={(open) => { setShowVerifyModal(open); if (!open) setScanMode(false); }}>
               <DialogTrigger asChild>
                 <Button className="bg-[#192534] hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center space-x-2 px-4 py-2.5 cursor-pointer">
                   <QrCode className="w-4 h-4" />
@@ -332,6 +342,23 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
                     Scan or enter the appointment reference code (e.g. <code>APPT-XXXXX</code>).
                   </DialogDescription>
                 </DialogHeader>
+
+                <button
+                  type="button"
+                  onClick={() => setScanMode(m => !m)}
+                  className="flex items-center space-x-1.5 text-[11px] font-bold text-[#769046] hover:text-[#657c3a] cursor-pointer"
+                >
+                  {scanMode ? <Keyboard className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
+                  <span>{scanMode ? 'Switch to manual entry' : 'Scan QR with camera'}</span>
+                </button>
+
+                {scanMode && (
+                  <QrScanner
+                    active={showVerifyModal && scanMode}
+                    onScan={handleQrScan}
+                    onError={setVerifyError}
+                  />
+                )}
 
                 <form onSubmit={handleVerifyReference} className="space-y-4 pt-2">
                   <div className="flex space-x-2">
