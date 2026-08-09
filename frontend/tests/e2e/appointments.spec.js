@@ -154,7 +154,25 @@ test.describe('Appointment booking/cancellation — browser flow', () => {
     const loginRes = await apiContext.post(`${API}/auth/login`, { data: { email: CLIENT_EMAIL, password: CLIENT_PASSWORD } });
     const token = (await loginRes.json()).data.token;
     const profilesRes = await apiContext.get(`${API}/patients/my-profiles`, { headers: { Authorization: `Bearer ${token}` } });
-    const patientId = (await profilesRes.json()).data.patients[0].id;
+    const existingPatients = (await profilesRes.json()).data.patients;
+    let patientId = existingPatients[0]?.id;
+    if (!patientId) {
+      // Seeded account may have zero patient profiles on a freshly reset database.
+      const createRes = await apiContext.post(`${API}/patients`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: {
+          patientTypeId: 3,
+          firstName: 'Elena',
+          lastName: 'Client',
+          birthdate: '1990-01-01',
+          sex: 'Female',
+          address: 'Test Address',
+          contactNumber: '09170000000',
+          emergencyContact: '09171111111',
+        },
+      });
+      patientId = (await createRes.json()).data.patient.id;
+    }
     const slot = await findAvailableSlot(apiContext, token);
     const bookRes = await apiContext.post(`${API}/appointments`, {
       headers: { Authorization: `Bearer ${token}` },
