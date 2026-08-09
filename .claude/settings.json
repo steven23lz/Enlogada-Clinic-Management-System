@@ -20,5 +20,14 @@
       "Bash(mv '/c/Dev/REAL Enlogada Clinic Management System/Enlogada-Clinic-Management-System/frontend/tmp_verify_slots.js' '/c/Dev/REAL Enlogada Clinic Management System/Enlogada-Clinic-Management-System/frontend/tmp_verify_slots.cjs')",
       "Bash(node tmp_verify_slots.cjs)"
     ]
+  },
+  "enabledPlugins": {
+    "engineering-skills@claude-code-skills": true,
+    "engineering-advanced-skills@claude-code-skills": true,
+    "a11y-audit@claude-code-skills": true,
+    "pw@claude-code-skills": true,
+    "security-guidance@claude-code-skills": true,
+    "write-a-skill@claude-code-skills": true,
+    "zero-hallucination-coder@claude-code-skills": true
   }
 }
