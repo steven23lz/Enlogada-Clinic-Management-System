@@ -27,6 +27,12 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+const NAV_TO_CATEGORY = {
+  'lab-ops': 'Laboratory',
+  'ultrasound-ops': 'Ultrasound',
+  'xray-ops': 'Xray'
+};
+
 const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const { user } = useAuth();
   const [pendingTests, setPendingTests] = useState([]);
@@ -66,10 +72,13 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   }, []);
 
   useEffect(() => {
-    if (user && user.roles) {
+    const navCategory = NAV_TO_CATEGORY[activeNav];
+    if (navCategory) {
+      setCategory(navCategory);
+    } else if (user && user.roles) {
       determineCategory(user.roles);
     }
-  }, [user, determineCategory]);
+  }, [activeNav, user, determineCategory]);
 
   useEffect(() => {
     if (category) {
@@ -141,7 +150,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const processingCount = pendingTests.filter(t => t.test_status === 'Processing').length;
 
   return (
-    <SidebarLayout title="Diagnostic Operations Worklist" activeNav={activeNav} onSelectNav={onSelectNav}>
+    <SidebarLayout title={`${category} Operations Worklist`} activeNav={activeNav} onSelectNav={onSelectNav}>
       <div className="space-y-6">
         
         {/* Department Modality Worklist Header Cards */}
@@ -185,25 +194,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
           </Card>
         </div>
 
-        {/* Modality Switcher & Search Bar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-          
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Modality Tab:</span>
-            <div className="flex bg-gray-100 p-1 rounded-xl text-xs">
-              {['Laboratory', 'Ultrasound', 'Xray'].map(mod => (
-                <button
-                  key={mod}
-                  onClick={() => setCategory(mod)}
-                  className={`px-3 py-1.5 rounded-lg border-0 font-bold cursor-pointer transition-all ${
-                    category === mod ? 'bg-[#769046] text-white shadow-sm' : 'text-gray-600 hover:text-slate-900'
-                  }`}
-                >
-                  {mod}
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* Search Bar */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-end gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
 
           <div className="relative w-full sm:w-64">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
