@@ -74,6 +74,11 @@ const ClientDashboard = () => {
   const [bookingSuccess, setBookingSuccess] = useState('');
   const [bookingError, setBookingError] = useState('');
 
+  // Live slot availability for the selected date
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [dayIsOpen, setDayIsOpen] = useState(true);
+
   const fetchProfiles = useCallback(async () => {
     try {
       const response = await api.get('/patients/my-profiles');
@@ -113,10 +118,46 @@ const ClientDashboard = () => {
     }
   }, []);
 
+  const fetchAvailability = useCallback(async (date) => {
+    setSlotsLoading(true);
+    try {
+      const response = await api.get('/appointments/availability', { params: { date } });
+      setAvailableSlots(response.data.data.slots || []);
+      setDayIsOpen(response.data.data.isOpen);
+    } catch (err) {
+      console.error('Failed to fetch availability:', err);
+      setAvailableSlots([]);
+      setDayIsOpen(true);
+    } finally {
+      setSlotsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchProfiles();
     fetchStaticData();
   }, [fetchProfiles, fetchStaticData]);
+
+  useEffect(() => {
+    if (bookingData.scheduledDate) {
+      fetchAvailability(bookingData.scheduledDate);
+    } else {
+      setAvailableSlots([]);
+      setDayIsOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingData.scheduledDate, fetchAvailability]);
+
+  // If the previously selected time is no longer in the fresh slot list, clear it
+  useEffect(() => {
+    if (bookingData.scheduledTime && availableSlots.length > 0) {
+      const stillAvailable = availableSlots.some(s => s.time === bookingData.scheduledTime && s.available);
+      if (!stillAvailable) {
+        setBookingData(prev => ({ ...prev, scheduledTime: '' }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableSlots]);
 
   useEffect(() => {
     if (selectedProfileId) {
@@ -220,6 +261,9 @@ const ClientDashboard = () => {
       }, 4000);
     } catch (err) {
       setBookingError(err.response?.data?.message || 'Failed to book appointment');
+      if (err.response?.status === 409 && bookingData.scheduledDate) {
+        fetchAvailability(bookingData.scheduledDate);
+      }
     }
   };
 
@@ -533,26 +577,50 @@ const ClientDashboard = () => {
 
                     {bookingStep === 1 && (
                       <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-600 uppercase">Date</label>
-                            <Input
-                              type="date"
-                              value={bookingData.scheduledDate}
-                              onChange={e => setBookingData({...bookingData, scheduledDate: e.target.value})}
-                              required
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-600 uppercase">Time</label>
-                            <Input
-                              type="time"
-                              value={bookingData.scheduledTime}
-                              onChange={e => setBookingData({...bookingData, scheduledTime: e.target.value})}
-                              required
-                            />
-                          </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-gray-600 uppercase">Date</label>
+                          <Input
+                            type="date"
+                            value={bookingData.scheduledDate}
+                            onChange={e => setBookingData({...bookingData, scheduledDate: e.target.value, scheduledTime: ''})}
+                            required
+                          />
                         </div>
+
+                        {bookingData.scheduledDate && (
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-600 uppercase">Available Time</label>
+                            {slotsLoading ? (
+                              <div className="text-xs text-gray-400 font-semibold py-2">Loading available times...</div>
+                            ) : !dayIsOpen ? (
+                              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 font-semibold">
+                                Clinic is closed on this date. Please choose another date.
+                              </div>
+                            ) : availableSlots.length === 0 ? (
+                              <div className="text-xs text-gray-400 font-semibold py-2">No time slots configured for this date.</div>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-0.5">
+                                {availableSlots.map(slot => (
+                                  <button
+                                    key={slot.time}
+                                    type="button"
+                                    disabled={!slot.available}
+                                    onClick={() => setBookingData({...bookingData, scheduledTime: slot.time})}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer transition-all ${
+                                      bookingData.scheduledTime === slot.time
+                                        ? 'bg-[#769046] text-white border-[#769046]'
+                                        : slot.available
+                                        ? 'bg-white text-slate-700 border-gray-200 hover:border-[#769046]'
+                                        : 'bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed line-through'
+                                    }`}
+                                  >
+                                    {slot.time}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-center">
