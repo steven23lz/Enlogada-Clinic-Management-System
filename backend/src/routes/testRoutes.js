@@ -17,6 +17,6 @@ router.patch('/:id/price', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), t
 
 // Receptionist/Admin assigns tests to a visit
 router.post('/visit-tests', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), testController.addTestsToVisit);
-router.get('/visit-tests/:visitId', verifyToken, testController.getVisitTests);
+router.get('/visit-tests/:visitId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), testController.getVisitTests);
 
 module.exports = router;

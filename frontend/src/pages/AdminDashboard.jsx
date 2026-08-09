@@ -264,7 +264,11 @@ const AdminDashboard = ({ activeNav = 'dashboard', onSelectNav }) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredCatalog.length > 0 ? (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading services catalog…</TableCell>
+                  </TableRow>
+                ) : filteredCatalog.length > 0 ? (
                   filteredCatalog.map(test => (
                     <TableRow key={test.id} className="hover:bg-gray-50/50 transition-colors">
                       <TableCell className="py-3 font-mono text-xs text-gray-400">#{test.id}</TableCell>

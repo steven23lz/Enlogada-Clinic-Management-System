@@ -98,7 +98,11 @@ const Login = ({ onToggleView, onNavigate }) => {
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center">
                       <label className="text-xs font-semibold text-gray-700">Password</label>
-                      <button type="button" className="text-[11px] font-semibold text-[#769046] hover:underline bg-transparent border-0 cursor-pointer">
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('forgot-password')}
+                        className="text-[11px] font-semibold text-[#769046] hover:underline bg-transparent border-0 cursor-pointer"
+                      >
                         Forgot password?
                       </button>
                     </div>

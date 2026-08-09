@@ -1,4 +1,5 @@
 const resultService = require('../services/resultService');
+const patientService = require('../services/patientService');
 
 class ResultController {
   async getPending(req, res, next) {
@@ -80,6 +81,18 @@ class ResultController {
   async getPatientHistory(req, res, next) {
     try {
       const { patientId } = req.params;
+
+      // Security Check: If client, verify patient belongs to them
+      if (req.user.roles.includes('Client')) {
+        const patient = await patientService.getPatientById(patientId);
+        if (patient.user_id !== req.user.userId) {
+          return res.status(403).json({
+            status: 'error',
+            message: 'Access forbidden. This patient record does not belong to your account.'
+          });
+        }
+      }
+
       const results = await resultService.getPatientHistory(patientId);
       return res.status(200).json({
         status: 'success',

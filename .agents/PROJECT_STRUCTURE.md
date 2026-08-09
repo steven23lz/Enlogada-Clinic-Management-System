@@ -5,6 +5,8 @@ Do not place files randomly.
 Every file must have a clear responsibility.
 Follow feature-based organization whenever practical.
 
+> **Reconciliation note:** where this file's prescribed structure and `CLAUDE.md`'s description of what's actually shipped disagree, `CLAUDE.md` reflects reality and this file is aspirational for that point — see the Frontend Structure section below for the specific, known case. Any agent that finds a new disagreement between this file and the live code should escalate to the Project Architect rather than silently following either doc. See also `MODULE_SCOPE.md` for the functional boundary and `_shared/VISUAL_IDENTITY.md` for design tokens.
+
 ---
 
 # Overall Project Structure
@@ -114,6 +116,26 @@ Reusable helper functions.
 
 # Frontend Structure (React)
 
+**Current, actual structure (authoritative — matches `CLAUDE.md` and the live code):**
+
+```
+frontend/
+src/
+├── assets/
+├── components/       (including components/ui/ — shadcn/radix primitives)
+├── pages/
+├── hooks/
+├── contexts/
+├── config/           (api.js — Axios client)
+├── validations/
+├── App.jsx
+└── main.jsx
+```
+
+There is **no router library**. `App.jsx` performs manual, role-based conditional rendering driven by `user.roles` (from `AuthContext`) plus local `currentTab`/`activeNav` state. New pages/dashboards are wired into that branching logic in `App.jsx`, not into a `routes/` folder or a routing library. Do not introduce a routing library as a "structure fix" — `CLAUDE.md` documents this as the deliberate current pattern, not an oversight.
+
+**Aspirational structure (below) — not yet in use.** These folders (`api/`, `features/`, `routes/`, `services/`, `store/`, `types/`, `styles/`, `layouts/`, `constants/`) may be introduced in the future if a module genuinely needs them (e.g. `store/` if state outgrows Context), but scaffolding them speculatively — without a concrete module requirement driving it — is out of scope. Any agent proposing to introduce one of these needs Project Architect sign-off first.
+
 ```
 frontend/
 src/
@@ -206,6 +228,7 @@ Business logic shared across pages.
 Global styling.
 Theme.
 Variables.
+Canonical color/typography tokens are documented in `_shared/VISUAL_IDENTITY.md` (transcribed from `frontend/src/index.css`'s Tailwind `@theme` block) — check that file before introducing any new color or font.
 
 ---
 
@@ -241,5 +264,5 @@ UPPER_SNAKE_CASE
 * Avoid files exceeding 300–500 lines unless justified.
 * Keep components small and reusable.
 * Prefer reusable services over repeated logic.
-* Document significant architectural decisions in `/docs/ARCHITECTURE.md`.
+* Document significant architectural decisions in `/docs/ARCHITECTURE.md`. (Note: this file does not exist yet as of this writing — creating it is a future task for the Project Architect, not implied authorization to create it as a side effect of unrelated work.)
 * Review the project structure regularly and refactor when necessary to maintain clarity and scalability.

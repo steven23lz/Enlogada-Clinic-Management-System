@@ -18,6 +18,6 @@ router.post('/:visitTestId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 
 router.post('/:visitTestId/release', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), resultController.releaseResult);
 
 // View patient result history (staff or client viewing own patient)
-router.get('/history/:patientId', verifyToken, resultController.getPatientHistory);
+router.get('/history/:patientId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff', 'Client'), resultController.getPatientHistory);
 
 module.exports = router;

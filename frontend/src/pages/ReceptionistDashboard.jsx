@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../components/ui/dialog';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import api from '../config/api';
 import { validatePatientProfile } from '../validations/patientValidation';
@@ -47,6 +48,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
   const [verifyError, setVerifyError] = useState('');
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [scanMode, setScanMode] = useState(false);
+  const [showCheckInConfirm, setShowCheckInConfirm] = useState(false);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [checkInError, setCheckInError] = useState('');
 
   // Assign Tests Dialog State
   const [selectedVisitId, setSelectedVisitId] = useState(null);
@@ -129,16 +133,29 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
     handleVerifyReference(null, decodedText);
   };
 
-  const handleCheckIn = async (visitId, appointmentId) => {
+  const handleCheckIn = () => {
+    // Check-in advances both the appointment and visit status — require explicit
+    // confirmation before it fires. See .agents Phase 12.
+    setCheckInError('');
+    setShowCheckInConfirm(true);
+  };
+
+  const confirmCheckIn = async (visitId, appointmentId) => {
+    setCheckingIn(true);
+    setCheckInError('');
     try {
       await api.patch(`/appointments/${appointmentId}/status`, { status: 'Confirmed' });
       await api.patch(`/visits/${visitId}/status`, { status: 'Processing' });
       fetchActiveVisits();
+      setShowCheckInConfirm(false);
       setShowVerifyModal(false);
       setSearchRef('');
       setVerifyResult(null);
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to check in patient');
+      setCheckInError(err.response?.data?.message || 'Failed to check in patient');
+      setShowCheckInConfirm(false);
+    } finally {
+      setCheckingIn(false);
     }
   };
 
@@ -397,7 +414,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
 
                       <Button
                         type="button"
-                        onClick={() => handleCheckIn(verifyResult.patient_visit_id, verifyResult.id)}
+                        onClick={handleCheckIn}
                         className="w-full bg-[#769046] hover:bg-[#657c3a] text-white font-bold py-2 rounded-xl"
                       >
                         Confirm Check-In Patient
@@ -464,7 +481,13 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredVisits.length > 0 ? (
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-xs text-gray-500 font-semibold">
+                          Loading active queue…
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredVisits.length > 0 ? (
                       filteredVisits.map(visit => (
                         <TableRow key={visit.id} className="hover:bg-gray-50/50 transition-colors">
                           <TableCell className="py-3">
@@ -727,6 +750,18 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Check-in confirmation — advances appointment + visit status, see .agents Phase 12 */}
+        <ConfirmDialog
+          open={showCheckInConfirm}
+          onOpenChange={setShowCheckInConfirm}
+          title="Confirm Check-In"
+          description={verifyResult ? `Check in ${verifyResult.first_name} ${verifyResult.last_name} (Queue ${verifyResult.queue_number})? This confirms their appointment and moves them into processing.` : ''}
+          confirmLabel="Confirm Check-In"
+          onConfirm={() => confirmCheckIn(verifyResult.patient_visit_id, verifyResult.id)}
+          loading={checkingIn}
+          error={checkInError}
+        />
 
       </div>
     </SidebarLayout>

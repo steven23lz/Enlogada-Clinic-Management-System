@@ -45,6 +45,17 @@ class UserRepository {
     return result.rows[0];
   }
 
+  async updatePasswordHash(userId, passwordHash) {
+    const queryText = `
+      UPDATE users
+      SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, email
+    `;
+    const result = await db.query(queryText, [passwordHash, userId]);
+    return result.rows[0];
+  }
+
   async findRoleIdByName(roleName) {
     const queryText = 'SELECT id FROM roles WHERE name = $1';
     const result = await db.query(queryText, [roleName]);

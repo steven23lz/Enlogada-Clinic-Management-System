@@ -44,6 +44,21 @@ const authorizeRoles = (...allowedRoles) => {
   };
 };
 
+// Decision (2026-08-10 remediation pass): NOT currently wired onto any route. Reasons:
+// 1. SuperAdmin/Admin bypass below means this middleware can never additionally restrict
+//    those two roles beyond what authorizeRoles already does — its only theoretical value
+//    is for the 6 non-admin roles.
+// 2. Permissions are granted per-role only (role_permissions), with no per-user override in
+//    the data model, so for those 6 roles a permission check and a role check resolve
+//    identically in every case already covered by authorizeRoles — wiring both is redundant.
+// 3. The seeded permission taxonomy (setupRbac.js) is incomplete relative to the real route
+//    surface: e.g. Receptionist legitimately calls POST /tests/visit-tests today, but no
+//    tests:*-family permission is granted to Receptionist — wiring enforcement now would
+//    break that working flow, not just add security.
+// Future direction (needs Security Engineer + Project Architect sign-off, not a silent
+// change): either complete the permission taxonomy and make authorizePermissions the
+// primary authorization layer, or formally retire it and keep the RBAC matrix UI as
+// informational/future-proofing only. Do not wire this onto routes ad hoc.
 const authorizePermissions = (...requiredPermissions) => {
   return (req, res, next) => {
     if (!req.user) {

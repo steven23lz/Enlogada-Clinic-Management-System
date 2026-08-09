@@ -62,6 +62,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const forgotPassword = async (email) => {
+    try {
+      const response = await api.post('/auth/forgot-password', { email });
+      return response.data.message;
+    } catch (err) {
+      throw err.response?.data?.message || 'Could not process the password reset request.';
+    }
+  };
+
+  const resetPassword = async (token, newPassword) => {
+    try {
+      const response = await api.post('/auth/reset-password', { token, newPassword });
+      return response.data.message;
+    } catch (err) {
+      throw err.response?.data?.message || 'Could not reset the password.';
+    }
+  };
+
   const googleLogin = async (idToken) => {
     try {
       const response = await api.post('/auth/google', { idToken });
@@ -91,7 +109,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, logout, hasPermission, hasRole }}>
+    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, forgotPassword, resetPassword, logout, hasPermission, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

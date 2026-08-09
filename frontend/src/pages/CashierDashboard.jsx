@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import api from '../config/api';
 import { 
@@ -43,6 +44,8 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [paymentError, setPaymentError] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState(null);
+  const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
 
   const fetchActiveVisits = useCallback(async () => {
     try {
@@ -109,6 +112,16 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
       return;
     }
 
+    // Payment processing is irreversible (creates a receipt and advances the visit) —
+    // require explicit confirmation before it fires. See .agents/skills/*/SKILL.md Phase 12.
+    setShowPaymentConfirm(true);
+  };
+
+  const confirmProcessPayment = async () => {
+    const totalDue = parseFloat(billDetails.totalAmount);
+    setConfirmingPayment(true);
+    setPaymentError('');
+
     try {
       const response = await api.post('/payments', {
         patientVisitId: selectedVisit.id,
@@ -122,12 +135,16 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
       // Update visit status to Processing (ready for lab/xray)
       await api.patch(`/visits/${selectedVisit.id}/status`, { status: 'Processing' });
 
+      setShowPaymentConfirm(false);
       setPaymentSuccess(payment);
       setShowReceiptModal(true);
       fetchActiveVisits();
       fetchTransactions();
     } catch (err) {
       setPaymentError(err.response?.data?.message || 'Failed to process payment');
+      setShowPaymentConfirm(false);
+    } finally {
+      setConfirmingPayment(false);
     }
   };
 
@@ -234,7 +251,11 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
               </div>
 
               <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-                {filteredVisits.length > 0 ? (
+                {loading ? (
+                  <div className="p-8 text-center text-xs text-gray-400 font-semibold">
+                    Loading billing queue…
+                  </div>
+                ) : filteredVisits.length > 0 ? (
                   filteredVisits.map(visit => {
                     const isSelected = selectedVisit?.id === visit.id;
                     return (
@@ -484,6 +505,18 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
             </Table>
           </div>
         </Card>
+
+        {/* Payment confirmation — irreversible action, see .agents Phase 12 */}
+        <ConfirmDialog
+          open={showPaymentConfirm}
+          onOpenChange={setShowPaymentConfirm}
+          title="Confirm Payment"
+          description={billDetails ? `Charge ₱${parseFloat(billDetails.totalAmount).toFixed(2)} via ${paymentMethod} for ${billDetails.patientName}? This will issue a receipt and cannot be undone from this screen.` : ''}
+          confirmLabel="Confirm & Process"
+          onConfirm={confirmProcessPayment}
+          loading={confirmingPayment}
+          error={paymentError}
+        />
 
         {/* Printable Official Receipt Modal Generator */}
         <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>

@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -47,6 +48,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const [fileUrl, setFileUrl] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
+  const [releasingResult, setReleasingResult] = useState(false);
 
   const determineCategory = useCallback((roles) => {
     if (roles.includes('Laboratory Staff')) {
@@ -124,6 +127,15 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       return;
     }
 
+    // Releasing a diagnostic result is clinically significant and effectively irreversible
+    // from this screen — require explicit confirmation before it fires. See .agents Phase 12.
+    setShowReleaseConfirm(true);
+  };
+
+  const confirmReleaseResult = async () => {
+    setReleasingResult(true);
+    setUploadError('');
+
     try {
       await api.post(`/results/${activeTest.visit_test_id}`, {
         findings,
@@ -131,10 +143,14 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         fileUrl: fileUrl || null
       });
 
+      setShowReleaseConfirm(false);
       setShowUploadModal(false);
       fetchPendingTests(category);
     } catch (err) {
       setUploadError(err.response?.data?.message || 'Failed to record diagnostic result.');
+      setShowReleaseConfirm(false);
+    } finally {
+      setReleasingResult(false);
     }
   };
 
@@ -229,7 +245,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTests.length > 0 ? (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-6 text-xs text-gray-400">Loading worklist…</TableCell>
+                  </TableRow>
+                ) : filteredTests.length > 0 ? (
                   filteredTests.map(test => (
                     <TableRow key={test.visit_test_id} className="hover:bg-gray-50/50 transition-colors">
                       <TableCell className="py-3.5">
@@ -381,6 +401,18 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Result release confirmation — irreversible/clinically significant, see .agents Phase 12 */}
+        <ConfirmDialog
+          open={showReleaseConfirm}
+          onOpenChange={setShowReleaseConfirm}
+          title="Authorize & Release Result"
+          description={activeTest ? `Release ${activeTest.test_name} findings for ${activeTest.first_name} ${activeTest.last_name}? This finalizes the result and cannot be undone from this screen.` : ''}
+          confirmLabel="Authorize & Release"
+          onConfirm={confirmReleaseResult}
+          loading={releasingResult}
+          error={uploadError}
+        />
 
       </div>
     </SidebarLayout>

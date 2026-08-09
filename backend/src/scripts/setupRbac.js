@@ -3,29 +3,10 @@ const logger = require('../config/logger');
 
 const setupRbac = async () => {
   try {
-    logger.info('Setting up dynamic RBAC tables...');
+    logger.info('Seeding dynamic RBAC data (permissions + role_permissions)...');
+    logger.info('Precondition: the permissions/role_permissions tables must already exist — run migrateDb.js first.');
 
-    // 1. Create permissions table
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS permissions (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL UNIQUE,
-        module VARCHAR(50) NOT NULL,
-        description TEXT
-      );
-    `);
-
-    // 2. Create role_permissions table
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS role_permissions (
-        id SERIAL PRIMARY KEY,
-        role_id INT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-        permission_id INT NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
-        CONSTRAINT uq_role_permission UNIQUE (role_id, permission_id)
-      );
-    `);
-
-    // 3. Seed Permissions
+    // 1. Seed Permissions
     const permissionsData = [
       { name: 'appointments:create', module: 'Appointments', description: 'Create appointments & visits' },
       { name: 'appointments:read', module: 'Appointments', description: 'View appointments & visits' },
@@ -51,7 +32,7 @@ const setupRbac = async () => {
       );
     }
 
-    // 4. Map Roles to Permissions
+    // 2. Map Roles to Permissions
     const rolePermissionMappings = {
       SuperAdmin: permissionsData.map(p => p.name),
       Admin: permissionsData.map(p => p.name),

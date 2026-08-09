@@ -11,13 +11,13 @@ router.post('/', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionis
 router.get('/active', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier'), visitController.getActiveVisits);
 
 // Get specific visit details
-router.get('/:id', verifyToken, visitController.getVisitById);
+router.get('/:id', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier'), visitController.getVisitById);
 
 // Update visit status (Receptionist, Admin, Cashier)
 router.put('/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier'), visitController.updateStatus);
 router.patch('/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier'), visitController.updateStatus);
 
-// Visit history per patient
-router.get('/patient/:patientId', verifyToken, visitController.getVisitHistory);
+// Visit history per patient (staff or client viewing own patient)
+router.get('/patient/:patientId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier', 'Client'), visitController.getVisitHistory);
 
 module.exports = router;

@@ -5,6 +5,8 @@ import Home from './pages/Home';
 import ServicesPage from './pages/ServicesPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import ClientDashboard from './pages/ClientDashboard';
 import ReceptionistDashboard from './pages/ReceptionistDashboard';
 import CashierDashboard from './pages/CashierDashboard';
@@ -12,9 +14,19 @@ import DiagnosticDashboard from './pages/DiagnosticDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import ServicesCatalog from './pages/ServicesCatalog';
 
+// Read a one-time deep-link param from the URL (e.g. an emailed password-reset link) without
+// introducing a router — this app deliberately has none (see PROJECT_STRUCTURE.md). Read once
+// on initial mount only; nothing else in the app reads or writes the URL.
+const getInitialResetToken = () => {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  return params.get('reset_token');
+};
+
 const MainApp = () => {
   const { user, loading } = useAuth();
-  const [currentTab, setCurrentTab] = useState('home'); // 'home', 'services', 'about', 'login', 'register', 'dashboard'
+  const [resetToken] = useState(getInitialResetToken);
+  const [currentTab, setCurrentTab] = useState(() => (getInitialResetToken() ? 'reset-password' : 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'reset-password', 'dashboard'
   const [activeNav, setActiveNav] = useState('dashboard'); // Active nav in staff/admin sidebar
 
   if (loading) {
@@ -40,6 +52,12 @@ const MainApp = () => {
     }
     if (currentTab === 'register') {
       return <Register onToggleView={() => setCurrentTab('login')} onNavigate={handleNavigate} />;
+    }
+    if (currentTab === 'forgot-password') {
+      return <ForgotPassword onNavigate={handleNavigate} />;
+    }
+    if (currentTab === 'reset-password') {
+      return <ResetPassword token={resetToken} onNavigate={handleNavigate} />;
     }
     // Default fallback to login
     return <Login onToggleView={() => setCurrentTab('register')} onNavigate={handleNavigate} />;

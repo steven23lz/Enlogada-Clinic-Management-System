@@ -3,6 +3,9 @@
 
 -- Drop existing tables to allow clean recreation
 DROP TABLE IF EXISTS clinic_operating_hours CASCADE;
+DROP TABLE IF EXISTS password_reset_tokens CASCADE;
+DROP TABLE IF EXISTS role_permissions CASCADE;
+DROP TABLE IF EXISTS permissions CASCADE;
 DROP TABLE IF EXISTS payments CASCADE;
 DROP TABLE IF EXISTS test_results CASCADE;
 DROP TABLE IF EXISTS hmo_request_tests CASCADE;
@@ -50,6 +53,36 @@ CREATE TABLE user_roles (
     CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles(id),
     CONSTRAINT fk_user_roles_assigned_by FOREIGN KEY (assigned_by) REFERENCES users(id),
     CONSTRAINT uq_user_role UNIQUE (user_id, role_id)
+);
+
+-- Fine-grained permissions (dynamic RBAC matrix). Data is seeded separately by
+-- backend/src/scripts/setupRbac.js, which must be run after this schema is applied.
+CREATE TABLE permissions (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    module VARCHAR(50) NOT NULL,
+    description TEXT
+);
+
+CREATE TABLE role_permissions (
+    id SERIAL PRIMARY KEY,
+    role_id INT NOT NULL,
+    permission_id INT NOT NULL,
+    CONSTRAINT fk_role_permissions_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+    CONSTRAINT fk_role_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+    CONSTRAINT uq_role_permission UNIQUE (role_id, permission_id)
+);
+
+-- Password reset tokens (Module 1: Authentication). Only the SHA-256 hash of the emailed
+-- token is stored — never the raw token itself.
+CREATE TABLE password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_password_reset_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- 2. Patients (Only human profiles)

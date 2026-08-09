@@ -69,6 +69,57 @@ class AuthController {
     }
   }
 
+  async forgotPassword(req, res, next) {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Email is required.'
+        });
+      }
+
+      const result = await authService.forgotPassword(email);
+
+      return res.status(200).json({
+        status: 'success',
+        message: result.message
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async resetPassword(req, res, next) {
+    try {
+      const { token, newPassword } = req.body;
+
+      if (!token || !newPassword) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Token and new password are required.'
+        });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'New password must be at least 8 characters.'
+        });
+      }
+
+      const result = await authService.resetPassword(token, newPassword);
+
+      return res.status(200).json({
+        status: 'success',
+        message: result.message
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async googleLogin(req, res, next) {
     try {
       const { idToken } = req.body;

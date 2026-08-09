@@ -14,6 +14,6 @@ router.post('/', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), 
 router.get('/transactions', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), paymentController.getTransactions);
 
 // View payments for a specific visit
-router.get('/visit/:visitId', verifyToken, paymentController.getVisitPayments);
+router.get('/visit/:visitId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), paymentController.getVisitPayments);
 
 module.exports = router;
