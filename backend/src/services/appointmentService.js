@@ -1,7 +1,61 @@
 const appointmentRepository = require('../repositories/appointmentRepository');
 const visitRepository = require('../repositories/visitRepository');
+const scheduleRepository = require('../repositories/scheduleRepository');
+
+function timeToMinutes(timeStr) {
+  const [h, m] = timeStr.split(':').map(Number);
+  return h * 60 + m;
+}
+
+function minutesToTime(mins) {
+  const h = String(Math.floor(mins / 60)).padStart(2, '0');
+  const m = String(mins % 60).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function todayLocalDateString() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 class AppointmentService {
+  async getAvailableSlots(date) {
+    const dayOfWeek = new Date(`${date}T12:00:00Z`).getUTCDay();
+    const hours = await scheduleRepository.findOperatingHoursForDay(dayOfWeek);
+
+    if (!hours || !hours.is_open) {
+      return { date, isOpen: false, slots: [] };
+    }
+
+    const openMinutes = timeToMinutes(hours.open_time);
+    const closeMinutes = timeToMinutes(hours.close_time);
+    const interval = hours.slot_interval_minutes;
+    const maxConcurrent = hours.max_concurrent_bookings;
+
+    const bookings = await scheduleRepository.countBookingsByTimeForDate(date);
+    const bookedCounts = {};
+    bookings.forEach(b => {
+      bookedCounts[minutesToTime(timeToMinutes(b.scheduled_time))] = b.cnt;
+    });
+
+    const isToday = date === todayLocalDateString();
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const slots = [];
+    for (let m = openMinutes; m < closeMinutes; m += interval) {
+      const time = minutesToTime(m);
+      const bookedCount = bookedCounts[time] || 0;
+      const isPast = isToday && m <= nowMinutes;
+      slots.push({ time, available: bookedCount < maxConcurrent && !isPast });
+    }
+
+    return { date, isOpen: true, slots };
+  }
+
   async createAppointment({ patientId, scheduledDate, scheduledTime, notes, createdBy }) {
     // 1. Create a patient_visit record first (visit_type = 'Appointment')
     const queueNumber = await visitRepository.getNextQueueNumber();

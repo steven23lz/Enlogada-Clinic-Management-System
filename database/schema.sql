@@ -2,6 +2,7 @@
 -- Database: PostgreSQL (Local/Supabase hosted)
 
 -- Drop existing tables to allow clean recreation
+DROP TABLE IF EXISTS clinic_operating_hours CASCADE;
 DROP TABLE IF EXISTS payments CASCADE;
 DROP TABLE IF EXISTS test_results CASCADE;
 DROP TABLE IF EXISTS hmo_request_tests CASCADE;
@@ -203,6 +204,21 @@ CREATE TABLE payments (
     CONSTRAINT chk_payment_amount CHECK (amount >= 0)
 );
 
+-- 8. Clinic Availability
+CREATE TABLE clinic_operating_hours (
+    id SERIAL PRIMARY KEY,
+    day_of_week SMALLINT NOT NULL UNIQUE, -- 0=Sunday .. 6=Saturday
+    is_open BOOLEAN NOT NULL DEFAULT TRUE,
+    open_time TIME,
+    close_time TIME,
+    slot_interval_minutes SMALLINT NOT NULL DEFAULT 30,
+    max_concurrent_bookings SMALLINT NOT NULL DEFAULT 1,
+    CONSTRAINT chk_operating_hours_day CHECK (day_of_week BETWEEN 0 AND 6),
+    CONSTRAINT chk_operating_hours_times CHECK (
+      is_open = FALSE OR (open_time IS NOT NULL AND close_time IS NOT NULL AND open_time < close_time)
+    )
+);
+
 -- Seed Initial Data
 INSERT INTO roles (name) VALUES
 ('SuperAdmin'),
@@ -251,3 +267,13 @@ INSERT INTO tests (category_id, name, price) VALUES
 (4, 'Pediatric 2D Echo', 3080.00),
 -- ECG Tests
 (5, '12 Lead ECG', 480.00);
+
+-- Seed Clinic Operating Hours (Mon-Fri 08:00-17:00, Sat 08:00-12:00, Sun closed, 30-min slots)
+INSERT INTO clinic_operating_hours (day_of_week, is_open, open_time, close_time, slot_interval_minutes, max_concurrent_bookings) VALUES
+(0, FALSE, NULL, NULL, 30, 1),
+(1, TRUE, '08:00', '17:00', 30, 1),
+(2, TRUE, '08:00', '17:00', 30, 1),
+(3, TRUE, '08:00', '17:00', 30, 1),
+(4, TRUE, '08:00', '17:00', 30, 1),
+(5, TRUE, '08:00', '17:00', 30, 1),
+(6, TRUE, '08:00', '12:00', 30, 1);

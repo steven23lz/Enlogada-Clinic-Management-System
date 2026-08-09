@@ -10,6 +10,9 @@ router.post('/', verifyToken, appointmentController.create);
 // Client views their own bookings
 router.get('/my-bookings', verifyToken, appointmentController.getMyBookings);
 
+// Client or Receptionist retrieves bookable time slots for a given date
+router.get('/availability', verifyToken, appointmentController.getAvailability);
+
 // Receptionist verifies appointment by reference (QR scan or manual entry)
 router.get('/verify/:reference', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), appointmentController.verifyReference);
 

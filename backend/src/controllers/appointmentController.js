@@ -31,6 +31,26 @@ class AppointmentController {
     }
   }
 
+  async getAvailability(req, res, next) {
+    try {
+      const { date } = req.query;
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'A valid date (YYYY-MM-DD) query parameter is required.'
+        });
+      }
+
+      const availability = await appointmentService.getAvailableSlots(date);
+      return res.status(200).json({
+        status: 'success',
+        data: availability
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async verifyReference(req, res, next) {
     try {
       const { reference } = req.params;

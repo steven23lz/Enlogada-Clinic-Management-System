@@ -4,6 +4,18 @@ This file tracks all structural changes, migrations, and updates made to the Pos
 
 ---
 
+## [1.1.0] - 2026-08-09
+
+### Added
+* Created `clinic_operating_hours` table (per-weekday open/close window, slot granularity, and per-slot capacity) to drive dynamic appointment availability.
+* Seeded default operating hours: Mon-Fri 08:00-17:00, Sat 08:00-12:00 (30-minute slots), Sunday closed.
+* Added `GET /api/appointments/availability?date=YYYY-MM-DD` endpoint (new `scheduleRepository`) returning bookable time slots for a given date, computed from `clinic_operating_hours` minus already-booked, non-cancelled `appointments` rows.
+
+### Changed
+* `appointmentService.createAppointment` now performs a transactional, capacity-aware conflict check (Postgres advisory lock + row count against `max_concurrent_bookings`) before inserting an appointment, rejecting out-of-hours or already-full slots with HTTP 409.
+
+---
+
 ## [1.0.0] - 2026-08-05 (Baseline)
 
 ### Added
