@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
 import { Plus, Edit2, CheckCircle2, AlertCircle, RefreshCw, Layers } from 'lucide-react';
 
@@ -28,6 +29,11 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
   const [modalError, setModalError] = useState('');
   const [modalSuccess, setModalSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Status Change Confirmation State
+  const [confirmTarget, setConfirmTarget] = useState(null);
+  const [toggling, setToggling] = useState(false);
+  const [toggleError, setToggleError] = useState('');
 
   const fetchCatalogData = useCallback(async () => {
     try {
@@ -124,6 +130,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
   };
 
   const handleToggleStatus = async (test) => {
+    setToggleError('');
+    setToggling(true);
     try {
       await api.put(`/tests/${test.id}`, {
         categoryId: test.category_id,
@@ -132,9 +140,12 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
         isActive: !test.is_active
       });
       fetchCatalogData();
+      setConfirmTarget(null);
     } catch (err) {
       console.error(err);
-      alert('Failed to update service status.');
+      setToggleError(err.response?.data?.message || 'Failed to update service status.');
+    } finally {
+      setToggling(false);
     }
   };
 
@@ -239,8 +250,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                       <TableCell className="text-xs text-gray-600 font-medium">{test.category_name}</TableCell>
                       <TableCell className="font-bold text-xs text-slate-900">₱{parseFloat(test.price).toFixed(2)}</TableCell>
                       <TableCell>
-                        <Badge 
-                          onClick={() => handleToggleStatus(test)}
+                        <Badge
+                          onClick={() => { setToggleError(''); setConfirmTarget(test); }}
                           className={`cursor-pointer text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
                             test.is_active 
                               ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200' 
@@ -368,6 +379,20 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Status Change Confirmation Modal */}
+        <ConfirmDialog
+          open={!!confirmTarget}
+          onOpenChange={(open) => { if (!open) { setConfirmTarget(null); setToggleError(''); } }}
+          title={confirmTarget?.is_active ? 'Deactivate Service' : 'Activate Service'}
+          description={confirmTarget && (
+            `Are you sure you want to change "${confirmTarget.name}" from ${confirmTarget.is_active ? 'Active' : 'Inactive'} to ${confirmTarget.is_active ? 'Inactive' : 'Active'}? This immediately affects its availability on the public booking form.`
+          )}
+          confirmLabel={confirmTarget?.is_active ? 'Deactivate' : 'Activate'}
+          onConfirm={() => handleToggleStatus(confirmTarget)}
+          loading={toggling}
+          error={toggleError}
+        />
 
       </div>
     </SidebarLayout>
