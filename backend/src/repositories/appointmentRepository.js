@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const db = require('../config/database');
 
 class AppointmentRepository {
-  async createAppointment({ patientVisitId, scheduledDate, scheduledTime, notes }) {
+  async createAppointment({ patientVisitId, scheduledDate, scheduledTime, notes }, client = db) {
     // Generate a unique appointment reference for QR code lookup
     const appointmentReference = 'APT-' + crypto.randomBytes(6).toString('hex').toUpperCase();
 
@@ -11,7 +11,7 @@ class AppointmentRepository {
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `;
-    const result = await db.query(queryText, [patientVisitId, appointmentReference, scheduledDate, scheduledTime, notes]);
+    const result = await client.query(queryText, [patientVisitId, appointmentReference, scheduledDate, scheduledTime, notes]);
     return result.rows[0];
   }
 

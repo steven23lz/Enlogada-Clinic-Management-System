@@ -1,3 +1,4 @@
+const db = require('../config/database');
 const appointmentRepository = require('../repositories/appointmentRepository');
 const visitRepository = require('../repositories/visitRepository');
 const scheduleRepository = require('../repositories/scheduleRepository');
@@ -57,28 +58,70 @@ class AppointmentService {
   }
 
   async createAppointment({ patientId, scheduledDate, scheduledTime, notes, createdBy }) {
-    // 1. Create a patient_visit record first (visit_type = 'Appointment')
-    const queueNumber = await visitRepository.getNextQueueNumber();
-    const visit = await visitRepository.createVisit({
-      patientId,
-      visitType: 'Appointment',
-      notes,
-      queueNumber,
-      createdBy
-    });
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    // 2. Create the appointment record linked to the visit
-    const appointment = await appointmentRepository.createAppointment({
-      patientVisitId: visit.id,
-      scheduledDate,
-      scheduledTime,
-      notes
-    });
+      // 1. Validate the requested slot against clinic operating hours
+      const dayOfWeek = new Date(`${scheduledDate}T12:00:00Z`).getUTCDay();
+      const hours = await scheduleRepository.findOperatingHoursForDay(dayOfWeek, client);
 
-    return {
-      ...appointment,
-      queue_number: visit.queue_number
-    };
+      if (!hours || !hours.is_open) {
+        const error = new Error('The clinic is closed on the selected date.');
+        error.statusCode = 409;
+        throw error;
+      }
+      const requestedMinutes = timeToMinutes(scheduledTime);
+      if (requestedMinutes < timeToMinutes(hours.open_time) || requestedMinutes >= timeToMinutes(hours.close_time)) {
+        const error = new Error('The selected time is outside clinic operating hours.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      // 2. Serialize concurrent bookings for the same slot (no row exists yet to lock
+      //    on an empty slot, so an advisory lock closes that race window).
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${scheduledDate}|${scheduledTime}`]);
+
+      const { rows } = await client.query(
+        `SELECT COUNT(*)::int AS cnt FROM appointments WHERE scheduled_date = $1 AND scheduled_time = $2 AND status <> 'Cancelled'`,
+        [scheduledDate, scheduledTime]
+      );
+      if (rows[0].cnt >= hours.max_concurrent_bookings) {
+        const error = new Error('This time slot is no longer available. Please select a different time.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      // 3. Create the patient_visit record first (visit_type = 'Appointment')
+      const queueNumber = await visitRepository.getNextQueueNumber(client);
+      const visit = await visitRepository.createVisit({
+        patientId,
+        visitType: 'Appointment',
+        notes,
+        queueNumber,
+        createdBy
+      }, client);
+
+      // 4. Create the appointment record linked to the visit
+      const appointment = await appointmentRepository.createAppointment({
+        patientVisitId: visit.id,
+        scheduledDate,
+        scheduledTime,
+        notes
+      }, client);
+
+      await client.query('COMMIT');
+
+      return {
+        ...appointment,
+        queue_number: visit.queue_number
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async verifyByReference(reference) {

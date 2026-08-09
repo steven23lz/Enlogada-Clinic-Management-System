@@ -1,13 +1,13 @@
 const db = require('../config/database');
 
 class VisitRepository {
-  async createVisit({ patientId, visitType, notes, queueNumber, createdBy }) {
+  async createVisit({ patientId, visitType, notes, queueNumber, createdBy }, client = db) {
     const queryText = `
       INSERT INTO patient_visits (patient_id, visit_type, notes, queue_number, created_by)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `;
-    const result = await db.query(queryText, [patientId, visitType, notes, queueNumber, createdBy]);
+    const result = await client.query(queryText, [patientId, visitType, notes, queueNumber, createdBy]);
     return result.rows[0];
   }
 
@@ -79,13 +79,13 @@ class VisitRepository {
     return result.rows;
   }
 
-  async getNextQueueNumber() {
+  async getNextQueueNumber(client = db) {
     const queryText = `
       SELECT COUNT(*) as count
       FROM patient_visits
       WHERE created_at::date = CURRENT_DATE
     `;
-    const result = await db.query(queryText);
+    const result = await client.query(queryText);
     const count = parseInt(result.rows[0].count, 10);
     return String(count + 1).padStart(4, '0');
   }
