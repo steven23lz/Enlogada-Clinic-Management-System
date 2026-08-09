@@ -34,7 +34,7 @@ const Home = ({ onNavigate }) => {
             <div className="flex items-center space-x-4 pt-2">
               <Button
                 onClick={() => onNavigate && onNavigate('login')}
-                className="bg-[#769046] hover:bg-[#687e3d] text-white px-7 py-6 text-sm font-semibold rounded-xl shadow-lg border-0 cursor-pointer"
+                className="bg-[#769046] hover:bg-[#657c3a] text-white px-7 py-6 text-sm font-semibold rounded-xl shadow-lg border-0 cursor-pointer"
               >
                 Book Now
               </Button>
@@ -87,14 +87,14 @@ const Home = ({ onNavigate }) => {
 
       {/* Call to Action Bar */}
       <section className="max-w-7xl mx-auto px-8 py-16 w-full">
-        <div className="bg-[#1e293b] rounded-3xl p-10 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
+        <div className="bg-[#192534] rounded-3xl p-10 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
           <div className="space-y-2 mb-6 md:mb-0">
             <h2 className="text-2xl font-bold tracking-tight">Need a Diagnostic Appointment?</h2>
             <p className="text-sm text-gray-300">Sign in to your account or register to schedule an appointment today.</p>
           </div>
           <Button
             onClick={() => onNavigate && onNavigate('login')}
-            className="bg-[#769046] hover:bg-[#687e3d] text-white px-8 py-6 text-sm font-bold rounded-xl flex items-center space-x-2 border-0 cursor-pointer"
+            className="bg-[#769046] hover:bg-[#657c3a] text-white px-8 py-6 text-sm font-bold rounded-xl flex items-center space-x-2 border-0 cursor-pointer"
           >
             <span>Access Portal</span>
             <ChevronRight className="w-4 h-4" />
