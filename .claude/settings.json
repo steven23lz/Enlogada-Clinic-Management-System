@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx oxlint *)",
+      "Bash(npm install *)",
+      "Bash(node src/scripts/migrateDb.js)",
+      "Bash(node src/scripts/setupRbac.js)",
+      "Bash(node src/scripts/seedUsers.js)",
+      "PowerShell($psql = \"C:\\\\Program Files\\\\PostgreSQL\\\\17\\\\bin\\\\psql.exe\"; $env:PGPASSWORD = \"postgres\"; & $psql -U postgres -h localhost -d enlogada_clinic -c \"SELECT day_of_week, is_open, open_time, close_time, max_concurrent_bookings FROM clinic_operating_hours ORDER BY day_of_week;\")",
+      "Bash(node src/server.js)",
+      "Bash(netstat -ano)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name = 'node.exe'\")",
+      "PowerShell(Stop-Process -Id 5848,464,17452 -Force -ErrorAction SilentlyContinue)",
+      "Bash(node -e \"require\\('./src/services/appointmentService.js'\\); require\\('./src/repositories/appointmentRepository.js'\\); require\\('./src/repositories/visitRepository.js'\\); console.log\\('all modules load cleanly'\\)\")",
+      "Bash(npx playwright *)",
+      "Bash(node \"C:\\\\Users\\\\KAYEVE~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Dev-REAL-Enlogada-Clinic-Management-System\\\\062d1e52-4840-42be-ae41-6408c9ea7d37\\\\scratchpad\\\\verify_slots.js\")",
+      "Bash(cp 'C:\\\\Users\\\\KAYEVE~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Dev-REAL-Enlogada-Clinic-Management-System\\\\062d1e52-4840-42be-ae41-6408c9ea7d37\\\\scratchpad\\\\verify_slots.js' '/c/Dev/REAL Enlogada Clinic Management System/Enlogada-Clinic-Management-System/frontend/tmp_verify_slots.js')",
+      "Bash(node tmp_verify_slots.js)",
+      "Bash(mv '/c/Dev/REAL Enlogada Clinic Management System/Enlogada-Clinic-Management-System/frontend/tmp_verify_slots.js' '/c/Dev/REAL Enlogada Clinic Management System/Enlogada-Clinic-Management-System/frontend/tmp_verify_slots.cjs')",
+      "Bash(node tmp_verify_slots.cjs)"
+    ]
+  }
+}
