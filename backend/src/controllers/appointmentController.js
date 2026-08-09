@@ -18,7 +18,8 @@ class AppointmentController {
         scheduledDate,
         scheduledTime,
         notes,
-        createdBy
+        createdBy,
+        requestingUser: req.user
       });
 
       return res.status(201).json({
@@ -82,8 +83,7 @@ class AppointmentController {
   async cancel(req, res, next) {
     try {
       const { id } = req.params;
-      const userId = req.user.userId;
-      const appointment = await appointmentService.cancelAppointment(id, userId);
+      const appointment = await appointmentService.cancelAppointment(id, req.user);
 
       return res.status(200).json({
         status: 'success',

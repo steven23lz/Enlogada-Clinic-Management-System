@@ -6,6 +6,8 @@ import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
+import { StatusBadge } from '../components/ui/status-badge';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import { validatePatientProfile } from '../validations/patientValidation';
@@ -28,7 +30,9 @@ import {
   Stethoscope,
   Scan,
   Printer,
-  Sparkles
+  Sparkles,
+  XCircle,
+  CalendarClock
 } from 'lucide-react';
 
 const ClientDashboard = () => {
@@ -79,6 +83,13 @@ const ClientDashboard = () => {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [dayIsOpen, setDayIsOpen] = useState(true);
 
+  // My Appointments (Module 3: view/cancel own appointments)
+  const [appointments, setAppointments] = useState([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(true);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+
   const fetchProfiles = useCallback(async () => {
     try {
       const response = await api.get('/patients/my-profiles');
@@ -118,6 +129,18 @@ const ClientDashboard = () => {
     }
   }, []);
 
+  const fetchAppointments = useCallback(async () => {
+    setAppointmentsLoading(true);
+    try {
+      const response = await api.get('/appointments/my-bookings');
+      setAppointments(response.data.data.bookings || []);
+    } catch (err) {
+      console.error('Failed to fetch appointments:', err);
+    } finally {
+      setAppointmentsLoading(false);
+    }
+  }, []);
+
   const fetchAvailability = useCallback(async (date) => {
     setSlotsLoading(true);
     try {
@@ -136,7 +159,8 @@ const ClientDashboard = () => {
   useEffect(() => {
     fetchProfiles();
     fetchStaticData();
-  }, [fetchProfiles, fetchStaticData]);
+    fetchAppointments();
+  }, [fetchProfiles, fetchStaticData, fetchAppointments]);
 
   useEffect(() => {
     if (bookingData.scheduledDate) {
@@ -255,6 +279,7 @@ const ClientDashboard = () => {
       });
       setBookingStep(1);
       fetchHistory(selectedProfileId);
+      fetchAppointments();
       setTimeout(() => {
         setShowBooking(false);
         setBookingSuccess('');
@@ -264,6 +289,36 @@ const ClientDashboard = () => {
       if (err.response?.status === 409 && bookingData.scheduledDate) {
         fetchAvailability(bookingData.scheduledDate);
       }
+    }
+  };
+
+  // The API always sends scheduled_date as a full ISO instant string (e.g.
+  // "2026-08-10T16:00:00.000Z" — pg parses the SQL DATE column using the local-timezone
+  // constructor server-side, then JSON serializes it to that UTC instant). new Date(...)
+  // parses that instant correctly, and toLocaleDateString() converts it back to the
+  // browser's local calendar date — no manual timezone arithmetic needed.
+  const formatAppointmentDate = (value) => {
+    if (!value) return '';
+    return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const handleRequestCancelAppointment = (appointment) => {
+    setCancelError('');
+    setCancelTarget(appointment);
+  };
+
+  const confirmCancelAppointment = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    setCancelError('');
+    try {
+      await api.put(`/appointments/${cancelTarget.id}/cancel`);
+      setCancelTarget(null);
+      fetchAppointments();
+    } catch (err) {
+      setCancelError(err.response?.data?.message || 'Failed to cancel appointment.');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -957,6 +1012,52 @@ const ClientDashboard = () => {
               </Card>
             )}
 
+            {/* My Appointments (Module 3: view/cancel own appointments) */}
+            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
+              <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
+                <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+                  <CalendarClock className="w-4 h-4 text-[#769046]" />
+                  <span>My Appointments</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3 max-h-[360px] overflow-y-auto">
+                {appointmentsLoading ? (
+                  <p className="text-xs text-gray-400 text-center py-4">Loading appointments…</p>
+                ) : appointments.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-4 italic">No appointments booked yet.</p>
+                ) : (
+                  appointments.map((appt) => {
+                    const isCancellable = appt.status === 'Pending' || appt.status === 'Confirmed';
+                    return (
+                      <div key={appt.id} className="border border-gray-100 rounded-xl p-3 space-y-2 bg-gray-50/50">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="block text-xs font-extrabold text-slate-900">
+                              {formatAppointmentDate(appt.scheduled_date)}
+                            </span>
+                            <span className="block text-[11px] text-gray-500 font-medium">{appt.scheduled_time?.slice(0, 5)}</span>
+                          </div>
+                          <StatusBadge status={appt.status} />
+                        </div>
+                        <span className="block text-[10px] text-gray-400 font-mono">{appt.appointment_reference}</span>
+                        {isCancellable && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleRequestCancelAppointment(appt)}
+                            className="w-full text-[11px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 rounded-lg py-1.5 flex items-center justify-center space-x-1.5"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Cancel Appointment</span>
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+
             {/* HMO Coverage Info Card */}
             <Card className="border-gray-100 bg-[#192534] text-white rounded-2xl overflow-hidden p-5 space-y-3 shadow-sm">
               <div className="flex items-center space-x-2 text-[#769046]">
@@ -970,6 +1071,19 @@ const ClientDashboard = () => {
           </div>
 
         </div>
+
+        {/* Cancel appointment confirmation */}
+        <ConfirmDialog
+          open={!!cancelTarget}
+          onOpenChange={(open) => { if (!open) setCancelTarget(null); }}
+          title="Cancel Appointment"
+          description={cancelTarget ? `Cancel your appointment on ${formatAppointmentDate(cancelTarget.scheduled_date)} at ${cancelTarget.scheduled_time?.slice(0, 5)}? This cannot be undone.` : ''}
+          confirmLabel="Cancel Appointment"
+          cancelLabel="Keep Appointment"
+          onConfirm={confirmCancelAppointment}
+          loading={cancelling}
+          error={cancelError}
+        />
 
       </div>
     </DashboardLayout>

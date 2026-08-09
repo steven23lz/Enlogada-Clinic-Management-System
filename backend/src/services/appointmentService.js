@@ -2,6 +2,17 @@ const db = require('../config/database');
 const appointmentRepository = require('../repositories/appointmentRepository');
 const visitRepository = require('../repositories/visitRepository');
 const scheduleRepository = require('../repositories/scheduleRepository');
+const patientService = require('./patientService');
+
+async function assertClientOwnsPatient(requestingUser, patientId) {
+  if (!requestingUser?.roles?.includes('Client')) return; // staff roles are not ownership-restricted
+  const patient = await patientService.getPatientById(patientId);
+  if (patient.user_id !== requestingUser.userId) {
+    const error = new Error('Access forbidden. This patient profile does not belong to your account.');
+    error.statusCode = 403;
+    throw error;
+  }
+}
 
 function timeToMinutes(timeStr) {
   const [h, m] = timeStr.split(':').map(Number);
@@ -57,7 +68,9 @@ class AppointmentService {
     return { date, isOpen: true, slots };
   }
 
-  async createAppointment({ patientId, scheduledDate, scheduledTime, notes, createdBy }) {
+  async createAppointment({ patientId, scheduledDate, scheduledTime, notes, createdBy, requestingUser }) {
+    await assertClientOwnsPatient(requestingUser, patientId);
+
     const client = await db.pool.connect();
     try {
       await client.query('BEGIN');
@@ -138,13 +151,15 @@ class AppointmentService {
     return await appointmentRepository.findByPatientUserId(userId);
   }
 
-  async cancelAppointment(id, userId) {
+  async cancelAppointment(id, requestingUser) {
     const appointment = await appointmentRepository.findById(id);
     if (!appointment) {
       const error = new Error('Appointment not found');
       error.statusCode = 404;
       throw error;
     }
+
+    await assertClientOwnsPatient(requestingUser, appointment.patient_id);
 
     if (appointment.status === 'Cancelled') {
       const error = new Error('Appointment is already cancelled');
