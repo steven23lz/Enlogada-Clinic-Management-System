@@ -9,21 +9,23 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import api from '../config/api';
-import { 
-  Check, 
-  ClipboardList, 
-  Search, 
-  UserCheck, 
-  ShieldAlert, 
-  FilePlus, 
-  UserPlus, 
-  QrCode, 
-  PlusCircle, 
-  Clock, 
-  Volume2, 
+import { validatePatientProfile } from '../validations/patientValidation';
+import {
+  Check,
+  ClipboardList,
+  Search,
+  UserCheck,
+  ShieldAlert,
+  FilePlus,
+  UserPlus,
+  QrCode,
+  PlusCircle,
+  Clock,
+  Volume2,
   Printer,
-  AlertCircle, 
+  AlertCircle,
   CheckCircle,
+  CheckCircle2,
   Users
 } from 'lucide-react';
 
@@ -60,6 +62,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
   });
   const [visitNotes, setVisitNotes] = useState('');
   const [registrationSuccess, setRegistrationSuccess] = useState('');
+  const [registrationError, setRegistrationError] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
 
   // Manual HMO logging State
   const [showHmoModal, setShowHmoModal] = useState(false);
@@ -131,6 +135,15 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
   const handleWalkInRegister = async (e) => {
     e.preventDefault();
     setRegistrationSuccess('');
+    setRegistrationError('');
+
+    const validationError = validatePatientProfile(newPatient);
+    if (validationError) {
+      setRegistrationError(validationError);
+      return;
+    }
+
+    setIsRegistering(true);
     try {
       // 1. Create Patient Profile
       const pRes = await api.post('/patients', newPatient);
@@ -159,7 +172,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
       setVisitNotes('');
       fetchActiveVisits();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to register walk-in patient');
+      setRegistrationError(err.response?.data?.message || 'Failed to register walk-in patient');
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -529,23 +544,32 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
                 </div>
               )}
 
+              {registrationError && (
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{registrationError}</span>
+                </div>
+              )}
+
               <form onSubmit={handleWalkInRegister} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-600 uppercase">First Name</label>
+                    <label className="text-xs font-bold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
                     <Input
                       placeholder="Juan"
                       value={newPatient.firstName}
                       onChange={e => setNewPatient({...newPatient, firstName: e.target.value})}
+                      disabled={isRegistering}
                       required
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-600 uppercase">Last Name</label>
+                    <label className="text-xs font-bold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
                     <Input
                       placeholder="Dela Cruz"
                       value={newPatient.lastName}
                       onChange={e => setNewPatient({...newPatient, lastName: e.target.value})}
+                      disabled={isRegistering}
                       required
                     />
                   </div>
@@ -553,19 +577,21 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-1 col-span-2">
-                    <label className="text-xs font-bold text-gray-600 uppercase">Birthdate</label>
+                    <label className="text-xs font-bold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
                     <Input
                       type="date"
                       value={newPatient.birthdate}
                       onChange={e => setNewPatient({...newPatient, birthdate: e.target.value})}
+                      disabled={isRegistering}
                       required
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-600 uppercase">Sex</label>
+                    <label className="text-xs font-bold text-gray-600 uppercase">Sex <span className="text-rose-600">*</span></label>
                     <Select
                       value={newPatient.sex}
                       onValueChange={val => setNewPatient({...newPatient, sex: val})}
+                      disabled={isRegistering}
                     >
                       <SelectTrigger className="rounded-xl">
                         <SelectValue />
@@ -585,13 +611,15 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
                       placeholder="09171234567"
                       value={newPatient.contactNumber}
                       onChange={e => setNewPatient({...newPatient, contactNumber: e.target.value})}
+                      disabled={isRegistering}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-600 uppercase">Patient Type</label>
+                    <label className="text-xs font-bold text-gray-600 uppercase">Patient Type <span className="text-rose-600">*</span></label>
                     <Select
                       value={newPatient.patientTypeId}
                       onValueChange={val => setNewPatient({...newPatient, patientTypeId: val})}
+                      disabled={isRegistering}
                     >
                       <SelectTrigger className="rounded-xl">
                         <SelectValue placeholder="Select patient type" />
@@ -613,6 +641,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
                     placeholder="Barangay, City, Province"
                     value={newPatient.address}
                     onChange={e => setNewPatient({...newPatient, address: e.target.value})}
+                    disabled={isRegistering}
                   />
                 </div>
 
@@ -622,12 +651,13 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
                     placeholder="Walk-in referral for Abdominal Ultrasound..."
                     value={visitNotes}
                     onChange={e => setVisitNotes(e.target.value)}
+                    disabled={isRegistering}
                   />
                 </div>
 
                 <div className="flex justify-end pt-3">
-                  <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold text-xs px-6 py-2 rounded-xl">
-                    Register Walk-In & Issue Queue Ticket
+                  <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold text-xs px-6 py-2 rounded-xl" disabled={isRegistering}>
+                    {isRegistering ? 'Registering...' : 'Register Walk-In & Issue Queue Ticket'}
                   </Button>
                 </div>
               </form>

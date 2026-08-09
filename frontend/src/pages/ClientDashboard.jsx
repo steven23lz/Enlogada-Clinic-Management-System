@@ -8,6 +8,7 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
+import { validatePatientProfile } from '../validations/patientValidation';
 import { 
   Activity, 
   Calendar, 
@@ -55,6 +56,8 @@ const ClientDashboard = () => {
     emergencyContact: '',
     patientTypeId: ''
   });
+  const [isAddingProfile, setIsAddingProfile] = useState(false);
+  const [addProfileError, setAddProfileError] = useState('');
 
   // Appointment Booking Wizard State
   const [showBooking, setShowBooking] = useState(false);
@@ -128,6 +131,15 @@ const ClientDashboard = () => {
 
   const handleAddProfile = async (e) => {
     e.preventDefault();
+    setAddProfileError('');
+
+    const validationError = validatePatientProfile(newProfileData);
+    if (validationError) {
+      setAddProfileError(validationError);
+      return;
+    }
+
+    setIsAddingProfile(true);
     try {
       const response = await api.post('/patients', newProfileData);
       const created = response.data.data.patient;
@@ -145,7 +157,9 @@ const ClientDashboard = () => {
       await fetchProfiles();
       setSelectedProfileId(created.id.toString());
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to create patient profile');
+      setAddProfileError(err.response?.data?.message || 'Failed to create patient profile');
+    } finally {
+      setIsAddingProfile(false);
     }
   };
 
@@ -290,7 +304,7 @@ const ClientDashboard = () => {
             </div>
           </div>
 
-          <Dialog open={showAddProfile} onOpenChange={setShowAddProfile}>
+          <Dialog open={showAddProfile} onOpenChange={(open) => { setShowAddProfile(open); if (!open) setAddProfileError(''); }}>
             <DialogTrigger asChild>
               <Button className="bg-[#769046] hover:bg-[#657c3a] text-white flex items-center space-x-2 rounded-xl font-bold text-xs shadow-sm cursor-pointer transition-all">
                 <UserPlus className="w-4 h-4" />
@@ -305,22 +319,30 @@ const ClientDashboard = () => {
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleAddProfile} className="space-y-4 pt-2">
+                {addProfileError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{addProfileError}</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">First Name</label>
+                    <label className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
                     <Input
                       placeholder="Juan"
                       value={newProfileData.firstName}
                       onChange={e => setNewProfileData({...newProfileData, firstName: e.target.value})}
+                      disabled={isAddingProfile}
                       required
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Last Name</label>
+                    <label className="text-xs font-semibold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
                     <Input
                       placeholder="Dela Cruz"
                       value={newProfileData.lastName}
                       onChange={e => setNewProfileData({...newProfileData, lastName: e.target.value})}
+                      disabled={isAddingProfile}
                       required
                     />
                   </div>
@@ -328,19 +350,21 @@ const ClientDashboard = () => {
 
                 <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1.5 col-span-2">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Birthdate</label>
+                    <label className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
                     <Input
                       type="date"
                       value={newProfileData.birthdate}
                       onChange={e => setNewProfileData({...newProfileData, birthdate: e.target.value})}
+                      disabled={isAddingProfile}
                       required
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Sex</label>
+                    <label className="text-xs font-semibold text-gray-600 uppercase">Sex <span className="text-rose-600">*</span></label>
                     <Select
                       value={newProfileData.sex}
                       onValueChange={val => setNewProfileData({...newProfileData, sex: val})}
+                      disabled={isAddingProfile}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -360,13 +384,15 @@ const ClientDashboard = () => {
                       placeholder="09171234567"
                       value={newProfileData.contactNumber}
                       onChange={e => setNewProfileData({...newProfileData, contactNumber: e.target.value})}
+                      disabled={isAddingProfile}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Patient Billing Category</label>
+                    <label className="text-xs font-semibold text-gray-600 uppercase">Patient Billing Category <span className="text-rose-600">*</span></label>
                     <Select
                       value={newProfileData.patientTypeId}
                       onValueChange={val => setNewProfileData({...newProfileData, patientTypeId: val})}
+                      disabled={isAddingProfile}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Category" />
@@ -388,6 +414,7 @@ const ClientDashboard = () => {
                     placeholder="Barangay, City, Province"
                     value={newProfileData.address}
                     onChange={e => setNewProfileData({...newProfileData, address: e.target.value})}
+                    disabled={isAddingProfile}
                   />
                 </div>
 
@@ -397,12 +424,15 @@ const ClientDashboard = () => {
                     placeholder="Name & Contact Number"
                     value={newProfileData.emergencyContact}
                     onChange={e => setNewProfileData({...newProfileData, emergencyContact: e.target.value})}
+                    disabled={isAddingProfile}
                   />
                 </div>
 
                 <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
-                  <Button type="button" variant="outline" onClick={() => setShowAddProfile(false)}>Cancel</Button>
-                  <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white">Save Profile</Button>
+                  <Button type="button" variant="outline" onClick={() => setShowAddProfile(false)} disabled={isAddingProfile}>Cancel</Button>
+                  <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white" disabled={isAddingProfile}>
+                    {isAddingProfile ? 'Saving...' : 'Save Profile'}
+                  </Button>
                 </div>
               </form>
             </DialogContent>
