@@ -87,7 +87,7 @@ const AdminDashboard = ({ activeNav = 'dashboard', onSelectNav }) => {
   };
 
   return (
-    <SidebarLayout title="SuperAdmin Management Console" activeNav={activeNav} onSelectNav={onSelectNav}>
+    <SidebarLayout title="Management Console" activeNav={activeNav} onSelectNav={onSelectNav}>
       <div className="space-y-6">
         
         {/* Welcome Banner */}
