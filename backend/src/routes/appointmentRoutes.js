@@ -10,6 +10,9 @@ router.post('/', verifyToken, appointmentController.create);
 // Client views their own bookings
 router.get('/my-bookings', verifyToken, appointmentController.getMyBookings);
 
+// Admin/SuperAdmin oversight — list all appointments, optionally filtered
+router.get('/', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), appointmentController.getAll);
+
 // Client or Receptionist retrieves bookable time slots for a given date
 router.get('/availability', verifyToken, appointmentController.getAvailability);
 

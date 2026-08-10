@@ -151,6 +151,10 @@ class AppointmentService {
     return await appointmentRepository.findByPatientUserId(userId);
   }
 
+  async getAllAppointments(filters) {
+    return await appointmentRepository.findAll(filters);
+  }
+
   async cancelAppointment(id, requestingUser) {
     const appointment = await appointmentRepository.findById(id);
     if (!appointment) {

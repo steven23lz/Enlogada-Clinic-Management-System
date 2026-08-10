@@ -66,6 +66,19 @@ class AppointmentController {
     }
   }
 
+  async getAll(req, res, next) {
+    try {
+      const { status, dateFrom, dateTo } = req.query;
+      const appointments = await appointmentService.getAllAppointments({ status, dateFrom, dateTo });
+      return res.status(200).json({
+        status: 'success',
+        data: { appointments }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getMyBookings(req, res, next) {
     try {
       const userId = req.user.userId;

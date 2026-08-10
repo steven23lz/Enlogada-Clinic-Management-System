@@ -57,6 +57,38 @@ class AppointmentRepository {
     return result.rows;
   }
 
+  async findAll({ status, dateFrom, dateTo } = {}) {
+    const conditions = [];
+    const params = [];
+
+    if (status) {
+      params.push(status);
+      conditions.push(`a.status = $${params.length}`);
+    }
+    if (dateFrom) {
+      params.push(dateFrom);
+      conditions.push(`a.scheduled_date >= $${params.length}`);
+    }
+    if (dateTo) {
+      params.push(dateTo);
+      conditions.push(`a.scheduled_date <= $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const queryText = `
+      SELECT a.*, pv.patient_id, pv.visit_type, pv.status as visit_status, pv.queue_number,
+             p.first_name, p.last_name
+      FROM appointments a
+      JOIN patient_visits pv ON a.patient_visit_id = pv.id
+      JOIN patients p ON pv.patient_id = p.id
+      ${whereClause}
+      ORDER BY a.scheduled_date DESC, a.scheduled_time DESC
+    `;
+    const result = await db.query(queryText, params);
+    return result.rows;
+  }
+
   async updateAppointmentStatus(id, status) {
     const queryText = `
       UPDATE appointments

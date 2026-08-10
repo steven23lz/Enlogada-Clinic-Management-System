@@ -72,6 +72,32 @@ class UserRepository {
     return result.rows[0]?.password_hash;
   }
 
+  async findStaffUsers(roleNames) {
+    const queryText = `
+      SELECT u.id, u.first_name, u.last_name, u.email, u.contact_number, u.status, u.created_at,
+             COALESCE(ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles
+      FROM users u
+      JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = TRUE
+      JOIN roles r ON ur.role_id = r.id
+      WHERE r.name = ANY($1::text[])
+      GROUP BY u.id
+      ORDER BY u.created_at DESC
+    `;
+    const result = await db.query(queryText, [roleNames]);
+    return result.rows;
+  }
+
+  async updateUserStatus(userId, status) {
+    const queryText = `
+      UPDATE users
+      SET status = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, first_name, last_name, email, status
+    `;
+    const result = await db.query(queryText, [status, userId]);
+    return result.rows[0];
+  }
+
   async findRoleIdByName(roleName) {
     const queryText = 'SELECT id FROM roles WHERE name = $1';
     const result = await db.query(queryText, [roleName]);
