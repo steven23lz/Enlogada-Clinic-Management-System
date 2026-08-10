@@ -34,6 +34,20 @@ const NAV_TO_CATEGORY = {
   'xray-ops': 'Xray'
 };
 
+// The attachment URL is staff-entered free text with no format validation anywhere else in
+// the pipeline (it's rendered client-side in ClientDashboard.jsx behind a matching render-side
+// guard — see the Module 6 report). Validating it here, at the point of entry, stops an unsafe
+// value from ever being submitted in the first place.
+const isValidAttachmentUrl = (url) => {
+  if (!url) return true; // optional field
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
 const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const { user } = useAuth();
   const [pendingTests, setPendingTests] = useState([]);
@@ -127,6 +141,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       return;
     }
 
+    if (!isValidAttachmentUrl(fileUrl)) {
+      setUploadError('Attachment URL must be a valid http:// or https:// link, or left blank.');
+      return;
+    }
+
     // Releasing a diagnostic result is clinically significant and effectively irreversible
     // from this screen — require explicit confirmation before it fires. See .agents Phase 12.
     setShowReleaseConfirm(true);
@@ -142,6 +161,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         remarks,
         fileUrl: fileUrl || null
       });
+
+      // The upload call above only records the findings — this is the actual "release" step
+      // that notifies the patient by email. It was previously never called from this screen,
+      // so "Authorize & Release Result" recorded findings but never released/notified anyone.
+      await api.post(`/results/${activeTest.visit_test_id}/release`);
 
       setShowReleaseConfirm(false);
       setShowUploadModal(false);
@@ -325,7 +349,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
 
             <form onSubmit={handleUploadResult} className="space-y-4 pt-2">
               {uploadError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{uploadError}</span>
                 </div>
