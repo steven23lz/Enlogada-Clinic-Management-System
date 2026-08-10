@@ -2,7 +2,8 @@
 -- Database: PostgreSQL (Local/Supabase hosted)
 
 -- Drop existing tables to allow clean recreation
-DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS notification_reads CASCADE;
+DROP TABLE IF EXISTS notification_events CASCADE;
 DROP TABLE IF EXISTS clinic_operating_hours CASCADE;
 DROP TABLE IF EXISTS password_reset_tokens CASCADE;
 DROP TABLE IF EXISTS role_permissions CASCADE;
@@ -253,21 +254,30 @@ CREATE TABLE clinic_operating_hours (
     )
 );
 
--- 9. Notifications (Module 18). Broadcast-to-role events (appointment/result/payment) fan out
--- into one row per recipient user, so each recipient has an independent read state rather than
--- sharing one row that every recipient's "mark as read" would race over.
-CREATE TABLE notifications (
+-- 9. Notifications (Module 18). Split into two tables rather than one flat, per-recipient
+-- table: an event (title/message/type) is a fact that exists once and never changes; who has
+-- read it is a separate, per-user, mutable fact. Flattening both into one row per recipient
+-- (the original design) duplicated the event text N times per broadcast and offered no single
+-- place to correct it. This shape avoids that duplication and matches the real entities.
+CREATE TABLE notification_events (
     id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL,
     title VARCHAR(200) NOT NULL,
     message TEXT NOT NULL,
     type VARCHAR(20) NOT NULL DEFAULT 'info',
-    is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_notifications_type CHECK (type IN ('info', 'success', 'warning'))
+    CONSTRAINT chk_notification_events_type CHECK (type IN ('info', 'success', 'warning'))
 );
-CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
+
+CREATE TABLE notification_reads (
+    id SERIAL PRIMARY KEY,
+    event_id INT NOT NULL,
+    user_id INT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    CONSTRAINT fk_notification_reads_event FOREIGN KEY (event_id) REFERENCES notification_events(id) ON DELETE CASCADE,
+    CONSTRAINT fk_notification_reads_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT uq_notification_reads_event_user UNIQUE (event_id, user_id)
+);
+CREATE INDEX idx_notification_reads_user ON notification_reads(user_id, is_read);
 
 -- Seed Initial Data
 INSERT INTO roles (name) VALUES
