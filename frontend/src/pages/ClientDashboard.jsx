@@ -33,8 +33,35 @@ import {
   Sparkles,
   XCircle,
   CalendarClock,
-  Pencil
+  Pencil,
+  HeartPulse
 } from 'lucide-react';
+
+// Mirrors the 5 seeded test_categories rows exactly (database/schema.sql) so every
+// category a client can actually have a result in gets a distinct, correct icon.
+const CATEGORY_ICONS = {
+  Ultrasound: <Stethoscope className="w-5 h-5" />,
+  Xray: <Scan className="w-5 h-5" />,
+  Laboratory: <FlaskConical className="w-5 h-5" />,
+  '2D Echo': <HeartPulse className="w-5 h-5" />,
+  ECG: <Activity className="w-5 h-5" />
+};
+
+// test_results.file_url is staff-entered free text with no format validation anywhere in the
+// upload pipeline (see backend/src/controllers/resultController.js uploadResult). Rendered
+// directly as an <a href>, an unvalidated value (e.g. a "javascript:" URI) would execute in the
+// client's session — only allow schemes/paths that can never execute script.
+const isSafeResultUrl = (url) => {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('/')) return true;
+  try {
+    const parsed = new URL(trimmed, window.location.origin);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
 
 const ClientDashboard = ({ onNavigate }) => {
   const { user } = useAuth();
@@ -1011,8 +1038,10 @@ const ClientDashboard = ({ onNavigate }) => {
                   />
                 </div>
 
-                <div className="flex bg-gray-100 p-1 rounded-xl text-xs">
-                  {['All', 'Laboratory', 'Ultrasound', 'Xray'].map(cat => (
+                <div className="flex bg-gray-100 p-1 rounded-xl text-xs flex-wrap">
+                  {/* Mirrors the 5 seeded test_categories rows exactly (database/schema.sql) —
+                      previously only 3 of 5 were filterable, silently hiding 2D Echo/ECG results. */}
+                  {['All', 'Laboratory', 'Ultrasound', 'Xray', '2D Echo', 'ECG'].map(cat => (
                     <button
                       key={cat}
                       onClick={() => setFilterCategory(cat)}
@@ -1031,13 +1060,11 @@ const ClientDashboard = ({ onNavigate }) => {
             <div className="space-y-3">
               {filteredHistory.length > 0 ? (
                 filteredHistory.map(item => (
-                  <Card key={item.id} className="border-gray-100 shadow-xs rounded-2xl hover:shadow-md transition-all">
+                  <Card key={item.visit_test_id} className="border-gray-100 shadow-xs rounded-2xl hover:shadow-md transition-all">
                     <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div className="flex items-start space-x-3.5">
                         <div className="w-10 h-10 bg-gray-50 border border-gray-200/80 rounded-xl flex items-center justify-center flex-shrink-0 text-[#769046]">
-                          {item.category_name === 'Ultrasound' ? <Stethoscope className="w-5 h-5" /> : 
-                           item.category_name === 'Xray' ? <Scan className="w-5 h-5" /> : 
-                           <FlaskConical className="w-5 h-5" />}
+                          {CATEGORY_ICONS[item.category_name] || <FlaskConical className="w-5 h-5" />}
                         </div>
 
                         <div className="space-y-1">
@@ -1122,6 +1149,7 @@ const ClientDashboard = ({ onNavigate }) => {
                                     <FileText className="w-4 h-4 text-emerald-600" />
                                     <span className="font-bold text-emerald-800">Scanned Diagnostic Image / PDF Attachment</span>
                                   </div>
+                                  {isSafeResultUrl(item.file_url) ? (
                                   <a
                                     href={item.file_url}
                                     target="_blank"
@@ -1131,6 +1159,9 @@ const ClientDashboard = ({ onNavigate }) => {
                                     <Download className="w-3.5 h-3.5" />
                                     <span>Download Attachment</span>
                                   </a>
+                                  ) : (
+                                    <span className="text-xs font-bold text-amber-700">Attachment link unavailable</span>
+                                  )}
                                 </div>
                               )}
                             </div>
