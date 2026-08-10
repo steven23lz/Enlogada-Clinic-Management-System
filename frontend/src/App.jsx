@@ -85,7 +85,7 @@ const MainApp = () => {
     }
 
     if (activeNav === 'services-cat') return <ServicesCatalog activeNav={activeNav} onSelectNav={setActiveNav} />;
-    if (['reception-queue', 'reception-walkin', 'reception-checkin'].includes(activeNav)) {
+    if (['reception-queue', 'reception-walkin', 'reception-checkin', 'reception-history'].includes(activeNav)) {
       return <ReceptionistDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
     }
     if (['cashier-queue', 'cashier-history'].includes(activeNav)) {

@@ -141,6 +141,11 @@ test.describe('Laboratory — browser flow', () => {
     await page.fill('input[type="email"]', LAB_STAFF.email);
     await page.fill('input[type="password"]', LAB_STAFF.password);
     await page.locator('button[type="submit"]').click();
+    // UI/UX Phase 2: the worklist is now paginated (10/page) against a queue that has
+    // accumulated hundreds of entries over this test suite's lifetime, so a freshly created
+    // entry isn't guaranteed to land on page 1 — search narrows it down first, same as a real
+    // user would.
+    await page.getByPlaceholder('Search patient, test, queue...').fill(patient.last_name);
     await expect(page.getByText(`M9 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
     const row1 = page.getByText(`M9 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
@@ -166,6 +171,8 @@ test.describe('Laboratory — browser flow', () => {
     await page.fill('input[type="email"]', LAB_STAFF.email);
     await page.fill('input[type="password"]', LAB_STAFF.password);
     await page.locator('button[type="submit"]').click();
+    // UI/UX Phase 2: search narrows the paginated worklist down to this specific patient.
+    await page.getByPlaceholder('Search patient, test, queue...').fill(patient.last_name);
     await expect(page.getByText(`M9 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
     const row2 = page.getByText(`M9 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');

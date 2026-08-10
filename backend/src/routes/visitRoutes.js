@@ -10,6 +10,10 @@ router.post('/', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionis
 // Active visits for front desk / cashier dashboard
 router.get('/active', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier'), visitController.getActiveVisits);
 
+// UI/UX Phase 2: any-status, date-ranged visit history for Reception's Visit History view.
+// Must be registered before '/:id' so 'history' isn't swallowed as an :id param.
+router.get('/history', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), visitController.getVisitsByDateRange);
+
 // Get specific visit details
 router.get('/:id', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier'), visitController.getVisitById);
 

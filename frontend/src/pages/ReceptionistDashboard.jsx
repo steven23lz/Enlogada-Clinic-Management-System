@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import MetricCard from '../components/ui/metric-card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
+import { SearchInput } from '../components/ui/search-input';
+import { StatusBadge } from '../components/ui/status-badge';
+import Pagination from '../components/ui/pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
@@ -15,7 +18,6 @@ import QrScanner from '../components/QrScanner';
 import {
   Check,
   ClipboardList,
-  Search,
   UserCheck,
   ShieldAlert,
   FilePlus,
@@ -30,15 +32,20 @@ import {
   CheckCircle2,
   Users,
   Camera,
-  Keyboard
+  Keyboard,
+  History,
+  RefreshCw
 } from 'lucide-react';
 
 const PAGE_TITLES = {
   'reception-queue': 'Active Patient Queue',
   'reception-walkin': 'Walk-In Registration',
   'reception-checkin': 'Appointment Check-In',
+  'reception-history': 'Visit History',
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const QUEUE_PAGE_SIZE = 25;
 
 const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) => {
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
@@ -49,8 +56,29 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [patientTypes, setPatientTypes] = useState([]);
   const [hmoProviders, setHmoProviders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [queueError, setQueueError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const searchDebounceRef = useRef(null);
+
+  // Server-driven pagination state (UI/UX Phase 2): the queue can genuinely grow into the
+  // hundreds on a busy day, so search/status filtering and paging now happen in the backend
+  // query, not in a client-side .filter() over every visit already downloaded.
+  const [queuePage, setQueuePage] = useState(1);
+  const [queueTotal, setQueueTotal] = useState(0);
+  const [queueTotalPages, setQueueTotalPages] = useState(1);
+  const [queuePendingCount, setQueuePendingCount] = useState(0);
+  const [queueProcessingCount, setQueueProcessingCount] = useState(0);
+  const [queueWalkinCount, setQueueWalkinCount] = useState(0);
+
+  // Visit History state (new nav destination, UI/UX Phase 2)
+  const [historyVisits, setHistoryVisits] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyStartDate, setHistoryStartDate] = useState(todayStr());
+  const [historyEndDate, setHistoryEndDate] = useState(todayStr());
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
   // QR Code / Ref Verification State
   const [searchRef, setSearchRef] = useState('');
@@ -98,14 +126,48 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [hmoError, setHmoError] = useState('');
   const [hmoSuccess, setHmoSuccess] = useState('');
 
-  const fetchActiveVisits = useCallback(async () => {
+  const fetchActiveVisits = useCallback(async ({ page = 1, search = searchQuery, status = statusFilter } = {}) => {
+    setLoading(true);
+    setQueueError('');
     try {
-      const response = await api.get('/visits/active');
-      setActiveVisits(response.data.data.visits || []);
+      const response = await api.get('/visits/active', {
+        params: {
+          page,
+          limit: QUEUE_PAGE_SIZE,
+          search: search || undefined,
+          status: status && status !== 'All' ? status : undefined
+        }
+      });
+      const data = response.data.data;
+      setActiveVisits(data.visits || []);
+      setQueueTotal(data.total || 0);
+      setQueueTotalPages(data.totalPages || 1);
+      setQueuePendingCount(data.pendingCount || 0);
+      setQueueProcessingCount(data.processingCount || 0);
+      setQueueWalkinCount(data.walkinCount || 0);
+      setQueuePage(data.page || page);
     } catch (err) {
       console.error('Failed to fetch active visits:', err);
+      setQueueError('Could not load the active queue. Please try again.');
     } finally {
       setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchVisitHistory = useCallback(async (startDate, endDate, search) => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const response = await api.get('/visits/history', {
+        params: { startDate, endDate, search: search || undefined }
+      });
+      setHistoryVisits(response.data.data.visits || []);
+    } catch (err) {
+      console.error('Failed to fetch visit history:', err);
+      setHistoryError('Could not load visit history. Please try again.');
+    } finally {
+      setHistoryLoading(false);
     }
   }, []);
 
@@ -125,9 +187,38 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   }, []);
 
   useEffect(() => {
-    fetchActiveVisits();
+    fetchActiveVisits({ page: 1, search: '', status: 'All' });
     fetchStaticData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchActiveVisits, fetchStaticData]);
+
+  // Lazy-load Visit History only once the tab is actually opened, not on every Receptionist
+  // dashboard mount.
+  useEffect(() => {
+    if (view === 'reception-history' && !historyLoaded) {
+      setHistoryLoaded(true);
+      fetchVisitHistory(historyStartDate, historyEndDate, historySearch);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  const handleQueueSearchChange = (value) => {
+    setSearchQuery(value);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      fetchActiveVisits({ page: 1, search: value, status: statusFilter });
+    }, 400);
+  };
+
+  const handleQueueStatusFilterChange = (value) => {
+    setStatusFilter(value);
+    fetchActiveVisits({ page: 1, search: searchQuery, status: value });
+  };
+
+  const handleQueuePageChange = (newPage) => {
+    if (newPage < 1 || newPage > queueTotalPages) return;
+    fetchActiveVisits({ page: newPage, search: searchQuery, status: statusFilter });
+  };
 
   const handleVerifyReference = async (e, refOverride) => {
     e?.preventDefault?.();
@@ -163,7 +254,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     try {
       await api.patch(`/appointments/${appointmentId}/status`, { status: 'Confirmed' });
       await api.patch(`/visits/${visitId}/status`, { status: 'Processing' });
-      fetchActiveVisits();
+      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
       setShowCheckInConfirm(false);
       setSearchRef('');
       setVerifyResult(null);
@@ -213,7 +304,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         patientTypeId: ''
       });
       setVisitNotes('');
-      fetchActiveVisits();
+      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
     } catch (err) {
       setRegistrationError(err.response?.data?.message || 'Failed to register walk-in patient');
     } finally {
@@ -258,7 +349,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setPatientSearchResults(null);
       setPatientSearchQuery('');
       setVisitNotes('');
-      fetchActiveVisits();
+      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
     } catch (err) {
       setPatientSearchError(err.response?.data?.message || 'Failed to check in existing patient.');
     } finally {
@@ -282,7 +373,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         testIds: selectedTestIds.map(id => parseInt(id, 10))
       });
       setShowTestsModal(false);
-      fetchActiveVisits();
+      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to assign tests to visit');
     }
@@ -326,7 +417,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setTimeout(() => {
         setShowHmoModal(false);
         setHmoSuccess('');
-        fetchActiveVisits();
+        fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
       }, 1500);
     } catch (err) {
       setHmoError(err.response?.data?.message || 'Failed to log HMO authorization');
@@ -343,19 +434,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     }
   };
 
-  const filteredVisits = activeVisits.filter(visit => {
-    const matchesSearch = !searchQuery || 
-      `${visit.first_name} ${visit.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (visit.queue_number && visit.queue_number.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    const matchesStatus = statusFilter === 'All' || visit.visit_status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const pendingVisits = activeVisits.filter(v => v.visit_status === 'Pending').length;
-  const processingVisits = activeVisits.filter(v => v.visit_status === 'Processing').length;
-  const walkinCount = activeVisits.filter(v => v.visit_type === 'Walk in').length;
-
   return (
     <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
       <div className="space-y-6">
@@ -364,27 +442,23 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           <>
             {/* KPI Metrics Header */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <MetricCard label="Active Queue Visits" value={activeVisits.length} icon={UserCheck} tone="green" />
-              <MetricCard label="Pending Intake" value={pendingVisits} icon={Clock} tone="amber" />
-              <MetricCard label="In Diagnostic / Processing" value={processingVisits} icon={ClipboardList} tone="indigo" />
-              <MetricCard label="Walk-In Intake Today" value={walkinCount} icon={UserPlus} tone="emerald" />
+              <MetricCard label="Active Queue Visits" value={queueTotal} icon={UserCheck} tone="green" />
+              <MetricCard label="Pending Intake" value={queuePendingCount} icon={Clock} tone="amber" />
+              <MetricCard label="In Diagnostic / Processing" value={queueProcessingCount} icon={ClipboardList} tone="indigo" />
+              <MetricCard label="Walk-In Intake Today" value={queueWalkinCount} icon={UserPlus} tone="emerald" />
             </div>
 
             {/* Search + Status Filter Toolbar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
               <div className="flex items-center space-x-3 w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-64">
-                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search patient name or Queue #..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus:outline-none focus:ring-1 focus:ring-[#769046]"
-                  />
-                </div>
+                <SearchInput
+                  placeholder="Search patient name or Queue #..."
+                  value={searchQuery}
+                  onChange={e => handleQueueSearchChange(e.target.value)}
+                  containerClassName="flex-1 sm:w-64"
+                />
 
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select value={statusFilter} onValueChange={handleQueueStatusFilterChange}>
                   <SelectTrigger className="w-36 text-xs rounded-xl">
                     <SelectValue placeholder="Status Filter" />
                   </SelectTrigger>
@@ -396,7 +470,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   </SelectContent>
                 </Select>
               </div>
-              <span className="text-xs font-bold text-gray-400 whitespace-nowrap">{filteredVisits.length} visit(s)</span>
+              <span className="text-xs font-bold text-gray-400 whitespace-nowrap">Showing {activeVisits.length} of {queueTotal} visit(s)</span>
             </div>
 
             {/* Active Queue Table */}
@@ -415,14 +489,27 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {loading ? (
+                    {queueError ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-xs text-rose-600 font-semibold">
+                          {queueError}{' '}
+                          <button
+                            type="button"
+                            onClick={() => fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter })}
+                            className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
+                          >
+                            Retry
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    ) : loading ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-8 text-xs text-gray-500 font-semibold">
                           Loading active queue…
                         </TableCell>
                       </TableRow>
-                    ) : filteredVisits.length > 0 ? (
-                      filteredVisits.map(visit => (
+                    ) : activeVisits.length > 0 ? (
+                      activeVisits.map(visit => (
                         <TableRow key={visit.id} className="hover:bg-gray-50/50 transition-colors">
                           <TableCell className="py-3">
                             <div className="flex items-center space-x-2">
@@ -519,8 +606,123 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   </TableBody>
                 </Table>
               </CardContent>
+              <Pagination
+                page={queuePage}
+                totalPages={queueTotalPages}
+                onPageChange={handleQueuePageChange}
+                totalLabel={`${queueTotal} total`}
+              />
             </Card>
           </>
+        )}
+
+        {view === 'reception-history' && (
+          <div className="space-y-6">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900 m-0 flex items-center space-x-2">
+                  <History className="w-5 h-5 text-[#769046]" />
+                  <span>Visit History</span>
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-1">Look up past patient visits, of any status, by date range.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <SearchInput
+                  placeholder="Search patient or Queue #..."
+                  value={historySearch}
+                  onChange={e => setHistorySearch(e.target.value)}
+                  containerClassName="w-56"
+                />
+                <Input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="text-xs w-36" />
+                <span className="text-xs text-gray-400">to</span>
+                <Input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="text-xs w-36" />
+                <Button
+                  variant="outline"
+                  onClick={() => fetchVisitHistory(historyStartDate, historyEndDate, historySearch)}
+                  className="flex items-center space-x-1.5 text-xs font-semibold"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Apply</span>
+                </Button>
+              </div>
+            </div>
+
+            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
+              <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-bold text-slate-800">{historyVisits.length} Visit(s)</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader className="bg-gray-50/80">
+                    <TableRow>
+                      <TableHead className="text-[10px] font-bold uppercase py-3">Queue Ticket</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-3">Patient</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-3">Visit Type</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-3">Tests</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {historyError ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-xs text-rose-600 font-semibold">
+                          {historyError}{' '}
+                          <button
+                            type="button"
+                            onClick={() => fetchVisitHistory(historyStartDate, historyEndDate, historySearch)}
+                            className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
+                          >
+                            Retry
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    ) : historyLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-xs text-gray-500 font-semibold">
+                          Loading visit history…
+                        </TableCell>
+                      </TableRow>
+                    ) : historyVisits.length > 0 ? (
+                      historyVisits.map(v => (
+                        <TableRow key={v.id} className="hover:bg-gray-50/50 transition-colors">
+                          <TableCell className="py-3">
+                            <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
+                              {v.queue_number || `V-${v.id}`}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-3 font-bold text-xs text-slate-900">
+                            {v.first_name} {v.last_name}
+                            <span className="block text-[10px] text-gray-400 font-normal">{v.patient_type_name}</span>
+                          </TableCell>
+                          <TableCell className="py-3 text-xs">
+                            <Badge variant="outline" className="text-[10px] font-bold border-gray-200">
+                              {v.visit_type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-3 text-xs text-gray-600">
+                            {v.tests && v.tests.length > 0 ? v.tests.map(t => t.test_name).join(', ') : <span className="text-gray-400 italic">No tests attached</span>}
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <StatusBadge status={v.visit_status} />
+                          </TableCell>
+                          <TableCell className="py-3 text-xs text-gray-500 text-right">
+                            {new Date(v.created_at).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-xs text-gray-500 font-semibold italic">
+                          No visits found in this date range.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {view === 'reception-walkin' && (

@@ -128,7 +128,14 @@ test.describe('Ultrasound Staff — browser flow', () => {
     await page.locator('button[type="submit"]').click();
 
     await expect(page.getByText('Ultrasound (incl. 2D Echo)').first()).toBeVisible({ timeout: 10000 });
+    // UI/UX Phase 2: the worklist is now paginated (10/page) against a queue that has
+    // accumulated hundreds of entries over this test suite's lifetime, so a freshly created
+    // entry isn't guaranteed to land on page 1 — search narrows it down first, same as a real
+    // user would. Checked one at a time since each has a distinct unique last name.
+    const searchBox = page.getByPlaceholder('Search patient, test, queue...');
+    await searchBox.fill(echoPatient.last_name);
     await expect(page.getByText(`M10 ${echoPatient.last_name}`)).toBeVisible({ timeout: 10000 });
+    await searchBox.fill(usPatient.last_name);
     await expect(page.getByText(`M10 ${usPatient.last_name}`)).toBeVisible({ timeout: 10000 });
   });
 
@@ -143,6 +150,8 @@ test.describe('Ultrasound Staff — browser flow', () => {
     await page.fill('input[type="email"]', ULTRASOUND_STAFF.email);
     await page.fill('input[type="password"]', ULTRASOUND_STAFF.password);
     await page.locator('button[type="submit"]').click();
+    // UI/UX Phase 2: search narrows the paginated worklist down to this specific patient.
+    await page.getByPlaceholder('Search patient, test, queue...').fill(patient.last_name);
     await expect(page.getByText(`M10 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
     const row = page.getByText(`M10 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');

@@ -146,6 +146,8 @@ test.describe('X-ray Staff — browser flow', () => {
     await page.fill('input[type="email"]', XRAY_STAFF.email);
     await page.fill('input[type="password"]', XRAY_STAFF.password);
     await page.locator('button[type="submit"]').click();
+    // UI/UX Phase 2: search narrows the paginated worklist down to this specific patient.
+    await page.getByPlaceholder('Search patient, test, queue...').fill(patient.last_name);
     await expect(page.getByText(`M11 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
     const row = page.getByText(`M11 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');

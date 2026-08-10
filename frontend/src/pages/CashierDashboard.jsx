@@ -5,29 +5,24 @@ import { Card, CardContent } from '../components/ui/card';
 import MetricCard from '../components/ui/metric-card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
+import { SearchInput } from '../components/ui/search-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import api from '../config/api';
-import { 
-  Receipt, 
-  Coins, 
-  Wallet, 
-  CreditCard, 
-  Banknote, 
-  ShieldAlert, 
-  CheckCircle, 
-  Printer, 
-  Search, 
-  User, 
+import {
+  Receipt,
+  Wallet,
+  Banknote,
+  CheckCircle,
+  Printer,
   DollarSign,
-  TrendingUp,
-  FileCheck,
-  Building2,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  ArrowUpDown,
+  RefreshCw
 } from 'lucide-react';
 
 const PAGE_TITLES = {
@@ -35,6 +30,16 @@ const PAGE_TITLES = {
   'cashier-history': 'Transaction History',
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
+// Wait-time triage badge on the billing queue: green under 15 minutes, amber 15-30, rose 30+.
+const getWaitInfo = (createdAt) => {
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000));
+  let tone = 'bg-emerald-100 text-emerald-700';
+  if (minutes >= 30) tone = 'bg-rose-100 text-rose-700';
+  else if (minutes >= 15) tone = 'bg-amber-100 text-amber-700';
+  return { minutes, tone };
+};
 
 const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
@@ -44,6 +49,20 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All');
+  const [sortOrder, setSortOrder] = useState('oldest');
+  const [patientTypes, setPatientTypes] = useState([]);
+
+  // Transaction History view state — deliberately separate from `transactions` above, which
+  // stays pinned to *today* (it also drives paidVisitIds and the queue's collections metrics).
+  // Reusing one state for both would mean picking a date range in History silently makes
+  // "Today's Collections" stop meaning today.
+  const [historyTransactions, setHistoryTransactions] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [historyStartDate, setHistoryStartDate] = useState(todayStr());
+  const [historyEndDate, setHistoryEndDate] = useState(todayStr());
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
   // Selected Billing Item in POS Layout
   const [selectedVisit, setSelectedVisit] = useState(null);
@@ -77,10 +96,43 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     }
   }, []);
 
+  const fetchPatientTypes = useCallback(async () => {
+    try {
+      const res = await api.get('/patients/types');
+      setPatientTypes(res.data.data.patientTypes || []);
+    } catch (err) {
+      console.error('Failed to fetch patient types:', err);
+    }
+  }, []);
+
+  const fetchTransactionHistory = useCallback(async (startDate, endDate) => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const response = await api.get('/payments/transactions', { params: { startDate, endDate } });
+      setHistoryTransactions(response.data.data.transactions || []);
+    } catch (err) {
+      console.error('Failed to fetch transaction history:', err);
+      setHistoryError('Could not load transaction history. Please try again.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchActiveVisits();
     fetchTransactions();
-  }, [fetchActiveVisits, fetchTransactions]);
+    fetchPatientTypes();
+  }, [fetchActiveVisits, fetchTransactions, fetchPatientTypes]);
+
+  // Lazy-load Transaction History only once that tab is actually opened.
+  useEffect(() => {
+    if (view === 'cashier-history' && !historyLoaded) {
+      setHistoryLoaded(true);
+      fetchTransactionHistory(historyStartDate, historyEndDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   // GET /visits/active returns both 'Pending' and 'Processing' visits (Processing = already
   // checked in, which includes visits already paid today) — cross-reference against today's
@@ -187,13 +239,19 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const cashTotal = transactions.filter(t => t.payment_method === 'Cash').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
   const eWalletTotal = transactions.filter(t => t.payment_method === 'GCash' || t.payment_method === 'PayMaya').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
 
-  const filteredVisits = activeVisits.filter(v => {
-    if (paidVisitIds.has(v.id)) return false;
-    const matchesSearch = !searchQuery ||
-      `${v.first_name} ${v.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (v.queue_number && v.queue_number.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesSearch;
-  });
+  const filteredVisits = activeVisits
+    .filter(v => {
+      if (paidVisitIds.has(v.id)) return false;
+      const matchesSearch = !searchQuery ||
+        `${v.first_name} ${v.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (v.queue_number && v.queue_number.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesType = typeFilter === 'All' || v.patient_type_name === typeFilter;
+      return matchesSearch && matchesType;
+    })
+    .sort((a, b) => {
+      const diff = new Date(a.created_at) - new Date(b.created_at);
+      return sortOrder === 'oldest' ? diff : -diff;
+    });
 
   return (
     <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
@@ -225,15 +283,33 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 </Badge>
               </div>
 
-              <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search ticket # or name..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus:outline-none focus:ring-1 focus:ring-[#769046]"
-                />
+              <SearchInput
+                placeholder="Search ticket # or name..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+
+              <div className="flex items-center gap-2">
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="flex-1 text-xs rounded-xl">
+                    <SelectValue placeholder="Patient Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Types</SelectItem>
+                    {patientTypes.map(t => (
+                      <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <button
+                  type="button"
+                  onClick={() => setSortOrder(o => (o === 'oldest' ? 'newest' : 'oldest'))}
+                  title="Toggle sort order"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11px] font-bold text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors whitespace-nowrap"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5" />
+                  <span>{sortOrder === 'oldest' ? 'Oldest First' : 'Newest First'}</span>
+                </button>
               </div>
 
               <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
@@ -244,13 +320,14 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 ) : filteredVisits.length > 0 ? (
                   filteredVisits.map(visit => {
                     const isSelected = selectedVisit?.id === visit.id;
+                    const wait = getWaitInfo(visit.created_at);
                     return (
                       <div
                         key={visit.id}
                         onClick={() => handleSelectVisitForBilling(visit)}
                         className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-                          isSelected 
-                            ? 'bg-[#769046]/10 border-[#769046] shadow-sm' 
+                          isSelected
+                            ? 'bg-[#769046]/10 border-[#769046] shadow-sm'
                             : 'bg-gray-50/70 border-gray-100 hover:bg-gray-50 hover:border-gray-200'
                         }`}
                       >
@@ -259,9 +336,15 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             <span className="font-extrabold text-xs text-slate-900">{visit.first_name} {visit.last_name}</span>
                             <span className="block text-[10px] text-gray-400 font-bold uppercase">Ticket: {visit.queue_number || `V-${visit.id}`}</span>
                           </div>
-                          <Badge className="bg-amber-100 text-amber-800 text-[10px] font-bold">
-                            {visit.patient_type_name || 'Self Pay'}
-                          </Badge>
+                          <div className="flex flex-col items-end gap-1">
+                            <Badge className="bg-amber-100 text-amber-800 text-[10px] font-bold">
+                              {visit.patient_type_name || 'Self Pay'}
+                            </Badge>
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${wait.tone}`}>
+                              <Clock className="w-3 h-3" />
+                              {wait.minutes}m waiting
+                            </span>
+                          </div>
                         </div>
                         <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center text-[11px]">
                           <span className="text-gray-500">{visit.tests?.length || 0} diagnostic item(s)</span>
@@ -466,51 +549,90 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         )}
 
         {view === 'cashier-history' && (
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-slate-900 m-0">Today's Completed Cashier Transactions</h3>
-            <Badge variant="secondary" className="bg-[#769046]/10 text-[#769046] font-bold">
-              {transactions.length} Receipt(s)
-            </Badge>
+        <div className="space-y-6">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-slate-900 m-0">Transaction History</h3>
+              <p className="text-xs text-gray-500 m-0">Receipts processed within the selected date range.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="text-xs w-36" />
+              <span className="text-xs text-gray-400">to</span>
+              <Input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="text-xs w-36" />
+              <Button
+                variant="outline"
+                onClick={() => fetchTransactionHistory(historyStartDate, historyEndDate)}
+                className="flex items-center space-x-1.5 text-xs font-semibold"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Apply</span>
+              </Button>
+            </div>
           </div>
 
-          <div className="border border-gray-100 rounded-xl overflow-hidden">
-            <Table>
-              <TableHeader className="bg-gray-50/80">
-                <TableRow>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Receipt #</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Patient Name</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Payment Method</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Reference #</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Amount Paid</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Date & Time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {transactions.length > 0 ? (
-                  transactions.map(t => (
-                    <TableRow key={t.id}>
-                      <TableCell className="py-3 font-extrabold text-xs text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
-                      <TableCell className="py-3 text-xs font-bold text-gray-800">{t.first_name} {t.last_name}</TableCell>
-                      <TableCell className="py-3 text-xs">
-                        <Badge className="bg-gray-100 text-gray-800 font-bold border-gray-200">
-                          {t.payment_method}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="py-3 text-xs font-mono text-gray-500">{t.reference_number || 'N/A (Cash)'}</TableCell>
-                      <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">₱{parseFloat(t.amount).toFixed(2)}</TableCell>
-                      <TableCell className="py-3 text-xs text-gray-500 text-right">{new Date(t.paid_at).toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))
-                ) : (
+          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900 m-0">Completed Cashier Transactions</h3>
+              <Badge variant="secondary" className="bg-[#769046]/10 text-[#769046] font-bold">
+                {historyTransactions.length} Receipt(s)
+              </Badge>
+            </div>
+
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              <Table>
+                <TableHeader className="bg-gray-50/80">
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 italic">No payments processed today yet.</TableCell>
+                    <TableHead className="text-[10px] font-bold uppercase py-3">Receipt #</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-3">Patient Name</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-3">Payment Method</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-3">Reference #</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Amount Paid</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Date & Time</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                  {historyError ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-6 text-xs text-rose-600 font-semibold">
+                        {historyError}{' '}
+                        <button
+                          type="button"
+                          onClick={() => fetchTransactionHistory(historyStartDate, historyEndDate)}
+                          className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
+                        >
+                          Retry
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  ) : historyLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 font-semibold">Loading transaction history…</TableCell>
+                    </TableRow>
+                  ) : historyTransactions.length > 0 ? (
+                    historyTransactions.map(t => (
+                      <TableRow key={t.id}>
+                        <TableCell className="py-3 font-extrabold text-xs text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
+                        <TableCell className="py-3 text-xs font-bold text-gray-800">{t.first_name} {t.last_name}</TableCell>
+                        <TableCell className="py-3 text-xs">
+                          <Badge className="bg-gray-100 text-gray-800 font-bold border-gray-200">
+                            {t.payment_method}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="py-3 text-xs font-mono text-gray-500">{t.reference_number || 'N/A (Cash)'}</TableCell>
+                        <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">₱{parseFloat(t.amount).toFixed(2)}</TableCell>
+                        <TableCell className="py-3 text-xs text-gray-500 text-right">{new Date(t.paid_at).toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 italic">No payments processed in this date range.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </div>
         )}
 
         {/* Payment confirmation — irreversible action, see .agents Phase 12 */}

@@ -33,7 +33,21 @@ class VisitController {
 
   async getActiveVisits(req, res, next) {
     try {
-      const visits = await visitService.getActiveVisits();
+      const { search, status, page, limit } = req.query;
+      const data = await visitService.getActiveVisits({ search, status, page, limit });
+      return res.status(200).json({
+        status: 'success',
+        data
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getVisitsByDateRange(req, res, next) {
+    try {
+      const { startDate, endDate, search } = req.query;
+      const visits = await visitService.getVisitHistoryByDateRange({ startDate, endDate, search });
       return res.status(200).json({
         status: 'success',
         data: { visits }

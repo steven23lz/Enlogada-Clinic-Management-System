@@ -8,7 +8,8 @@ import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { SearchInput } from '../components/ui/search-input';
+import Pagination from '../components/ui/pagination';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -18,18 +19,14 @@ import {
   Play,
   FileText,
   Send,
-  ShieldAlert,
-  CheckCircle2,
-  Sparkles,
-  Search,
-  Upload,
-  Check,
   Clock,
-  FileCheck,
   AlertCircle,
   History,
   Eye
 } from 'lucide-react';
+
+const WORKLIST_STATUS_FILTERS = ['All', 'Pending', 'Processing'];
+const PAGE_SIZE = 10;
 
 const NAV_TO_CATEGORY = {
   'lab-ops': 'Laboratory',
@@ -67,6 +64,9 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const [category, setCategory] = useState('Laboratory');
   const [categoryResolved, setCategoryResolved] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [worklistPage, setWorklistPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
 
   // Result Upload Form State
   const [activeTest, setActiveTest] = useState(null);
@@ -142,6 +142,16 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       }
     }
   }, [category, categoryResolved, mode, fetchPendingTests, fetchReleasedTests]);
+
+  // Reset to page 1 whenever the filtered set could change shape, so a stale page number never
+  // points past the end of a newly-filtered/newly-fetched list.
+  useEffect(() => {
+    setWorklistPage(1);
+  }, [category, searchQuery, statusFilter]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [category, searchQuery]);
 
   const handleStartProcessing = async (visitTestId) => {
     try {
@@ -223,7 +233,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       `${t.first_name} ${t.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.test_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.queue_number && t.queue_number.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesSearch;
+    const matchesStatus = statusFilter === 'All' || t.test_status === statusFilter;
+    return matchesSearch && matchesStatus;
   });
 
   const filteredReleased = releasedTests.filter(t => {
@@ -233,6 +244,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       (t.queue_number && t.queue_number.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesSearch;
   });
+
+  const worklistTotalPages = Math.max(1, Math.ceil(filteredTests.length / PAGE_SIZE));
+  const pagedTests = filteredTests.slice((worklistPage - 1) * PAGE_SIZE, worklistPage * PAGE_SIZE);
+  const historyTotalPages = Math.max(1, Math.ceil(filteredReleased.length / PAGE_SIZE));
+  const pagedReleased = filteredReleased.slice((historyPage - 1) * PAGE_SIZE, historyPage * PAGE_SIZE);
 
   const pendingCount = pendingTests.filter(t => t.test_status === 'Pending').length;
   const categoryLabel = category === 'Ultrasound' ? 'Ultrasound (incl. 2D Echo)' : category;
@@ -257,20 +273,28 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
           <MetricCard label="Currently Processing" value={processingCount} icon={FileText} tone="indigo" />
         </div>
 
-        {/* Search Bar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-end gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search patient, test, queue..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus:outline-none focus:ring-1 focus:ring-[#769046]"
-            />
+        {/* Search + Status Filter Toolbar */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+          <div className="flex bg-gray-100 p-1 rounded-xl text-xs flex-wrap">
+            {WORKLIST_STATUS_FILTERS.map(s => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-2.5 py-1 rounded-lg border-0 font-semibold cursor-pointer transition-all ${
+                  statusFilter === s ? 'bg-white text-slate-900 shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
           </div>
 
+          <SearchInput
+            placeholder="Search patient, test, queue..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            containerClassName="w-full sm:w-64"
+          />
         </div>
 
         {/* Modality Worklist Data Table */}
@@ -296,8 +320,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading worklist…</TableCell>
                   </TableRow>
-                ) : filteredTests.length > 0 ? (
-                  filteredTests.map(test => (
+                ) : pagedTests.length > 0 ? (
+                  pagedTests.map(test => (
                     <TableRow key={test.visit_test_id} className="hover:bg-gray-50/50 transition-colors">
                       <TableCell className="py-3.5">
                         <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
@@ -356,6 +380,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               </TableBody>
             </Table>
           </CardContent>
+          <Pagination
+            page={worklistPage}
+            totalPages={worklistTotalPages}
+            onPageChange={setWorklistPage}
+            totalLabel={`${filteredTests.length} total`}
+          />
         </Card>
         </>
         )}
@@ -364,16 +394,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         <>
         {/* Search Bar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-end gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search patient, test, queue..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus:outline-none focus:ring-1 focus:ring-[#769046]"
-            />
-          </div>
+          <SearchInput
+            placeholder="Search patient, test, queue..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            containerClassName="w-full sm:w-64"
+          />
         </div>
 
         {/* Released Results Table (read-only) */}
@@ -400,8 +426,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading result history…</TableCell>
                   </TableRow>
-                ) : filteredReleased.length > 0 ? (
-                  filteredReleased.map(test => (
+                ) : pagedReleased.length > 0 ? (
+                  pagedReleased.map(test => (
                     <TableRow key={test.visit_test_id} className="hover:bg-gray-50/50 transition-colors">
                       <TableCell className="py-3.5">
                         <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
@@ -447,6 +473,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               </TableBody>
             </Table>
           </CardContent>
+          <Pagination
+            page={historyPage}
+            totalPages={historyTotalPages}
+            onPageChange={setHistoryPage}
+            totalLabel={`${filteredReleased.length} total`}
+          />
         </Card>
         </>
         )}

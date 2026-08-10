@@ -16,7 +16,6 @@ import {
   FlaskConical,
   Stethoscope,
   Scan,
-  Search,
   Bell,
   LogOut,
   ChevronDown,
@@ -34,7 +33,6 @@ import {
 const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectNav, children }) => {
   const { user, logout } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const userRoles = user?.roles || [];
@@ -70,6 +68,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
     { id: 'reception-queue', label: 'Active Queue', icon: Calendar, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
     { id: 'reception-walkin', label: 'Walk-In Registration', icon: UserPlus, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
     { id: 'reception-checkin', label: 'Appointment Check-In', icon: QrCode, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
+    { id: 'reception-history', label: 'Visit History', icon: History, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
 
     { id: 'cashier-queue', label: 'Billing Queue', icon: Receipt, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
     { id: 'cashier-history', label: 'Transaction History', icon: History, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
@@ -288,18 +287,6 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
           </div>
 
           <div className="flex items-center space-x-4">
-            {/* Search Input */}
-            <div className="relative hidden md:block">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search patient, test, queue..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#769046]/40 focus:bg-white w-60 transition-all"
-              />
-            </div>
-
             {/* Notification Icon with Dropdown */}
             <div className="relative">
               <button
