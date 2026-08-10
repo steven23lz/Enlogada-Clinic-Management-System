@@ -9,6 +9,7 @@ import CashierMonitoring from './admin/CashierMonitoring';
 import AppointmentsOversight from './admin/AppointmentsOversight';
 import PatientRecordsOversight from './admin/PatientRecordsOversight';
 import ReportsOverview from './admin/ReportsOverview';
+import SuperAdminManagement from './admin/SuperAdminManagement';
 
 const NAV_TITLES = {
   dashboard: 'Management Console',
@@ -18,6 +19,7 @@ const NAV_TITLES = {
   'appointments-list': 'Appointments Oversight',
   'patient-records': 'Patient Records Oversight',
   reports: 'Clinic Reports',
+  superadmin: 'Super Admin Management',
 };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -125,6 +127,8 @@ const ServiceRequestsPlaceholder = () => (
 );
 
 const AdminDashboard = ({ activeNav = 'dashboard', onSelectNav }) => {
+  const { user } = useAuth();
+
   const renderContent = () => {
     switch (activeNav) {
       case 'staff':
@@ -139,6 +143,11 @@ const AdminDashboard = ({ activeNav = 'dashboard', onSelectNav }) => {
         return <PatientRecordsOversight />;
       case 'reports':
         return <ReportsOverview />;
+      case 'superadmin':
+        // Backend endpoints already enforce SuperAdmin-only; this just avoids rendering a
+        // confusing broken tab for an Admin whose activeNav somehow ended up here (the nav
+        // item itself is already hidden from Admin in SidebarLayout).
+        return user?.roles?.includes('SuperAdmin') ? <SuperAdminManagement /> : <DashboardOverview />;
       default:
         return <DashboardOverview />;
     }

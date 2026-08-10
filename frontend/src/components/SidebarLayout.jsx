@@ -9,20 +9,21 @@ import {
   FileText, 
   CreditCard, 
   Calendar, 
-  FolderKanban, 
-  BarChart3, 
-  Receipt, 
-  FlaskConical, 
-  Stethoscope, 
-  Scan, 
-  Search, 
-  Bell, 
+  FolderKanban,
+  BarChart3,
+  Receipt,
+  FlaskConical,
+  Stethoscope,
+  Scan,
+  Search,
+  Bell,
   LogOut,
   ChevronDown,
   Activity,
   CheckCircle2,
   X,
-  Menu
+  Menu,
+  ShieldCheck
 } from 'lucide-react';
 
 const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectNav, children }) => {
@@ -34,7 +35,9 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   const userRoles = user?.roles || [];
   const isSuperOrAdmin = userRoles.includes('SuperAdmin') || userRoles.includes('Admin');
 
-  // Navigation Items
+  // Navigation Items. Most admin-console items are gated by isSuperOrAdmin (Admin and
+  // SuperAdmin see the same thing); 'superadmin' is the first item restricted to SuperAdmin
+  // alone — Module 13's "elevated ... beyond what Admin can do" boundary.
   const mainNavItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     ...(isSuperOrAdmin ? [
@@ -45,7 +48,10 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
       { id: 'appointments-list', label: 'Appointments', icon: Calendar },
       { id: 'patient-records', label: 'Patient Records', icon: FolderKanban },
       { id: 'reports', label: 'Reports', icon: BarChart3 },
-    ] : [])
+    ] : []),
+    ...(userRoles.includes('SuperAdmin') ? [
+      { id: 'superadmin', label: 'Super Admin', icon: ShieldCheck },
+    ] : []),
   ];
 
   const opsNavItems = [

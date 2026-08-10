@@ -10,6 +10,7 @@ const seedUsers = async () => {
 
     const usersToSeed = [
       { firstName: 'Super', lastName: 'Admin', email: 'admin@enlogada.com', role: 'SuperAdmin' },
+      { firstName: 'Clinic', lastName: 'Manager', email: 'clinicadmin@enlogada.com', role: 'Admin' },
       { firstName: 'Maria', lastName: 'Santos', email: 'receptionist@enlogada.com', role: 'Receptionist' },
       { firstName: 'Juan', lastName: 'Cashier', email: 'cashier@enlogada.com', role: 'Cashier' },
       { firstName: 'Doc', lastName: 'Lab', email: 'lab@enlogada.com', role: 'Laboratory Staff' },
