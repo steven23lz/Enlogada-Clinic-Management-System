@@ -60,9 +60,21 @@ class PaymentRepository {
     `;
     const visitResult = await db.query(visitQuery, [patientVisitId]);
 
+    // Correlated subquery (not a LEFT JOIN) for hmo_approval_status: a visit_test could in
+    // principle be linked to more than one hmo_request_tests row (no constraint prevents it
+    // across different HMO requests), and a JOIN would then duplicate that test's line item,
+    // silently inflating the bill subtotal. The subquery guarantees exactly one row per test,
+    // taking the most recent linked request if more than one exists.
     const itemsQuery = `
       SELECT vt.id as visit_test_id, vt.price_at_time, vt.status,
-             t.name as test_name, tc.name as category_name
+             t.name as test_name, tc.name as category_name,
+             (
+               SELECT hrt.approval_status
+               FROM hmo_request_tests hrt
+               WHERE hrt.visit_test_id = vt.id
+               ORDER BY hrt.created_at DESC
+               LIMIT 1
+             ) as hmo_approval_status
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
@@ -75,6 +87,33 @@ class PaymentRepository {
       visitInfo: visitResult.rows[0],
       items: itemsResult.rows
     };
+  }
+
+  // Module 14's "Client-side payment visibility" — aggregates across all of the client's own
+  // patient profiles/dependents, matching the same pattern already used by
+  // appointmentRepository.findByPatientUserId and patientRepository.findPatientsByUserId.
+  async findPaymentsByPatientUserId(userId) {
+    const queryText = `
+      SELECT pay.*, p.first_name as patient_first_name, p.last_name as patient_last_name,
+             pv.queue_number, pv.visit_type
+      FROM payments pay
+      JOIN patient_visits pv ON pay.patient_visit_id = pv.id
+      JOIN patients p ON pv.patient_id = p.id
+      WHERE p.user_id = $1
+      ORDER BY pay.paid_at DESC
+    `;
+    const result = await db.query(queryText, [userId]);
+    return result.rows;
+  }
+
+  async hasPaidPayment(patientVisitId) {
+    const queryText = `
+      SELECT 1 FROM payments
+      WHERE patient_visit_id = $1 AND payment_status = 'Paid'
+      LIMIT 1
+    `;
+    const result = await db.query(queryText, [patientVisitId]);
+    return result.rows.length > 0;
   }
 
   async getNextReceiptNumber() {

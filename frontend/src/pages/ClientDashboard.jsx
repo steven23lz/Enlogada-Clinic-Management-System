@@ -33,6 +33,7 @@ import {
   Sparkles,
   XCircle,
   CalendarClock,
+  Receipt,
   Pencil,
   HeartPulse
 } from 'lucide-react';
@@ -133,6 +134,10 @@ const ClientDashboard = ({ onNavigate }) => {
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
 
+  // Payment History (Module 14: client-side payment visibility)
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
+
   const fetchProfiles = useCallback(async () => {
     try {
       const response = await api.get('/patients/my-profiles');
@@ -184,6 +189,18 @@ const ClientDashboard = ({ onNavigate }) => {
     }
   }, []);
 
+  const fetchPaymentHistory = useCallback(async () => {
+    setPaymentHistoryLoading(true);
+    try {
+      const response = await api.get('/payments/my-payments');
+      setPaymentHistory(response.data.data.payments || []);
+    } catch (err) {
+      console.error('Failed to fetch payment history:', err);
+    } finally {
+      setPaymentHistoryLoading(false);
+    }
+  }, []);
+
   const fetchAvailability = useCallback(async (date) => {
     setSlotsLoading(true);
     try {
@@ -203,7 +220,8 @@ const ClientDashboard = ({ onNavigate }) => {
     fetchProfiles();
     fetchStaticData();
     fetchAppointments();
-  }, [fetchProfiles, fetchStaticData, fetchAppointments]);
+    fetchPaymentHistory();
+  }, [fetchProfiles, fetchStaticData, fetchAppointments, fetchPaymentHistory]);
 
   useEffect(() => {
     if (bookingData.scheduledDate) {
@@ -1288,6 +1306,39 @@ const ClientDashboard = ({ onNavigate }) => {
                       </div>
                     );
                   })
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Payment History (Module 14: client-side payment visibility) */}
+            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
+              <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
+                <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+                  <Receipt className="w-4 h-4 text-[#769046]" />
+                  <span>Payment History</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3 max-h-[360px] overflow-y-auto">
+                {paymentHistoryLoading ? (
+                  <p className="text-xs text-gray-400 text-center py-4">Loading payment history…</p>
+                ) : paymentHistory.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-4 italic">No payments recorded yet.</p>
+                ) : (
+                  paymentHistory.map((pay) => (
+                    <div key={pay.id} className="border border-gray-100 rounded-xl p-3 space-y-1.5 bg-gray-50/50">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="block text-xs font-extrabold text-slate-900">₱{parseFloat(pay.amount).toFixed(2)}</span>
+                          <span className="block text-[11px] text-gray-500 font-medium">{pay.patient_first_name} {pay.patient_last_name}</span>
+                        </div>
+                        <StatusBadge status={pay.payment_status} />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-gray-400">
+                        <span className="font-mono">{pay.receipt_number || `OR-${pay.id}`}</span>
+                        <span>{new Date(pay.paid_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </div>
+                    </div>
+                  ))
                 )}
               </CardContent>
             </Card>

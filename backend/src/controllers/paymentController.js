@@ -69,6 +69,19 @@ class PaymentController {
       next(err);
     }
   }
+
+  async getMyPayments(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const payments = await paymentService.getPaymentsForClient(userId);
+      return res.status(200).json({
+        status: 'success',
+        data: { payments }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new PaymentController();

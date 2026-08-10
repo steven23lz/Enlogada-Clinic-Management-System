@@ -7,6 +7,10 @@ const router = express.Router();
 // Get billing summary for a visit
 router.get('/bill/:visitId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), paymentController.getBill);
 
+// Client-side payment visibility — self-scoped via req.user.userId, no role restriction beyond
+// being logged in (matches /patients/my-profiles, /appointments/my-bookings).
+router.get('/my-payments', verifyToken, paymentController.getMyPayments);
+
 // Process a payment
 router.post('/', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), paymentController.processPayment);
 
