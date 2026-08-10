@@ -65,6 +65,21 @@ class PatientRepository {
     return result.rows[0];
   }
 
+  async searchPatients(query) {
+    const queryText = `
+      SELECT p.*, pt.name as patient_type_name
+      FROM patients p
+      JOIN patient_types pt ON p.patient_type_id = pt.id
+      WHERE (p.first_name || ' ' || p.last_name) ILIKE $1
+         OR p.first_name ILIKE $1
+         OR p.last_name ILIKE $1
+      ORDER BY p.last_name, p.first_name
+      LIMIT 20
+    `;
+    const result = await db.query(queryText, [`%${query}%`]);
+    return result.rows;
+  }
+
   async findPatientTypes() {
     const queryText = 'SELECT id, name FROM patient_types ORDER BY id';
     const result = await db.query(queryText);

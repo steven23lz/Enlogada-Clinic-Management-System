@@ -352,7 +352,7 @@ const ClientDashboard = ({ onNavigate }) => {
       if (hmoProviderId) {
         const visitTests = visitTestsRes.data.data.visitTests || [];
         if (visitTests.length > 0) {
-          await api.post('/hmo/requests', {
+          await api.post('/hmo/request', {
             hmoProviderId: parseInt(hmoProviderId, 10),
             approvalCode: hmoApprovalCode,
             visitTestIds: visitTests.map(vt => vt.id)

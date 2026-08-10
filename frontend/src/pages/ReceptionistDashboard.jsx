@@ -57,6 +57,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
   const [selectedTestIds, setSelectedTestIds] = useState([]);
   const [showTestsModal, setShowTestsModal] = useState(false);
 
+  // Existing Patient Lookup State (Module 7: patient record lookup)
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
+  const [patientSearchResults, setPatientSearchResults] = useState(null);
+  const [patientSearching, setPatientSearching] = useState(false);
+  const [patientSearchError, setPatientSearchError] = useState('');
+  const [checkingInPatientId, setCheckingInPatientId] = useState(null);
+  const [lookupCheckInSuccess, setLookupCheckInSuccess] = useState('');
+
   // Walk-in Registration State
   const [newPatient, setNewPatient] = useState({
     firstName: '',
@@ -205,6 +213,51 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
     }
   };
 
+  const handlePatientSearch = async (e) => {
+    e.preventDefault();
+    setPatientSearchError('');
+    setLookupCheckInSuccess('');
+
+    if (patientSearchQuery.trim().length < 2) {
+      setPatientSearchError('Enter at least 2 characters to search.');
+      return;
+    }
+
+    setPatientSearching(true);
+    try {
+      const response = await api.get('/patients/search', { params: { q: patientSearchQuery.trim() } });
+      setPatientSearchResults(response.data.data.patients);
+    } catch (err) {
+      setPatientSearchError(err.response?.data?.message || 'Failed to search patient records.');
+      setPatientSearchResults(null);
+    } finally {
+      setPatientSearching(false);
+    }
+  };
+
+  const handleCheckInExistingPatient = async (patient) => {
+    setPatientSearchError('');
+    setLookupCheckInSuccess('');
+    setCheckingInPatientId(patient.id);
+    try {
+      const vRes = await api.post('/visits', {
+        patientId: patient.id,
+        visitType: 'Walk in',
+        notes: visitNotes
+      });
+      const visit = vRes.data.data.visit;
+      setLookupCheckInSuccess(`${patient.first_name} ${patient.last_name} checked in! Physical Queue Ticket: ${visit.queue_number}`);
+      setPatientSearchResults(null);
+      setPatientSearchQuery('');
+      setVisitNotes('');
+      fetchActiveVisits();
+    } catch (err) {
+      setPatientSearchError(err.response?.data?.message || 'Failed to check in existing patient.');
+    } finally {
+      setCheckingInPatientId(null);
+    }
+  };
+
   const handleOpenAssignTests = (visitId) => {
     setSelectedVisitId(visitId);
     setSelectedTestIds([]);
@@ -235,6 +288,15 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
     }
   };
 
+  const handleOpenHmoModal = (visitTest) => {
+    setActiveVisitTest(visitTest);
+    setHmoProviderId('');
+    setHmoApprovalCode('');
+    setHmoError('');
+    setHmoSuccess('');
+    setShowHmoModal(true);
+  };
+
   const handleHmoSubmit = async (e) => {
     e.preventDefault();
     setHmoError('');
@@ -246,7 +308,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
     }
 
     try {
-      await api.post('/hmo/requests', {
+      await api.post('/hmo/request', {
         hmoProviderId: parseInt(hmoProviderId, 10),
         approvalCode: hmoApprovalCode,
         visitTestIds: [activeVisitTest.id]
@@ -531,9 +593,20 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
                             {visit.tests && visit.tests.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {visit.tests.map(t => (
-                                  <Badge key={t.id} className="bg-gray-100 text-gray-700 hover:bg-gray-100 text-[10px] font-semibold border-gray-200">
-                                    {t.test_name} ({t.test_status})
-                                  </Badge>
+                                  <span key={t.id} className="inline-flex items-center gap-1">
+                                    <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100 text-[10px] font-semibold border-gray-200">
+                                      {t.test_name} ({t.test_status})
+                                    </Badge>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenHmoModal(t)}
+                                      title="Log HMO pre-authorization for this test"
+                                      aria-label={`Log HMO pre-authorization for ${t.test_name}`}
+                                      className="p-0.5 text-gray-400 hover:text-[#769046] border-0 bg-transparent cursor-pointer"
+                                    >
+                                      <ShieldAlert className="w-3.5 h-3.5" />
+                                    </button>
+                                  </span>
                                 ))}
                               </div>
                             ) : (
@@ -578,7 +651,70 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
           </TabsContent>
 
           {/* Walk-in Registration Form */}
-          <TabsContent value="walkin" className="m-0">
+          <TabsContent value="walkin" className="m-0 space-y-4">
+
+            {/* Existing Patient Lookup (Module 7: patient record lookup) */}
+            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 max-w-3xl">
+              <div className="border-b border-gray-100 pb-3 mb-4">
+                <h3 className="text-base font-bold text-slate-900 m-0 flex items-center space-x-2">
+                  <Users className="w-5 h-5 text-[#769046]" />
+                  <span>Find Existing Patient</span>
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-1">Search before registering — a returning patient should be checked in, not re-registered.</p>
+              </div>
+
+              {lookupCheckInSuccess && (
+                <div role="status" className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  <span>{lookupCheckInSuccess}</span>
+                </div>
+              )}
+              {patientSearchError && (
+                <div role="alert" className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{patientSearchError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handlePatientSearch} className="flex space-x-2">
+                <Input
+                  placeholder="Search by patient name..."
+                  value={patientSearchQuery}
+                  onChange={e => setPatientSearchQuery(e.target.value)}
+                  className="flex-1"
+                />
+                <Button type="submit" className="bg-[#192534] hover:bg-slate-800 text-white text-xs font-bold px-4" disabled={patientSearching}>
+                  {patientSearching ? 'Searching...' : 'Search'}
+                </Button>
+              </form>
+
+              {patientSearchResults && (
+                <div className="mt-4 space-y-2">
+                  {patientSearchResults.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic text-center py-3">No matching patient records found. Register them as a new patient below.</p>
+                  ) : (
+                    patientSearchResults.map(patient => (
+                      <div key={patient.id} className="flex items-center justify-between border border-gray-100 rounded-xl p-3 bg-gray-50/50">
+                        <div className="text-xs">
+                          <span className="block font-bold text-slate-900">{patient.first_name} {patient.last_name} <span className="text-[10px] text-gray-400 font-normal">PT-{patient.id}</span></span>
+                          <span className="block text-gray-500">{patient.patient_type_name} &middot; DOB {new Date(patient.birthdate).toLocaleDateString()}</span>
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={() => handleCheckInExistingPatient(patient)}
+                          disabled={checkingInPatientId === patient.id}
+                          className="bg-[#769046] hover:bg-[#657c3a] text-white text-[11px] font-bold rounded-lg flex items-center space-x-1.5 px-3 py-1.5"
+                        >
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          <span>{checkingInPatientId === patient.id ? 'Checking In...' : 'Check In This Patient'}</span>
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </Card>
+
             <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 max-w-3xl">
               <div className="border-b border-gray-100 pb-3 mb-4">
                 <h3 className="text-base font-bold text-slate-900 m-0 flex items-center space-x-2">
@@ -746,6 +882,63 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
               <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
                 <Button type="button" variant="outline" onClick={() => setShowTestsModal(false)}>Cancel</Button>
                 <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold">Attach Selected Tests</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* HMO Pre-Authorization Logging Modal (Module 7: HMO request initiation) */}
+        <Dialog open={showHmoModal} onOpenChange={(open) => { setShowHmoModal(open); if (!open) { setHmoError(''); setHmoSuccess(''); } }}>
+          <DialogContent className="max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900">Log HMO Pre-Authorization</DialogTitle>
+              <DialogDescription className="text-xs">
+                For <strong>{activeVisitTest?.test_name}</strong>. This logs the initial HMO request; approval is confirmed separately once the provider responds.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleHmoSubmit} className="space-y-4 pt-2">
+              {hmoError && (
+                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{hmoError}</span>
+                </div>
+              )}
+              {hmoSuccess && (
+                <div role="status" className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{hmoSuccess}</span>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-600 uppercase">HMO Provider <span className="text-rose-600">*</span></label>
+                <Select value={hmoProviderId} onValueChange={setHmoProviderId}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Select HMO provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hmoProviders.map(hmo => (
+                      <SelectItem key={hmo.id} value={hmo.id.toString()}>
+                        {hmo.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-600 uppercase">Approval / LOA Code (if already available)</label>
+                <Input
+                  placeholder="Enter approval or card LOA number"
+                  value={hmoApprovalCode}
+                  onChange={e => setHmoApprovalCode(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+                <Button type="button" variant="outline" onClick={() => setShowHmoModal(false)}>Cancel</Button>
+                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold">Log HMO Request</Button>
               </div>
             </form>
           </DialogContent>

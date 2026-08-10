@@ -32,6 +32,16 @@ class PatientService {
     return await patientRepository.updatePatient(id, patientData);
   }
 
+  async searchPatients(query) {
+    const trimmed = (query || '').trim();
+    if (trimmed.length < 2) {
+      const error = new Error('Search query must be at least 2 characters.');
+      error.statusCode = 400;
+      throw error;
+    }
+    return await patientRepository.searchPatients(trimmed);
+  }
+
   async getPatientTypes() {
     return await patientRepository.findPatientTypes();
   }

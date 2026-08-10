@@ -114,6 +114,19 @@ class PatientController {
     }
   }
 
+  async search(req, res, next) {
+    try {
+      const { q } = req.query;
+      const patients = await patientService.searchPatients(q);
+      return res.status(200).json({
+        status: 'success',
+        data: { patients }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getTypes(req, res, next) {
     try {
       const types = await patientService.getPatientTypes();
