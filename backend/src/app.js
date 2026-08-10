@@ -56,6 +56,7 @@ const hmoRoutes = require('./routes/hmoRoutes');
 const rbacRoutes = require('./routes/rbacRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const superAdminRoutes = require('./routes/superAdminRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
@@ -68,6 +69,7 @@ app.use('/api/hmo', hmoRoutes);
 app.use('/api/rbac', rbacRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/superadmin', superAdminRoutes);
+app.use('/api/reports', reportRoutes);
 
 // 6. Global Catch-all Error Handling Middleware
 app.use(errorHandler);

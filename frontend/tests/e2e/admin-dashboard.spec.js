@@ -249,7 +249,12 @@ test.describe('Admin Dashboard — browser flow', () => {
     await expect(page.getByText('Not Yet Available')).toHaveCount(0);
   });
 
-  test('Reports shows a real revenue trend line derived from actual transactions', async ({ page }) => {
+  test('Reports shows a real today-vs-yesterday revenue comparison, and now a real Date-Range Reports tab (superseded the Module 12 placeholder)', async ({ page }) => {
+    // The "reporting entry point" placeholder banner this test used to assert was intentionally
+    // built as an honest, minimal stand-in by Module 12, explicitly deferring "historical
+    // trends, date-range filtering, ... to a dedicated future module" (its own in-code comment).
+    // Module 17 (Reporting) is that module — it replaced the placeholder banner with a real
+    // Date-Range Reports tab, so this test now asserts the real content instead.
     await page.goto('/');
     await page.getByText('Sign In', { exact: true }).first().click();
     await page.fill('input[type="email"]', SUPERADMIN.email);
@@ -259,6 +264,9 @@ test.describe('Admin Dashboard — browser flow', () => {
 
     await page.getByText('Reports', { exact: true }).click();
     await expect(page.getByText('vs yesterday', { exact: false })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('reporting entry point', { exact: false })).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Date-Range Reports' }).click();
+    await expect(page.getByText('Revenue Trend')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('reporting entry point', { exact: false })).toHaveCount(0);
   });
 });
