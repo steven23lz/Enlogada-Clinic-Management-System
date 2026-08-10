@@ -72,7 +72,18 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
     fetchTransactions();
   }, [fetchActiveVisits, fetchTransactions]);
 
+  // GET /visits/active returns both 'Pending' and 'Processing' visits (Processing = already
+  // checked in, which includes visits already paid today) — cross-reference against today's
+  // transactions so an already-paid visit can't be selected and billed a second time.
+  const paidVisitIds = new Set(
+    transactions.filter(t => t.payment_status === 'Paid').map(t => t.patient_visit_id)
+  );
+
   const handleSelectVisitForBilling = async (visit) => {
+    if (paidVisitIds.has(visit.id)) {
+      alert('This visit has already been paid today. Refresh the queue if this looks wrong.');
+      return;
+    }
     setSelectedVisit(visit);
     setPaymentError('');
     setPaymentSuccess(null);
@@ -96,6 +107,11 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
 
     if (!selectedVisit || !billDetails) {
       setPaymentError('No active billing ticket selected.');
+      return;
+    }
+
+    if (paidVisitIds.has(selectedVisit.id)) {
+      setPaymentError('This visit was already paid — refresh the queue before retrying.');
       return;
     }
 
@@ -162,7 +178,8 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
   const eWalletTotal = transactions.filter(t => t.payment_method === 'GCash' || t.payment_method === 'PayMaya').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
 
   const filteredVisits = activeVisits.filter(v => {
-    const matchesSearch = !searchQuery || 
+    if (paidVisitIds.has(v.id)) return false;
+    const matchesSearch = !searchQuery ||
       `${v.first_name} ${v.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (v.queue_number && v.queue_number.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesSearch;
