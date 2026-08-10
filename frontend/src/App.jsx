@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Home from './pages/Home';
+import AboutUs from './pages/AboutUs';
 import ServicesPage from './pages/ServicesPage';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
@@ -57,7 +58,10 @@ const MainApp = () => {
     if (currentTab === 'terms') {
       return <TermsOfService onNavigate={handleNavigate} />;
     }
-    if (currentTab === 'about' || currentTab === 'home') {
+    if (currentTab === 'about') {
+      return <AboutUs onNavigate={handleNavigate} />;
+    }
+    if (currentTab === 'home') {
       return <Home onNavigate={handleNavigate} />;
     }
     if (currentTab === 'register') {
@@ -89,7 +93,7 @@ const MainApp = () => {
       return <ServicesPage onNavigate={handleNavigate} />;
     }
     if (currentTab === 'about') {
-      return <Home onNavigate={handleNavigate} />;
+      return <AboutUs onNavigate={handleNavigate} />;
     }
 
     if (activeNav === 'services-cat') return <ServicesCatalog activeNav={activeNav} onSelectNav={setActiveNav} />;
@@ -109,7 +113,7 @@ const MainApp = () => {
   // Standard Role-based Routing
   if (roles.includes('Client')) {
     if (currentTab === 'services') return <ServicesPage onNavigate={handleNavigate} />;
-    if (currentTab === 'about') return <Home onNavigate={handleNavigate} />;
+    if (currentTab === 'about') return <AboutUs onNavigate={handleNavigate} />;
     if (currentTab === 'account') return <ClientProfile onNavigate={handleNavigate} />;
     return <ClientDashboard onNavigate={handleNavigate} />;
   }

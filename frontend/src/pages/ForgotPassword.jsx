@@ -86,7 +86,7 @@ const ForgotPassword = ({ onNavigate }) => {
                     <Button
                       type="submit"
                       disabled={submitting}
-                      className="w-full bg-[#769046] hover:bg-[#657c3a] text-white py-3 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-colors border-0 cursor-pointer shadow-md"
+                      className="w-full bg-primary-hover hover:bg-primary-active text-white py-3 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-colors border-0 cursor-pointer shadow-md"
                     >
                       <span>{submitting ? 'Sending...' : 'Send Reset Link'}</span>
                       <ArrowRight className="w-4 h-4" />

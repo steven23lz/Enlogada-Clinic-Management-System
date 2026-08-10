@@ -177,7 +177,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
             </Button>
             <Button
               onClick={handleOpenAddModal}
-              className="bg-[#769046] hover:bg-[#687e3d] text-white flex items-center space-x-2 text-xs font-bold px-4 py-2 rounded-xl"
+              className="bg-[#769046] hover:bg-primary-hover text-white flex items-center space-x-2 text-xs font-bold px-4 py-2 rounded-xl"
             >
               <Plus className="w-4 h-4" />
               <span>Add New Service</span>
@@ -371,7 +371,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                 <Button 
                   type="submit" 
                   disabled={submitting}
-                  className="bg-[#769046] hover:bg-[#687e3d] text-white"
+                  className="bg-[#769046] hover:bg-primary-hover text-white"
                 >
                   {submitting ? 'Saving...' : editingTest ? 'Update Service' : 'Add Service'}
                 </Button>

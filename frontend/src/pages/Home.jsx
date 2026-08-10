@@ -1,6 +1,7 @@
 import React from 'react';
 import PublicHeader from '../components/PublicHeader';
 import PublicFooter from '../components/PublicFooter';
+import Logo from '../components/Logo';
 import { Button } from '../components/ui/button';
 import { ShieldCheck, Clock, Award, ChevronRight } from 'lucide-react';
 
@@ -9,18 +10,24 @@ const Home = ({ onNavigate }) => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <PublicHeader currentTab="home" onNavigate={onNavigate} />
 
-      {/* Hero Banner Section matching Image 3 */}
+      {/* Hero Banner Section */}
       <section className="relative bg-primary-navy text-white min-h-[500px] flex items-center overflow-hidden">
-        {/* Background Image Overlay */}
+        {/* UI/UX Phase 4: replaces a generic, unrelated stock photo with a brand-forward
+            treatment — the clinic's own mark, large and faint, plus a subtle dot grid — so the
+            hero reads as this clinic's, not a stock library's. */}
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-30 mix-blend-overlay"
+          className="absolute inset-0 opacity-[0.05]"
           style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=1600&q=80')`
+            backgroundImage: 'radial-gradient(circle, #ffffff 1.5px, transparent 1.5px)',
+            backgroundSize: '28px 28px'
           }}
         />
+        <div className="absolute -right-20 top-1/2 -translate-y-1/2 opacity-[0.08] pointer-events-none hidden md:block">
+          <Logo className="w-[480px] h-[480px]" />
+        </div>
 
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-navy via-primary-navy/90 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-primary-navy via-primary-navy/90 to-primary-navy/60" />
 
         <div className="relative max-w-7xl mx-auto px-8 py-20 z-10 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           <div className="space-y-6">
@@ -34,7 +41,7 @@ const Home = ({ onNavigate }) => {
             <div className="flex items-center space-x-4 pt-2">
               <Button
                 onClick={() => onNavigate && onNavigate('login')}
-                className="bg-[#769046] hover:bg-[#657c3a] text-white px-7 py-6 text-sm font-semibold rounded-xl shadow-lg border-0 cursor-pointer"
+                className="bg-primary-hover hover:bg-primary-active text-white px-7 py-6 text-sm font-semibold rounded-xl shadow-lg border-0 cursor-pointer"
               >
                 Book Now
               </Button>
@@ -94,7 +101,7 @@ const Home = ({ onNavigate }) => {
           </div>
           <Button
             onClick={() => onNavigate && onNavigate('login')}
-            className="bg-[#769046] hover:bg-[#657c3a] text-white px-8 py-6 text-sm font-bold rounded-xl flex items-center space-x-2 border-0 cursor-pointer"
+            className="bg-primary-hover hover:bg-primary-active text-white px-8 py-6 text-sm font-bold rounded-xl flex items-center space-x-2 border-0 cursor-pointer"
           >
             <span>Access Portal</span>
             <ChevronRight className="w-4 h-4" />

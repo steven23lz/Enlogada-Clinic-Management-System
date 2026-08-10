@@ -116,10 +116,14 @@ const Login = ({ onToggleView, onNavigate }) => {
                     />
                   </div>
 
+                  {/* UI/UX Phase 4: reverses Phase 0's navy choice for this button — this card's
+                      own top accent bar, heading, and links are all green, and Register's
+                      sibling submit button is green, so navy here read as mismatched rather
+                      than as "the brand's second color." */}
                   <Button
                     type="submit"
                     disabled={submitting}
-                    className="w-full bg-primary-navy hover:bg-primary-navy-hover text-white py-3 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-colors border-0 cursor-pointer shadow-md"
+                    className="w-full bg-primary-hover hover:bg-primary-active text-white py-3 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-colors border-0 cursor-pointer shadow-md"
                   >
                     <span>{submitting ? 'Signing in...' : 'Sign In'}</span>
                     <ArrowRight className="w-4 h-4" />

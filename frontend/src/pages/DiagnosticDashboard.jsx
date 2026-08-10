@@ -37,6 +37,15 @@ const NAV_TO_CATEGORY = {
   'xray-history': 'Xray'
 };
 
+// UI/UX Phase 4: quick-fill templates were previously all shown to every department
+// regardless of relevance (Laboratory staff saw an X-Ray template, etc.) — keyed by category
+// so only the templates that department would actually use appear.
+const TEMPLATES_BY_CATEGORY = {
+  Laboratory: [{ key: 'cbc_normal', label: '+ Normal CBC Template' }],
+  Xray: [{ key: 'xray_chest', label: '+ Normal Chest X-Ray' }],
+  Ultrasound: [{ key: 'pelvic_us', label: '+ Normal Pelvic Ultrasound' }]
+};
+
 // The attachment URL is staff-entered free text with no format validation anywhere else in
 // the pipeline (it's rendered client-side in ClientDashboard.jsx behind a matching render-side
 // guard — see the Module 6 report). Validating it here, at the point of entry, stops an unsafe
@@ -531,33 +540,24 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 </div>
               )}
 
-              {/* Quick Template Generator Buttons */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Clinical Report Templates</span>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleApplyTemplate('cbc_normal')}
-                    className="text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded-lg border border-gray-200 cursor-pointer"
-                  >
-                    + Normal CBC Template
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyTemplate('xray_chest')}
-                    className="text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded-lg border border-gray-200 cursor-pointer"
-                  >
-                    + Normal Chest X-Ray
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyTemplate('pelvic_us')}
-                    className="text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded-lg border border-gray-200 cursor-pointer"
-                  >
-                    + Normal Pelvic Ultrasound
-                  </button>
+              {/* Quick Template Generator Buttons — scoped to this department's category */}
+              {TEMPLATES_BY_CATEGORY[category]?.length > 0 && (
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Clinical Report Templates</span>
+                  <div className="flex flex-wrap gap-2">
+                    {TEMPLATES_BY_CATEGORY[category].map(t => (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => handleApplyTemplate(t.key)}
+                        className="text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded-lg border border-gray-200 cursor-pointer"
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-600 uppercase">Findings & Impression (Required)</label>
