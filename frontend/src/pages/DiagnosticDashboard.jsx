@@ -11,28 +11,33 @@ import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-  Stethoscope, 
-  FlaskConical, 
-  Scan, 
-  Play, 
-  FileText, 
-  Send, 
-  ShieldAlert, 
-  CheckCircle2, 
-  Sparkles, 
-  Search, 
-  Upload, 
-  Check, 
-  Clock, 
+import {
+  Stethoscope,
+  FlaskConical,
+  Scan,
+  Play,
+  FileText,
+  Send,
+  ShieldAlert,
+  CheckCircle2,
+  Sparkles,
+  Search,
+  Upload,
+  Check,
+  Clock,
   FileCheck,
-  AlertCircle
+  AlertCircle,
+  History,
+  Eye
 } from 'lucide-react';
 
 const NAV_TO_CATEGORY = {
   'lab-ops': 'Laboratory',
+  'lab-history': 'Laboratory',
   'ultrasound-ops': 'Ultrasound',
-  'xray-ops': 'Xray'
+  'ultrasound-history': 'Ultrasound',
+  'xray-ops': 'Xray',
+  'xray-history': 'Xray'
 };
 
 // The attachment URL is staff-entered free text with no format validation anywhere else in
@@ -51,8 +56,14 @@ const isValidAttachmentUrl = (url) => {
 
 const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const { user } = useAuth();
+  // UI/UX Phase 1: 'worklist' (pending/processing, actionable) vs 'history' (already-released,
+  // read-only) — each diagnostic role now has a real second nav destination for the latter,
+  // which previously had no UI anywhere (released results just vanished from this screen).
+  const mode = activeNav.endsWith('-history') ? 'history' : 'worklist';
   const [pendingTests, setPendingTests] = useState([]);
+  const [releasedTests, setReleasedTests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewingResult, setViewingResult] = useState(null);
   const [category, setCategory] = useState('Laboratory');
   const [categoryResolved, setCategoryResolved] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -93,6 +104,18 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     }
   }, []);
 
+  const fetchReleasedTests = useCallback(async (catName) => {
+    try {
+      const categoriesToFetch = catName === 'Ultrasound' ? ['Ultrasound', '2D Echo'] : [catName];
+      const responses = await Promise.all(categoriesToFetch.map(c => api.get(`/results/released/${c}`)));
+      setReleasedTests(responses.flatMap(r => r.data.data.released || []));
+    } catch (err) {
+      console.error('Failed to fetch released diagnostics:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const navCategory = NAV_TO_CATEGORY[activeNav];
     if (navCategory) {
@@ -108,11 +131,17 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   // Fetching once immediately with the hardcoded default, then again after resolution, is a
   // race: whichever response arrives last wins, and the resolved fetch isn't guaranteed to be
   // the faster of the two — especially now that the Ultrasound worklist fetches two categories.
+  // Only fetches whichever list the active mode actually needs.
   useEffect(() => {
     if (category && categoryResolved) {
-      fetchPendingTests(category);
+      setLoading(true);
+      if (mode === 'history') {
+        fetchReleasedTests(category);
+      } else {
+        fetchPendingTests(category);
+      }
     }
-  }, [category, categoryResolved, fetchPendingTests]);
+  }, [category, categoryResolved, mode, fetchPendingTests, fetchReleasedTests]);
 
   const handleStartProcessing = async (visitTestId) => {
     try {
@@ -190,7 +219,15 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   };
 
   const filteredTests = pendingTests.filter(t => {
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = !searchQuery ||
+      `${t.first_name} ${t.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      t.test_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.queue_number && t.queue_number.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesSearch;
+  });
+
+  const filteredReleased = releasedTests.filter(t => {
+    const matchesSearch = !searchQuery ||
       `${t.first_name} ${t.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.test_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.queue_number && t.queue_number.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -200,11 +237,14 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const pendingCount = pendingTests.filter(t => t.test_status === 'Pending').length;
   const categoryLabel = category === 'Ultrasound' ? 'Ultrasound (incl. 2D Echo)' : category;
   const processingCount = pendingTests.filter(t => t.test_status === 'Processing').length;
+  const pageTitle = mode === 'history' ? `${categoryLabel} Result History` : `${categoryLabel} Operations Worklist`;
 
   return (
-    <SidebarLayout title={`${categoryLabel} Operations Worklist`} activeNav={activeNav} onSelectNav={onSelectNav}>
+    <SidebarLayout title={pageTitle} activeNav={activeNav} onSelectNav={onSelectNav}>
       <div className="space-y-6">
-        
+
+        {mode === 'worklist' && (
+        <>
         {/* Department Modality Worklist Header Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricCard
@@ -254,7 +294,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-6 text-xs text-gray-400">Loading worklist…</TableCell>
+                    <TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading worklist…</TableCell>
                   </TableRow>
                 ) : filteredTests.length > 0 ? (
                   filteredTests.map(test => (
@@ -317,6 +357,127 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             </Table>
           </CardContent>
         </Card>
+        </>
+        )}
+
+        {mode === 'history' && (
+        <>
+        {/* Search Bar */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-end gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search patient, test, queue..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus:outline-none focus:ring-1 focus:ring-[#769046]"
+            />
+          </div>
+        </div>
+
+        {/* Released Results Table (read-only) */}
+        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
+          <CardHeader className="border-b border-gray-100 py-4 px-6 flex justify-between items-center">
+            <CardTitle className="text-base font-bold text-slate-900 m-0 flex items-center space-x-2">
+              <History className="w-4 h-4 text-[#769046]" />
+              <span>{categoryLabel} Released Results ({filteredReleased.length})</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-gray-50/80">
+                <TableRow>
+                  <TableHead className="text-[10px] font-bold uppercase py-3">Queue Ticket</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase py-3">Patient Name</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase py-3">Diagnostic Examination</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase py-3">Released</TableHead>
+                  <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading result history…</TableCell>
+                  </TableRow>
+                ) : filteredReleased.length > 0 ? (
+                  filteredReleased.map(test => (
+                    <TableRow key={test.visit_test_id} className="hover:bg-gray-50/50 transition-colors">
+                      <TableCell className="py-3.5">
+                        <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
+                          {test.queue_number || `VT-${test.visit_test_id}`}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="py-3.5 font-bold text-xs text-slate-900">
+                        {test.first_name} {test.last_name}
+                      </TableCell>
+
+                      <TableCell className="py-3.5 text-xs font-bold text-gray-800">
+                        {test.test_name}
+                        <span className="block text-[10px] text-gray-400 font-normal">{test.category_name}</span>
+                      </TableCell>
+
+                      <TableCell className="py-3.5 text-xs text-gray-500">
+                        {test.released_at ? new Date(test.released_at).toLocaleString() : '—'}
+                        {test.released_by_first_name && (
+                          <span className="block text-[10px] text-gray-400">by {test.released_by_first_name} {test.released_by_last_name}</span>
+                        )}
+                      </TableCell>
+
+                      <TableCell className="py-3.5 text-right">
+                        <Button
+                          onClick={() => setViewingResult(test)}
+                          variant="outline"
+                          className="text-[11px] font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5 ml-auto"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Report</span>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-xs text-gray-400 font-semibold italic">
+                      No released results yet in the {categoryLabel} history.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+        </>
+        )}
+
+        {/* Read-only Released Result Viewer */}
+        <Dialog open={!!viewingResult} onOpenChange={(open) => { if (!open) setViewingResult(null); }}>
+          <DialogContent className="max-w-2xl rounded-2xl p-6">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-slate-900">Diagnostic Report</DialogTitle>
+              <DialogDescription className="text-xs">
+                Patient: <strong>{viewingResult?.first_name} {viewingResult?.last_name}</strong> &bull; Examination: <strong>{viewingResult?.test_name}</strong>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Findings &amp; Impression</span>
+                <p className="whitespace-pre-wrap text-xs bg-gray-50 border border-gray-200 rounded-xl p-3 m-0">{viewingResult?.findings || '—'}</p>
+              </div>
+              {viewingResult?.result_remarks && (
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Remarks</span>
+                  <p className="text-xs m-0">{viewingResult.result_remarks}</p>
+                </div>
+              )}
+              <div className="text-[11px] text-gray-400">
+                Released {viewingResult?.released_at ? new Date(viewingResult.released_at).toLocaleString() : '—'}
+                {viewingResult?.released_by_first_name && ` by ${viewingResult.released_by_first_name} ${viewingResult.released_by_last_name}`}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Record Diagnostic Findings & Result Entry Modal */}
         <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>

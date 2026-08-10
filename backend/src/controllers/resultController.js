@@ -15,6 +15,19 @@ class ResultController {
     }
   }
 
+  async getReleased(req, res, next) {
+    try {
+      const { category } = req.params;
+      const released = await resultService.getReleasedByCategory(category, req.user);
+      return res.status(200).json({
+        status: 'success',
+        data: { released }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async updateTestStatus(req, res, next) {
     try {
       const { visitTestId } = req.params;

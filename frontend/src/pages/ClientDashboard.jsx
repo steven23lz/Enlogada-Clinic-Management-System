@@ -9,6 +9,7 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { StatusBadge } from '../components/ui/status-badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import { validatePatientProfile } from '../validations/patientValidation';
@@ -494,7 +495,7 @@ const ClientDashboard = ({ onNavigate }) => {
               <User className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Active Profile Profile</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Active Profile</span>
               {profiles.length > 0 ? (
                 <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
                   <SelectTrigger className="w-64 border-0 p-0 font-bold text-slate-800 focus:ring-0 focus:outline-none bg-transparent">
@@ -1018,12 +1019,20 @@ const ClientDashboard = ({ onNavigate }) => {
           <div className="absolute right-[-60px] top-[-60px] w-80 h-80 bg-[#769046]/15 rounded-full blur-3xl pointer-events-none"></div>
         </div>
 
-        {/* Diagnostic Results & History Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Main Left - Test History Workspace */}
-          <div className="lg:col-span-2 space-y-4">
-            
+        {/* UI/UX Phase 1: previously one long stacked page with no way to jump to a section —
+            Payment History sat 3rd of 3 cards in a compressed right sidebar, requiring a client
+            to scroll past everything else to reach it (the exact complaint that prompted this
+            restructure). Each section now gets its own full-width tab. */}
+        <Tabs defaultValue="results" className="w-full space-y-4">
+          <TabsList className="bg-gray-100 p-1 rounded-xl flex-wrap h-auto">
+            <TabsTrigger value="results" className="rounded-lg text-xs font-bold px-4 py-1.5">Diagnostic Results</TabsTrigger>
+            <TabsTrigger value="appointments" className="rounded-lg text-xs font-bold px-4 py-1.5">Appointments</TabsTrigger>
+            <TabsTrigger value="payments" className="rounded-lg text-xs font-bold px-4 py-1.5">Payments</TabsTrigger>
+            <TabsTrigger value="profile" className="rounded-lg text-xs font-bold px-4 py-1.5">Profile</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="results" className="m-0 space-y-4">
+
             {/* Filter & Search Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
               <div className="flex items-center space-x-2">
@@ -1205,10 +1214,97 @@ const ClientDashboard = ({ onNavigate }) => {
                 </Card>
               )}
             </div>
-          </div>
+          </TabsContent>
 
-          {/* Right Sidebar - Patient Info Card & Clinic Info */}
-          <div className="space-y-6">
+          {/* My Appointments (Module 3: view/cancel own appointments) — full width now, no
+              more max-h scroll-box compression forced by sharing a column with two other
+              cards. */}
+          <TabsContent value="appointments" className="m-0">
+            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden max-w-2xl">
+              <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
+                <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+                  <CalendarClock className="w-4 h-4 text-[#769046]" />
+                  <span>My Appointments</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3">
+                {appointmentsLoading ? (
+                  <p className="text-xs text-gray-400 text-center py-4">Loading appointments…</p>
+                ) : appointments.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-4 italic">No appointments booked yet.</p>
+                ) : (
+                  appointments.map((appt) => {
+                    const isCancellable = appt.status === 'Pending' || appt.status === 'Confirmed';
+                    return (
+                      <div key={appt.id} className="border border-gray-100 rounded-xl p-3 space-y-2 bg-gray-50/50">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="block text-xs font-extrabold text-slate-900">
+                              {formatAppointmentDate(appt.scheduled_date)}
+                            </span>
+                            <span className="block text-[11px] text-gray-500 font-medium">{appt.scheduled_time?.slice(0, 5)}</span>
+                          </div>
+                          <StatusBadge status={appt.status} />
+                        </div>
+                        <span className="block text-[10px] text-gray-400 font-mono">{appt.appointment_reference}</span>
+                        {isCancellable && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleRequestCancelAppointment(appt)}
+                            className="w-full text-[11px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 rounded-lg py-1.5 flex items-center justify-center space-x-1.5"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                            <span>Cancel Appointment</span>
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Payment History (Module 14: client-side payment visibility) — the exact section
+              the "scroll to find payments" complaint was about; now its own full-width tab
+              instead of 3rd-of-3 in a compressed sidebar. */}
+          <TabsContent value="payments" className="m-0">
+            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden max-w-2xl">
+              <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
+                <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+                  <Receipt className="w-4 h-4 text-[#769046]" />
+                  <span>Payment History</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3">
+                {paymentHistoryLoading ? (
+                  <p className="text-xs text-gray-400 text-center py-4">Loading payment history…</p>
+                ) : paymentHistory.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-4 italic">No payments recorded yet.</p>
+                ) : (
+                  paymentHistory.map((pay) => (
+                    <div key={pay.id} className="border border-gray-100 rounded-xl p-3 space-y-1.5 bg-gray-50/50">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="block text-xs font-extrabold text-slate-900">₱{parseFloat(pay.amount).toFixed(2)}</span>
+                          <span className="block text-[11px] text-gray-500 font-medium">{pay.patient_first_name} {pay.patient_last_name}</span>
+                        </div>
+                        <StatusBadge status={pay.payment_status} />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-gray-400">
+                        <span className="font-mono">{pay.receipt_number || `OR-${pay.id}`}</span>
+                        <span>{new Date(pay.paid_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Patient Profile Summary + HMO info — grouped under one Profile tab */}
+          <TabsContent value="profile" className="m-0 space-y-4 max-w-2xl">
             {selectedProfile && (
               <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
                 <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5 flex-row items-center justify-between space-y-0">
@@ -1251,85 +1347,6 @@ const ClientDashboard = ({ onNavigate }) => {
               </Card>
             )}
 
-            {/* My Appointments (Module 3: view/cancel own appointments) */}
-            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-              <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
-                <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                  <CalendarClock className="w-4 h-4 text-[#769046]" />
-                  <span>My Appointments</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3 max-h-[360px] overflow-y-auto">
-                {appointmentsLoading ? (
-                  <p className="text-xs text-gray-400 text-center py-4">Loading appointments…</p>
-                ) : appointments.length === 0 ? (
-                  <p className="text-xs text-gray-400 text-center py-4 italic">No appointments booked yet.</p>
-                ) : (
-                  appointments.map((appt) => {
-                    const isCancellable = appt.status === 'Pending' || appt.status === 'Confirmed';
-                    return (
-                      <div key={appt.id} className="border border-gray-100 rounded-xl p-3 space-y-2 bg-gray-50/50">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="block text-xs font-extrabold text-slate-900">
-                              {formatAppointmentDate(appt.scheduled_date)}
-                            </span>
-                            <span className="block text-[11px] text-gray-500 font-medium">{appt.scheduled_time?.slice(0, 5)}</span>
-                          </div>
-                          <StatusBadge status={appt.status} />
-                        </div>
-                        <span className="block text-[10px] text-gray-400 font-mono">{appt.appointment_reference}</span>
-                        {isCancellable && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => handleRequestCancelAppointment(appt)}
-                            className="w-full text-[11px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 rounded-lg py-1.5 flex items-center justify-center space-x-1.5"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>Cancel Appointment</span>
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Payment History (Module 14: client-side payment visibility) */}
-            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-              <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
-                <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                  <Receipt className="w-4 h-4 text-[#769046]" />
-                  <span>Payment History</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3 max-h-[360px] overflow-y-auto">
-                {paymentHistoryLoading ? (
-                  <p className="text-xs text-gray-400 text-center py-4">Loading payment history…</p>
-                ) : paymentHistory.length === 0 ? (
-                  <p className="text-xs text-gray-400 text-center py-4 italic">No payments recorded yet.</p>
-                ) : (
-                  paymentHistory.map((pay) => (
-                    <div key={pay.id} className="border border-gray-100 rounded-xl p-3 space-y-1.5 bg-gray-50/50">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className="block text-xs font-extrabold text-slate-900">₱{parseFloat(pay.amount).toFixed(2)}</span>
-                          <span className="block text-[11px] text-gray-500 font-medium">{pay.patient_first_name} {pay.patient_last_name}</span>
-                        </div>
-                        <StatusBadge status={pay.payment_status} />
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] text-gray-400">
-                        <span className="font-mono">{pay.receipt_number || `OR-${pay.id}`}</span>
-                        <span>{new Date(pay.paid_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
             {/* HMO Coverage Info Card */}
             <Card className="border-gray-100 bg-[#192534] text-white rounded-2xl overflow-hidden p-5 space-y-3 shadow-sm">
               <div className="flex items-center space-x-2 text-[#769046]">
@@ -1340,9 +1357,9 @@ const ClientDashboard = ({ onNavigate }) => {
                 Enlogada Clinic is partnered with accredited HMO providers like <strong>1CoopHealth</strong>. Present your HMO LOA or Approval Code during booking.
               </p>
             </Card>
-          </div>
+          </TabsContent>
 
-        </div>
+        </Tabs>
 
         {/* Cancel appointment confirmation */}
         <ConfirmDialog

@@ -63,6 +63,17 @@ class ResultService {
     return await resultRepository.findPendingByCategory(categoryName);
   }
 
+  async getReleasedByCategory(categoryName, requestingUser) {
+    const validCategories = ['Laboratory', 'Xray', 'Ultrasound', '2D Echo'];
+    if (!validCategories.includes(categoryName)) {
+      const error = new Error(`Invalid category. Must be one of: ${validCategories.join(', ')}`);
+      error.statusCode = 400;
+      throw error;
+    }
+    assertStaffAllowedCategory(requestingUser, categoryName);
+    return await resultRepository.findReleasedByCategory(categoryName);
+  }
+
   async updateTestStatus(visitTestId, status, requestingUser) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
     return await testRepository.updateVisitTestStatus(visitTestId, status);

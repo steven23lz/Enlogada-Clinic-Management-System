@@ -7,6 +7,9 @@ const router = express.Router();
 // Department staff views pending tests by category (Laboratory, Xray, Ultrasound)
 router.get('/pending/:category', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), resultController.getPending);
 
+// UI/UX Phase 1: department staff review results they've already released, by category
+router.get('/released/:category', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), resultController.getReleased);
+
 // Department staff updates a visit_test status (Processing, Completed, etc.)
 router.put('/test-status/:visitTestId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), resultController.updateTestStatus);
 router.patch('/test-status/:visitTestId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), resultController.updateTestStatus);

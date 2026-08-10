@@ -166,9 +166,11 @@ test.describe('Receptionist — browser flow', () => {
     await page.fill('input[type="email"]', RECEPTIONIST_EMAIL);
     await page.fill('input[type="password"]', RECEPTIONIST_PASSWORD);
     await page.locator('button[type="submit"]').click();
-    await expect(page.getByRole('tab', { name: /Walk-In Fast Registration/ })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Active Queue Visits')).toBeVisible({ timeout: 10000 });
 
-    await page.getByRole('tab', { name: /Walk-In Fast Registration/ }).click();
+    // UI/UX Phase 1: "Walk-In Fast Registration" was previously a tab on the same page as the
+    // queue; it's now its own nav destination ("Walk-In Registration").
+    await page.getByText('Walk-In Registration', { exact: true }).click();
     await page.getByPlaceholder('Search by patient name...').fill(uniqueLastName);
     await page.getByRole('button', { name: 'Search' }).click();
     await expect(page.getByText(`Returning ${uniqueLastName}`)).toBeVisible({ timeout: 10000 });
@@ -204,7 +206,8 @@ test.describe('Receptionist — browser flow', () => {
     await page.fill('input[type="email"]', RECEPTIONIST_EMAIL);
     await page.fill('input[type="password"]', RECEPTIONIST_PASSWORD);
     await page.locator('button[type="submit"]').click();
-    await expect(page.getByRole('tab', { name: /Active Patient Queue/ })).toBeVisible({ timeout: 10000 });
+    // UI/UX Phase 1: Active Queue is now Receptionist's default landing page (no tab needed).
+    await expect(page.getByText('Active Queue Visits')).toBeVisible({ timeout: 10000 });
 
     await page.getByLabel(`Log HMO pre-authorization for ${labTest.name}`).first().click();
     await expect(page.getByText('Log HMO Pre-Authorization')).toBeVisible();

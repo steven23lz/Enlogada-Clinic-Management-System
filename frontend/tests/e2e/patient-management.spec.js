@@ -116,6 +116,9 @@ test.describe('Patient profile editing — browser flow', () => {
     await page.fill('input[type="email"]', client.email);
     await page.fill('input[type="password"]', 'TestPass123!');
     await page.locator('button[type="submit"]').click();
+    // UI/UX Phase 1: Patient Profile Summary moved from an always-visible sidebar card into
+    // its own Profile tab.
+    await page.getByRole('tab', { name: 'Profile', exact: true }).click();
     await expect(page.getByText('Patient Profile Summary')).toBeVisible({ timeout: 10000 });
 
     await page.getByLabel('Edit patient profile').click();

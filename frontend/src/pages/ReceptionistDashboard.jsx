@@ -7,9 +7,8 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import api from '../config/api';
 import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
@@ -34,7 +33,17 @@ import {
   Keyboard
 } from 'lucide-react';
 
-const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => {
+const PAGE_TITLES = {
+  'reception-queue': 'Active Patient Queue',
+  'reception-walkin': 'Walk-In Registration',
+  'reception-checkin': 'Appointment Check-In',
+};
+const VALID_VIEWS = Object.keys(PAGE_TITLES);
+
+const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) => {
+  // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
+  // back to the primary queue view, mirroring DiagnosticDashboard's existing fallback pattern.
+  const view = VALID_VIEWS.includes(activeNav) ? activeNav : 'reception-queue';
   const [activeVisits, setActiveVisits] = useState([]);
   const [testCatalog, setTestCatalog] = useState([]);
   const [patientTypes, setPatientTypes] = useState([]);
@@ -47,7 +56,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
   const [searchRef, setSearchRef] = useState('');
   const [verifyResult, setVerifyResult] = useState(null);
   const [verifyError, setVerifyError] = useState('');
-  const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [scanMode, setScanMode] = useState(false);
   const [showCheckInConfirm, setShowCheckInConfirm] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
@@ -157,7 +165,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
       await api.patch(`/visits/${visitId}/status`, { status: 'Processing' });
       fetchActiveVisits();
       setShowCheckInConfirm(false);
-      setShowVerifyModal(false);
       setSearchRef('');
       setVerifyResult(null);
     } catch (err) {
@@ -350,142 +357,49 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
   const walkinCount = activeVisits.filter(v => v.visit_type === 'Walk in').length;
 
   return (
-    <SidebarLayout title="Receptionist Operational Desk" activeNav={activeNav} onSelectNav={onSelectNav}>
+    <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
       <div className="space-y-6">
-        
-        {/* KPI Metrics Header */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard label="Active Queue Visits" value={activeVisits.length} icon={UserCheck} tone="green" />
-          <MetricCard label="Pending Intake" value={pendingVisits} icon={Clock} tone="amber" />
-          <MetricCard label="In Diagnostic / Processing" value={processingVisits} icon={ClipboardList} tone="indigo" />
-          <MetricCard label="Walk-In Intake Today" value={walkinCount} icon={UserPlus} tone="emerald" />
-        </div>
 
-        {/* Action Toolbar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-          
-          <div className="flex items-center space-x-3">
-            <Dialog open={showVerifyModal} onOpenChange={(open) => { setShowVerifyModal(open); if (!open) setScanMode(false); }}>
-              <DialogTrigger asChild>
-                <Button className="bg-[#192534] hover:bg-slate-800 text-white text-xs font-bold rounded-xl flex items-center space-x-2 px-4 py-2.5 cursor-pointer">
-                  <QrCode className="w-4 h-4" />
-                  <span>Verify Online QR / Reference</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md rounded-2xl">
-                <DialogHeader>
-                  <DialogTitle className="text-base font-bold text-slate-900">Verify Appointment Reference</DialogTitle>
-                  <DialogDescription className="text-xs">
-                    Scan or enter the appointment reference code (e.g. <code>APPT-XXXXX</code>).
-                  </DialogDescription>
-                </DialogHeader>
-
-                <button
-                  type="button"
-                  onClick={() => setScanMode(m => !m)}
-                  className="flex items-center space-x-1.5 text-[11px] font-bold text-[#769046] hover:text-[#657c3a] cursor-pointer"
-                >
-                  {scanMode ? <Keyboard className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
-                  <span>{scanMode ? 'Switch to manual entry' : 'Scan QR with camera'}</span>
-                </button>
-
-                {scanMode && (
-                  <QrScanner
-                    active={showVerifyModal && scanMode}
-                    onScan={handleQrScan}
-                    onError={setVerifyError}
-                  />
-                )}
-
-                <form onSubmit={handleVerifyReference} className="space-y-4 pt-2">
-                  <div className="flex space-x-2">
-                    <Input
-                      placeholder="APPT-104928"
-                      value={searchRef}
-                      onChange={e => setSearchRef(e.target.value)}
-                      className="text-xs rounded-xl"
-                    />
-                    <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-xs font-bold px-4">
-                      Lookup
-                    </Button>
-                  </div>
-
-                  {verifyError && (
-                    <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
-                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                      <span>{verifyError}</span>
-                    </div>
-                  )}
-
-                  {verifyResult && (
-                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3 text-xs">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-gray-500 uppercase">Patient</span>
-                        <span className="font-extrabold text-slate-900">{verifyResult.first_name} {verifyResult.last_name}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-gray-500 uppercase">Scheduled</span>
-                        <span className="font-bold text-gray-800">{verifyResult.scheduled_date} at {verifyResult.scheduled_time}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-gray-500 uppercase">Queue Ticket</span>
-                        <Badge className="bg-[#769046] text-white font-extrabold">{verifyResult.queue_number}</Badge>
-                      </div>
-
-                      <Button
-                        type="button"
-                        onClick={handleCheckIn}
-                        className="w-full bg-[#769046] hover:bg-[#657c3a] text-white font-bold py-2 rounded-xl"
-                      >
-                        Confirm Check-In Patient
-                      </Button>
-                    </div>
-                  )}
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <div className="flex items-center space-x-3 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search patient name or Queue #..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus:outline-none focus:ring-1 focus:ring-[#769046]"
-              />
+        {view === 'reception-queue' && (
+          <>
+            {/* KPI Metrics Header */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <MetricCard label="Active Queue Visits" value={activeVisits.length} icon={UserCheck} tone="green" />
+              <MetricCard label="Pending Intake" value={pendingVisits} icon={Clock} tone="amber" />
+              <MetricCard label="In Diagnostic / Processing" value={processingVisits} icon={ClipboardList} tone="indigo" />
+              <MetricCard label="Walk-In Intake Today" value={walkinCount} icon={UserPlus} tone="emerald" />
             </div>
 
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36 text-xs rounded-xl">
-                <SelectValue placeholder="Status Filter" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Statuses</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Processing">Processing</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            {/* Search + Status Filter Toolbar */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
+              <div className="flex items-center space-x-3 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search patient name or Queue #..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus:outline-none focus:ring-1 focus:ring-[#769046]"
+                  />
+                </div>
 
-        </div>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-36 text-xs rounded-xl">
+                    <SelectValue placeholder="Status Filter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Statuses</SelectItem>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Processing">Processing</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <span className="text-xs font-bold text-gray-400 whitespace-nowrap">{filteredVisits.length} visit(s)</span>
+            </div>
 
-        {/* Main Work Surface (Tabs for Active Queue vs Walk-in Intake) */}
-        <Tabs defaultValue="queue" className="w-full space-y-4">
-          <TabsList className="bg-gray-100 p-1 rounded-xl">
-            <TabsTrigger value="queue" className="rounded-lg text-xs font-bold px-4 py-1.5">
-              Active Patient Queue ({filteredVisits.length})
-            </TabsTrigger>
-            <TabsTrigger value="walkin" className="rounded-lg text-xs font-bold px-4 py-1.5">
-              Walk-In Fast Registration
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Active Queue Table */}
-          <TabsContent value="queue" className="space-y-4 m-0">
+            {/* Active Queue Table */}
             <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
               <CardContent className="p-0">
                 <Table>
@@ -606,10 +520,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
                 </Table>
               </CardContent>
             </Card>
-          </TabsContent>
+          </>
+        )}
 
-          {/* Walk-in Registration Form */}
-          <TabsContent value="walkin" className="m-0 space-y-4">
+        {view === 'reception-walkin' && (
+          <div className="space-y-4">
 
             {/* Existing Patient Lookup (Module 7: patient record lookup) */}
             <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 max-w-3xl">
@@ -806,8 +721,85 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
                 </div>
               </form>
             </Card>
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
+
+        {view === 'reception-checkin' && (
+          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 max-w-xl">
+            <div className="border-b border-gray-100 pb-3 mb-4">
+              <h3 className="text-base font-bold text-slate-900 m-0 flex items-center space-x-2">
+                <QrCode className="w-5 h-5 text-[#769046]" />
+                <span>Verify Appointment Reference</span>
+              </h3>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Scan or enter the appointment reference code (e.g. <code>APPT-XXXXX</code>) to check a patient in.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setScanMode(m => !m)}
+              className="flex items-center space-x-1.5 text-[11px] font-bold text-[#769046] hover:text-[#657c3a] cursor-pointer mb-3"
+            >
+              {scanMode ? <Keyboard className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
+              <span>{scanMode ? 'Switch to manual entry' : 'Scan QR with camera'}</span>
+            </button>
+
+            {scanMode && (
+              <QrScanner
+                active={view === 'reception-checkin' && scanMode}
+                onScan={handleQrScan}
+                onError={setVerifyError}
+              />
+            )}
+
+            <form onSubmit={handleVerifyReference} className="space-y-4 pt-2">
+              <div className="flex space-x-2">
+                <Input
+                  placeholder="APPT-104928"
+                  value={searchRef}
+                  onChange={e => setSearchRef(e.target.value)}
+                  className="text-xs rounded-xl"
+                />
+                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-xs font-bold px-4">
+                  Lookup
+                </Button>
+              </div>
+
+              {verifyError && (
+                <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{verifyError}</span>
+                </div>
+              )}
+
+              {verifyResult && (
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-gray-500 uppercase">Patient</span>
+                    <span className="font-extrabold text-slate-900">{verifyResult.first_name} {verifyResult.last_name}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-gray-500 uppercase">Scheduled</span>
+                    <span className="font-bold text-gray-800">{verifyResult.scheduled_date} at {verifyResult.scheduled_time}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-gray-500 uppercase">Queue Ticket</span>
+                    <Badge className="bg-[#769046] text-white font-extrabold">{verifyResult.queue_number}</Badge>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={handleCheckIn}
+                    className="w-full bg-[#769046] hover:bg-[#657c3a] text-white font-bold py-2 rounded-xl"
+                  >
+                    Confirm Check-In Patient
+                  </Button>
+                </div>
+              )}
+            </form>
+          </Card>
+        )}
 
         {/* Attach Diagnostic Tests Modal */}
         <Dialog open={showTestsModal} onOpenChange={setShowTestsModal}>

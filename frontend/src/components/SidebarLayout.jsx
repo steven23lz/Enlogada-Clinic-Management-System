@@ -3,13 +3,13 @@ import { useAuth } from '../contexts/AuthContext';
 import Logo from './Logo';
 import { Button } from './ui/button';
 import api from '../config/api';
-import { 
-  LayoutDashboard, 
-  Users, 
-  ClipboardList, 
-  FileText, 
-  CreditCard, 
-  Calendar, 
+import {
+  LayoutDashboard,
+  Users,
+  ClipboardList,
+  FileText,
+  CreditCard,
+  Calendar,
   FolderKanban,
   BarChart3,
   Receipt,
@@ -24,7 +24,11 @@ import {
   CheckCircle2,
   X,
   Menu,
-  ShieldCheck
+  ShieldCheck,
+  UserPlus,
+  QrCode,
+  History,
+  UserCog
 } from 'lucide-react';
 
 const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectNav, children }) => {
@@ -38,10 +42,13 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
 
   // Navigation Items. Most admin-console items are gated by isSuperOrAdmin (Admin and
   // SuperAdmin see the same thing); 'superadmin' is the first item restricted to SuperAdmin
-  // alone — Module 13's "elevated ... beyond what Admin can do" boundary.
+  // alone — Module 13's "elevated ... beyond what Admin can do" boundary. 'dashboard' is
+  // Admin/SuperAdmin-only too: the 5 operational roles now have real, focused destinations in
+  // opsNavItems below, so a generic "Dashboard" button that silently re-rendered whatever page
+  // they were already on (a dead click, confirmed in the UI/UX audit) would only add confusion.
   const mainNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     ...(isSuperOrAdmin ? [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'staff', label: 'Staff Accounts', icon: Users },
       { id: 'service-requests', label: 'Service Requests', icon: ClipboardList },
       { id: 'services-cat', label: 'Services Catalog', icon: FileText },
@@ -55,12 +62,24 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
     ] : []),
   ];
 
+  // Module 18 UI/UX Phase 1: every operational role previously had exactly one nav
+  // destination (some even shared a "Dashboard" item that silently routed to the same page).
+  // Split into real, focused destinations per role, mirroring the pattern mainNavItems above
+  // already uses for Admin/SuperAdmin.
   const opsNavItems = [
-    { id: 'reception-ops', label: 'Receptionist Ops', icon: Calendar, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
-    { id: 'cashier-ops', label: 'Cashier Ops', icon: Receipt, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
-    { id: 'lab-ops', label: 'Laboratory Ops', icon: FlaskConical, roleRequired: ['Laboratory Staff', 'Admin', 'SuperAdmin'] },
-    { id: 'ultrasound-ops', label: 'Ultrasound Ops', icon: Stethoscope, roleRequired: ['Ultrasound Staff', 'Admin', 'SuperAdmin'] },
-    { id: 'xray-ops', label: 'X-Ray Ops', icon: Scan, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
+    { id: 'reception-queue', label: 'Active Queue', icon: Calendar, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
+    { id: 'reception-walkin', label: 'Walk-In Registration', icon: UserPlus, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
+    { id: 'reception-checkin', label: 'Appointment Check-In', icon: QrCode, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
+
+    { id: 'cashier-queue', label: 'Billing Queue', icon: Receipt, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
+    { id: 'cashier-history', label: 'Transaction History', icon: History, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
+
+    { id: 'lab-ops', label: 'Laboratory Worklist', icon: FlaskConical, roleRequired: ['Laboratory Staff', 'Admin', 'SuperAdmin'] },
+    { id: 'lab-history', label: 'Laboratory History', icon: History, roleRequired: ['Laboratory Staff', 'Admin', 'SuperAdmin'] },
+    { id: 'ultrasound-ops', label: 'Ultrasound Worklist', icon: Stethoscope, roleRequired: ['Ultrasound Staff', 'Admin', 'SuperAdmin'] },
+    { id: 'ultrasound-history', label: 'Ultrasound History', icon: History, roleRequired: ['Ultrasound Staff', 'Admin', 'SuperAdmin'] },
+    { id: 'xray-ops', label: 'X-Ray Worklist', icon: Scan, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
+    { id: 'xray-history', label: 'X-Ray History', icon: History, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
   ];
 
   // Module 18 (Notification): real, per-user notifications from the backend, replacing the
@@ -198,7 +217,13 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 bg-[#192534] text-gray-300 flex-col justify-between p-4 shadow-xl z-20 flex-shrink-0">
         {renderNavContent()}
-        <div className="bg-slate-800/90 rounded-xl p-3 flex items-center justify-between border border-slate-700/60 shadow-inner mt-4">
+        <button
+          onClick={() => onSelectNav && onSelectNav('account')}
+          aria-label="My Account"
+          className={`w-full text-left rounded-xl p-3 flex items-center justify-between border shadow-inner mt-4 cursor-pointer transition-colors border-0 ${
+            activeNav === 'account' ? 'bg-[#769046]/20 border-[#769046]/40' : 'bg-slate-800/90 border-slate-700/60 hover:bg-slate-800'
+          }`}
+        >
           <div className="flex items-center space-x-2.5 min-w-0">
             <div className="w-8 h-8 rounded-full bg-[#769046] text-white flex items-center justify-center font-bold text-xs shadow-xs flex-shrink-0">
               {user?.firstName ? user.firstName.charAt(0) : 'U'}
@@ -208,7 +233,8 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
               <span className="text-[10px] text-gray-400 truncate">{userRoles.join(', ')}</span>
             </div>
           </div>
-        </div>
+          <UserCog className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        </button>
       </aside>
 
       {/* Mobile Drawer Overlay */}
@@ -223,7 +249,13 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
               <X className="w-5 h-5" />
             </button>
             {renderNavContent()}
-            <div className="bg-slate-800/90 rounded-xl p-3 flex items-center justify-between border border-slate-700/60 shadow-inner mt-4">
+            <button
+              onClick={() => { onSelectNav && onSelectNav('account'); setMobileOpen(false); }}
+              aria-label="My Account"
+              className={`w-full text-left rounded-xl p-3 flex items-center justify-between border shadow-inner mt-4 cursor-pointer transition-colors border-0 ${
+                activeNav === 'account' ? 'bg-[#769046]/20 border-[#769046]/40' : 'bg-slate-800/90 border-slate-700/60 hover:bg-slate-800'
+              }`}
+            >
               <div className="flex items-center space-x-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-[#769046] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
                   {user?.firstName ? user.firstName.charAt(0) : 'U'}
@@ -233,7 +265,8 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
                   <span className="text-[10px] text-gray-400 truncate">{userRoles.join(', ')}</span>
                 </div>
               </div>
-            </div>
+              <UserCog className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            </button>
           </div>
         </div>
       )}

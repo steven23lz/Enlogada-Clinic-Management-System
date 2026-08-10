@@ -271,6 +271,8 @@ test.describe('Payment — browser flow', () => {
     await page.fill('input[type="email"]', email);
     await page.fill('input[type="password"]', 'TestPass123!');
     await page.locator('button[type="submit"]').click();
+    // UI/UX Phase 1: Payment History moved from an always-visible sidebar card into its own tab.
+    await page.getByRole('tab', { name: 'Payments' }).click();
     await expect(page.getByText('Payment History', { exact: true })).toBeVisible({ timeout: 10000 });
 
     const paymentCard = page.getByText('Payment History', { exact: true }).locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]');

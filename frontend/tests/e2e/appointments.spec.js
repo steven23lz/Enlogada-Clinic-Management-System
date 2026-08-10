@@ -144,6 +144,8 @@ test.describe('Appointment booking/cancellation — browser flow', () => {
     await page.fill('input[type="email"]', CLIENT_EMAIL);
     await page.fill('input[type="password"]', CLIENT_PASSWORD);
     await page.locator('button[type="submit"]').click();
+    // UI/UX Phase 1: Appointments moved from an always-visible sidebar card into its own tab.
+    await page.getByRole('tab', { name: 'Appointments' }).click();
     await expect(page.getByText('My Appointments', { exact: true })).toBeVisible({ timeout: 10000 });
   });
 
@@ -186,6 +188,8 @@ test.describe('Appointment booking/cancellation — browser flow', () => {
     await page.fill('input[type="email"]', CLIENT_EMAIL);
     await page.fill('input[type="password"]', CLIENT_PASSWORD);
     await page.locator('button[type="submit"]').click();
+    // UI/UX Phase 1: Appointments moved from an always-visible sidebar card into its own tab.
+    await page.getByRole('tab', { name: 'Appointments' }).click();
     await expect(page.getByText(appointment.appointment_reference)).toBeVisible({ timeout: 10000 });
 
     const card = page.locator('div', { has: page.getByText(appointment.appointment_reference) }).last();

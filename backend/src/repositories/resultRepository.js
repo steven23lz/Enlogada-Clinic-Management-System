@@ -20,6 +20,33 @@ class ResultRepository {
     return result.rows;
   }
 
+  // UI/UX Phase 1: diagnostic staff previously had no way to review results they'd already
+  // released from this app at all — the pending-worklist endpoint above only ever returns
+  // Pending/Approved/Processing tests. Mirrors findPendingByCategory's shape/filtering exactly,
+  // just against 'Completed' status and joined to the actual result content.
+  async findReleasedByCategory(categoryName) {
+    const queryText = `
+      SELECT vt.id as visit_test_id, vt.status as test_status,
+             t.name as test_name, tc.name as category_name,
+             pv.id as visit_id, pv.queue_number,
+             p.first_name, p.last_name,
+             tr.findings, tr.remarks as result_remarks, tr.file_url, tr.released_at,
+             u.first_name as released_by_first_name, u.last_name as released_by_last_name
+      FROM visit_tests vt
+      JOIN tests t ON vt.test_id = t.id
+      JOIN test_categories tc ON t.category_id = tc.id
+      JOIN patient_visits pv ON vt.patient_visit_id = pv.id
+      JOIN patients p ON pv.patient_id = p.id
+      LEFT JOIN test_results tr ON tr.visit_test_id = vt.id
+      LEFT JOIN users u ON tr.released_by = u.id
+      WHERE tc.name = $1
+        AND vt.status = 'Completed'
+      ORDER BY tr.released_at DESC NULLS LAST, pv.created_at DESC
+    `;
+    const result = await db.query(queryText, [categoryName]);
+    return result.rows;
+  }
+
   async createResult({ visitTestId, fileUrl, findings, remarks, releasedBy }) {
     // Upsert, not a plain insert: the caller always follows this with a separate release call
     // (see resultService.releaseResult) for the same clinically-significant action. If that

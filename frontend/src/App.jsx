@@ -14,6 +14,7 @@ import CashierDashboard from './pages/CashierDashboard';
 import DiagnosticDashboard from './pages/DiagnosticDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import ServicesCatalog from './pages/ServicesCatalog';
+import StaffAccountSettings from './pages/StaffAccountSettings';
 
 // Read a one-time deep-link param from the URL (e.g. an emailed password-reset link) without
 // introducing a router — this app deliberately has none (see PROJECT_STRUCTURE.md). Read once
@@ -67,6 +68,13 @@ const MainApp = () => {
   // If user IS logged in
   const roles = user.roles || [];
 
+  // Every SidebarLayout-based role (everyone except Client) can reach a shared, self-service
+  // account page via the sidebar's user-info block — see StaffAccountSettings.jsx. Checked
+  // before any role branch below since it applies uniformly across all of them.
+  if (!roles.includes('Client') && activeNav === 'account') {
+    return <StaffAccountSettings onSelectNav={setActiveNav} />;
+  }
+
   // SuperAdmin and Admin
   if (roles.includes('SuperAdmin') || roles.includes('Admin')) {
     if (currentTab === 'services') {
@@ -77,9 +85,13 @@ const MainApp = () => {
     }
 
     if (activeNav === 'services-cat') return <ServicesCatalog activeNav={activeNav} onSelectNav={setActiveNav} />;
-    if (activeNav === 'reception-ops') return <ReceptionistDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
-    if (activeNav === 'cashier-ops') return <CashierDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
-    if (activeNav === 'lab-ops' || activeNav === 'ultrasound-ops' || activeNav === 'xray-ops') {
+    if (['reception-queue', 'reception-walkin', 'reception-checkin'].includes(activeNav)) {
+      return <ReceptionistDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
+    }
+    if (['cashier-queue', 'cashier-history'].includes(activeNav)) {
+      return <CashierDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
+    }
+    if (['lab-ops', 'lab-history', 'ultrasound-ops', 'ultrasound-history', 'xray-ops', 'xray-history'].includes(activeNav)) {
       return <DiagnosticDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
     }
 

@@ -30,7 +30,16 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
+const PAGE_TITLES = {
+  'cashier-queue': 'Cashier POS & Billing Terminal',
+  'cashier-history': 'Transaction History',
+};
+const VALID_VIEWS = Object.keys(PAGE_TITLES);
+
+const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
+  // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
+  // back to the primary billing queue view.
+  const view = VALID_VIEWS.includes(activeNav) ? activeNav : 'cashier-queue';
   const [activeVisits, setActiveVisits] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -187,9 +196,11 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
   });
 
   return (
-    <SidebarLayout title="Cashier POS & Billing Terminal" activeNav={activeNav} onSelectNav={onSelectNav}>
+    <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
       <div className="space-y-6">
-        
+
+        {view === 'cashier-queue' && (
+        <>
         {/* Collections Overview Metrics Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard label="Today's Collections" value={`₱${totalCollectionsToday.toFixed(2)}`} icon={DollarSign} tone="green" />
@@ -200,7 +211,7 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
 
         {/* POS Split Workstation (Left: Billing Queue, Right: Invoice Checkout Terminal) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
+
           {/* Left Panel: Pending Patients Billing Queue */}
           <div className="lg:col-span-5 space-y-4">
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs space-y-3">
@@ -451,11 +462,18 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
           </div>
 
         </div>
+        </>
+        )}
 
-        {/* Transaction History Log Table */}
+        {view === 'cashier-history' && (
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 space-y-4">
-          <h3 className="text-base font-bold text-slate-900 m-0">Today's Completed Cashier Transactions</h3>
-          
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-slate-900 m-0">Today's Completed Cashier Transactions</h3>
+            <Badge variant="secondary" className="bg-[#769046]/10 text-[#769046] font-bold">
+              {transactions.length} Receipt(s)
+            </Badge>
+          </div>
+
           <div className="border border-gray-100 rounded-xl overflow-hidden">
             <Table>
               <TableHeader className="bg-gray-50/80">
@@ -493,6 +511,7 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
             </Table>
           </div>
         </Card>
+        )}
 
         {/* Payment confirmation — irreversible action, see .agents Phase 12 */}
         <ConfirmDialog
