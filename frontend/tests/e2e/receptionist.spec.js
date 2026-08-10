@@ -175,7 +175,12 @@ test.describe('Receptionist — browser flow', () => {
     await page.getByRole('button', { name: 'Search' }).click();
     await expect(page.getByText(`Returning ${uniqueLastName}`)).toBeVisible({ timeout: 10000 });
 
+    // UI/UX Phase 3: this used to check the patient in immediately on click; it now opens a
+    // confirmation dialog first (unified with the QR/reference check-in flow's existing
+    // confirm-before-firing pattern).
     await page.getByRole('button', { name: /Check In This Patient/ }).click();
+    await expect(page.getByText(/as a walk-in\?/)).toBeVisible({ timeout: 10000 });
+    await page.getByRole('button', { name: 'Confirm Check-In' }).click();
     await expect(page.getByText(/checked in!/)).toBeVisible({ timeout: 10000 });
   });
 

@@ -34,19 +34,22 @@ const DashboardOverview = () => {
   const [catalogCount, setCatalogCount] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [roleCount, setRoleCount] = useState(0);
+  const [hmoPartnerCount, setHmoPartnerCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const fetchOverview = useCallback(async () => {
     try {
       const today = todayStr();
-      const [testsRes, txRes, rbacRes] = await Promise.all([
+      const [testsRes, txRes, rbacRes, hmoRes] = await Promise.all([
         api.get('/tests'),
         api.get('/payments/transactions', { params: { startDate: today, endDate: today } }),
         api.get('/rbac/matrix'),
+        api.get('/hmo/providers'),
       ]);
       setCatalogCount((testsRes.data.data.tests || []).length);
       setTodayRevenue((txRes.data.data.transactions || []).reduce((s, t) => s + parseFloat(t.amount || 0), 0));
       setRoleCount((rbacRes.data.data.roles || []).length);
+      setHmoPartnerCount((hmoRes.data.data.providers || []).length);
     } catch (err) {
       console.error('Failed to fetch dashboard overview:', err);
     } finally {
@@ -93,8 +96,8 @@ const DashboardOverview = () => {
         />
         <MetricCard
           label="HMO Partners"
-          value="1CoopHealth"
-          caption="Active Accreditation"
+          value={loading ? '…' : `${hmoPartnerCount} Partner${hmoPartnerCount === 1 ? '' : 's'}`}
+          caption="Accredited Providers"
           icon={UserCheck}
           tone="purple"
         />

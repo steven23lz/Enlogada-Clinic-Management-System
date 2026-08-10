@@ -8,16 +8,21 @@ import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 
 // Module 5: Profile — a client's own account settings (contact info, password,
-// read-only view of role/permissions). Distinct from Module 4 (Patient Management),
+// read-only view of account type). Distinct from Module 4 (Patient Management),
 // which covers the `patients` records a client manages, not the `users` account itself.
 // The form itself (Account Information + Change Password) now lives in the shared,
 // layout-agnostic AccountSettingsForm component — this page supplies the Client-specific
-// shell (back button, header) and the Role & Permissions sidebar card.
+// shell (back button, header) and the Account Type sidebar card.
+//
+// UI/UX Phase 3: dropped the raw resource:action permission-string badges that used to sit
+// below the role badge here — confirmed not a security issue (a caller only ever sees their
+// own JWT-derived roles/permissions), but raw RBAC strings like "appointments:create" are
+// internal implementation detail that only confused a non-technical Client. The role badge
+// alone already answers "what kind of account is this."
 const ClientProfile = ({ onNavigate }) => {
   const { user } = useAuth();
 
   const roles = user?.roles || [];
-  const permissions = user?.permissions || [];
 
   return (
     <DashboardLayout onNavigate={onNavigate} activeTab="account">
@@ -52,37 +57,18 @@ const ClientProfile = ({ onNavigate }) => {
               <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
                 <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
                   <ShieldCheck className="w-4 h-4 text-[#769046]" />
-                  <span>Role &amp; Permissions</span>
+                  <span>Account Type</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4 space-y-4">
-                <div className="space-y-1.5">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Assigned Role(s)</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {roles.length > 0 ? roles.map(role => (
-                      <Badge key={role} className="bg-[#769046]/10 text-[#769046] text-[11px] font-bold px-2.5 py-1 rounded-full border-0">
-                        {role}
-                      </Badge>
-                    )) : (
-                      <span className="text-xs text-gray-400 italic">No role assigned</span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Granted Permissions</span>
-                  {permissions.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {permissions.map(perm => (
-                        <Badge key={perm} variant="secondary" className="bg-gray-100 text-gray-600 text-[10px] font-semibold px-2 py-0.5 rounded-full border-0">
-                          {perm}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-gray-400 italic m-0">
-                      No fine-grained permissions are assigned to your role — access is governed by your role alone.
-                    </p>
+              <CardContent className="p-4 space-y-1.5">
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Assigned Role(s)</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {roles.length > 0 ? roles.map(role => (
+                    <Badge key={role} className="bg-[#769046]/10 text-[#769046] text-[11px] font-bold px-2.5 py-1 rounded-full border-0">
+                      {role}
+                    </Badge>
+                  )) : (
+                    <span className="text-xs text-gray-400 italic">No role assigned</span>
                   )}
                 </div>
               </CardContent>

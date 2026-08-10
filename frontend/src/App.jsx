@@ -3,6 +3,8 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Home from './pages/Home';
 import ServicesPage from './pages/ServicesPage';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -48,6 +50,12 @@ const MainApp = () => {
   if (!user) {
     if (currentTab === 'services') {
       return <ServicesPage onNavigate={handleNavigate} />;
+    }
+    if (currentTab === 'privacy') {
+      return <PrivacyPolicy onNavigate={handleNavigate} />;
+    }
+    if (currentTab === 'terms') {
+      return <TermsOfService onNavigate={handleNavigate} />;
     }
     if (currentTab === 'about' || currentTab === 'home') {
       return <Home onNavigate={handleNavigate} />;

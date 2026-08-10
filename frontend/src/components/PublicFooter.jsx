@@ -55,8 +55,20 @@ const PublicFooter = ({ onNavigate }) => {
       <div className="max-w-7xl mx-auto px-8 pt-8 mt-8 border-t border-gray-800 flex flex-col md:flex-row items-center justify-between text-xs text-gray-500">
         <p>© 2026 Enlogada Ultrasound & Diagnostic Clinic. All rights reserved.</p>
         <div className="flex items-center space-x-6 mt-4 md:mt-0">
-          <span className="hover:underline cursor-pointer">Privacy Policy</span>
-          <span className="hover:underline cursor-pointer">Terms of Service</span>
+          <button
+            type="button"
+            onClick={() => onNavigate && onNavigate('privacy')}
+            className="hover:underline cursor-pointer border-0 bg-transparent p-0 text-gray-500 hover:text-white transition-colors"
+          >
+            Privacy Policy
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate && onNavigate('terms')}
+            className="hover:underline cursor-pointer border-0 bg-transparent p-0 text-gray-500 hover:text-white transition-colors"
+          >
+            Terms of Service
+          </button>
         </div>
       </div>
     </footer>

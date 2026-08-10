@@ -85,7 +85,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [verifyResult, setVerifyResult] = useState(null);
   const [verifyError, setVerifyError] = useState('');
   const [scanMode, setScanMode] = useState(false);
-  const [showCheckInConfirm, setShowCheckInConfirm] = useState(false);
+
+  // UI/UX Phase 3: check-in used to have two independent code paths — the QR/reference flow
+  // went through a ConfirmDialog, but checking in an existing patient found via the Walk-In
+  // Registration lookup fired immediately with no confirmation at all. Both now funnel through
+  // this one target + one ConfirmDialog, tagged by type so the same confirm action can branch.
+  const [checkInTarget, setCheckInTarget] = useState(null); // { type: 'appointment' | 'walkin', data }
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkInError, setCheckInError] = useState('');
 
@@ -99,7 +104,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [patientSearchResults, setPatientSearchResults] = useState(null);
   const [patientSearching, setPatientSearching] = useState(false);
   const [patientSearchError, setPatientSearchError] = useState('');
-  const [checkingInPatientId, setCheckingInPatientId] = useState(null);
   const [lookupCheckInSuccess, setLookupCheckInSuccess] = useState('');
 
   // Walk-in Registration State
@@ -241,26 +245,42 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     handleVerifyReference(null, decodedText);
   };
 
-  const handleCheckIn = () => {
-    // Check-in advances both the appointment and visit status — require explicit
-    // confirmation before it fires. See .agents Phase 12.
+  const requestCheckIn = (type, data) => {
+    // Check-in is clinically/operationally significant either way — advances an appointment
+    // and visit status, or creates a brand-new visit — so both paths require explicit
+    // confirmation before firing. See .agents Phase 12.
     setCheckInError('');
-    setShowCheckInConfirm(true);
+    setCheckInTarget({ type, data });
   };
 
-  const confirmCheckIn = async (visitId, appointmentId) => {
+  const confirmCheckIn = async () => {
+    if (!checkInTarget) return;
     setCheckingIn(true);
     setCheckInError('');
     try {
-      await api.patch(`/appointments/${appointmentId}/status`, { status: 'Confirmed' });
-      await api.patch(`/visits/${visitId}/status`, { status: 'Processing' });
+      if (checkInTarget.type === 'appointment') {
+        const { id: appointmentId, patient_visit_id: visitId } = checkInTarget.data;
+        await api.patch(`/appointments/${appointmentId}/status`, { status: 'Confirmed' });
+        await api.patch(`/visits/${visitId}/status`, { status: 'Processing' });
+        setSearchRef('');
+        setVerifyResult(null);
+      } else {
+        const patient = checkInTarget.data;
+        const vRes = await api.post('/visits', {
+          patientId: patient.id,
+          visitType: 'Walk in',
+          notes: visitNotes
+        });
+        const visit = vRes.data.data.visit;
+        setLookupCheckInSuccess(`${patient.first_name} ${patient.last_name} checked in! Physical Queue Ticket: ${visit.queue_number}`);
+        setPatientSearchResults(null);
+        setPatientSearchQuery('');
+        setVisitNotes('');
+      }
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
-      setShowCheckInConfirm(false);
-      setSearchRef('');
-      setVerifyResult(null);
+      setCheckInTarget(null);
     } catch (err) {
       setCheckInError(err.response?.data?.message || 'Failed to check in patient');
-      setShowCheckInConfirm(false);
     } finally {
       setCheckingIn(false);
     }
@@ -331,29 +351,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setPatientSearchResults(null);
     } finally {
       setPatientSearching(false);
-    }
-  };
-
-  const handleCheckInExistingPatient = async (patient) => {
-    setPatientSearchError('');
-    setLookupCheckInSuccess('');
-    setCheckingInPatientId(patient.id);
-    try {
-      const vRes = await api.post('/visits', {
-        patientId: patient.id,
-        visitType: 'Walk in',
-        notes: visitNotes
-      });
-      const visit = vRes.data.data.visit;
-      setLookupCheckInSuccess(`${patient.first_name} ${patient.last_name} checked in! Physical Queue Ticket: ${visit.queue_number}`);
-      setPatientSearchResults(null);
-      setPatientSearchQuery('');
-      setVisitNotes('');
-      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
-    } catch (err) {
-      setPatientSearchError(err.response?.data?.message || 'Failed to check in existing patient.');
-    } finally {
-      setCheckingInPatientId(null);
     }
   };
 
@@ -776,12 +773,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                         </div>
                         <Button
                           type="button"
-                          onClick={() => handleCheckInExistingPatient(patient)}
-                          disabled={checkingInPatientId === patient.id}
+                          onClick={() => requestCheckIn('walkin', patient)}
                           className="bg-[#769046] hover:bg-[#657c3a] text-white text-[11px] font-bold rounded-lg flex items-center space-x-1.5 px-3 py-1.5"
                         >
                           <CheckCircle className="w-3.5 h-3.5" />
-                          <span>{checkingInPatientId === patient.id ? 'Checking In...' : 'Check In This Patient'}</span>
+                          <span>Check In This Patient</span>
                         </Button>
                       </div>
                     ))
@@ -992,7 +988,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
                   <Button
                     type="button"
-                    onClick={handleCheckIn}
+                    onClick={() => requestCheckIn('appointment', verifyResult)}
                     className="w-full bg-[#769046] hover:bg-[#657c3a] text-white font-bold py-2 rounded-xl"
                   >
                     Confirm Check-In Patient
@@ -1096,14 +1092,21 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           </DialogContent>
         </Dialog>
 
-        {/* Check-in confirmation — advances appointment + visit status, see .agents Phase 12 */}
+        {/* Check-in confirmation — one dialog for both check-in paths (QR/reference verify and
+            existing-patient lookup), see .agents Phase 12 and UI/UX Phase 3 */}
         <ConfirmDialog
-          open={showCheckInConfirm}
-          onOpenChange={setShowCheckInConfirm}
+          open={!!checkInTarget}
+          onOpenChange={(open) => { if (!open) setCheckInTarget(null); }}
           title="Confirm Check-In"
-          description={verifyResult ? `Check in ${verifyResult.first_name} ${verifyResult.last_name} (Queue ${verifyResult.queue_number})? This confirms their appointment and moves them into processing.` : ''}
+          description={
+            checkInTarget?.type === 'appointment'
+              ? `Check in ${checkInTarget.data.first_name} ${checkInTarget.data.last_name} (Queue ${checkInTarget.data.queue_number})? This confirms their appointment and moves them into processing.`
+              : checkInTarget?.type === 'walkin'
+              ? `Check in ${checkInTarget.data.first_name} ${checkInTarget.data.last_name} as a walk-in? This creates a new visit and queue ticket.`
+              : ''
+          }
           confirmLabel="Confirm Check-In"
-          onConfirm={() => confirmCheckIn(verifyResult.patient_visit_id, verifyResult.id)}
+          onConfirm={confirmCheckIn}
           loading={checkingIn}
           error={checkInError}
         />
