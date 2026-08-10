@@ -53,6 +53,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const [pendingTests, setPendingTests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState('Laboratory');
+  const [categoryResolved, setCategoryResolved] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Result Upload Form State
@@ -79,8 +80,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
 
   const fetchPendingTests = useCallback(async (catName) => {
     try {
-      const response = await api.get(`/results/pending/${catName}`);
-      setPendingTests(response.data.data.pending || []);
+      // '2D Echo' is a distinct test_categories row, but MODULE_SCOPE.md assigns it to the
+      // Ultrasound Staff role — merge both into one worklist for that role only.
+      const categoriesToFetch = catName === 'Ultrasound' ? ['Ultrasound', '2D Echo'] : [catName];
+      const responses = await Promise.all(categoriesToFetch.map(c => api.get(`/results/pending/${c}`)));
+      setPendingTests(responses.flatMap(r => r.data.data.pending || []));
     } catch (err) {
       console.error('Failed to fetch pending diagnostics:', err);
     } finally {
@@ -92,16 +96,22 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     const navCategory = NAV_TO_CATEGORY[activeNav];
     if (navCategory) {
       setCategory(navCategory);
+      setCategoryResolved(true);
     } else if (user && user.roles) {
       determineCategory(user.roles);
+      setCategoryResolved(true);
     }
   }, [activeNav, user, determineCategory]);
 
+  // Wait for the real category (from nav or the user's actual role) before fetching at all.
+  // Fetching once immediately with the hardcoded default, then again after resolution, is a
+  // race: whichever response arrives last wins, and the resolved fetch isn't guaranteed to be
+  // the faster of the two — especially now that the Ultrasound worklist fetches two categories.
   useEffect(() => {
-    if (category) {
+    if (category && categoryResolved) {
       fetchPendingTests(category);
     }
-  }, [category, fetchPendingTests]);
+  }, [category, categoryResolved, fetchPendingTests]);
 
   const handleStartProcessing = async (visitTestId) => {
     try {
@@ -187,10 +197,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   });
 
   const pendingCount = pendingTests.filter(t => t.test_status === 'Pending').length;
+  const categoryLabel = category === 'Ultrasound' ? 'Ultrasound (incl. 2D Echo)' : category;
   const processingCount = pendingTests.filter(t => t.test_status === 'Processing').length;
 
   return (
-    <SidebarLayout title={`${category} Operations Worklist`} activeNav={activeNav} onSelectNav={onSelectNav}>
+    <SidebarLayout title={`${categoryLabel} Operations Worklist`} activeNav={activeNav} onSelectNav={onSelectNav}>
       <div className="space-y-6">
         
         {/* Department Modality Worklist Header Cards */}
@@ -199,7 +210,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             <div className="flex justify-between items-center">
               <div>
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Active Modality</span>
-                <span className="text-xl font-extrabold text-slate-900">{category} Department</span>
+                <span className="text-xl font-extrabold text-slate-900">{categoryLabel} Department</span>
               </div>
               <div className="w-10 h-10 rounded-xl bg-[#769046]/10 text-[#769046] flex items-center justify-center font-bold">
                 {category === 'Ultrasound' ? <Stethoscope className="w-5 h-5" /> :
@@ -254,7 +265,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
           <CardHeader className="border-b border-gray-100 py-4 px-6 flex justify-between items-center">
             <CardTitle className="text-base font-bold text-slate-900 m-0">
-              {category} Worklist Queue ({filteredTests.length})
+              {categoryLabel} Worklist Queue ({filteredTests.length})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -326,7 +337,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-xs text-gray-400 font-semibold italic">
-                      No pending diagnostic examinations in the {category} worklist.
+                      No pending diagnostic examinations in the {categoryLabel} worklist.
                     </TableCell>
                   </TableRow>
                 )}

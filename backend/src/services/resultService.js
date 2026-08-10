@@ -4,7 +4,11 @@ const { sendEmail } = require('../config/email');
 
 class ResultService {
   async getPendingByCategory(categoryName) {
-    const validCategories = ['Laboratory', 'Xray', 'Ultrasound'];
+    // '2D Echo' is its own row in test_categories, distinct from 'Ultrasound', but
+    // MODULE_SCOPE.md explicitly assigns it to the Ultrasound Staff role ("Ultrasound-category
+    // (including 2D Echo)") — so it must be independently queryable here even though no staff
+    // role is named after it directly.
+    const validCategories = ['Laboratory', 'Xray', 'Ultrasound', '2D Echo'];
     if (!validCategories.includes(categoryName)) {
       const error = new Error(`Invalid category. Must be one of: ${validCategories.join(', ')}`);
       error.statusCode = 400;
