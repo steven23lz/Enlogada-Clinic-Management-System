@@ -4,7 +4,7 @@ import Logo from './Logo';
 import { Button } from './ui/button';
 import { LogOut, User } from 'lucide-react';
 
-const Navbar = () => {
+const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
   const { user, logout } = useAuth();
 
   return (
@@ -21,20 +21,40 @@ const Navbar = () => {
       {/* Navigation and User Actions */}
       <div className="flex items-center space-x-8">
         <nav className="flex items-center space-x-6">
-          <span className="text-[#769046] font-semibold text-sm cursor-pointer border-b-2 border-[#769046] pb-1">
+          <button
+            type="button"
+            onClick={() => onNavigate?.('dashboard')}
+            className={`text-sm font-semibold pb-1 bg-transparent border-0 border-b-2 cursor-pointer transition-colors ${
+              activeTab === 'dashboard' ? 'text-[#769046] border-[#769046]' : 'text-gray-400 border-transparent hover:text-gray-600'
+            }`}
+          >
             Dashboard
-          </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate?.('account')}
+            className={`text-sm font-semibold pb-1 bg-transparent border-0 border-b-2 cursor-pointer transition-colors ${
+              activeTab === 'account' ? 'text-[#769046] border-[#769046]' : 'text-gray-400 border-transparent hover:text-gray-600'
+            }`}
+          >
+            My Account
+          </button>
         </nav>
 
         {user && (
           <div className="flex items-center space-x-4">
             {/* User Badge */}
-            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-100 rounded-full px-4 py-2 text-sm text-gray-700 font-medium shadow-sm">
+            <button
+              type="button"
+              onClick={() => onNavigate?.('account')}
+              aria-label="Manage account settings"
+              className="flex items-center space-x-2 bg-gray-50 border border-gray-100 rounded-full px-4 py-2 text-sm text-gray-700 font-medium shadow-sm cursor-pointer hover:border-[#769046]/40 transition-colors"
+            >
               <div className="w-6 h-6 bg-primary-navy/15 rounded-full flex items-center justify-center text-primary-navy">
                 <User className="w-3.5 h-3.5" />
               </div>
               <span>{user.firstName} {user.lastName}</span>
-            </div>
+            </button>
 
             {/* Log Off Button */}
             <Button

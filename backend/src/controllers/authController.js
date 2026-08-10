@@ -69,6 +69,60 @@ class AuthController {
     }
   }
 
+  async updateProfile(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { firstName, lastName, contactNumber } = req.body;
+
+      if (!firstName || !String(firstName).trim() || !lastName || !String(lastName).trim()) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'First name and last name are required fields.'
+        });
+      }
+
+      const user = await authService.updateProfile(userId, { firstName, lastName, contactNumber });
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Profile updated successfully.',
+        data: { user }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async changePassword(req, res, next) {
+    try {
+      const userId = req.user.userId;
+      const { currentPassword, newPassword } = req.body;
+
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Current password and new password are required.'
+        });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'New password must be at least 8 characters.'
+        });
+      }
+
+      const result = await authService.changePassword(userId, currentPassword, newPassword);
+
+      return res.status(200).json({
+        status: 'success',
+        message: result.message
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async forgotPassword(req, res, next) {
     try {
       const { email } = req.body;

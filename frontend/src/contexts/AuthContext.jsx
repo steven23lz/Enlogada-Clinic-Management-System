@@ -92,6 +92,26 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateProfile = async ({ firstName, lastName, contactNumber }) => {
+    try {
+      const response = await api.put('/auth/me', { firstName, lastName, contactNumber });
+      const updatedUser = response.data.data.user;
+      setUser((prev) => ({ ...prev, ...updatedUser }));
+      return updatedUser;
+    } catch (err) {
+      throw err.response?.data?.message || 'Failed to update profile';
+    }
+  };
+
+  const changePassword = async (currentPassword, newPassword) => {
+    try {
+      const response = await api.put('/auth/change-password', { currentPassword, newPassword });
+      return response.data.message;
+    } catch (err) {
+      throw err.response?.data?.message || 'Failed to change password';
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
@@ -109,7 +129,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, forgotPassword, resetPassword, logout, hasPermission, hasRole }}>
+    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, forgotPassword, resetPassword, updateProfile, changePassword, logout, hasPermission, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

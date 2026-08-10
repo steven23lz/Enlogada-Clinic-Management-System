@@ -56,6 +56,22 @@ class UserRepository {
     return result.rows[0];
   }
 
+  async updateContactInfo(userId, firstName, lastName, contactNumber) {
+    const queryText = `
+      UPDATE users
+      SET first_name = $1, last_name = $2, contact_number = $3, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4
+      RETURNING id, first_name, last_name, email, contact_number, status, created_at
+    `;
+    const result = await db.query(queryText, [firstName, lastName, contactNumber, userId]);
+    return result.rows[0];
+  }
+
+  async findPasswordHashById(userId) {
+    const result = await db.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+    return result.rows[0]?.password_hash;
+  }
+
   async findRoleIdByName(roleName) {
     const queryText = 'SELECT id FROM roles WHERE name = $1';
     const result = await db.query(queryText, [roleName]);

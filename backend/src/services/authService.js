@@ -141,6 +141,33 @@ class AuthService {
     return { message: 'Your password has been reset. You can now log in with your new password.' };
   }
 
+  async updateProfile(userId, { firstName, lastName, contactNumber }) {
+    await userRepository.updateContactInfo(userId, firstName, lastName, contactNumber);
+    return this.getUserProfile(userId);
+  }
+
+  async changePassword(userId, currentPassword, newPassword) {
+    const passwordHash = await userRepository.findPasswordHashById(userId);
+    if (!passwordHash) {
+      const error = new Error('User not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, passwordHash);
+    if (!isMatch) {
+      const error = new Error('Current password is incorrect.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const newHash = await bcrypt.hash(newPassword, salt);
+    await userRepository.updatePasswordHash(userId, newHash);
+
+    return { message: 'Password changed successfully.' };
+  }
+
   async getUserProfile(userId) {
     const user = await userRepository.findById(userId);
     if (!user) {

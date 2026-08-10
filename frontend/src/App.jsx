@@ -8,6 +8,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ClientDashboard from './pages/ClientDashboard';
+import ClientProfile from './pages/ClientProfile';
 import ReceptionistDashboard from './pages/ReceptionistDashboard';
 import CashierDashboard from './pages/CashierDashboard';
 import DiagnosticDashboard from './pages/DiagnosticDashboard';
@@ -26,7 +27,7 @@ const getInitialResetToken = () => {
 const MainApp = () => {
   const { user, loading } = useAuth();
   const [resetToken] = useState(getInitialResetToken);
-  const [currentTab, setCurrentTab] = useState(() => (getInitialResetToken() ? 'reset-password' : 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'reset-password', 'dashboard'
+  const [currentTab, setCurrentTab] = useState(() => (getInitialResetToken() ? 'reset-password' : 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'reset-password', 'dashboard', 'account'
   const [activeNav, setActiveNav] = useState('dashboard'); // Active nav in staff/admin sidebar
 
   if (loading) {
@@ -89,6 +90,7 @@ const MainApp = () => {
   if (roles.includes('Client')) {
     if (currentTab === 'services') return <ServicesPage onNavigate={handleNavigate} />;
     if (currentTab === 'about') return <Home onNavigate={handleNavigate} />;
+    if (currentTab === 'account') return <ClientProfile onNavigate={handleNavigate} />;
     return <ClientDashboard onNavigate={handleNavigate} />;
   }
 

@@ -36,7 +36,7 @@ import {
   Pencil
 } from 'lucide-react';
 
-const ClientDashboard = () => {
+const ClientDashboard = ({ onNavigate }) => {
   const { user } = useAuth();
   const [profiles, setProfiles] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState(null);
@@ -428,7 +428,7 @@ const ClientDashboard = () => {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout onNavigate={onNavigate} activeTab="dashboard">
         <div className="flex-1 flex flex-col items-center justify-center space-y-3 py-16">
           <div className="w-10 h-10 border-4 border-[#769046] border-t-transparent rounded-full animate-spin"></div>
           <span className="text-sm font-semibold text-gray-500">Loading your clinic patient profile...</span>
@@ -438,7 +438,7 @@ const ClientDashboard = () => {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout onNavigate={onNavigate} activeTab="dashboard">
       <div className="flex flex-col space-y-6">
         
         {/* Top Active Profile Bar */}
