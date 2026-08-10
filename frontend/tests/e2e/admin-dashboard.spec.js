@@ -233,7 +233,10 @@ test.describe('Admin Dashboard — browser flow', () => {
     await expect(page.getByText('+14% vs yesterday')).toHaveCount(0);
   });
 
-  test('the Service Requests nav shows an honest placeholder, not stale/wrong content', async ({ page }) => {
+  test('the Service Requests nav shows the real HMO approval page (superseded the Module 12 placeholder)', async ({ page }) => {
+    // As of Module 15, 'service-requests' renders admin/ServiceRequests.jsx, not the honest
+    // "Not Yet Available" placeholder this test originally asserted — see service-requests.spec.js
+    // for full coverage of that page's own behavior.
     await page.goto('/');
     await page.getByText('Sign In', { exact: true }).first().click();
     await page.fill('input[type="email"]', SUPERADMIN.email);
@@ -242,7 +245,8 @@ test.describe('Admin Dashboard — browser flow', () => {
     await expect(page.getByText('System Command Center')).toBeVisible({ timeout: 10000 });
 
     await page.getByText('Service Requests', { exact: true }).click();
-    await expect(page.getByText('Not Yet Available')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Service & HMO Requests')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Not Yet Available')).toHaveCount(0);
   });
 
   test('Reports shows a real revenue trend line derived from actual transactions', async ({ page }) => {

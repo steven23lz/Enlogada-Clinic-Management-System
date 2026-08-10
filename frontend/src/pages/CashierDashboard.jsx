@@ -398,11 +398,24 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
                       </div>
                     </div>
 
+                    {/* Reflects the real, per-test-approved coverage computed server-side
+                        (Module 14) — an HMO-category patient is not guaranteed full coverage
+                        just from their billing category alone. */}
                     {billDetails?.patientType === 'HMO' && (
-                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
-                        <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                        <span><strong>HMO Partner Accredited</strong> — Full coverage approved (₱0.00 Out of Pocket).</span>
-                      </div>
+                      parseFloat(billDetails.hmoCoverage) > 0 ? (
+                        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
+                          <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                          <span>
+                            <strong>HMO Partner Accredited</strong> — ₱{parseFloat(billDetails.hmoCoverage).toFixed(2)} covered
+                            {parseFloat(billDetails.hmoCoverage) >= parseFloat(billDetails.subtotal) ? ' (full coverage, ₱0.00 out of pocket).' : ' (partial coverage — remaining balance due).'}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
+                          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                          <span><strong>HMO Partner Accredited</strong> — no approved coverage yet for this visit. Full amount is due unless Reception logs an approval first.</span>
+                        </div>
+                      )
                     )}
 
                     {paymentMethod === 'Cash' ? (

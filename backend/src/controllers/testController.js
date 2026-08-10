@@ -123,7 +123,7 @@ class TestController {
         });
       }
 
-      const visitTests = await testService.addTestsToVisit(patientVisitId, testIds);
+      const visitTests = await testService.addTestsToVisit(patientVisitId, testIds, req.user);
       return res.status(201).json({
         status: 'success',
         message: `${visitTests.length} test(s) added to visit.`,

@@ -82,6 +82,19 @@ class HmoController {
     }
   }
 
+  async getAllRequests(req, res, next) {
+    try {
+      const { status } = req.query;
+      const requests = await hmoService.getAllRequests({ status });
+      return res.status(200).json({
+        status: 'success',
+        data: { requests }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getProviders(req, res, next) {
     try {
       const providers = await hmoService.getProviders();

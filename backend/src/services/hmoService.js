@@ -59,6 +59,10 @@ class HmoService {
     return await hmoRepository.updateTestApprovalStatus(hmoRequestTestId, approvalStatus);
   }
 
+  async getAllRequests(filters) {
+    return await hmoRepository.findAllRequests(filters);
+  }
+
   async getProviders() {
     return await hmoRepository.findAllProviders();
   }

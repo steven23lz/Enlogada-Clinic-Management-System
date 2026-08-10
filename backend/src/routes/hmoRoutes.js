@@ -7,6 +7,10 @@ const router = express.Router();
 // Get list of HMO providers
 router.get('/providers', verifyToken, hmoController.getProviders);
 
+// List all HMO requests, optionally filtered by status — previously nothing let staff discover
+// pending requests; approval was only reachable if you already knew a specific request ID.
+router.get('/requests', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier'), hmoController.getAllRequests);
+
 // Create an HMO request (Receptionist logs the manual HMO verification)
 router.post('/request', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), hmoController.createRequest);
 

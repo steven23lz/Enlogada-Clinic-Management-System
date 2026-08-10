@@ -81,6 +81,32 @@ class HmoRepository {
     return result.rows[0];
   }
 
+  // No "list requests" capability existed before — approval was only reachable if you already
+  // knew a specific request ID, making the approval half of the HMO flow practically
+  // undiscoverable through any UI.
+  async findAllRequests({ status } = {}) {
+    const params = [];
+    let whereClause = '';
+    if (status) {
+      params.push(status);
+      whereClause = 'WHERE hr.status = $1';
+    }
+
+    const queryText = `
+      SELECT hr.*, hp.name as provider_name,
+             COUNT(hrt.id) as test_count,
+             COUNT(hrt.id) FILTER (WHERE hrt.approval_status = 'Approved') as approved_test_count
+      FROM hmo_requests hr
+      JOIN hmo_providers hp ON hr.hmo_provider_id = hp.id
+      LEFT JOIN hmo_request_tests hrt ON hrt.hmo_request_id = hr.id
+      ${whereClause}
+      GROUP BY hr.id, hp.name
+      ORDER BY hr.request_date DESC
+    `;
+    const result = await db.query(queryText, params);
+    return result.rows;
+  }
+
   async findAllProviders() {
     const queryText = 'SELECT * FROM hmo_providers ORDER BY name';
     const result = await db.query(queryText);

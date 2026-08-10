@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { Card, CardContent } from '../components/ui/card';
-import { DollarSign, Shield, FileText, UserCheck, Info } from 'lucide-react';
+import { DollarSign, Shield, FileText, UserCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../config/api';
 import StaffAccounts from './admin/StaffAccounts';
+import ServiceRequests from './admin/ServiceRequests';
 import CashierMonitoring from './admin/CashierMonitoring';
 import AppointmentsOversight from './admin/AppointmentsOversight';
 import PatientRecordsOversight from './admin/PatientRecordsOversight';
@@ -116,16 +117,6 @@ const DashboardOverview = () => {
   );
 };
 
-const ServiceRequestsPlaceholder = () => (
-  <div className="bg-white p-10 rounded-2xl border border-dashed border-gray-200 text-center space-y-3">
-    <Info className="w-8 h-8 text-gray-400 mx-auto" />
-    <h3 className="text-sm font-bold text-slate-700 m-0">Not Yet Available</h3>
-    <p className="text-xs text-gray-500 max-w-md mx-auto m-0">
-      Service &amp; HMO request oversight belongs to a future module (Test and Service Request) and hasn't been built yet.
-    </p>
-  </div>
-);
-
 const AdminDashboard = ({ activeNav = 'dashboard', onSelectNav }) => {
   const { user } = useAuth();
 
@@ -134,7 +125,7 @@ const AdminDashboard = ({ activeNav = 'dashboard', onSelectNav }) => {
       case 'staff':
         return <StaffAccounts />;
       case 'service-requests':
-        return <ServiceRequestsPlaceholder />;
+        return <ServiceRequests />;
       case 'cashier-monitoring':
         return <CashierMonitoring />;
       case 'appointments-list':

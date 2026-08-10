@@ -1,4 +1,27 @@
 const testRepository = require('../repositories/testRepository');
+const visitRepository = require('../repositories/visitRepository');
+const patientService = require('./patientService');
+
+// Mirrors appointmentService.js's assertClientOwnsPatient exactly. POST /tests/visit-tests
+// authorizes the Client role (for self-service booking) but previously performed no ownership
+// check at all — a client could attach tests to, and be billed against, any arbitrary
+// patientVisitId. Known gap, deferred since the pre-implementation remediation pass; fixed here
+// as part of Module 15 (visit_tests attachment is this module's own scope).
+async function assertClientOwnsVisit(requestingUser, patientVisitId) {
+  if (!requestingUser?.roles?.includes('Client')) return; // staff roles are not ownership-restricted
+  const visit = await visitRepository.findVisitById(patientVisitId);
+  if (!visit) {
+    const error = new Error('Visit not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  const patient = await patientService.getPatientById(visit.patient_id);
+  if (patient.user_id !== requestingUser.userId) {
+    const error = new Error('Access forbidden. This visit does not belong to your account.');
+    error.statusCode = 403;
+    throw error;
+  }
+}
 
 class TestService {
   async getAllTests(includeInactive = false) {
@@ -43,7 +66,9 @@ class TestService {
     return await testRepository.findAllCategories();
   }
 
-  async addTestsToVisit(patientVisitId, testIds) {
+  async addTestsToVisit(patientVisitId, testIds, requestingUser) {
+    await assertClientOwnsVisit(requestingUser, patientVisitId);
+
     const results = [];
     for (const testId of testIds) {
       // Fetch current price to lock it at time of visit
