@@ -114,11 +114,12 @@ test.describe('Xray worklist (API)', () => {
     expect(pending.some((p) => p.visit_test_id === visitTestId)).toBeFalsy();
   });
 
-  test('Laboratory worklist visibility is unaffected — cross-category isolation holds', async () => {
+  test('Xray Staff cannot reach the Laboratory worklist — cross-category isolation now enforced server-side (Module 16 fix)', async () => {
+    // Previously escalated from Module 9: any diagnostic staff role could call any category's
+    // pending/upload/release/status endpoints directly, bypassing the UI's client-side category
+    // routing. Module 16 closed this with a server-side department check, so this now 403s.
     const res = await apiContext.get(`${API}/results/pending/Laboratory`, { headers: { Authorization: `Bearer ${xrayToken}` } });
-    // Xray Staff can technically still call this today (the escalated Module 16 gap from
-    // Module 9), but the request itself should succeed cleanly, not error.
-    expect(res.status()).toBe(200);
+    expect(res.status()).toBe(403);
   });
 
   test('a Client role cannot reach the Xray worklist endpoint', async () => {

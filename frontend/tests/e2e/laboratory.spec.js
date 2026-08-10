@@ -9,10 +9,11 @@ import { test, expect, request } from 'playwright/test';
 // Also added: client-side validation on the optional attachment URL (the source-side
 // complement to the render-side guard added in Module 6).
 //
-// NOT fixed here, and NOT this module's to fix — recorded as an escalation in
-// .agents/TRACEABILITY.md: resultController.js/resultService.js (Module 16) authorize any
+// NOT fixed here (was Module 16's, not this module's, to fix) — recorded as an escalation in
+// .agents/TRACEABILITY.md at the time: resultController.js/resultService.js authorized any
 // diagnostic staff role for any category via direct API calls, with no check that a Laboratory
-// Staff account is only acting on Laboratory-category visit_tests.
+// Staff account was only acting on Laboratory-category visit_tests. Since fixed by Module 16 —
+// see diagnostic-result-layer.spec.js for that coverage.
 
 const BACKEND_URL = process.env.E2E_API_URL || 'http://localhost:5000';
 const API = `${BACKEND_URL}/api`;

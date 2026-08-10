@@ -5,7 +5,7 @@ class ResultController {
   async getPending(req, res, next) {
     try {
       const { category } = req.params;
-      const pending = await resultService.getPendingByCategory(category);
+      const pending = await resultService.getPendingByCategory(category, req.user);
       return res.status(200).json({
         status: 'success',
         data: { pending }
@@ -27,7 +27,7 @@ class ResultController {
         });
       }
 
-      const updated = await resultService.updateTestStatus(visitTestId, status);
+      const updated = await resultService.updateTestStatus(visitTestId, status, req.user);
       return res.status(200).json({
         status: 'success',
         message: `Test status updated to ${status}.`,
@@ -50,7 +50,7 @@ class ResultController {
         findings,
         remarks,
         releasedBy
-      });
+      }, req.user);
 
       return res.status(201).json({
         status: 'success',
@@ -67,7 +67,7 @@ class ResultController {
       const { visitTestId } = req.params;
       const releasedBy = req.user.userId;
 
-      const result = await resultService.releaseResult({ visitTestId, releasedBy });
+      const result = await resultService.releaseResult({ visitTestId, releasedBy }, req.user);
       return res.status(200).json({
         status: 'success',
         message: 'Result released and patient notified via email.',

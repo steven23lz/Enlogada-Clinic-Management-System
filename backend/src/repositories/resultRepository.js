@@ -21,12 +21,35 @@ class ResultRepository {
   }
 
   async createResult({ visitTestId, fileUrl, findings, remarks, releasedBy }) {
+    // Upsert, not a plain insert: the caller always follows this with a separate release call
+    // (see resultService.releaseResult) for the same clinically-significant action. If that
+    // second call fails (e.g. a network blip) after this one already succeeded, the only way
+    // to recover is to retry the whole sequence from the top — which would otherwise violate
+    // visit_test_id's UNIQUE constraint and leave the result permanently stuck un-released.
     const queryText = `
       INSERT INTO test_results (visit_test_id, file_url, findings, remarks, released_by)
       VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (visit_test_id) DO UPDATE
+      SET file_url = EXCLUDED.file_url,
+          findings = EXCLUDED.findings,
+          remarks = EXCLUDED.remarks,
+          released_by = EXCLUDED.released_by,
+          released_at = CURRENT_TIMESTAMP
       RETURNING *
     `;
     const result = await db.query(queryText, [visitTestId, fileUrl, findings, remarks, releasedBy]);
+    return result.rows[0];
+  }
+
+  async findVisitTestCategory(visitTestId) {
+    const queryText = `
+      SELECT tc.name as category_name
+      FROM visit_tests vt
+      JOIN tests t ON vt.test_id = t.id
+      JOIN test_categories tc ON t.category_id = tc.id
+      WHERE vt.id = $1
+    `;
+    const result = await db.query(queryText, [visitTestId]);
     return result.rows[0];
   }
 
