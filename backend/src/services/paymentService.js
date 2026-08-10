@@ -1,4 +1,5 @@
 const paymentRepository = require('../repositories/paymentRepository');
+const notificationService = require('./notificationService');
 
 class PaymentService {
   async getBillingSummary(visitId) {
@@ -68,6 +69,15 @@ class PaymentService {
       referenceNumber,
       receiptNumber,
       amount: authoritativeTotal
+    });
+
+    // Module 18 (Notification): Admin/SuperAdmin financial oversight, matching Reports/Cashier
+    // Monitoring — not the processing Cashier themselves, who already sees this live in their
+    // own receipt flow.
+    await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
+      title: 'Payment Confirmed',
+      message: `Receipt #${receiptNumber} — ${bill.patientName}, ₱${authoritativeTotal.toFixed(2)}`,
+      type: 'success'
     });
 
     return payment;

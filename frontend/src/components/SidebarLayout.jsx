@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Logo from './Logo';
 import { Button } from './ui/button';
+import api from '../config/api';
 import { 
   LayoutDashboard, 
   Users, 
@@ -62,11 +63,66 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
     { id: 'xray-ops', label: 'X-Ray Ops', icon: Scan, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
   ];
 
-  const notifications = [
-    { id: 1, title: 'New Appointment Booked', desc: 'Patient Juan Dela Cruz scheduled Ultrasound for tomorrow', time: '10m ago', type: 'info' },
-    { id: 2, title: 'Payment Confirmed', desc: 'Receipt #OR-8921 processed by Cashier', time: '25m ago', type: 'success' },
-    { id: 3, title: 'Result Ready for Release', desc: 'Complete Blood Count ready for PT-104', time: '1h ago', type: 'warning' },
-  ];
+  // Module 18 (Notification): real, per-user notifications from the backend, replacing the
+  // static 3-item mock list that previously rendered identically for every user regardless of
+  // role or actual events.
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifLoading, setNotifLoading] = useState(true);
+
+  const fetchNotifications = useCallback(async () => {
+    setNotifLoading(true);
+    try {
+      const res = await api.get('/notifications');
+      setNotifications(res.data.data.notifications || []);
+      setUnreadCount(res.data.data.unreadCount || 0);
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    } finally {
+      setNotifLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  const handleToggleNotifications = () => {
+    const opening = !showNotifications;
+    setShowNotifications(opening);
+    if (opening) fetchNotifications();
+  };
+
+  const handleMarkAsRead = async (notificationId) => {
+    try {
+      await api.patch(`/notifications/${notificationId}/read`);
+      setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n)));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await api.patch('/notifications/read-all');
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err);
+    }
+  };
+
+  const timeAgo = (isoString) => {
+    const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
 
   const renderNavContent = () => (
     <div className="space-y-6">
@@ -213,32 +269,60 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
 
             {/* Notification Icon with Dropdown */}
             <div className="relative">
-              <button 
-                onClick={() => setShowNotifications(!showNotifications)}
+              <button
+                onClick={handleToggleNotifications}
+                aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
                 className="relative p-2 text-gray-600 hover:text-slate-900 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200/80 cursor-pointer transition-colors"
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                )}
               </button>
 
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 p-4 animate-fade-in space-y-3">
                   <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                     <span className="font-bold text-xs text-slate-900 uppercase tracking-wider">Notifications</span>
-                    <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600 border-0 bg-transparent cursor-pointer">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={handleMarkAllAsRead}
+                          className="text-[10px] font-bold text-[#769046] hover:underline border-0 bg-transparent cursor-pointer uppercase tracking-wide"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                      <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600 border-0 bg-transparent cursor-pointer" aria-label="Close notifications">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {notifications.map(n => (
-                      <div key={n.id} className="p-2.5 bg-gray-50/70 hover:bg-gray-50 rounded-xl space-y-1 border border-gray-100 text-xs">
-                        <div className="flex justify-between items-center font-bold text-gray-800">
-                          <span>{n.title}</span>
-                          <span className="text-[10px] text-gray-400 font-normal">{n.time}</span>
-                        </div>
-                        <p className="text-[11px] text-gray-600 leading-snug">{n.desc}</p>
-                      </div>
-                    ))}
+                    {notifLoading ? (
+                      <p className="text-[11px] text-gray-400 text-center py-4">Loading…</p>
+                    ) : notifications.length === 0 ? (
+                      <p className="text-[11px] text-gray-400 italic text-center py-4">No notifications yet.</p>
+                    ) : (
+                      notifications.map(n => (
+                        <button
+                          key={n.id}
+                          onClick={() => !n.is_read && handleMarkAsRead(n.id)}
+                          className={`w-full text-left p-2.5 rounded-xl space-y-1 border text-xs cursor-pointer transition-colors ${
+                            n.is_read ? 'bg-gray-50/70 hover:bg-gray-50 border-gray-100' : 'bg-[#769046]/5 hover:bg-[#769046]/10 border-[#769046]/20'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center font-bold text-gray-800">
+                            <span className="flex items-center space-x-1.5">
+                              {!n.is_read && <span className="w-1.5 h-1.5 rounded-full bg-[#769046] flex-shrink-0" />}
+                              <span>{n.title}</span>
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-normal whitespace-nowrap">{timeAgo(n.created_at)}</span>
+                          </div>
+                          <p className="text-[11px] text-gray-600 leading-snug">{n.message}</p>
+                        </button>
+                      ))
+                    )}
                   </div>
                 </div>
               )}

@@ -1,6 +1,7 @@
 const resultRepository = require('../repositories/resultRepository');
 const testRepository = require('../repositories/testRepository');
 const { sendEmail } = require('../config/email');
+const notificationService = require('./notificationService');
 
 // Which test_categories a given diagnostic staff role is allowed to act on. Ultrasound Staff
 // covers '2D Echo' too — a distinct test_categories row that MODULE_SCOPE.md explicitly assigns
@@ -112,6 +113,17 @@ class ResultService {
             <p><strong>Enlogada Ultrasound and Diagnostic Clinic</strong></p>
           </div>
         `
+      });
+    }
+
+    // Module 18 (Notification): Admin/SuperAdmin oversight of diagnostic throughput, matching
+    // the existing Reports/oversight theme — not the releasing staff member themselves, who is
+    // the actor here, not a recipient.
+    if (patientInfo) {
+      await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
+        title: 'Result Released',
+        message: `${patientInfo.test_name} for ${patientInfo.first_name} ${patientInfo.last_name}`,
+        type: 'success'
       });
     }
 

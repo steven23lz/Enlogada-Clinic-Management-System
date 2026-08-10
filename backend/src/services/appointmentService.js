@@ -3,6 +3,7 @@ const appointmentRepository = require('../repositories/appointmentRepository');
 const visitRepository = require('../repositories/visitRepository');
 const scheduleRepository = require('../repositories/scheduleRepository');
 const patientService = require('./patientService');
+const notificationService = require('./notificationService');
 
 async function assertClientOwnsPatient(requestingUser, patientId) {
   if (!requestingUser?.roles?.includes('Client')) return; // staff roles are not ownership-restricted
@@ -124,6 +125,15 @@ class AppointmentService {
       }, client);
 
       await client.query('COMMIT');
+
+      // Module 18 (Notification): Receptionist owns intake/check-in for a booked appointment;
+      // Admin/SuperAdmin have standing oversight (matches the existing Appointments Oversight
+      // page). Fired after COMMIT so a notification failure can never roll back a real booking.
+      await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
+        title: 'New Appointment Booked',
+        message: `Queue #${visit.queue_number} — ${scheduledDate} at ${scheduledTime}`,
+        type: 'info'
+      });
 
       return {
         ...appointment,

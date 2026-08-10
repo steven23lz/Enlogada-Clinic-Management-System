@@ -2,6 +2,7 @@
 -- Database: PostgreSQL (Local/Supabase hosted)
 
 -- Drop existing tables to allow clean recreation
+DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS clinic_operating_hours CASCADE;
 DROP TABLE IF EXISTS password_reset_tokens CASCADE;
 DROP TABLE IF EXISTS role_permissions CASCADE;
@@ -251,6 +252,22 @@ CREATE TABLE clinic_operating_hours (
       is_open = FALSE OR (open_time IS NOT NULL AND close_time IS NOT NULL AND open_time < close_time)
     )
 );
+
+-- 9. Notifications (Module 18). Broadcast-to-role events (appointment/result/payment) fan out
+-- into one row per recipient user, so each recipient has an independent read state rather than
+-- sharing one row that every recipient's "mark as read" would race over.
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(20) NOT NULL DEFAULT 'info',
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT chk_notifications_type CHECK (type IN ('info', 'success', 'warning'))
+);
+CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
 
 -- Seed Initial Data
 INSERT INTO roles (name) VALUES
