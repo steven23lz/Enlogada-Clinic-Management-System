@@ -119,7 +119,7 @@ const Login = ({ onToggleView, onNavigate }) => {
                   <Button
                     type="submit"
                     disabled={submitting}
-                    className="w-full bg-[#1e293b] hover:bg-[#0f172a] text-white py-3 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-colors border-0 cursor-pointer shadow-md"
+                    className="w-full bg-primary-navy hover:bg-primary-navy-hover text-white py-3 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-colors border-0 cursor-pointer shadow-md"
                   >
                     <span>{submitting ? 'Signing in...' : 'Sign In'}</span>
                     <ArrowRight className="w-4 h-4" />

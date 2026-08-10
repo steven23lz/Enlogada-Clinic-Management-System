@@ -67,7 +67,7 @@ const ServicesPage = ({ onNavigate }) => {
       <PublicHeader currentTab="services" onNavigate={onNavigate} />
 
       {/* Page Title Dark Header matching Figma design */}
-      <section className="bg-[#1e293b] text-white py-14 px-8 border-b border-gray-800">
+      <section className="bg-primary-navy text-white py-14 px-8 border-b border-gray-800">
         <div className="max-w-7xl mx-auto space-y-3">
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Our Services</h1>
           <p className="text-gray-300 text-sm max-w-2xl leading-relaxed">

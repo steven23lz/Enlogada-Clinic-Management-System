@@ -62,7 +62,7 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
             </button>
             <button
               onClick={logout}
-              className="bg-[#769046] hover:bg-[#687e3d] text-white px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 border-0 cursor-pointer shadow-xs transition-colors"
+              className="bg-[#769046] hover:bg-primary-hover text-white px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 border-0 cursor-pointer shadow-xs transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Log Out</span>
@@ -78,7 +78,7 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
             </button>
             <button
               onClick={() => onNavigate && onNavigate('register')}
-              className="bg-[#769046] hover:bg-[#687e3d] text-white px-4 py-2 rounded-lg text-xs font-semibold border-0 cursor-pointer shadow-xs transition-colors"
+              className="bg-[#769046] hover:bg-primary-hover text-white px-4 py-2 rounded-lg text-xs font-semibold border-0 cursor-pointer shadow-xs transition-colors"
             >
               Create Account
             </button>

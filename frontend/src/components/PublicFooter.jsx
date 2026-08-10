@@ -4,13 +4,13 @@ import { Phone, Mail, MapPin } from 'lucide-react';
 
 const PublicFooter = ({ onNavigate }) => {
   return (
-    <footer className="w-full bg-[#1e293b] text-gray-300 pt-12 pb-8 border-t border-gray-800">
+    <footer className="w-full bg-primary-navy text-gray-300 pt-12 pb-8 border-t border-gray-800">
       <div className="max-w-7xl mx-auto px-8 grid grid-cols-1 md:grid-cols-3 gap-10">
-        
+
         {/* Brand Summary */}
         <div className="space-y-4">
           <div className="flex items-center space-x-3">
-            <div className="p-2 bg-white rounded-xl">
+            <div className="p-2 bg-white rounded-full">
               <Logo className="w-8 h-8" />
             </div>
             <span className="text-xl font-bold text-white tracking-wider">Enlogada</span>

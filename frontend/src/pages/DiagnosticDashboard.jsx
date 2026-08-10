@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import MetricCard from '../components/ui/metric-card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
@@ -206,43 +207,14 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         
         {/* Department Modality Worklist Header Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Active Modality</span>
-                <span className="text-xl font-extrabold text-slate-900">{categoryLabel} Department</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-[#769046]/10 text-[#769046] flex items-center justify-center font-bold">
-                {category === 'Ultrasound' ? <Stethoscope className="w-5 h-5" /> :
-                 category === 'Xray' ? <Scan className="w-5 h-5" /> :
-                 <FlaskConical className="w-5 h-5" />}
-              </div>
-            </div>
-          </Card>
-
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Queue Awaiting Test</span>
-                <span className="text-2xl font-extrabold text-amber-600">{pendingCount}</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                <Clock className="w-5 h-5" />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Currently Processing</span>
-                <span className="text-2xl font-extrabold text-indigo-600">{processingCount}</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                <FileText className="w-5 h-5" />
-              </div>
-            </div>
-          </Card>
+          <MetricCard
+            label="Active Modality"
+            value={`${categoryLabel} Department`}
+            icon={category === 'Ultrasound' ? Stethoscope : category === 'Xray' ? Scan : FlaskConical}
+            tone="green"
+          />
+          <MetricCard label="Queue Awaiting Test" value={pendingCount} icon={Clock} tone="amber" />
+          <MetricCard label="Currently Processing" value={processingCount} icon={FileText} tone="indigo" />
         </div>
 
         {/* Search Bar */}

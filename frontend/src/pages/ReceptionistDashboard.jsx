@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import MetricCard from '../components/ui/metric-card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -354,53 +355,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-ops', onSelectNav }) => 
         
         {/* KPI Metrics Header */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Active Queue Visits</span>
-                <span className="text-2xl font-extrabold text-slate-900">{activeVisits.length}</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-[#769046]/10 text-[#769046] flex items-center justify-center font-bold">
-                <UserCheck className="w-5 h-5" />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Pending Intake</span>
-                <span className="text-2xl font-extrabold text-amber-600">{pendingVisits}</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-                <Clock className="w-5 h-5" />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">In Diagnostic / Processing</span>
-                <span className="text-2xl font-extrabold text-indigo-600">{processingVisits}</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                <ClipboardList className="w-5 h-5" />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Walk-In Intake Today</span>
-                <span className="text-2xl font-extrabold text-emerald-600">{walkinCount}</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                <UserPlus className="w-5 h-5" />
-              </div>
-            </div>
-          </Card>
+          <MetricCard label="Active Queue Visits" value={activeVisits.length} icon={UserCheck} tone="green" />
+          <MetricCard label="Pending Intake" value={pendingVisits} icon={Clock} tone="amber" />
+          <MetricCard label="In Diagnostic / Processing" value={processingVisits} icon={ClipboardList} tone="indigo" />
+          <MetricCard label="Walk-In Intake Today" value={walkinCount} icon={UserPlus} tone="emerald" />
         </div>
 
         {/* Action Toolbar */}

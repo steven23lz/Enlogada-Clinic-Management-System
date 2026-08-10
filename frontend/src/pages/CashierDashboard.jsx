@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
+import MetricCard from '../components/ui/metric-card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -191,53 +192,10 @@ const CashierDashboard = ({ activeNav = 'cashier-ops', onSelectNav }) => {
         
         {/* Collections Overview Metrics Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Today's Collections</span>
-                <span className="text-2xl font-extrabold text-slate-900">₱{totalCollectionsToday.toFixed(2)}</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-[#769046]/10 text-[#769046] flex items-center justify-center font-bold">
-                <DollarSign className="w-5 h-5" />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Cash Collected</span>
-                <span className="text-2xl font-extrabold text-emerald-600">₱{cashTotal.toFixed(2)}</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-                <Banknote className="w-5 h-5" />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">E-Wallet (GCash/PayMaya)</span>
-                <span className="text-2xl font-extrabold text-indigo-600">₱{eWalletTotal.toFixed(2)}</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                <Wallet className="w-5 h-5" />
-              </div>
-            </div>
-          </Card>
-
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Receipts Processed</span>
-                <span className="text-2xl font-extrabold text-slate-900">{transactions.length}</span>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
-                <Receipt className="w-5 h-5" />
-              </div>
-            </div>
-          </Card>
+          <MetricCard label="Today's Collections" value={`₱${totalCollectionsToday.toFixed(2)}`} icon={DollarSign} tone="green" />
+          <MetricCard label="Cash Collected" value={`₱${cashTotal.toFixed(2)}`} icon={Banknote} tone="emerald" />
+          <MetricCard label="E-Wallet (GCash/PayMaya)" value={`₱${eWalletTotal.toFixed(2)}`} icon={Wallet} tone="indigo" />
+          <MetricCard label="Receipts Processed" value={transactions.length} icon={Receipt} tone="slate" />
         </div>
 
         {/* POS Split Workstation (Left: Billing Queue, Right: Invoice Checkout Terminal) */}

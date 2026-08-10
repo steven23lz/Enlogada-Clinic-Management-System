@@ -10,9 +10,9 @@ const Home = ({ onNavigate }) => {
       <PublicHeader currentTab="home" onNavigate={onNavigate} />
 
       {/* Hero Banner Section matching Image 3 */}
-      <section className="relative bg-slate-900 text-white min-h-[500px] flex items-center overflow-hidden">
+      <section className="relative bg-primary-navy text-white min-h-[500px] flex items-center overflow-hidden">
         {/* Background Image Overlay */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center opacity-30 mix-blend-overlay"
           style={{
             backgroundImage: `url('https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=1600&q=80')`
@@ -20,7 +20,7 @@ const Home = ({ onNavigate }) => {
         />
 
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900/90 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-primary-navy via-primary-navy/90 to-transparent" />
 
         <div className="relative max-w-7xl mx-auto px-8 py-20 z-10 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           <div className="space-y-6">
@@ -87,7 +87,7 @@ const Home = ({ onNavigate }) => {
 
       {/* Call to Action Bar */}
       <section className="max-w-7xl mx-auto px-8 py-16 w-full">
-        <div className="bg-[#192534] rounded-3xl p-10 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
+        <div className="bg-primary-navy rounded-3xl p-10 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
           <div className="space-y-2 mb-6 md:mb-0">
             <h2 className="text-2xl font-bold tracking-tight">Need a Diagnostic Appointment?</h2>
             <p className="text-sm text-gray-300">Sign in to your account or register to schedule an appointment today.</p>

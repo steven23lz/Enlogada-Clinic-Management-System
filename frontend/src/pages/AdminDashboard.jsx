@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
-import { Card, CardContent } from '../components/ui/card';
+import MetricCard from '../components/ui/metric-card';
 import { DollarSign, Shield, FileText, UserCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../config/api';
@@ -69,49 +69,35 @@ const DashboardOverview = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total Services Catalog</span>
-              <div className="text-2xl font-extrabold text-slate-900">{loading ? '…' : catalogCount}</div>
-              <span className="text-[11px] text-[#769046] font-bold">Lab, X-Ray, Ultrasound &amp; more</span>
-            </div>
-            <div className="w-11 h-11 bg-[#769046]/10 text-[#769046] rounded-2xl flex items-center justify-center"><FileText className="w-5 h-5" /></div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Today's Revenue</span>
-              <div className="text-2xl font-extrabold text-slate-900">{loading ? '…' : `₱${todayRevenue.toFixed(2)}`}</div>
-              <span className="text-[11px] text-gray-400 font-bold">See Reports for trend</span>
-            </div>
-            <div className="w-11 h-11 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center"><DollarSign className="w-5 h-5" /></div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Clinic Operational Roles</span>
-              <div className="text-2xl font-extrabold text-slate-900">{loading ? '…' : `${roleCount} Roles`}</div>
-              <span className="text-[11px] text-indigo-600 font-bold">RBAC Enforced</span>
-            </div>
-            <div className="w-11 h-11 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center"><Shield className="w-5 h-5" /></div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">HMO Partners</span>
-              <div className="text-2xl font-extrabold text-slate-900">1CoopHealth</div>
-              <span className="text-[11px] text-purple-600 font-bold">Active Accreditation</span>
-            </div>
-            <div className="w-11 h-11 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center"><UserCheck className="w-5 h-5" /></div>
-          </CardContent>
-        </Card>
+        <MetricCard
+          label="Total Services Catalog"
+          value={loading ? '…' : catalogCount}
+          caption="Lab, X-Ray, Ultrasound & more"
+          icon={FileText}
+          tone="green"
+        />
+        <MetricCard
+          label="Today's Revenue"
+          value={loading ? '…' : `₱${todayRevenue.toFixed(2)}`}
+          caption="See Reports for trend"
+          captionTone="slate"
+          icon={DollarSign}
+          tone="emerald"
+        />
+        <MetricCard
+          label="Clinic Operational Roles"
+          value={loading ? '…' : `${roleCount} Roles`}
+          caption="RBAC Enforced"
+          icon={Shield}
+          tone="indigo"
+        />
+        <MetricCard
+          label="HMO Partners"
+          value="1CoopHealth"
+          caption="Active Accreditation"
+          icon={UserCheck}
+          tone="purple"
+        />
       </div>
     </div>
   );

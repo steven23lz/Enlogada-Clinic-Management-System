@@ -5,8 +5,9 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import MetricCard from '../../components/ui/metric-card';
 import api from '../../config/api';
-import { TrendingUp, TrendingDown, ClipboardList, FileText, Info, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ClipboardList, FileText, Info, RefreshCw, ShieldCheck, DollarSign } from 'lucide-react';
 
 const dateStr = (d) => {
   const y = d.getFullYear();
@@ -78,34 +79,27 @@ const TodaySnapshot = () => {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-5 space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Today's Revenue</span>
-          <div className="text-2xl font-extrabold text-slate-900">{loading ? '…' : `₱${todayTotal.toFixed(2)}`}</div>
-          {!loading && (
-            <div className={`flex items-center space-x-1 text-[11px] font-bold ${isUp ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-              <span>{isUp ? '+' : ''}{percentChange.toFixed(0)}% vs yesterday (₱{yesterdayTotal.toFixed(2)})</span>
-            </div>
-          )}
-        </Card>
-
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-5 space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Active Queue</span>
-          <div className="text-2xl font-extrabold text-slate-900">{loading ? '…' : activeQueueCount}</div>
-          <div className="flex items-center space-x-1 text-[11px] text-indigo-600 font-bold">
-            <ClipboardList className="w-3 h-3" />
-            <span>Pending + Processing visits today</span>
-          </div>
-        </Card>
-
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-5 space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Services Catalog</span>
-          <div className="text-2xl font-extrabold text-slate-900">{loading ? '…' : catalogCount}</div>
-          <div className="flex items-center space-x-1 text-[11px] text-[#769046] font-bold">
-            <FileText className="w-3 h-3" />
-            <span>Active diagnostic services</span>
-          </div>
-        </Card>
+        <MetricCard
+          label="Today's Revenue"
+          value={loading ? '…' : `₱${todayTotal.toFixed(2)}`}
+          icon={DollarSign}
+          tone="emerald"
+          trend={!loading ? { direction: isUp ? 'up' : 'down', label: `${isUp ? '+' : ''}${percentChange.toFixed(0)}% vs yesterday (₱${yesterdayTotal.toFixed(2)})` } : undefined}
+        />
+        <MetricCard
+          label="Active Queue"
+          value={loading ? '…' : activeQueueCount}
+          icon={ClipboardList}
+          tone="indigo"
+          caption="Pending + Processing visits today"
+        />
+        <MetricCard
+          label="Services Catalog"
+          value={loading ? '…' : catalogCount}
+          icon={FileText}
+          tone="green"
+          caption="Active diagnostic services"
+        />
 
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-5 space-y-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Payment Methods (Today)</span>

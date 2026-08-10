@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import MetricCard from '../components/ui/metric-card';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
@@ -1006,24 +1007,10 @@ const ClientDashboard = ({ onNavigate }) => {
 
             {/* Quick Metrics Bar inside Hero */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-800">
-              <div className="bg-slate-800/80 rounded-2xl p-3.5 border border-slate-700/60">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Pending Requests</span>
-                <span className="text-xl font-extrabold text-amber-400">{pendingCount}</span>
-              </div>
-              <div className="bg-slate-800/80 rounded-2xl p-3.5 border border-slate-700/60">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Completed Reports</span>
-                <span className="text-xl font-extrabold text-emerald-400">{completedCount}</span>
-              </div>
-              <div className="bg-slate-800/80 rounded-2xl p-3.5 border border-slate-700/60">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Total Test History</span>
-                <span className="text-xl font-extrabold text-white">{history.length}</span>
-              </div>
-              <div className="bg-slate-800/80 rounded-2xl p-3.5 border border-slate-700/60">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Billing Type</span>
-                <span className="text-xs font-bold text-[#769046] block truncate mt-1">
-                  {selectedProfile?.patient_type_name || 'Standard'}
-                </span>
-              </div>
+              <MetricCard variant="dark" label="Pending Requests" value={pendingCount} icon={Clock} tone="amber" />
+              <MetricCard variant="dark" label="Completed Reports" value={completedCount} icon={CheckCircle} tone="emerald" />
+              <MetricCard variant="dark" label="Total Test History" value={history.length} icon={FileText} tone="slate" />
+              <MetricCard variant="dark" label="Billing Type" value={selectedProfile?.patient_type_name || 'Standard'} icon={Receipt} tone="green" />
             </div>
 
           </div>
