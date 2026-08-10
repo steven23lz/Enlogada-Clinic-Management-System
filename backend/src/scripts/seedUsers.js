@@ -14,6 +14,7 @@ const seedUsers = async () => {
       { firstName: 'Juan', lastName: 'Cashier', email: 'cashier@enlogada.com', role: 'Cashier' },
       { firstName: 'Doc', lastName: 'Lab', email: 'lab@enlogada.com', role: 'Laboratory Staff' },
       { firstName: 'Sonya', lastName: 'Ultrasound', email: 'ultrasound@enlogada.com', role: 'Ultrasound Staff' },
+      { firstName: 'Xavier', lastName: 'Ray', email: 'xray@enlogada.com', role: 'Xray Staff' },
       { firstName: 'Elena', lastName: 'Client', email: 'client@enlogada.com', role: 'Client' },
     ];
 
