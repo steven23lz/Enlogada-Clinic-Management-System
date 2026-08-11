@@ -117,6 +117,12 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  // Called after AvatarUpload.jsx uploads/removes a photo — avoids a full /auth/me refetch
+  // just to flip one flag.
+  const updateAvatarFlag = (hasAvatar) => {
+    setUser((prev) => (prev ? { ...prev, hasAvatar } : prev));
+  };
+
   const hasPermission = (permissionName) => {
     if (!user) return false;
     if (user.roles?.includes('SuperAdmin') || user.roles?.includes('Admin')) return true;
@@ -129,7 +135,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, forgotPassword, resetPassword, updateProfile, changePassword, logout, hasPermission, hasRole }}>
+    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, forgotPassword, resetPassword, updateProfile, changePassword, updateAvatarFlag, logout, hasPermission, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

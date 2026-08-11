@@ -39,6 +39,8 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     contact_number VARCHAR(20),
     status BOOLEAN DEFAULT TRUE,
+    avatar_path VARCHAR(255),
+    avatar_mime_type VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

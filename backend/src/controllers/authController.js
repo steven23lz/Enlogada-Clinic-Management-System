@@ -174,6 +174,49 @@ class AuthController {
     }
   }
 
+  async uploadAvatar(req, res, next) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'An image file is required.'
+        });
+      }
+
+      await authService.uploadAvatar(req.user.userId, req.file);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Profile photo updated.'
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async deleteAvatar(req, res, next) {
+    try {
+      await authService.deleteAvatar(req.user.userId);
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'Profile photo removed.'
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getAvatarFile(req, res, next) {
+    try {
+      const { absolutePath, mimeType } = await authService.getAvatarFile(req.user.userId);
+      res.setHeader('Content-Type', mimeType);
+      return res.sendFile(absolutePath);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async googleLogin(req, res, next) {
     try {
       const { idToken } = req.body;

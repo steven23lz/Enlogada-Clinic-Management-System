@@ -3,7 +3,18 @@ import PublicHeader from '../components/PublicHeader';
 import PublicFooter from '../components/PublicFooter';
 import Logo from '../components/Logo';
 import { Button } from '../components/ui/button';
-import { ShieldCheck, Clock, Award, ChevronRight } from 'lucide-react';
+import { ShieldCheck, Clock, Award, ChevronRight, Stethoscope, FlaskConical, Scan, HeartPulse, Activity } from 'lucide-react';
+
+// Mirrors the 5 seeded test_categories rows exactly (database/schema.sql), same icon mapping
+// ClientDashboard.jsx already uses per category — static/decorative, not live data, so the
+// hero's right column doesn't need a fabricated stat to fill the space.
+const SERVICE_PREVIEW = [
+  { label: 'Ultrasound', icon: Stethoscope },
+  { label: 'Laboratory', icon: FlaskConical },
+  { label: 'Digital X-Ray', icon: Scan },
+  { label: '2D Echo', icon: HeartPulse },
+  { label: 'ECG', icon: Activity },
+];
 
 const Home = ({ onNavigate }) => {
   return (
@@ -52,6 +63,27 @@ const Home = ({ onNavigate }) => {
               >
                 View Services
               </Button>
+            </div>
+          </div>
+
+          {/* UI/UX Modernization Phase 8: the right column previously rendered nothing but the
+              faint background logo — filled with a static services-preview card instead of a
+              stock photo or a fabricated stat (e.g. "10,000+ patients"), consistent with Phase
+              4's earlier decision to keep this hero brand-forward rather than reach for imagery. */}
+          <div className="hidden md:flex justify-center">
+            <div className="glass-card rounded-3xl p-7 w-full max-w-sm shadow-2xl">
+              <span className="text-[11px] font-bold text-[#657c3a] uppercase tracking-widest">What We Offer</span>
+              <h3 className="text-lg font-bold text-dark-slate mt-1 mb-5">Our Diagnostic Services</h3>
+              <ul className="space-y-3 list-none p-0 m-0">
+                {SERVICE_PREVIEW.map(({ label, icon: Icon }) => (
+                  <li key={label} className="flex items-center space-x-3">
+                    <span className="w-9 h-9 rounded-xl bg-[#769046]/10 text-[#769046] flex items-center justify-center flex-shrink-0">
+                      <Icon className="w-4.5 h-4.5" />
+                    </span>
+                    <span className="text-sm font-semibold text-slate-700">{label}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>

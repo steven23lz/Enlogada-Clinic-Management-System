@@ -20,7 +20,8 @@ class UserRepository {
 
   async findById(id) {
     const queryText = `
-      SELECT u.id, u.first_name, u.last_name, u.email, u.contact_number, u.status, u.created_at, 
+      SELECT u.id, u.first_name, u.last_name, u.email, u.contact_number, u.status, u.created_at,
+             u.avatar_path,
              COALESCE(ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles,
              COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}') as permissions
       FROM users u
@@ -111,6 +112,40 @@ class UserRepository {
       RETURNING id, user_id, role_id
     `;
     const result = await db.query(queryText, [userId, roleId, assignedBy]);
+    return result.rows[0];
+  }
+
+  // Returns the *previous* avatar_path (before overwrite) so the service can delete the stale
+  // file from disk — a replace, not an append, since only one avatar exists per user at a time.
+  async replaceAvatar(userId, avatarPath, avatarMimeType) {
+    const queryText = `
+      WITH old AS (SELECT avatar_path FROM users WHERE id = $3)
+      UPDATE users
+      SET avatar_path = $1, avatar_mime_type = $2, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING (SELECT avatar_path FROM old) AS previous_avatar_path
+    `;
+    const result = await db.query(queryText, [avatarPath, avatarMimeType, userId]);
+    return result.rows[0]?.previous_avatar_path;
+  }
+
+  async clearAvatar(userId) {
+    // RETURNING reflects the row *after* the update, so avatar_path would already be NULL by
+    // then — the old-value CTE (same trick as replaceAvatar above) is what actually captures
+    // the path to delete from disk.
+    const queryText = `
+      WITH old AS (SELECT avatar_path FROM users WHERE id = $1)
+      UPDATE users
+      SET avatar_path = NULL, avatar_mime_type = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING (SELECT avatar_path FROM old) AS previous_avatar_path
+    `;
+    const result = await db.query(queryText, [userId]);
+    return result.rows[0]?.previous_avatar_path;
+  }
+
+  async findAvatarById(userId) {
+    const result = await db.query('SELECT avatar_path, avatar_mime_type FROM users WHERE id = $1', [userId]);
     return result.rows[0];
   }
 }
