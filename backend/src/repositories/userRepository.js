@@ -68,6 +68,21 @@ class UserRepository {
     return result.rows[0];
   }
 
+  // UI/UX Modernization Phase 11: unlike updateContactInfo (self-service, email deliberately
+  // excluded — "your email is your login and cannot be changed here"), this is Admin editing
+  // someone else's staff record, where correcting a typo'd email at creation time is legitimate.
+  // Role is never touched here — reassigning a role is a separate, more sensitive surface.
+  async updateStaffDetails(userId, { firstName, lastName, email, contactNumber }) {
+    const queryText = `
+      UPDATE users
+      SET first_name = $1, last_name = $2, email = $3, contact_number = $4, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $5
+      RETURNING id, first_name, last_name, email, contact_number, status, created_at
+    `;
+    const result = await db.query(queryText, [firstName, lastName, email, contactNumber, userId]);
+    return result.rows[0];
+  }
+
   async findPasswordHashById(userId) {
     const result = await db.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
     return result.rows[0]?.password_hash;

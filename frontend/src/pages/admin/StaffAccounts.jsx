@@ -10,7 +10,8 @@ import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { SearchInput } from '../../components/ui/search-input';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
-import { UserPlus, AlertCircle, KeyRound, CheckCircle2 } from 'lucide-react';
+import { toastSuccess } from '../../lib/toast';
+import { UserPlus, AlertCircle, KeyRound, CheckCircle2, Pencil } from 'lucide-react';
 
 // Module 12: staff account management, scoped to the 5 operational roles only (Admin/SuperAdmin
 // account management is Module 13's explicit responsibility — see adminService.js's
@@ -45,6 +46,14 @@ const StaffAccounts = () => {
   const [resettingPwd, setResettingPwd] = useState(false);
   const [resetPwdError, setResetPwdError] = useState('');
   const [resetPwdSuccess, setResetPwdSuccess] = useState(false);
+
+  // UI/UX Modernization Phase 11: previously the only recourse for a typo'd name/email/contact
+  // number was deactivating and recreating the whole account. Deliberately excludes role — that
+  // stays a separate, more sensitive action.
+  const [editTarget, setEditTarget] = useState(null);
+  const [editData, setEditData] = useState({ firstName: '', lastName: '', email: '', contactNumber: '' });
+  const [editError, setEditError] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const fetchStaff = useCallback(async () => {
     try {
@@ -130,6 +139,33 @@ const StaffAccounts = () => {
       setResetPwdError(err.response?.data?.message || 'Failed to reset password.');
     } finally {
       setResettingPwd(false);
+    }
+  };
+
+  const handleOpenEdit = (s) => {
+    setEditTarget(s);
+    setEditData({ firstName: s.first_name, lastName: s.last_name, email: s.email, contactNumber: s.contact_number || '' });
+    setEditError('');
+  };
+
+  const confirmEditStaff = async (e) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    if (!editData.firstName.trim() || !editData.lastName.trim() || !editData.email.trim()) {
+      setEditError('First name, last name, and email are required.');
+      return;
+    }
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      await api.patch(`/admin/staff/${editTarget.id}`, editData);
+      setEditTarget(null);
+      toastSuccess('Staff account details updated.');
+      fetchStaff();
+    } catch (err) {
+      setEditError(err.response?.data?.message || 'Failed to update staff account.');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -268,15 +304,26 @@ const StaffAccounts = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className="py-3 text-right">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => handleOpenResetPwd(s)}
-                        className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1 ml-auto"
-                      >
-                        <KeyRound className="w-3 h-3" />
-                        <span>Reset Password</span>
-                      </Button>
+                      <div className="flex items-center justify-end space-x-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleOpenEdit(s)}
+                          className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>Edit</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleOpenResetPwd(s)}
+                          className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
+                        >
+                          <KeyRound className="w-3 h-3" />
+                          <span>Reset Password</span>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -334,6 +381,49 @@ const StaffAccounts = () => {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editTarget} onOpenChange={(open) => !savingEdit && !open && setEditTarget(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900">Edit Staff Account</DialogTitle>
+            <DialogDescription className="text-xs">
+              {editTarget && `Update contact details for ${editTarget.first_name} ${editTarget.last_name}. Role and password are managed separately.`}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={confirmEditStaff} className="space-y-4">
+            {editError && (
+              <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{editError}</span>
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-600 uppercase">First Name</label>
+                <Input value={editData.firstName} onChange={e => setEditData({ ...editData, firstName: e.target.value })} disabled={savingEdit} required />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-600 uppercase">Last Name</label>
+                <Input value={editData.lastName} onChange={e => setEditData({ ...editData, lastName: e.target.value })} disabled={savingEdit} required />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-600 uppercase">Email</label>
+              <Input type="email" value={editData.email} onChange={e => setEditData({ ...editData, email: e.target.value })} disabled={savingEdit} required />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-600 uppercase">Contact Number</label>
+              <Input value={editData.contactNumber} onChange={e => setEditData({ ...editData, contactNumber: e.target.value })} disabled={savingEdit} />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>Cancel</Button>
+              <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold" disabled={savingEdit}>
+                {savingEdit ? 'Saving…' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

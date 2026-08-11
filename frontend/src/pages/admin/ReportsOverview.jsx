@@ -10,7 +10,7 @@ import RevenueTrendChart from '../../components/charts/RevenueTrendChart';
 import CategoryVolumeChart from '../../components/charts/CategoryVolumeChart';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
-import { ClipboardList, FileText, Info, RefreshCw, ShieldCheck, DollarSign, Users, FlaskConical } from 'lucide-react';
+import { ClipboardList, FileText, Info, RefreshCw, ShieldCheck, DollarSign, Users, FlaskConical, Printer } from 'lucide-react';
 
 const dateStr = (d) => {
   const y = d.getFullYear();
@@ -187,6 +187,14 @@ const DateRangeReports = () => {
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Apply</span>
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => window.print()}
+            className="flex items-center space-x-1.5 text-xs font-semibold"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Print Reports</span>
+          </Button>
         </div>
       </div>
 
@@ -196,6 +204,11 @@ const DateRangeReports = () => {
         </div>
       )}
 
+      <div className="print-area space-y-6">
+      <div className="hidden print:block text-center border-b border-gray-100 pb-3 mb-3">
+        <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide m-0">Enlogada Ultrasound &amp; Diagnostic Clinic</h3>
+        <p className="text-xs text-gray-500 m-0">Clinic Report — {startDate} to {endDate}</p>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
           <CardHeader className="border-b border-gray-100 py-4 px-6 space-y-0.5">
@@ -282,6 +295,7 @@ const DateRangeReports = () => {
             </Table>
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   );

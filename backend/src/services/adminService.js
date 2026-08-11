@@ -69,6 +69,47 @@ class AdminService {
     });
   }
 
+  // UI/UX Modernization Phase 11: previously only status-toggle and password-reset existed —
+  // there was no way to fix a staff member's own typo'd name/email/contact number after account
+  // creation short of deactivating and recreating the whole account. Role is intentionally not a
+  // parameter here — reassigning a role is a separate, more sensitive action.
+  async updateStaffDetails(userId, { firstName, lastName, email, contactNumber }, requestingUser) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      const error = new Error('Staff account not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const isManageableStaff = (user.roles || []).some((r) => MANAGEABLE_ROLES.includes(r));
+    if (!isManageableStaff) {
+      const error = new Error('This account is not a staff account managed by this endpoint.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    if (email !== user.email) {
+      const existing = await userRepository.findByEmail(email);
+      if (existing && existing.id !== Number(userId)) {
+        const error = new Error('Email is already registered to another account.');
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+
+    const updated = await userRepository.updateStaffDetails(userId, { firstName, lastName, email, contactNumber });
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: 'staff.details_updated',
+      entityType: 'user',
+      entityId: userId,
+      description: `Updated contact details for ${updated.first_name} ${updated.last_name} (${updated.email})`
+    });
+
+    return updated;
+  }
+
   async updateStaffStatus(userId, status, requestingUser) {
     const user = await userRepository.findById(userId);
     if (!user) {

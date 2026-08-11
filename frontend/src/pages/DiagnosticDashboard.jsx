@@ -11,7 +11,7 @@ import { SearchInput } from '../components/ui/search-input';
 import { StatusBadge } from '../components/ui/status-badge';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
-import { toastError } from '../lib/toast';
+import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Stethoscope,
@@ -26,7 +26,8 @@ import {
   Eye,
   Pencil,
   Printer,
-  ShieldCheck
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
 
 const WORKLIST_STATUS_FILTERS = ['All', 'Pending', 'Processing'];
@@ -85,6 +86,10 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const [resultFile, setResultFile] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  // UI/UX Modernization Phase 11: shown in place of the upload form immediately after a
+  // successful release, so "Print Now" doesn't require navigating away to History and finding
+  // this same result again.
+  const [justReleased, setJustReleased] = useState(null);
   const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
   const [releasingResult, setReleasingResult] = useState(false);
   // Phase C finding 03: correcting an already-released result — reuses the same modal/upsert
@@ -214,6 +219,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     setRemarks('');
     setResultFile(null);
     setUploadError('');
+    setJustReleased(null);
     setShowUploadModal(true);
     fetchPatientHistory(test.patient_id, test.visit_test_id);
   };
@@ -229,6 +235,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     setRemarks(test.result_remarks || '');
     setResultFile(null);
     setUploadError('');
+    setJustReleased(null);
     setShowUploadModal(true);
     fetchPatientHistory(test.patient_id, test.visit_test_id);
   };
@@ -301,10 +308,29 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       // The upload call above only records the findings — this is the actual "release" step
       // that notifies the patient by email. It was previously never called from this screen,
       // so "Authorize & Release Result" recorded findings but never released/notified anyone.
-      await api.post(`/results/${activeTest.visit_test_id}/release`);
+      const releaseRes = await api.post(`/results/${activeTest.visit_test_id}/release`);
+      const emailStatus = releaseRes.data.data.result?.emailStatus;
+
+      // Previously this always showed a blanket "released and notified" success, even when
+      // sendEmail() had actually failed or skipped silently (SMTP unconfigured) — the backend
+      // now reports what really happened via emailStatus.
+      if (emailStatus === 'sent') {
+        toastSuccess('Result released and the patient was notified by email.');
+      } else if (emailStatus === 'failed') {
+        toastError('Result released — email notification failed, patient was not notified.');
+      } else {
+        toastInfo('Result released. No email on file, so the patient was not notified.');
+      }
 
       setShowReleaseConfirm(false);
-      setShowUploadModal(false);
+      setJustReleased({
+        ...activeTest,
+        findings,
+        result_remarks: remarks,
+        released_at: new Date().toISOString(),
+        released_by_first_name: user?.firstName,
+        released_by_last_name: user?.lastName
+      });
       if (isEditingResult) {
         fetchReleasedTests(category);
       } else {
@@ -655,8 +681,61 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         </Dialog>
 
         {/* Record Diagnostic Findings & Result Entry Modal */}
-        <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
+        <Dialog
+          open={showUploadModal}
+          onOpenChange={(open) => {
+            setShowUploadModal(open);
+            if (!open) setJustReleased(null);
+          }}
+        >
           <DialogContent className="max-w-2xl rounded-2xl p-6">
+            {justReleased ? (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                  <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                  <span className="text-sm font-bold">Result released successfully.</span>
+                </div>
+
+                <div className="print-area space-y-3 bg-white rounded-2xl border border-gray-100 p-5">
+                  <div className="text-center border-b border-gray-100 pb-3 space-y-0.5">
+                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide m-0">Enlogada Ultrasound &amp; Diagnostic Clinic</h3>
+                    <p className="text-xs text-gray-500 m-0">Diagnostic Result Certificate</p>
+                  </div>
+                  <p className="text-xs m-0">
+                    Patient: <strong>{justReleased.first_name} {justReleased.last_name}</strong> &bull; Examination: <strong>{justReleased.test_name}</strong>
+                  </p>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Findings</span>
+                    <p className="whitespace-pre-wrap text-xs bg-gray-50 border border-gray-200 rounded-xl p-3 m-0">{justReleased.findings || '—'}</p>
+                  </div>
+                  {justReleased.result_remarks && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Remarks</span>
+                      <p className="text-xs m-0">{justReleased.result_remarks}</p>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-400 m-0 pt-2 border-t border-gray-100">
+                    Released {new Date(justReleased.released_at).toLocaleString()}
+                    {justReleased.released_by_first_name && ` by ${justReleased.released_by_first_name} ${justReleased.released_by_last_name}`}
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-2">
+                  <Button type="button" variant="outline" onClick={() => window.print()} className="text-xs font-bold flex items-center space-x-1.5">
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print Now</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => { setShowUploadModal(false); setJustReleased(null); }}
+                    className="bg-[#769046] hover:bg-[#657c3a] text-white text-xs font-bold"
+                  >
+                    Done
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
             <DialogHeader>
               <DialogTitle className="text-lg font-bold text-slate-900">
                 {isEditingResult ? 'Correct Released Result' : 'Record Findings & Release Diagnostic Certificate'}
@@ -762,6 +841,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 </Button>
               </div>
             </form>
+              </>
+            )}
           </DialogContent>
         </Dialog>
 

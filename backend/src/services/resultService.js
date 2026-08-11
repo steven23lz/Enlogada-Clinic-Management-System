@@ -201,10 +201,14 @@ class ResultService {
       throw error;
     }
 
-    // Attempt to send email notification to patient
+    // Attempt to send email notification to patient. sendEmail() never throws (it swallows
+    // SMTP failures and returns {error}/{skipped} instead, per backend/src/config/email.js) —
+    // UI/UX Modernization Phase 11: previously that return value was discarded here, so the
+    // controller always reported "patient notified via email" even when nothing was sent.
     const patientInfo = await resultRepository.findPatientEmailByVisitTestId(visitTestId);
+    let emailStatus = 'no_email';
     if (patientInfo && patientInfo.email) {
-      await sendEmail({
+      const emailResult = await sendEmail({
         to: patientInfo.email,
         subject: `Your ${patientInfo.test_name} Results Are Ready - Enlogada Clinic`,
         html: `
@@ -218,6 +222,7 @@ class ResultService {
           </div>
         `
       });
+      emailStatus = (emailResult?.error || emailResult?.skipped) ? 'failed' : 'sent';
     }
 
     // Module 18 (Notification): Admin/SuperAdmin oversight of diagnostic throughput, matching
@@ -231,7 +236,7 @@ class ResultService {
       });
     }
 
-    return result;
+    return { ...result, emailStatus };
   }
 
   async getPatientHistory(patientId) {

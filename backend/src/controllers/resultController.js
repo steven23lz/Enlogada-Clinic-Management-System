@@ -94,9 +94,15 @@ class ResultController {
       const releasedBy = req.user.userId;
 
       const result = await resultService.releaseResult({ visitTestId, releasedBy }, req.user);
+      const message = result.emailStatus === 'sent'
+        ? 'Result released and patient notified via email.'
+        : result.emailStatus === 'failed'
+        ? 'Result released — email notification failed, patient was not notified.'
+        : 'Result released. No email on file, so the patient was not notified.';
+
       return res.status(200).json({
         status: 'success',
-        message: 'Result released and patient notified via email.',
+        message,
         data: { result }
       });
     } catch (err) {

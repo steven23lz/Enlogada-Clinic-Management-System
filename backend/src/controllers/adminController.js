@@ -60,6 +60,29 @@ class AdminController {
     }
   }
 
+  async updateStaffDetails(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { firstName, lastName, email, contactNumber } = req.body;
+
+      if (!firstName || !String(firstName).trim() || !lastName || !String(lastName).trim() || !email || !String(email).trim()) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'First name, last name, and email are required fields.'
+        });
+      }
+
+      const staffAccount = await adminService.updateStaffDetails(id, { firstName, lastName, email, contactNumber }, req.user);
+      return res.status(200).json({
+        status: 'success',
+        message: 'Staff account details updated.',
+        data: { staff: staffAccount }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async resetStaffPassword(req, res, next) {
     try {
       const { id } = req.params;
