@@ -6,6 +6,8 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import MetricCard from '../../components/ui/metric-card';
+import RevenueTrendChart from '../../components/charts/RevenueTrendChart';
+import CategoryVolumeChart from '../../components/charts/CategoryVolumeChart';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
 import { ClipboardList, FileText, Info, RefreshCw, ShieldCheck, DollarSign, Users, FlaskConical } from 'lucide-react';
@@ -164,15 +166,7 @@ const DateRangeReports = () => {
   const paymentMethodBreakdown = report?.paymentMethodBreakdown || [];
 
   const totalRevenue = revenueTrend.reduce((s, r) => s + parseFloat(r.total), 0);
-  const maxRevenue = Math.max(1, ...revenueTrend.map((r) => parseFloat(r.total)));
-  const maxVolume = Math.max(1, ...serviceVolume.map((s) => parseInt(s.test_count, 10)));
   const totalVisits = visitStatusBreakdown.reduce((s, v) => s + parseInt(v.visit_count, 10), 0);
-
-  // paid_at::date comes back from pg as a native Date; over JSON that serializes to a full
-  // ISO datetime string (already carrying its own "T..."), so appending another "T00:00:00"
-  // silently produced "Invalid Date". `new Date(day)` alone parses any of: a Date instance,
-  // a full ISO datetime, or a bare YYYY-MM-DD.
-  const formatDay = (day) => new Date(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
   return (
     <div className="space-y-6">
@@ -214,24 +208,7 @@ const DateRangeReports = () => {
             ) : revenueTrend.length === 0 ? (
               <p className="text-xs text-gray-400 italic text-center py-6">No paid transactions in this range.</p>
             ) : (
-              <div className="flex items-end space-x-2 overflow-x-auto pb-1" style={{ minHeight: '140px' }}>
-                {revenueTrend.map((row) => {
-                  const value = parseFloat(row.total);
-                  const heightPct = Math.max(4, (value / maxRevenue) * 100);
-                  return (
-                    <div key={row.day} className="flex flex-col items-center space-y-1 flex-shrink-0" style={{ width: '44px' }}>
-                      <span className="text-[10px] font-bold text-slate-700">₱{value.toFixed(0)}</span>
-                      <div
-                        className="w-full rounded-t-md bg-[#769046]"
-                        style={{ height: `${heightPct}px`, maxHeight: '100px' }}
-                        role="img"
-                        aria-label={`${formatCurrency(value)} on ${row.day}`}
-                      />
-                      <span className="text-[9px] text-gray-400 font-semibold whitespace-nowrap">{formatDay(row.day)}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              <RevenueTrendChart data={revenueTrend} />
             )}
           </CardContent>
         </Card>
@@ -240,32 +217,13 @@ const DateRangeReports = () => {
           <CardHeader className="border-b border-gray-100 py-4 px-6">
             <CardTitle className="text-sm font-bold text-slate-800">Service Volume by Category</CardTitle>
           </CardHeader>
-          <CardContent className="p-5 space-y-3">
+          <CardContent className="p-5">
             {loading ? (
               <p className="text-xs text-gray-400 text-center py-6">Loading…</p>
             ) : serviceVolume.length === 0 ? (
               <p className="text-xs text-gray-400 italic text-center py-6">No tests attached to visits in this range.</p>
             ) : (
-              serviceVolume.map((row) => {
-                const count = parseInt(row.test_count, 10);
-                const widthPct = Math.max(4, (count / maxVolume) * 100);
-                return (
-                  <div key={row.category_name} className="space-y-1">
-                    <div className="flex justify-between text-[11px] font-semibold text-gray-700">
-                      <span>{row.category_name}</span>
-                      <span className="font-bold text-slate-900">{count}</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-gray-100">
-                      <div
-                        className="h-2 rounded-full bg-indigo-500"
-                        style={{ width: `${widthPct}%` }}
-                        role="img"
-                        aria-label={`${count} ${row.category_name} tests`}
-                      />
-                    </div>
-                  </div>
-                );
-              })
+              <CategoryVolumeChart data={serviceVolume} />
             )}
           </CardContent>
         </Card>

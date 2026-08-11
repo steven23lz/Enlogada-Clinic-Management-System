@@ -3,6 +3,7 @@ import SidebarLayout from '../components/SidebarLayout';
 import MetricCard from '../components/ui/metric-card';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { StatusBadge } from '../components/ui/status-badge';
+import RevenueTrendChart from '../components/charts/RevenueTrendChart';
 import {
   DollarSign, Shield, FileText, UserCheck, Users, CreditCard, BarChart3, ClipboardList, ArrowRight
 } from 'lucide-react';
@@ -32,12 +33,6 @@ const NAV_TITLES = {
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const daysAgoStr = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
-
-// paid_at::date comes back from pg as a native Date; over JSON that serializes to a full
-// ISO datetime string (already carrying its own "T..."), so appending another "T00:00:00"
-// (the previous approach, copied from ReportsOverview.jsx) silently produced "Invalid Date".
-// `new Date(day)` alone parses a Date instance, a full ISO datetime, or a bare YYYY-MM-DD.
-const formatDay = (day) => new Date(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 // Visual Design Improvement Plan Phase V2: the overview previously ended at the stat row,
 // leaving the rest of the page blank (see the plan's Section 08, finding 01). Revenue Trend and
@@ -102,8 +97,6 @@ const DashboardOverview = ({ onSelectNav }) => {
   useEffect(() => {
     fetchOverview();
   }, [fetchOverview]);
-
-  const maxRevenue = Math.max(1, ...revenueTrend.map((r) => parseFloat(r.total)));
 
   return (
     <div className="space-y-6">
@@ -186,24 +179,7 @@ const DashboardOverview = ({ onSelectNav }) => {
             ) : revenueTrend.length === 0 ? (
               <p className="text-xs text-gray-400 italic text-center py-6">No paid transactions in the last 7 days.</p>
             ) : (
-              <div className="flex items-end space-x-2 overflow-x-auto pb-1" style={{ minHeight: '140px' }}>
-                {revenueTrend.map((row) => {
-                  const value = parseFloat(row.total);
-                  const heightPct = Math.max(4, (value / maxRevenue) * 100);
-                  return (
-                    <div key={row.day} className="flex flex-col items-center space-y-1 flex-shrink-0" style={{ width: '44px' }}>
-                      <span className="text-[10px] font-bold text-slate-700">₱{value.toFixed(0)}</span>
-                      <div
-                        className="w-full rounded-t-md bg-[#769046]"
-                        style={{ height: `${heightPct}px`, maxHeight: '100px' }}
-                        role="img"
-                        aria-label={`${formatCurrency(value)} on ${row.day}`}
-                      />
-                      <span className="text-[9px] text-gray-400 font-semibold whitespace-nowrap">{formatDay(row.day)}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              <RevenueTrendChart data={revenueTrend} />
             )}
           </CardContent>
         </Card>
