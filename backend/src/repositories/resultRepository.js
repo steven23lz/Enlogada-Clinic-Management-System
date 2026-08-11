@@ -6,7 +6,14 @@ class ResultRepository {
       SELECT vt.id as visit_test_id, vt.status as test_status, vt.price_at_time, vt.remarks,
              t.name as test_name, tc.name as category_name,
              pv.id as visit_id, pv.queue_number,
-             p.first_name, p.last_name, p.birthdate, p.sex
+             p.id as patient_id, p.first_name, p.last_name, p.birthdate, p.sex,
+             (
+               SELECT hrt.approval_status
+               FROM hmo_request_tests hrt
+               WHERE hrt.visit_test_id = vt.id
+               ORDER BY hrt.created_at DESC
+               LIMIT 1
+             ) as hmo_approval_status
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
@@ -29,8 +36,8 @@ class ResultRepository {
       SELECT vt.id as visit_test_id, vt.status as test_status,
              t.name as test_name, tc.name as category_name,
              pv.id as visit_id, pv.queue_number,
-             p.first_name, p.last_name,
-             tr.findings, tr.remarks as result_remarks, tr.file_url, tr.released_at,
+             p.id as patient_id, p.first_name, p.last_name,
+             tr.findings, tr.remarks as result_remarks, tr.file_url, tr.file_path, tr.released_at,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id

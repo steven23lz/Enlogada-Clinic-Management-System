@@ -91,13 +91,37 @@ class ResultService {
     // Phase B: a real uploaded file (via multer) takes precedence over the legacy fileUrl text
     // field — both can't meaningfully apply at once, and the frontend only ever sends one or
     // the other.
+    let resolvedFileUrl = fileUrl || null;
+    let filePath = null, fileOriginalName = null, fileMimeType = null, fileSizeBytes = null;
+
+    if (file) {
+      filePath = path.relative(UPLOAD_ROOT, file.path);
+      fileOriginalName = file.originalname;
+      fileMimeType = file.mimetype;
+      fileSizeBytes = file.size;
+      resolvedFileUrl = null;
+    } else if (!fileUrl) {
+      // Phase C: this call now also handles correcting an already-released result (editing
+      // findings/remarks without re-attaching a file) — without this, re-submitting would
+      // silently wipe a previously uploaded file's metadata, since createResult's upsert
+      // otherwise overwrites every column unconditionally.
+      const existing = await resultRepository.findResultByVisitTestId(visitTestId);
+      if (existing) {
+        filePath = existing.file_path;
+        fileOriginalName = existing.file_original_name;
+        fileMimeType = existing.file_mime_type;
+        fileSizeBytes = existing.file_size_bytes;
+        resolvedFileUrl = existing.file_url;
+      }
+    }
+
     const result = await resultRepository.createResult({
       visitTestId,
-      fileUrl: file ? null : fileUrl,
-      filePath: file ? path.relative(UPLOAD_ROOT, file.path) : null,
-      fileOriginalName: file ? file.originalname : null,
-      fileMimeType: file ? file.mimetype : null,
-      fileSizeBytes: file ? file.size : null,
+      fileUrl: resolvedFileUrl,
+      filePath,
+      fileOriginalName,
+      fileMimeType,
+      fileSizeBytes,
       findings,
       remarks,
       releasedBy

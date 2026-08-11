@@ -1124,7 +1124,8 @@ const ClientDashboard = ({ onNavigate }) => {
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-2xl rounded-2xl p-6">
-                            
+
+                          <div className="print-area space-y-4">
                             {/* Official Lab Report Simulation Header */}
                             <div className="border-b border-gray-200 pb-4 text-center space-y-1">
                               <h2 className="text-base font-extrabold text-slate-900 uppercase tracking-wide m-0">ENLOGADA ULTRASOUND & DIAGNOSTIC CLINIC</h2>
@@ -1197,17 +1198,21 @@ const ClientDashboard = ({ onNavigate }) => {
                             </div>
 
                             {/* Footer Release Stamp */}
-                            <div className="flex items-center justify-between pt-4 border-t border-gray-100 text-[11px]">
+                            <div className="pt-4 border-t border-gray-100 text-[11px]">
                               <span className="text-gray-400 font-medium">Released: {new Date(item.released_at).toLocaleString()}</span>
-                              <Button 
-                                onClick={() => window.print()}
-                                variant="outline" 
-                                className="text-xs font-bold flex items-center space-x-1.5"
-                              >
-                                <Printer className="w-3.5 h-3.5" />
-                                <span>Print Official Copy</span>
-                              </Button>
                             </div>
+                          </div>
+
+                          <div className="flex justify-end pt-2">
+                            <Button
+                              onClick={() => window.print()}
+                              variant="outline"
+                              className="text-xs font-bold flex items-center space-x-1.5"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>Print Official Copy</span>
+                            </Button>
+                          </div>
 
                           </DialogContent>
                         </Dialog>
