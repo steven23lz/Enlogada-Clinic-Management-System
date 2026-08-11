@@ -571,13 +571,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                           </TableCell>
 
                           <TableCell className="py-3">
-                            <Badge className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                              visit.visit_status === 'Processing' ? 'bg-indigo-100 text-indigo-800' :
-                              visit.visit_status === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
-                              'bg-amber-100 text-amber-800'
-                            }`}>
-                              {visit.visit_status}
-                            </Badge>
+                            <StatusBadge status={visit.visit_status} className="px-2.5 py-0.5" />
                           </TableCell>
 
                           <TableCell className="py-3 text-right">

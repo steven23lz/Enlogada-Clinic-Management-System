@@ -3,12 +3,12 @@ import SidebarLayout from '../components/SidebarLayout';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import MetricCard from '../components/ui/metric-card';
-import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { SearchInput } from '../components/ui/search-input';
+import { StatusBadge } from '../components/ui/status-badge';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -349,11 +349,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                       </TableCell>
 
                       <TableCell className="py-3.5">
-                        <Badge className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                          test.test_status === 'Processing' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {test.test_status}
-                        </Badge>
+                        <StatusBadge status={test.test_status} className="px-2.5 py-0.5" />
                       </TableCell>
 
                       <TableCell className="py-3.5 text-right">

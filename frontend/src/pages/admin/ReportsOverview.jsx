@@ -167,10 +167,11 @@ const DateRangeReports = () => {
   const maxVolume = Math.max(1, ...serviceVolume.map((s) => parseInt(s.test_count, 10)));
   const totalVisits = visitStatusBreakdown.reduce((s, v) => s + parseInt(v.visit_count, 10), 0);
 
-  const formatDay = (isoDay) => {
-    const d = new Date(`${isoDay}T00:00:00`);
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  };
+  // paid_at::date comes back from pg as a native Date; over JSON that serializes to a full
+  // ISO datetime string (already carrying its own "T..."), so appending another "T00:00:00"
+  // silently produced "Invalid Date". `new Date(day)` alone parses any of: a Date instance,
+  // a full ISO datetime, or a bare YYYY-MM-DD.
+  const formatDay = (day) => new Date(day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
   return (
     <div className="space-y-6">

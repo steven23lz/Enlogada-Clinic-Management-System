@@ -64,21 +64,39 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // destination (some even shared a "Dashboard" item that silently routed to the same page).
   // Split into real, focused destinations per role, mirroring the pattern mainNavItems above
   // already uses for Admin/SuperAdmin.
-  const opsNavItems = [
-    { id: 'reception-queue', label: 'Active Queue', icon: Calendar, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
-    { id: 'reception-walkin', label: 'Walk-In Registration', icon: UserPlus, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
-    { id: 'reception-checkin', label: 'Appointment Check-In', icon: QrCode, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
-    { id: 'reception-history', label: 'Visit History', icon: History, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
-
-    { id: 'cashier-queue', label: 'Billing Queue', icon: Receipt, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
-    { id: 'cashier-history', label: 'Transaction History', icon: History, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
-
-    { id: 'lab-ops', label: 'Laboratory Worklist', icon: FlaskConical, roleRequired: ['Laboratory Staff', 'Admin', 'SuperAdmin'] },
-    { id: 'lab-history', label: 'Laboratory History', icon: History, roleRequired: ['Laboratory Staff', 'Admin', 'SuperAdmin'] },
-    { id: 'ultrasound-ops', label: 'Ultrasound Worklist', icon: Stethoscope, roleRequired: ['Ultrasound Staff', 'Admin', 'SuperAdmin'] },
-    { id: 'ultrasound-history', label: 'Ultrasound History', icon: History, roleRequired: ['Ultrasound Staff', 'Admin', 'SuperAdmin'] },
-    { id: 'xray-ops', label: 'X-Ray Worklist', icon: Scan, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
-    { id: 'xray-history', label: 'X-Ray History', icon: History, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
+  //
+  // Visual Design Improvement Plan Phase V2 (see .agents/_shared/VISUAL_IDENTITY.md §3a #11 /
+  // the plan's Section 07 "structure fix"): grouped by department instead of one flat list, so
+  // Admin/SuperAdmin — who see all of these at once — get a scannable sidebar instead of 12
+  // undifferentiated items. A single-department user still only ever sees their own group.
+  const opsNavGroups = [
+    {
+      label: 'Front Desk',
+      items: [
+        { id: 'reception-queue', label: 'Active Queue', icon: Calendar, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
+        { id: 'reception-walkin', label: 'Walk-In Registration', icon: UserPlus, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
+        { id: 'reception-checkin', label: 'Appointment Check-In', icon: QrCode, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
+        { id: 'reception-history', label: 'Visit History', icon: History, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
+      ],
+    },
+    {
+      label: 'Billing',
+      items: [
+        { id: 'cashier-queue', label: 'Billing Queue', icon: Receipt, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
+        { id: 'cashier-history', label: 'Transaction History', icon: History, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
+      ],
+    },
+    {
+      label: 'Diagnostics',
+      items: [
+        { id: 'lab-ops', label: 'Laboratory Worklist', icon: FlaskConical, roleRequired: ['Laboratory Staff', 'Admin', 'SuperAdmin'] },
+        { id: 'lab-history', label: 'Laboratory History', icon: History, roleRequired: ['Laboratory Staff', 'Admin', 'SuperAdmin'] },
+        { id: 'ultrasound-ops', label: 'Ultrasound Worklist', icon: Stethoscope, roleRequired: ['Ultrasound Staff', 'Admin', 'SuperAdmin'] },
+        { id: 'ultrasound-history', label: 'Ultrasound History', icon: History, roleRequired: ['Ultrasound Staff', 'Admin', 'SuperAdmin'] },
+        { id: 'xray-ops', label: 'X-Ray Worklist', icon: Scan, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
+        { id: 'xray-history', label: 'X-Ray History', icon: History, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
+      ],
+    },
   ];
 
   // Module 18 (Notification): real, per-user notifications from the backend, replacing the
@@ -179,33 +197,40 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
         </nav>
       </div>
 
-      <div className="space-y-1 pt-2">
+      <div className="space-y-3 pt-2">
         <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-3">Clinical Operations</span>
-        <nav className="space-y-1 pt-1">
-          {opsNavItems
-            .filter(item => !item.roleRequired || item.roleRequired.some(r => userRoles.includes(r)))
-            .map(item => {
-              const Icon = item.icon;
-              const isActive = activeNav === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    onSelectNav && onSelectNav(item.id);
-                    setMobileOpen(false);
-                  }}
-                  className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border-0 cursor-pointer ${
-                    isActive 
-                      ? 'bg-[#769046] text-white shadow-md shadow-[#769046]/20 font-bold' 
-                      : 'text-gray-300 hover:bg-slate-800/80 hover:text-white'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-        </nav>
+        {opsNavGroups.map(group => {
+          const visibleItems = group.items.filter(item => !item.roleRequired || item.roleRequired.some(r => userRoles.includes(r)));
+          if (visibleItems.length === 0) return null;
+          return (
+            <div key={group.label} className="space-y-1">
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3">{group.label}</span>
+              <nav className="space-y-1 pt-0.5">
+                {visibleItems.map(item => {
+                  const Icon = item.icon;
+                  const isActive = activeNav === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        onSelectNav && onSelectNav(item.id);
+                        setMobileOpen(false);
+                      }}
+                      className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border-0 cursor-pointer ${
+                        isActive
+                          ? 'bg-[#769046] text-white shadow-md shadow-[#769046]/20 font-bold'
+                          : 'text-gray-300 hover:bg-slate-800/80 hover:text-white'
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

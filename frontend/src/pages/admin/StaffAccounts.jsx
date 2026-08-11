@@ -7,6 +7,8 @@ import { Input } from '../../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
+import { SearchInput } from '../../components/ui/search-input';
+import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { UserPlus, AlertCircle } from 'lucide-react';
 
@@ -15,9 +17,16 @@ import { UserPlus, AlertCircle } from 'lucide-react';
 // MANAGEABLE_ROLES, enforced server-side, not just hidden here).
 const MANAGEABLE_ROLES = ['Receptionist', 'Cashier', 'Laboratory Staff', 'Ultrasound Staff', 'Xray Staff'];
 
+// Visual Design Improvement Plan Phase V1: this list has no server-side pagination endpoint,
+// so a client-side page size over an already-fetched, search-filtered array is proportionate —
+// see VISUAL_IDENTITY.md §3a #11.
+const PAGE_SIZE = 15;
+
 const StaffAccounts = () => {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', contactNumber: '', password: '', role: '' });
@@ -88,6 +97,18 @@ const StaffAccounts = () => {
       setTogglingStatus(false);
     }
   };
+
+  const filteredStaff = staff.filter(s => {
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return (
+      `${s.first_name} ${s.last_name}`.toLowerCase().includes(q) ||
+      s.email.toLowerCase().includes(q) ||
+      (s.roles?.[0] || '').toLowerCase().includes(q)
+    );
+  });
+  const totalPages = Math.max(1, Math.ceil(filteredStaff.length / PAGE_SIZE));
+  const pagedStaff = filteredStaff.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -165,8 +186,17 @@ const StaffAccounts = () => {
       </div>
 
       <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="border-b border-gray-100 py-4 px-6">
-          <CardTitle className="text-sm font-bold text-slate-800">{staff.length} Staff Account{staff.length === 1 ? '' : 's'}</CardTitle>
+        <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <CardTitle className="text-sm font-bold text-slate-800">
+            {filteredStaff.length} Staff Account{filteredStaff.length === 1 ? '' : 's'}
+            {search && <span className="text-xs font-normal text-gray-400"> of {staff.length} total</span>}
+          </CardTitle>
+          <SearchInput
+            placeholder="Search name, email, or role..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            containerClassName="w-full sm:w-72"
+          />
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -182,11 +212,11 @@ const StaffAccounts = () => {
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading staff accounts…</TableCell></TableRow>
-              ) : staff.length > 0 ? (
-                staff.map(s => (
+              ) : pagedStaff.length > 0 ? (
+                pagedStaff.map(s => (
                   <TableRow key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                    <TableCell className="py-3 font-bold text-xs text-slate-900">{s.first_name} {s.last_name}</TableCell>
-                    <TableCell className="py-3 text-xs text-gray-600">{s.email}</TableCell>
+                    <TableCell className="py-3 font-bold text-xs text-slate-900 max-w-[180px] truncate" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
+                    <TableCell className="py-3 text-xs text-gray-600 max-w-[220px] truncate" title={s.email}>{s.email}</TableCell>
                     <TableCell className="py-3 text-xs">
                       <Badge variant="outline" className="text-[10px] font-bold border-gray-200">{s.roles?.[0]}</Badge>
                     </TableCell>
@@ -204,10 +234,16 @@ const StaffAccounts = () => {
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400 italic">No staff accounts yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400 italic">{search ? 'No staff accounts match your search.' : 'No staff accounts yet.'}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            totalLabel={`${filteredStaff.length} account${filteredStaff.length === 1 ? '' : 's'}`}
+          />
         </CardContent>
       </Card>
 

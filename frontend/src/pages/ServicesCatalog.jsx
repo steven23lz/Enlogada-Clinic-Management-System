@@ -190,8 +190,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
           <button
             onClick={() => setFilterCategory('all')}
             className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all border-0 cursor-pointer ${
-              filterCategory === 'all' 
-                ? 'bg-[#1e293b] text-white shadow-xs' 
+              filterCategory === 'all'
+                ? 'bg-[#192534] text-white shadow-xs'
                 : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
             }`}
           >
