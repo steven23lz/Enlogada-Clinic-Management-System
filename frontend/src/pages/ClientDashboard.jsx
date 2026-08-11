@@ -12,6 +12,7 @@ import { StatusBadge } from '../components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
+import { formatCurrency } from '../lib/currency';
 import { validatePatientProfile } from '../validations/patientValidation';
 import { 
   Activity, 
@@ -930,7 +931,7 @@ const ClientDashboard = ({ onNavigate }) => {
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-center">
                             <label className="text-xs font-bold text-gray-600 uppercase">Select Diagnostic Tests</label>
-                            <span className="text-xs font-extrabold text-[#769046]">Total: ₱{calculateTotalPrice().toFixed(2)}</span>
+                            <span className="text-xs font-extrabold text-[#769046]">Total: {formatCurrency(calculateTotalPrice())}</span>
                           </div>
                           <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-xl p-2.5 space-y-2 bg-gray-50/50">
                             {testCatalog.map(test => (
@@ -943,7 +944,7 @@ const ClientDashboard = ({ onNavigate }) => {
                                 />
                                 <div className="flex-1 flex justify-between items-center text-xs">
                                   <span className="font-bold text-gray-800">{test.name} <span className="text-[10px] text-gray-400 font-medium">({test.category_name})</span></span>
-                                  <span className="font-extrabold text-slate-900">₱{parseFloat(test.price).toFixed(2)}</span>
+                                  <span className="font-extrabold text-slate-900">{formatCurrency(test.price)}</span>
                                 </div>
                               </label>
                             ))}
@@ -1308,7 +1309,7 @@ const ClientDashboard = ({ onNavigate }) => {
                     <div key={pay.id} className="border border-gray-100 rounded-xl p-3 space-y-1.5 bg-gray-50/50">
                       <div className="flex justify-between items-start">
                         <div>
-                          <span className="block text-xs font-extrabold text-slate-900">₱{parseFloat(pay.amount).toFixed(2)}</span>
+                          <span className="block text-xs font-extrabold text-slate-900">{formatCurrency(pay.amount)}</span>
                           <span className="block text-[11px] text-gray-500 font-medium">{pay.patient_first_name} {pay.patient_last_name}</span>
                         </div>
                         <StatusBadge status={pay.payment_status} />

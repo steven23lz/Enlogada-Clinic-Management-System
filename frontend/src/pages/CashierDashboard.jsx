@@ -236,7 +236,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     const tendered = parseFloat(amountTendered);
 
     if (paymentMethod === 'Cash' && (isNaN(tendered) || tendered < totalDue)) {
-      setPaymentError(`Cash tendered (₱${tendered || 0}) is less than total amount due (₱${totalDue}).`);
+      setPaymentError(`Cash tendered (${formatCurrency(tendered || 0)}) is less than total amount due (${formatCurrency(totalDue)}).`);
       return;
     }
 
@@ -325,8 +325,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         {/* Collections Overview Metrics Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard label="Today's Collections" value={formatCurrency(totalCollectionsToday)} icon={DollarSign} tone="green" />
-          <MetricCard label="Cash Collected" value={`₱${cashTotal.toFixed(2)}`} icon={Banknote} tone="emerald" />
-          <MetricCard label="E-Wallet (GCash/PayMaya)" value={`₱${eWalletTotal.toFixed(2)}`} icon={Wallet} tone="indigo" />
+          <MetricCard label="Cash Collected" value={formatCurrency(cashTotal)} icon={Banknote} tone="emerald" />
+          <MetricCard label="E-Wallet (GCash/PayMaya)" value={formatCurrency(eWalletTotal)} icon={Wallet} tone="indigo" />
           <MetricCard label="Receipts Processed" value={transactions.length} icon={Receipt} tone="slate" />
         </div>
 
@@ -460,7 +460,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             <TableRow key={idx}>
                               <TableCell className="py-2.5 text-xs font-bold text-slate-900">{item.name}</TableCell>
                               <TableCell className="py-2.5 text-xs text-gray-500">{item.category}</TableCell>
-                              <TableCell className="py-2.5 text-xs font-bold text-slate-900 text-right">₱{parseFloat(item.price).toFixed(2)}</TableCell>
+                              <TableCell className="py-2.5 text-xs font-bold text-slate-900 text-right">{formatCurrency(item.price)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -472,15 +472,15 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-2 text-xs">
                     <div className="flex justify-between items-center text-gray-600">
                       <span>Gross Services Subtotal:</span>
-                      <span className="font-bold text-slate-900">₱{parseFloat(billDetails.subtotal).toFixed(2)}</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(billDetails.subtotal)}</span>
                     </div>
                     <div className="flex justify-between items-center text-gray-600">
                       <span>HMO Coverage / Discount:</span>
-                      <span className="font-bold text-emerald-600">- ₱{parseFloat(billDetails.hmoCoverage || 0).toFixed(2)}</span>
+                      <span className="font-bold text-emerald-600">- {formatCurrency(billDetails.hmoCoverage || 0)}</span>
                     </div>
                     <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-sm font-extrabold text-slate-900">
                       <span>NET AMOUNT DUE:</span>
-                      <span className="text-base text-[#769046]">₱{parseFloat(billDetails.totalAmount).toFixed(2)}</span>
+                      <span className="text-base text-[#769046]">{formatCurrency(billDetails.totalAmount)}</span>
                     </div>
                   </div>
 
@@ -521,7 +521,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
                           <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                           <span>
-                            <strong>HMO Partner Accredited</strong> — ₱{parseFloat(billDetails.hmoCoverage).toFixed(2)} covered
+                            <strong>HMO Partner Accredited</strong> — {formatCurrency(billDetails.hmoCoverage)} covered
                             {parseFloat(billDetails.hmoCoverage) >= parseFloat(billDetails.subtotal) ? ' (full coverage, ₱0.00 out of pocket).' : ' (partial coverage — remaining balance due).'}
                           </span>
                         </div>
@@ -550,7 +550,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           </div>
                           <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-gray-100">
                             <span className="text-[10px] font-bold text-gray-400 uppercase block">Change Due</span>
-                            <span className="text-base font-extrabold text-emerald-600">₱{calculateChange().toFixed(2)}</span>
+                            <span className="text-base font-extrabold text-emerald-600">{formatCurrency(calculateChange())}</span>
                           </div>
                         </div>
 
@@ -684,7 +684,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           </Badge>
                         </TableCell>
                         <TableCell className="py-3 text-xs font-mono text-gray-500">{t.reference_number || 'N/A (Cash)'}</TableCell>
-                        <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">₱{parseFloat(t.amount).toFixed(2)}</TableCell>
+                        <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">{formatCurrency(t.amount)}</TableCell>
                         <TableCell className="py-3">
                           <StatusBadge status={t.payment_status || 'Paid'} />
                         </TableCell>
@@ -732,7 +732,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">Refund Payment</DialogTitle>
               <DialogDescription className="text-xs text-gray-500">
-                {refundTarget && `Refund ₱${parseFloat(refundTarget.amount).toFixed(2)} (Receipt ${refundTarget.receipt_number || `OR-${refundTarget.id}`})? This marks the payment as Refunded and cannot be undone from this screen.`}
+                {refundTarget && `Refund ${formatCurrency(refundTarget.amount)} (Receipt ${refundTarget.receipt_number || `OR-${refundTarget.id}`})? This marks the payment as Refunded and cannot be undone from this screen.`}
               </DialogDescription>
             </DialogHeader>
 
@@ -773,7 +773,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
           open={showPaymentConfirm}
           onOpenChange={setShowPaymentConfirm}
           title="Confirm Payment"
-          description={billDetails ? `Charge ₱${parseFloat(billDetails.totalAmount).toFixed(2)} via ${paymentMethod} for ${billDetails.patientName}? This will issue a receipt and cannot be undone from this screen.` : ''}
+          description={billDetails ? `Charge ${formatCurrency(billDetails.totalAmount)} via ${paymentMethod} for ${billDetails.patientName}? This will issue a receipt and cannot be undone from this screen.` : ''}
           confirmLabel="Confirm & Process"
           onConfirm={confirmProcessPayment}
           loading={confirmingPayment}
@@ -802,7 +802,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500 font-medium">Amount Paid:</span>
-                    <span className="font-extrabold text-[#769046] text-sm">₱{parseFloat(paymentSuccess.amount).toFixed(2)}</span>
+                    <span className="font-extrabold text-[#769046] text-sm">{formatCurrency(paymentSuccess.amount)}</span>
                   </div>
                 </div>
 

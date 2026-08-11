@@ -6,6 +6,7 @@ import { Input } from '../../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { StatusBadge } from '../../components/ui/status-badge';
 import api from '../../config/api';
+import { formatCurrency } from '../../lib/currency';
 import { ShieldCheck, AlertCircle, Check, X } from 'lucide-react';
 
 const STATUS_FILTERS = ['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'];
@@ -206,7 +207,7 @@ const ServiceRequests = () => {
                     <div key={t.id} className="flex items-center justify-between p-2.5 bg-gray-50/70 rounded-lg border border-gray-100 text-xs">
                       <div>
                         <span className="font-bold text-gray-800 block">{t.test_name}</span>
-                        <span className="text-[11px] text-gray-500">{t.category_name} &bull; ₱{parseFloat(t.price_at_time).toFixed(2)}</span>
+                        <span className="text-[11px] text-gray-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
                       </div>
                       <div className="flex items-center space-x-1.5">
                         <StatusBadge status={t.approval_status} />

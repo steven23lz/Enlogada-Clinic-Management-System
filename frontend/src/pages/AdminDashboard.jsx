@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../config/api';
+import { formatCurrency } from '../lib/currency';
 import StaffAccounts from './admin/StaffAccounts';
 import ServiceRequests from './admin/ServiceRequests';
 import CashierMonitoring from './admin/CashierMonitoring';
@@ -124,7 +125,7 @@ const DashboardOverview = ({ onSelectNav }) => {
         />
         <MetricCard
           label="Today's Revenue"
-          value={loading ? '…' : `₱${todayRevenue.toFixed(2)}`}
+          value={loading ? '…' : formatCurrency(todayRevenue)}
           caption="See Reports for trend"
           captionTone="slate"
           icon={DollarSign}
@@ -196,7 +197,7 @@ const DashboardOverview = ({ onSelectNav }) => {
                         className="w-full rounded-t-md bg-[#769046]"
                         style={{ height: `${heightPct}px`, maxHeight: '100px' }}
                         role="img"
-                        aria-label={`₱${value.toFixed(2)} on ${row.day}`}
+                        aria-label={`${formatCurrency(value)} on ${row.day}`}
                       />
                       <span className="text-[9px] text-gray-400 font-semibold whitespace-nowrap">{formatDay(row.day)}</span>
                     </div>

@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
+import { formatCurrency } from '../lib/currency';
 import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
 import {
@@ -1106,7 +1107,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     />
                     <div className="flex-1 flex justify-between items-center">
                       <span className="font-bold text-gray-800">{t.name} <span className="text-[10px] text-gray-400 font-normal">({t.category_name})</span></span>
-                      <span className="font-extrabold text-slate-900">₱{parseFloat(t.price).toFixed(2)}</span>
+                      <span className="font-extrabold text-slate-900">{formatCurrency(t.price)}</span>
                     </div>
                   </label>
                 ))}

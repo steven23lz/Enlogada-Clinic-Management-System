@@ -3,6 +3,7 @@ import PublicHeader from '../components/PublicHeader';
 import PublicFooter from '../components/PublicFooter';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import api from '../config/api';
+import { formatCurrency } from '../lib/currency';
 import { Activity, Stethoscope, FileText, Heart, Zap } from 'lucide-react';
 
 const ServicesPage = ({ onNavigate }) => {
@@ -108,7 +109,7 @@ const ServicesPage = ({ onNavigate }) => {
                           <span className="w-1.5 h-1.5 rounded-full bg-[#769046]"></span>
                           <span>{item.name}</span>
                         </span>
-                        <span className="font-bold text-gray-900">₱{parseFloat(item.price).toFixed(2)}</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(item.price)}</span>
                       </div>
                     ))}
                   </CardContent>

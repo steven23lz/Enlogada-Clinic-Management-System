@@ -6,6 +6,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
+import { formatCurrency } from '../../lib/currency';
 import { Receipt, RefreshCw } from 'lucide-react';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -74,7 +75,7 @@ const CashierMonitoring = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Collections (Range)</span>
-          <span className="text-2xl font-extrabold text-slate-900">₱{total.toFixed(2)}</span>
+          <span className="text-2xl font-extrabold text-slate-900">{formatCurrency(total)}</span>
         </Card>
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Transactions</span>
@@ -83,7 +84,7 @@ const CashierMonitoring = () => {
         {Object.entries(byCashier).slice(0, 2).map(([name, amt]) => (
           <Card key={name} className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">{name}</span>
-            <span className="text-2xl font-extrabold text-emerald-600">₱{amt.toFixed(2)}</span>
+            <span className="text-2xl font-extrabold text-emerald-600">{formatCurrency(amt)}</span>
           </Card>
         ))}
       </div>
@@ -115,7 +116,7 @@ const CashierMonitoring = () => {
                     <TableCell className="py-3 text-xs text-gray-700 max-w-[160px] truncate" title={`${t.processed_by_first_name} ${t.processed_by_last_name}`}>{t.processed_by_first_name} {t.processed_by_last_name}</TableCell>
                     <TableCell className="py-3 text-xs text-gray-700 max-w-[160px] truncate" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
                     <TableCell className="py-3 text-xs"><Badge className="bg-gray-100 text-gray-800 font-bold border-gray-200">{t.payment_method}</Badge></TableCell>
-                    <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">₱{parseFloat(t.amount).toFixed(2)}</TableCell>
+                    <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">{formatCurrency(t.amount)}</TableCell>
                     <TableCell className="py-3 text-xs text-gray-500 text-right">{new Date(t.paid_at).toLocaleString()}</TableCell>
                   </TableRow>
                 ))

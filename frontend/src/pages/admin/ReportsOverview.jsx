@@ -7,6 +7,7 @@ import { Input } from '../../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import MetricCard from '../../components/ui/metric-card';
 import api from '../../config/api';
+import { formatCurrency } from '../../lib/currency';
 import { ClipboardList, FileText, Info, RefreshCw, ShieldCheck, DollarSign, Users, FlaskConical } from 'lucide-react';
 
 const dateStr = (d) => {
@@ -81,10 +82,10 @@ const TodaySnapshot = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <MetricCard
           label="Today's Revenue"
-          value={loading ? '…' : `₱${todayTotal.toFixed(2)}`}
+          value={loading ? '…' : formatCurrency(todayTotal)}
           icon={DollarSign}
           tone="emerald"
-          trend={!loading ? { direction: isUp ? 'up' : 'down', label: `${isUp ? '+' : ''}${percentChange.toFixed(0)}% vs yesterday (₱${yesterdayTotal.toFixed(2)})` } : undefined}
+          trend={!loading ? { direction: isUp ? 'up' : 'down', label: `${isUp ? '+' : ''}${percentChange.toFixed(0)}% vs yesterday (${formatCurrency(yesterdayTotal)})` } : undefined}
         />
         <MetricCard
           label="Active Queue"
@@ -112,7 +113,7 @@ const TodaySnapshot = () => {
               {Object.entries(methodBreakdown).map(([method, amt]) => (
                 <div key={method} className="flex justify-between text-[11px] font-semibold text-gray-700">
                   <span>{method}</span>
-                  <span className="font-bold text-slate-900">₱{amt.toFixed(2)}</span>
+                  <span className="font-bold text-slate-900">{formatCurrency(amt)}</span>
                 </div>
               ))}
             </div>
@@ -205,7 +206,7 @@ const DateRangeReports = () => {
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
           <CardHeader className="border-b border-gray-100 py-4 px-6 space-y-0.5">
             <CardTitle className="text-sm font-bold text-slate-800">Revenue Trend</CardTitle>
-            <p className="text-[11px] text-gray-500 m-0">Total for range: <span className="font-bold text-slate-900">₱{totalRevenue.toFixed(2)}</span></p>
+            <p className="text-[11px] text-gray-500 m-0">Total for range: <span className="font-bold text-slate-900">{formatCurrency(totalRevenue)}</span></p>
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
@@ -224,7 +225,7 @@ const DateRangeReports = () => {
                         className="w-full rounded-t-md bg-[#769046]"
                         style={{ height: `${heightPct}px`, maxHeight: '100px' }}
                         role="img"
-                        aria-label={`₱${value.toFixed(2)} on ${row.day}`}
+                        aria-label={`${formatCurrency(value)} on ${row.day}`}
                       />
                       <span className="text-[9px] text-gray-400 font-semibold whitespace-nowrap">{formatDay(row.day)}</span>
                     </div>
@@ -315,7 +316,7 @@ const DateRangeReports = () => {
                     <TableRow key={row.payment_method}>
                       <TableCell className="py-3 text-xs font-semibold text-slate-800">{row.payment_method}</TableCell>
                       <TableCell className="py-3 text-xs text-right text-gray-600">{row.payment_count}</TableCell>
-                      <TableCell className="py-3 text-xs text-right font-bold text-slate-900">₱{parseFloat(row.total).toFixed(2)}</TableCell>
+                      <TableCell className="py-3 text-xs text-right font-bold text-slate-900">{formatCurrency(row.total)}</TableCell>
                     </TableRow>
                   ))
                 )}

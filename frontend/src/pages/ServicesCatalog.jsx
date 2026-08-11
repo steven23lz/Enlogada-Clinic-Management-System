@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
+import { formatCurrency } from '../lib/currency';
 import { Plus, Edit2, CheckCircle2, AlertCircle, RefreshCw, Layers, ShieldPlus } from 'lucide-react';
 
 const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
@@ -325,7 +326,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                       <TableCell className="font-bold text-xs text-slate-900">SRV-{test.id}</TableCell>
                       <TableCell className="font-semibold text-xs text-slate-800">{test.name}</TableCell>
                       <TableCell className="text-xs text-gray-600 font-medium">{test.category_name}</TableCell>
-                      <TableCell className="font-bold text-xs text-slate-900">₱{parseFloat(test.price).toFixed(2)}</TableCell>
+                      <TableCell className="font-bold text-xs text-slate-900">{formatCurrency(test.price)}</TableCell>
                       <TableCell>
                         <Badge
                           onClick={() => { setToggleError(''); setConfirmTarget(test); }}
