@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { StatusBadge } from '../components/ui/status-badge';
 import { Textarea } from '../components/ui/textarea';
+import Pagination from '../components/ui/pagination';
 import api from '../config/api';
 import { formatCurrency } from '../lib/currency';
 import { toastError } from '../lib/toast';
@@ -36,6 +37,11 @@ const PAGE_TITLES = {
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 const todayStr = () => new Date().toISOString().slice(0, 10);
+
+// UI/UX Modernization Phase 4: Transaction History has no server-side pagination endpoint, so a
+// client-side page size over the already-fetched, date-range-filtered array is proportionate —
+// same pattern as StaffAccounts.jsx (VISUAL_IDENTITY.md §3a #11).
+const HISTORY_PAGE_SIZE = 15;
 
 // Wait-time triage badge on the billing queue: green under 15 minutes, amber 15-30, rose 30+.
 const getWaitInfo = (createdAt) => {
@@ -72,6 +78,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [historyStartDate, setHistoryStartDate] = useState(todayStr());
   const [historyEndDate, setHistoryEndDate] = useState(todayStr());
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
 
   // Feature Gap Plan Phase A: payment_status has always allowed 'Refunded'/'Cancelled', but
   // nothing in the app ever set them — a duplicate or disputed charge had no reversal path.
@@ -136,6 +143,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     try {
       const response = await api.get('/payments/transactions', { params: { startDate, endDate } });
       setHistoryTransactions(response.data.data.transactions || []);
+      setHistoryPage(1);
     } catch (err) {
       console.error('Failed to fetch transaction history:', err);
       setHistoryError('Could not load transaction history. Please try again.');
@@ -611,7 +619,13 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         </>
         )}
 
-        {view === 'cashier-history' && (
+        {view === 'cashier-history' && (() => {
+          const historyTotalPages = Math.max(1, Math.ceil(historyTransactions.length / HISTORY_PAGE_SIZE));
+          const pagedHistoryTransactions = historyTransactions.slice(
+            (historyPage - 1) * HISTORY_PAGE_SIZE,
+            historyPage * HISTORY_PAGE_SIZE
+          );
+          return (
         <div className="space-y-6">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
             <div className="space-y-1">
@@ -673,8 +687,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-6 text-xs text-gray-400 font-semibold">Loading transaction history…</TableCell>
                     </TableRow>
-                  ) : historyTransactions.length > 0 ? (
-                    historyTransactions.map(t => (
+                  ) : pagedHistoryTransactions.length > 0 ? (
+                    pagedHistoryTransactions.map(t => (
                       <TableRow key={t.id}>
                         <TableCell className="py-3 font-extrabold text-xs text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
                         <TableCell className="py-3 text-xs font-bold text-gray-800">{t.patient_first_name} {t.patient_last_name}</TableCell>
@@ -723,9 +737,16 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 </TableBody>
               </Table>
             </div>
+            <Pagination
+              page={historyPage}
+              totalPages={historyTotalPages}
+              onPageChange={setHistoryPage}
+              totalLabel={`${historyTransactions.length} total`}
+            />
           </Card>
         </div>
-        )}
+          );
+        })()}
 
         <Dialog open={!!refundTarget} onOpenChange={(open) => !refunding && !open && setRefundTarget(null)}>
           <DialogContent className="max-w-sm rounded-2xl">

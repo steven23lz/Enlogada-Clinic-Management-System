@@ -2,8 +2,13 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
+import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { Search, Users, AlertCircle } from 'lucide-react';
+
+// UI/UX Modernization Phase 4: search results come back in one shot with no server-side
+// pagination, so a client-side page size is proportionate (VISUAL_IDENTITY.md §3a #11).
+const PAGE_SIZE = 15;
 
 // Module 12: patient-records oversight — search-first, reusing GET /patients/search (already
 // Admin/SuperAdmin-authorized, built for Module 7's receptionist lookup). Read-only; editing a
@@ -13,6 +18,7 @@ const PatientRecordsOversight = () => {
   const [results, setResults] = useState(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -25,6 +31,7 @@ const PatientRecordsOversight = () => {
     try {
       const res = await api.get('/patients/search', { params: { q: query.trim() } });
       setResults(res.data.data.patients);
+      setPage(1);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to search patient records.');
       setResults(null);
@@ -42,7 +49,7 @@ const PatientRecordsOversight = () => {
         </div>
 
         {error && (
-          <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+          <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
@@ -65,7 +72,10 @@ const PatientRecordsOversight = () => {
         </form>
       </div>
 
-      {results && (
+      {results && (() => {
+        const totalPages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
+        const pagedResults = results.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+        return (
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
           <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-row items-center space-x-2">
             <Users className="w-4 h-4 text-[#769046]" />
@@ -76,7 +86,7 @@ const PatientRecordsOversight = () => {
               <p className="text-xs text-gray-400 italic text-center py-4">No matching patient records found.</p>
             ) : (
               <div className="space-y-2">
-                {results.map(patient => (
+                {pagedResults.map(patient => (
                   <div key={patient.id} className="flex items-center justify-between border border-gray-100 rounded-xl p-3 bg-gray-50/50">
                     <div className="text-xs space-y-0.5">
                       <span className="block font-bold text-slate-900">
@@ -94,8 +104,12 @@ const PatientRecordsOversight = () => {
               </div>
             )}
           </CardContent>
+          {results.length > 0 && (
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${results.length} total`} />
+          )}
         </Card>
-      )}
+        );
+      })()}
     </div>
   );
 };

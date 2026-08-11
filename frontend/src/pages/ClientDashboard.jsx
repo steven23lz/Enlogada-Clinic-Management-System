@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { StatusBadge } from '../components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import Pagination from '../components/ui/pagination';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../lib/currency';
@@ -51,6 +52,11 @@ const CATEGORY_ICONS = {
   '2D Echo': <HeartPulse className="w-5 h-5" />,
   ECG: <Activity className="w-5 h-5" />
 };
+
+// UI/UX Modernization Phase 4: My Appointments and Payment History are fetched in one shot with
+// no server-side pagination, so a client-side page size over each already-fetched array is
+// proportionate (VISUAL_IDENTITY.md §3a #11).
+const LIST_PAGE_SIZE = 8;
 
 // test_results.file_url is staff-entered free text with no format validation anywhere in the
 // upload pipeline (see backend/src/controllers/resultController.js uploadResult). Rendered
@@ -154,6 +160,7 @@ const ClientDashboard = ({ onNavigate }) => {
   // My Appointments (Module 3: view/cancel own appointments)
   const [appointments, setAppointments] = useState([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
+  const [appointmentsPage, setAppointmentsPage] = useState(1);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
@@ -161,6 +168,7 @@ const ClientDashboard = ({ onNavigate }) => {
   // Payment History (Module 14: client-side payment visibility)
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
+  const [paymentHistoryPage, setPaymentHistoryPage] = useState(1);
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -494,6 +502,20 @@ const ClientDashboard = ({ onNavigate }) => {
       </DashboardLayout>
     );
   }
+
+  const appointmentsTotalPages = Math.max(1, Math.ceil(appointments.length / LIST_PAGE_SIZE));
+  const safeAppointmentsPage = Math.min(appointmentsPage, appointmentsTotalPages);
+  const pagedAppointments = appointments.slice(
+    (safeAppointmentsPage - 1) * LIST_PAGE_SIZE,
+    safeAppointmentsPage * LIST_PAGE_SIZE
+  );
+
+  const paymentHistoryTotalPages = Math.max(1, Math.ceil(paymentHistory.length / LIST_PAGE_SIZE));
+  const safePaymentHistoryPage = Math.min(paymentHistoryPage, paymentHistoryTotalPages);
+  const pagedPaymentHistory = paymentHistory.slice(
+    (safePaymentHistoryPage - 1) * LIST_PAGE_SIZE,
+    safePaymentHistoryPage * LIST_PAGE_SIZE
+  );
 
   return (
     <DashboardLayout onNavigate={onNavigate} activeTab="dashboard">
@@ -1256,7 +1278,7 @@ const ClientDashboard = ({ onNavigate }) => {
                 ) : appointments.length === 0 ? (
                   <p className="text-xs text-gray-400 text-center py-4 italic">No appointments booked yet.</p>
                 ) : (
-                  appointments.map((appt) => {
+                  pagedAppointments.map((appt) => {
                     const isCancellable = appt.status === 'Pending' || appt.status === 'Confirmed';
                     return (
                       <div key={appt.id} className="border border-gray-100 rounded-xl p-3 space-y-2 bg-gray-50/50">
@@ -1286,6 +1308,14 @@ const ClientDashboard = ({ onNavigate }) => {
                   })
                 )}
               </CardContent>
+              {appointments.length > 0 && (
+                <Pagination
+                  page={safeAppointmentsPage}
+                  totalPages={appointmentsTotalPages}
+                  onPageChange={setAppointmentsPage}
+                  totalLabel={`${appointments.length} total`}
+                />
+              )}
             </Card>
           </TabsContent>
 
@@ -1306,7 +1336,7 @@ const ClientDashboard = ({ onNavigate }) => {
                 ) : paymentHistory.length === 0 ? (
                   <p className="text-xs text-gray-400 text-center py-4 italic">No payments recorded yet.</p>
                 ) : (
-                  paymentHistory.map((pay) => (
+                  pagedPaymentHistory.map((pay) => (
                     <div key={pay.id} className="border border-gray-100 rounded-xl p-3 space-y-1.5 bg-gray-50/50">
                       <div className="flex justify-between items-start">
                         <div>
@@ -1323,6 +1353,14 @@ const ClientDashboard = ({ onNavigate }) => {
                   ))
                 )}
               </CardContent>
+              {paymentHistory.length > 0 && (
+                <Pagination
+                  page={safePaymentHistoryPage}
+                  totalPages={paymentHistoryTotalPages}
+                  onPageChange={setPaymentHistoryPage}
+                  totalLabel={`${paymentHistory.length} total`}
+                />
+              )}
             </Card>
           </TabsContent>
 

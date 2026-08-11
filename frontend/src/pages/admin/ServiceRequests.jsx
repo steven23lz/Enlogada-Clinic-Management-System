@@ -5,11 +5,17 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { StatusBadge } from '../../components/ui/status-badge';
+import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
 import { ShieldCheck, AlertCircle, Check, X } from 'lucide-react';
 
 const STATUS_FILTERS = ['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'];
+
+// UI/UX Modernization Phase 4: GET /hmo/requests has no server-side pagination, so a client-side
+// page size over the already-fetched, status-filtered array is proportionate (VISUAL_IDENTITY.md
+// §3a #11).
+const PAGE_SIZE = 15;
 
 // Module 15 (Test and Service Request): the approval half of the HMO request/approval flow.
 // Module 7 built request *initiation*; approval existed on the backend
@@ -19,6 +25,7 @@ const ServiceRequests = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('All');
+  const [page, setPage] = useState(1);
 
   const [detailRequest, setDetailRequest] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -32,6 +39,7 @@ const ServiceRequests = () => {
       const params = statusFilter !== 'All' ? { status: statusFilter } : {};
       const res = await api.get('/hmo/requests', { params });
       setRequests(res.data.data.requests || []);
+      setPage(1);
     } catch (err) {
       console.error('Failed to fetch HMO requests:', err);
     } finally {
@@ -93,6 +101,9 @@ const ServiceRequests = () => {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(requests.length / PAGE_SIZE));
+  const pagedRequests = requests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
@@ -134,8 +145,8 @@ const ServiceRequests = () => {
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading requests…</TableCell></TableRow>
-              ) : requests.length > 0 ? (
-                requests.map(r => (
+              ) : pagedRequests.length > 0 ? (
+                pagedRequests.map(r => (
                   <TableRow key={r.id} className="hover:bg-gray-50/50 transition-colors">
                     <TableCell className="py-3 font-bold text-xs text-slate-900">{r.provider_name}</TableCell>
                     <TableCell className="py-3 text-xs text-gray-500">{new Date(r.request_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</TableCell>
@@ -158,6 +169,7 @@ const ServiceRequests = () => {
             </TableBody>
           </Table>
         </CardContent>
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${requests.length} total`} />
       </Card>
 
       <Dialog open={!!detailRequest} onOpenChange={(open) => { if (!open) setDetailRequest(null); }}>
@@ -172,7 +184,7 @@ const ServiceRequests = () => {
           ) : (
             <div className="space-y-4">
               {detailError && (
-                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{detailError}</span>
                 </div>
