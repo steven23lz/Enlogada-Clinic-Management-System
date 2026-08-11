@@ -22,7 +22,11 @@ class HmoService {
     };
   }
 
-  async approveRequest(id, { approvalCode }) {
+  // UI/UX Modernization Phase 12: now Admin/SuperAdmin-only (see hmoRoutes.js) — audit-logged
+  // like this app's other sensitive actions (payment refunds, staff account changes), since
+  // approving HMO coverage is exactly the kind of decision that should leave a trace of who
+  // signed off and when.
+  async approveRequest(id, { approvalCode }, requestingUser) {
     const request = await hmoRepository.findRequestById(id);
     if (!request) {
       const error = new Error('HMO request not found');
@@ -30,7 +34,17 @@ class HmoService {
       throw error;
     }
 
-    return await hmoRepository.approveRequest(id, { approvalCode });
+    const approved = await hmoRepository.approveRequest(id, { approvalCode });
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: 'hmo_request.approved',
+      entityType: 'hmo_request',
+      entityId: id,
+      description: `Approved HMO request for ${request.provider_name} (code: ${approvalCode})`
+    });
+
+    return approved;
   }
 
   async updateRequestStatus(id, status) {
@@ -56,8 +70,18 @@ class HmoService {
     return { ...request, tests };
   }
 
-  async updateTestApproval(hmoRequestTestId, approvalStatus) {
-    return await hmoRepository.updateTestApprovalStatus(hmoRequestTestId, approvalStatus);
+  async updateTestApproval(hmoRequestTestId, approvalStatus, requestingUser) {
+    const updated = await hmoRepository.updateTestApprovalStatus(hmoRequestTestId, approvalStatus);
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: approvalStatus === 'Approved' ? 'hmo_request_test.approved' : 'hmo_request_test.rejected',
+      entityType: 'hmo_request_test',
+      entityId: hmoRequestTestId,
+      description: `Set test approval status to ${approvalStatus} for HMO request test #${hmoRequestTestId}`
+    });
+
+    return updated;
   }
 
   async getAllRequests(filters) {

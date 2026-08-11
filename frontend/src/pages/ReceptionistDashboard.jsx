@@ -1201,7 +1201,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">Log HMO Pre-Authorization</DialogTitle>
               <DialogDescription className="text-xs">
-                For <strong>{activeVisitTest?.test_name}</strong>. This logs the initial HMO request; approval is confirmed separately once the provider responds.
+                For <strong>{activeVisitTest?.test_name}</strong>. This logs the request for Admin review — it does not approve coverage on its own, even if a code is entered below.
               </DialogDescription>
             </DialogHeader>
 
@@ -1229,9 +1229,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-600 uppercase">Approval / LOA Code (if already available)</label>
+                <label className="text-xs font-bold text-gray-600 uppercase">Card / LOA Number (if shown by patient)</label>
                 <Input
-                  placeholder="Enter approval or card LOA number"
+                  placeholder="Enter the code shown on the HMO card or LOA"
                   value={hmoApprovalCode}
                   onChange={e => setHmoApprovalCode(e.target.value)}
                 />

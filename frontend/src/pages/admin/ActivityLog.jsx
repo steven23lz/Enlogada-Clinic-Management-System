@@ -18,6 +18,11 @@ const ACTION_TONES = {
   'hmo_provider.created': 'text-emerald-700 bg-emerald-50 border-emerald-200',
   'hmo_provider.updated': 'text-amber-700 bg-amber-50 border-amber-200',
   'result.corrected': 'text-amber-700 bg-amber-50 border-amber-200',
+  // UI/UX Modernization Phase 12: HMO approval moved from self-service (Receptionist) to
+  // Admin/SuperAdmin-only, now audit-logged for the first time.
+  'hmo_request.approved': 'text-emerald-700 bg-emerald-50 border-emerald-200',
+  'hmo_request_test.approved': 'text-emerald-700 bg-emerald-50 border-emerald-200',
+  'hmo_request_test.rejected': 'text-rose-700 bg-rose-50 border-rose-200',
 };
 const DEFAULT_TONE = 'text-gray-700 bg-gray-100 border-gray-200';
 

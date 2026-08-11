@@ -1,15 +1,20 @@
 const db = require('../config/database');
 
 class HmoRepository {
+  // UI/UX Modernization Phase 12: previously a caller-supplied approvalCode auto-approved the
+  // request in this same call (status/approved_date set from the code's mere presence) — the
+  // create step is Reception logging what the patient's HMO card/LOA shows, not an actual
+  // verification, so a request always starts Pending now regardless of whether a code was typed.
+  // approval_code is still stored (Admin sees exactly what was submitted when reviewing), it just
+  // no longer self-approves. Only hmoRepository.approveRequest (Admin/SuperAdmin-only route, see
+  // hmoRoutes.js) can move a request to Approved.
   async createRequest({ hmoProviderId, approvalCode = null }) {
-    const status = approvalCode ? 'Approved' : 'Pending';
-    const approvedDate = approvalCode ? new Date() : null;
     const queryText = `
-      INSERT INTO hmo_requests (hmo_provider_id, approval_code, status, approved_date)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO hmo_requests (hmo_provider_id, approval_code, status)
+      VALUES ($1, $2, 'Pending')
       RETURNING *
     `;
-    const result = await db.query(queryText, [hmoProviderId, approvalCode, status, approvedDate]);
+    const result = await db.query(queryText, [hmoProviderId, approvalCode]);
     return result.rows[0];
   }
 
