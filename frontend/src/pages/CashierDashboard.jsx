@@ -503,7 +503,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-gray-600 uppercase block">Select Payment Method</label>
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {['Cash', 'GCash', 'PayMaya', 'Bank'].map(method => (
                           <button
                             key={method}
@@ -543,7 +543,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                     {paymentMethod === 'Cash' ? (
                       <div className="space-y-2 bg-white p-3 rounded-xl border border-gray-200">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-500 uppercase">Cash Tendered (₱)</label>
                             <Input
