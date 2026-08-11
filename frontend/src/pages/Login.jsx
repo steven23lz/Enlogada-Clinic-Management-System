@@ -4,6 +4,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { PasswordInput } from '../components/ui/password-input';
 import Logo from '../components/Logo';
 import PublicHeader from '../components/PublicHeader';
 import PublicFooter from '../components/PublicFooter';
@@ -106,8 +107,7 @@ const Login = ({ onToggleView, onNavigate }) => {
                         Forgot password?
                       </button>
                     </div>
-                    <Input
-                      type="password"
+                    <PasswordInput
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}

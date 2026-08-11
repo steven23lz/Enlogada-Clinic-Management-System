@@ -13,6 +13,8 @@ import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { StatusBadge } from '../components/ui/status-badge';
 import { Textarea } from '../components/ui/textarea';
 import api from '../config/api';
+import { formatCurrency } from '../lib/currency';
+import { toastError } from '../lib/toast';
 import {
   Receipt,
   Wallet,
@@ -196,7 +198,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
   const handleSelectVisitForBilling = async (visit) => {
     if (paidVisitIds.has(visit.id)) {
-      alert('This visit has already been paid today. Refresh the queue if this looks wrong.');
+      toastError('This visit has already been paid today. Refresh the queue if this looks wrong.');
       return;
     }
     setSelectedVisit(visit);
@@ -212,7 +214,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       setAmountTendered((bill?.totalAmount ?? 0).toString());
     } catch (err) {
       console.error(err);
-      alert('Failed to retrieve billing summary.');
+      toastError('Failed to retrieve billing summary.');
     }
   };
 
@@ -322,7 +324,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
         {/* Collections Overview Metrics Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard label="Today's Collections" value={`₱${totalCollectionsToday.toFixed(2)}`} icon={DollarSign} tone="green" />
+          <MetricCard label="Today's Collections" value={formatCurrency(totalCollectionsToday)} icon={DollarSign} tone="green" />
           <MetricCard label="Cash Collected" value={`₱${cashTotal.toFixed(2)}`} icon={Banknote} tone="emerald" />
           <MetricCard label="E-Wallet (GCash/PayMaya)" value={`₱${eWalletTotal.toFixed(2)}`} icon={Wallet} tone="indigo" />
           <MetricCard label="Receipts Processed" value={transactions.length} icon={Receipt} tone="slate" />
