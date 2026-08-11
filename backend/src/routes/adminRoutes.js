@@ -10,4 +10,8 @@ router.get('/staff', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), adminCo
 router.post('/staff', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), adminController.createStaff);
 router.patch('/staff/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), adminController.updateStaffStatus);
 
+// Feature Gap Plan Phase A: Admin sets a temporary password for a locked-out staff member —
+// previously the only recourse was deactivating and recreating the account.
+router.patch('/staff/:id/password', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), adminController.resetStaffPassword);
+
 module.exports = router;

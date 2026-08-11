@@ -112,6 +112,27 @@ class HmoRepository {
     const result = await db.query(queryText);
     return result.rows;
   }
+
+  async findProviderById(id) {
+    const result = await db.query('SELECT * FROM hmo_providers WHERE id = $1', [id]);
+    return result.rows[0];
+  }
+
+  async createProvider(name) {
+    const result = await db.query(
+      'INSERT INTO hmo_providers (name, is_active) VALUES ($1, TRUE) RETURNING *',
+      [name]
+    );
+    return result.rows[0];
+  }
+
+  async updateProvider(id, { name, isActive }) {
+    const result = await db.query(
+      'UPDATE hmo_providers SET name = COALESCE($1, name), is_active = COALESCE($2, is_active) WHERE id = $3 RETURNING *',
+      [name ?? null, isActive ?? null, id]
+    );
+    return result.rows[0];
+  }
 }
 
 module.exports = new HmoRepository();

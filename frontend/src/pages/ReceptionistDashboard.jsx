@@ -34,7 +34,9 @@ import {
   Camera,
   Keyboard,
   History,
-  RefreshCw
+  RefreshCw,
+  XCircle,
+  UserX
 } from 'lucide-react';
 
 const PAGE_TITLES = {
@@ -93,6 +95,16 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [checkInTarget, setCheckInTarget] = useState(null); // { type: 'appointment' | 'walkin', data }
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkInError, setCheckInError] = useState('');
+
+  // Feature Gap Plan Phase A: both endpoints already accepted 'Cancelled'/'No Show' — nothing
+  // in the Receptionist UI ever sent either value. A no-show appointment or a mis-registered
+  // walk-in had no way to be removed from the active queue.
+  const [cancelVisitTarget, setCancelVisitTarget] = useState(null);
+  const [cancelingVisit, setCancelingVisit] = useState(false);
+  const [cancelVisitError, setCancelVisitError] = useState('');
+  const [noShowTarget, setNoShowTarget] = useState(null);
+  const [markingNoShow, setMarkingNoShow] = useState(false);
+  const [noShowError, setNoShowError] = useState('');
 
   // Assign Tests Dialog State
   const [selectedVisitId, setSelectedVisitId] = useState(null);
@@ -184,7 +196,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setPatientTypes(typesRes.data.data.patientTypes || []);
 
       const hmoRes = await api.get('/hmo/providers');
-      setHmoProviders(hmoRes.data.data.providers || []);
+      setHmoProviders((hmoRes.data.data.providers || []).filter(p => p.is_active));
     } catch (err) {
       console.error('Failed to fetch static data:', err);
     }
@@ -283,6 +295,37 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setCheckInError(err.response?.data?.message || 'Failed to check in patient');
     } finally {
       setCheckingIn(false);
+    }
+  };
+
+  const confirmCancelVisit = async () => {
+    if (!cancelVisitTarget) return;
+    setCancelingVisit(true);
+    setCancelVisitError('');
+    try {
+      await api.patch(`/visits/${cancelVisitTarget.id}/status`, { status: 'Cancelled' });
+      setCancelVisitTarget(null);
+      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
+    } catch (err) {
+      setCancelVisitError(err.response?.data?.message || 'Failed to cancel this visit.');
+    } finally {
+      setCancelingVisit(false);
+    }
+  };
+
+  const confirmMarkNoShow = async () => {
+    if (!noShowTarget) return;
+    setMarkingNoShow(true);
+    setNoShowError('');
+    try {
+      await api.patch(`/appointments/${noShowTarget.id}/status`, { status: 'No Show' });
+      setNoShowTarget(null);
+      setVerifyResult(null);
+      setSearchRef('');
+    } catch (err) {
+      setNoShowError(err.response?.data?.message || 'Failed to mark this appointment as a no-show.');
+    } finally {
+      setMarkingNoShow(false);
     }
   };
 
@@ -583,6 +626,17 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                               >
                                 + Attach Tests
                               </Button>
+                              {!['Completed', 'Cancelled'].includes(visit.visit_status) && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setCancelVisitError(''); setCancelVisitTarget(visit); }}
+                                  title="Cancel this visit"
+                                  aria-label={`Cancel visit for ${visit.first_name} ${visit.last_name}`}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 border-0 bg-transparent cursor-pointer"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -987,6 +1041,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   >
                     Confirm Check-In Patient
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => { setNoShowError(''); setNoShowTarget(verifyResult); }}
+                    className="w-full flex items-center justify-center space-x-1.5 text-[11px] font-bold text-red-600 hover:text-red-700 border-0 bg-transparent cursor-pointer py-1"
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                    <span>Mark as No-Show instead</span>
+                  </button>
                 </div>
               )}
             </form>
@@ -1103,6 +1165,28 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           onConfirm={confirmCheckIn}
           loading={checkingIn}
           error={checkInError}
+        />
+
+        <ConfirmDialog
+          open={!!cancelVisitTarget}
+          onOpenChange={(open) => { if (!open) { setCancelVisitTarget(null); setCancelVisitError(''); } }}
+          title="Cancel Visit"
+          description={cancelVisitTarget && `Cancel the visit for ${cancelVisitTarget.first_name} ${cancelVisitTarget.last_name} (Queue ${cancelVisitTarget.queue_number})? This removes it from the active queue.`}
+          confirmLabel="Cancel Visit"
+          onConfirm={confirmCancelVisit}
+          loading={cancelingVisit}
+          error={cancelVisitError}
+        />
+
+        <ConfirmDialog
+          open={!!noShowTarget}
+          onOpenChange={(open) => { if (!open) { setNoShowTarget(null); setNoShowError(''); } }}
+          title="Mark as No-Show"
+          description={noShowTarget && `Mark ${noShowTarget.first_name} ${noShowTarget.last_name}'s appointment (Queue ${noShowTarget.queue_number}) as a no-show? This does not check them in.`}
+          confirmLabel="Mark No-Show"
+          onConfirm={confirmMarkNoShow}
+          loading={markingNoShow}
+          error={noShowError}
         />
 
       </div>

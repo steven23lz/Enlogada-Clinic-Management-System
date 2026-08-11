@@ -66,6 +66,48 @@ class HmoService {
   async getProviders() {
     return await hmoRepository.findAllProviders();
   }
+
+  async createProvider(name) {
+    if (!name || !name.trim()) {
+      const error = new Error('Provider name is required.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    try {
+      return await hmoRepository.createProvider(name.trim());
+    } catch (err) {
+      if (err.code === '23505') {
+        const error = new Error(`An HMO provider named "${name.trim()}" already exists.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      throw err;
+    }
+  }
+
+  async updateProvider(id, { name, isActive }) {
+    const provider = await hmoRepository.findProviderById(id);
+    if (!provider) {
+      const error = new Error('HMO provider not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    try {
+      return await hmoRepository.updateProvider(id, {
+        name: name ? name.trim() : undefined,
+        isActive: typeof isActive === 'boolean' ? isActive : undefined
+      });
+    } catch (err) {
+      if (err.code === '23505') {
+        const error = new Error(`An HMO provider named "${name.trim()}" already exists.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      throw err;
+    }
+  }
 }
 
 module.exports = new HmoService();

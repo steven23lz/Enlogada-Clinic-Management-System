@@ -40,6 +40,26 @@ class AdminService {
     return { ...user, roles: [role] };
   }
 
+  async resetStaffPassword(userId, newPassword) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      const error = new Error('Staff account not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const isManageableStaff = (user.roles || []).some((r) => MANAGEABLE_ROLES.includes(r));
+    if (!isManageableStaff) {
+      const error = new Error('This account is not a staff account managed by this endpoint.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+    await userRepository.updatePasswordHash(userId, passwordHash);
+  }
+
   async updateStaffStatus(userId, status) {
     const user = await userRepository.findById(userId);
     if (!user) {

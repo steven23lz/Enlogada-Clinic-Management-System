@@ -106,6 +106,28 @@ class PaymentRepository {
     return result.rows;
   }
 
+  async findById(id) {
+    const queryText = `
+      SELECT pay.*, u.first_name as processed_by_first_name, u.last_name as processed_by_last_name
+      FROM payments pay
+      LEFT JOIN users u ON pay.processed_by = u.id
+      WHERE pay.id = $1
+    `;
+    const result = await db.query(queryText, [id]);
+    return result.rows[0];
+  }
+
+  async updatePaymentStatus(id, status, reason) {
+    const queryText = `
+      UPDATE payments
+      SET payment_status = $1, refund_reason = $2
+      WHERE id = $3
+      RETURNING *
+    `;
+    const result = await db.query(queryText, [status, reason || null, id]);
+    return result.rows[0];
+  }
+
   async hasPaidPayment(patientVisitId) {
     const queryText = `
       SELECT 1 FROM payments

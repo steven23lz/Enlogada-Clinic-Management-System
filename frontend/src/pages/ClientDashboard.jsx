@@ -164,7 +164,7 @@ const ClientDashboard = ({ onNavigate }) => {
       setPatientTypes(typesRes.data.data.patientTypes);
 
       const hmoRes = await api.get('/hmo/providers');
-      setHmoProviders(hmoRes.data.data.providers || []);
+      setHmoProviders((hmoRes.data.data.providers || []).filter(p => p.is_active));
     } catch (err) {
       console.error('Failed to fetch catalog data:', err);
     }

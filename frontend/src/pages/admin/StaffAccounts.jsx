@@ -4,13 +4,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { SearchInput } from '../../components/ui/search-input';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
-import { UserPlus, AlertCircle } from 'lucide-react';
+import { UserPlus, AlertCircle, KeyRound, CheckCircle2 } from 'lucide-react';
 
 // Module 12: staff account management, scoped to the 5 operational roles only (Admin/SuperAdmin
 // account management is Module 13's explicit responsibility — see adminService.js's
@@ -36,6 +36,15 @@ const StaffAccounts = () => {
   const [statusTarget, setStatusTarget] = useState(null);
   const [togglingStatus, setTogglingStatus] = useState(false);
   const [statusError, setStatusError] = useState('');
+
+  // Feature Gap Plan Phase A: a locked-out staff member (forgotten password + no access to the
+  // email tied to their account) previously had no recourse short of deactivate-and-recreate,
+  // which loses the account's history association.
+  const [resetPwdTarget, setResetPwdTarget] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resettingPwd, setResettingPwd] = useState(false);
+  const [resetPwdError, setResetPwdError] = useState('');
+  const [resetPwdSuccess, setResetPwdSuccess] = useState(false);
 
   const fetchStaff = useCallback(async () => {
     try {
@@ -95,6 +104,32 @@ const StaffAccounts = () => {
       setStatusError(err.response?.data?.message || 'Failed to update staff account status.');
     } finally {
       setTogglingStatus(false);
+    }
+  };
+
+  const handleOpenResetPwd = (s) => {
+    setResetPwdTarget(s);
+    setNewPassword('');
+    setResetPwdError('');
+    setResetPwdSuccess(false);
+  };
+
+  const confirmResetPassword = async (e) => {
+    e.preventDefault();
+    if (!resetPwdTarget) return;
+    if (newPassword.length < 8) {
+      setResetPwdError('Password must be at least 8 characters.');
+      return;
+    }
+    setResettingPwd(true);
+    setResetPwdError('');
+    try {
+      await api.patch(`/admin/staff/${resetPwdTarget.id}/password`, { newPassword });
+      setResetPwdSuccess(true);
+    } catch (err) {
+      setResetPwdError(err.response?.data?.message || 'Failed to reset password.');
+    } finally {
+      setResettingPwd(false);
     }
   };
 
@@ -207,11 +242,12 @@ const StaffAccounts = () => {
                 <TableHead className="text-[10px] font-bold uppercase py-3">Role</TableHead>
                 <TableHead className="text-[10px] font-bold uppercase py-3">Contact</TableHead>
                 <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
+                <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading staff accounts…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400">Loading staff accounts…</TableCell></TableRow>
               ) : pagedStaff.length > 0 ? (
                 pagedStaff.map(s => (
                   <TableRow key={s.id} className="hover:bg-gray-50/50 transition-colors">
@@ -231,10 +267,21 @@ const StaffAccounts = () => {
                         {s.status ? 'Active' : 'Deactivated'}
                       </Badge>
                     </TableCell>
+                    <TableCell className="py-3 text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleOpenResetPwd(s)}
+                        className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1 ml-auto"
+                      >
+                        <KeyRound className="w-3 h-3" />
+                        <span>Reset Password</span>
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400 italic">{search ? 'No staff accounts match your search.' : 'No staff accounts yet.'}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 italic">{search ? 'No staff accounts match your search.' : 'No staff accounts yet.'}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -246,6 +293,49 @@ const StaffAccounts = () => {
           />
         </CardContent>
       </Card>
+
+      <Dialog open={!!resetPwdTarget} onOpenChange={(open) => !resettingPwd && !open && setResetPwdTarget(null)}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900">Reset Password</DialogTitle>
+            <DialogDescription className="text-xs">
+              {resetPwdTarget && `Set a new temporary password for ${resetPwdTarget.first_name} ${resetPwdTarget.last_name}. Share it with them securely — they should change it after logging in.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {resetPwdSuccess ? (
+            <div className="space-y-4">
+              <div role="status" className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span>Password reset successfully.</span>
+              </div>
+              <DialogFooter>
+                <Button type="button" onClick={() => setResetPwdTarget(null)} className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold">Done</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <form onSubmit={confirmResetPassword} className="space-y-4">
+              {resetPwdError && (
+                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{resetPwdError}</span>
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-600 uppercase">New Temporary Password</label>
+                <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={resettingPwd} required autoFocus />
+                <p className="text-[11px] text-gray-400 m-0">At least 8 characters.</p>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setResetPwdTarget(null)} disabled={resettingPwd}>Cancel</Button>
+                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold" disabled={resettingPwd}>
+                  {resettingPwd ? 'Resetting…' : 'Reset Password'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={!!statusTarget}

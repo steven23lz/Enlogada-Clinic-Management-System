@@ -7,6 +7,11 @@ const router = express.Router();
 // Get list of HMO providers
 router.get('/providers', verifyToken, hmoController.getProviders);
 
+// Feature Gap Plan Phase A: hmo_providers was entirely read-only — no screen could reflect a new
+// partnership or a lapsed accreditation without direct DB access.
+router.post('/providers', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), hmoController.createProvider);
+router.put('/providers/:id', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), hmoController.updateProvider);
+
 // List all HMO requests, optionally filtered by status — previously nothing let staff discover
 // pending requests; approval was only reachable if you already knew a specific request ID.
 router.get('/requests', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier'), hmoController.getAllRequests);

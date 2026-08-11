@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
-import { Plus, Edit2, CheckCircle2, AlertCircle, RefreshCw, Layers } from 'lucide-react';
+import { Plus, Edit2, CheckCircle2, AlertCircle, RefreshCw, Layers, ShieldPlus } from 'lucide-react';
 
 const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
   const [tests, setTests] = useState([]);
@@ -35,6 +35,19 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
   const [toggling, setToggling] = useState(false);
   const [toggleError, setToggleError] = useState('');
 
+  // Feature Gap Plan Phase A: hmo_providers was entirely read-only — no screen could reflect a
+  // new HMO partnership or a lapsed accreditation without direct database access.
+  const [providers, setProviders] = useState([]);
+  const [providersLoading, setProvidersLoading] = useState(true);
+  const [showProviderModal, setShowProviderModal] = useState(false);
+  const [editingProvider, setEditingProvider] = useState(null);
+  const [providerName, setProviderName] = useState('');
+  const [providerModalError, setProviderModalError] = useState('');
+  const [providerSubmitting, setProviderSubmitting] = useState(false);
+  const [providerConfirmTarget, setProviderConfirmTarget] = useState(null);
+  const [providerToggling, setProviderToggling] = useState(false);
+  const [providerToggleError, setProviderToggleError] = useState('');
+
   const fetchCatalogData = useCallback(async () => {
     try {
       setLoading(true);
@@ -51,9 +64,73 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
     }
   }, []);
 
+  const fetchProviders = useCallback(async () => {
+    setProvidersLoading(true);
+    try {
+      const res = await api.get('/hmo/providers');
+      setProviders(res.data.data.providers || []);
+    } catch (err) {
+      console.error('Failed to fetch HMO providers:', err);
+    } finally {
+      setProvidersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchCatalogData();
-  }, [fetchCatalogData]);
+    fetchProviders();
+  }, [fetchCatalogData, fetchProviders]);
+
+  const handleOpenAddProvider = () => {
+    setEditingProvider(null);
+    setProviderName('');
+    setProviderModalError('');
+    setShowProviderModal(true);
+  };
+
+  const handleOpenEditProvider = (provider) => {
+    setEditingProvider(provider);
+    setProviderName(provider.name);
+    setProviderModalError('');
+    setShowProviderModal(true);
+  };
+
+  const handleSaveProvider = async (e) => {
+    e.preventDefault();
+    setProviderModalError('');
+    if (!providerName.trim()) {
+      setProviderModalError('Provider name is required.');
+      return;
+    }
+    setProviderSubmitting(true);
+    try {
+      if (editingProvider) {
+        await api.put(`/hmo/providers/${editingProvider.id}`, { name: providerName.trim() });
+      } else {
+        await api.post('/hmo/providers', { name: providerName.trim() });
+      }
+      setShowProviderModal(false);
+      fetchProviders();
+    } catch (err) {
+      setProviderModalError(err.response?.data?.message || 'Failed to save HMO provider.');
+    } finally {
+      setProviderSubmitting(false);
+    }
+  };
+
+  const handleToggleProviderStatus = async (provider) => {
+    setProviderToggleError('');
+    setProviderToggling(true);
+    try {
+      await api.put(`/hmo/providers/${provider.id}`, { isActive: !provider.is_active });
+      fetchProviders();
+      setProviderConfirmTarget(null);
+    } catch (err) {
+      setProviderToggleError(err.response?.data?.message || 'Failed to update provider status.');
+    } finally {
+      setProviderToggling(false);
+    }
+  };
 
   const handleOpenAddModal = () => {
     setEditingTest(null);
@@ -279,6 +356,126 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
             )}
           </CardContent>
         </Card>
+
+        {/* HMO Providers Card */}
+        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
+          <CardHeader className="py-4 px-6 border-b border-gray-100 flex flex-row items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <ShieldPlus className="w-4 h-4 text-[#769046]" />
+              <CardTitle className="text-sm font-bold text-slate-800">HMO Providers</CardTitle>
+            </div>
+            <Button
+              onClick={handleOpenAddProvider}
+              className="bg-[#769046] hover:bg-primary-hover text-white flex items-center space-x-1.5 text-xs font-bold px-3 py-1.5 rounded-xl h-auto"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Provider</span>
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            {providersLoading ? (
+              <div className="py-10 flex flex-col items-center justify-center space-y-3">
+                <div className="w-6 h-6 border-4 border-[#769046] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : providers.length === 0 ? (
+              <div className="py-10 text-center text-xs text-gray-500">No HMO providers added yet.</div>
+            ) : (
+              <Table>
+                <TableHeader className="bg-gray-50/50">
+                  <TableRow>
+                    <TableHead className="text-xs font-bold uppercase">Provider Name</TableHead>
+                    <TableHead className="text-xs font-bold uppercase">Status</TableHead>
+                    <TableHead className="text-xs font-bold uppercase text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {providers.map(provider => (
+                    <TableRow key={provider.id}>
+                      <TableCell className="font-semibold text-xs text-slate-800">{provider.name}</TableCell>
+                      <TableCell>
+                        <Badge
+                          onClick={() => { setProviderToggleError(''); setProviderConfirmTarget(provider); }}
+                          className={`cursor-pointer text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                            provider.is_active
+                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200'
+                              : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                          }`}
+                        >
+                          {provider.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenEditProvider(provider)}
+                          className="h-8 text-xs font-bold flex items-center space-x-1.5 ml-auto"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span>Rename</span>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Add / Edit HMO Provider Dialog */}
+        <Dialog open={showProviderModal} onOpenChange={setShowProviderModal}>
+          <DialogContent className="max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900">
+                {editingProvider ? 'Rename HMO Provider' : 'Add HMO Provider'}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-gray-500">
+                {editingProvider ? 'Update this provider\'s name.' : 'Add a new accredited HMO partner.'}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSaveProvider} className="space-y-4 pt-2">
+              {providerModalError && (
+                <div className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{providerModalError}</span>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700">Provider Name</label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Maxicare"
+                  value={providerName}
+                  onChange={e => setProviderName(e.target.value)}
+                  className="rounded-xl"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end space-x-2 pt-3 border-t border-gray-100">
+                <Button type="button" variant="outline" onClick={() => setShowProviderModal(false)}>Cancel</Button>
+                <Button type="submit" disabled={providerSubmitting} className="bg-[#769046] hover:bg-primary-hover text-white">
+                  {providerSubmitting ? 'Saving...' : editingProvider ? 'Save Changes' : 'Add Provider'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* HMO Provider Status Confirmation */}
+        <ConfirmDialog
+          open={!!providerConfirmTarget}
+          onOpenChange={(open) => { if (!open) { setProviderConfirmTarget(null); setProviderToggleError(''); } }}
+          title={providerConfirmTarget?.is_active ? 'Deactivate Provider' : 'Activate Provider'}
+          description={providerConfirmTarget && (
+            `${providerConfirmTarget.is_active ? 'Deactivate' : 'Activate'} "${providerConfirmTarget.name}"? ${providerConfirmTarget.is_active ? 'Existing HMO requests are unaffected, but staff will be warned this provider is no longer accredited.' : ''}`
+          )}
+          confirmLabel={providerConfirmTarget?.is_active ? 'Deactivate' : 'Activate'}
+          onConfirm={() => handleToggleProviderStatus(providerConfirmTarget)}
+          loading={providerToggling}
+          error={providerToggleError}
+        />
 
         {/* Add / Edit Service Dialog Modal */}
         <Dialog open={showModal} onOpenChange={setShowModal}>

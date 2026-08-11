@@ -74,7 +74,7 @@ const DashboardOverview = ({ onSelectNav }) => {
       setCatalogCount((testsRes.data.data.tests || []).length);
       setTodayRevenue((txRes.data.data.transactions || []).reduce((s, t) => s + parseFloat(t.amount || 0), 0));
       setRoleCount((rbacRes.data.data.roles || []).length);
-      setHmoPartnerCount((hmoRes.data.data.providers || []).length);
+      setHmoPartnerCount((hmoRes.data.data.providers || []).filter(p => p.is_active).length);
     } catch (err) {
       console.error('Failed to fetch dashboard overview:', err);
     } finally {

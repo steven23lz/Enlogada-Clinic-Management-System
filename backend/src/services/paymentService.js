@@ -1,6 +1,11 @@
 const paymentRepository = require('../repositories/paymentRepository');
 const notificationService = require('./notificationService');
 
+// Feature Gap Plan Phase A: payment_status's CHECK constraint has allowed 'Refunded'/'Cancelled'
+// since the schema baseline, but no endpoint ever set them — a duplicate or disputed charge had
+// no reversal path anywhere in the app.
+const REVERSIBLE_TARGET_STATUSES = ['Refunded', 'Cancelled'];
+
 class PaymentService {
   async getBillingSummary(visitId) {
     const { visitInfo, items } = await paymentRepository.getBillingSummary(visitId);
@@ -81,6 +86,36 @@ class PaymentService {
     });
 
     return payment;
+  }
+
+  async updatePaymentStatus(paymentId, { status, reason }) {
+    if (!REVERSIBLE_TARGET_STATUSES.includes(status)) {
+      const error = new Error(`Status must be one of: ${REVERSIBLE_TARGET_STATUSES.join(', ')}`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const payment = await paymentRepository.findById(paymentId);
+    if (!payment) {
+      const error = new Error('Payment not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    if (payment.payment_status !== 'Paid') {
+      const error = new Error(`Only a 'Paid' payment can be ${status.toLowerCase()}. This payment is currently '${payment.payment_status}'.`);
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const updated = await paymentRepository.updatePaymentStatus(paymentId, status, reason);
+
+    await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
+      title: `Payment ${status}`,
+      message: `Receipt #${payment.receipt_number} — ₱${parseFloat(payment.amount).toFixed(2)}${reason ? `: ${reason}` : ''}`,
+      type: 'warning'
+    });
+
+    return updated;
   }
 
   async getTransactions({ startDate, endDate }) {

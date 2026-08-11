@@ -8,8 +8,10 @@ import { Input } from '../components/ui/input';
 import { SearchInput } from '../components/ui/search-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
+import { StatusBadge } from '../components/ui/status-badge';
+import { Textarea } from '../components/ui/textarea';
 import api from '../config/api';
 import {
   Receipt,
@@ -22,7 +24,8 @@ import {
   AlertCircle,
   Clock,
   ArrowUpDown,
-  RefreshCw
+  RefreshCw,
+  Undo2
 } from 'lucide-react';
 
 const PAGE_TITLES = {
@@ -63,6 +66,13 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [historyStartDate, setHistoryStartDate] = useState(todayStr());
   const [historyEndDate, setHistoryEndDate] = useState(todayStr());
   const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  // Feature Gap Plan Phase A: payment_status has always allowed 'Refunded'/'Cancelled', but
+  // nothing in the app ever set them — a duplicate or disputed charge had no reversal path.
+  const [refundTarget, setRefundTarget] = useState(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [refunding, setRefunding] = useState(false);
+  const [refundError, setRefundError] = useState('');
 
   // Selected Billing Item in POS Layout
   const [selectedVisit, setSelectedVisit] = useState(null);
@@ -118,6 +128,27 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       setHistoryLoading(false);
     }
   }, []);
+
+  const handleOpenRefund = (transaction) => {
+    setRefundTarget(transaction);
+    setRefundReason('');
+    setRefundError('');
+  };
+
+  const confirmRefund = async () => {
+    if (!refundTarget) return;
+    setRefunding(true);
+    setRefundError('');
+    try {
+      await api.patch(`/payments/${refundTarget.id}/status`, { status: 'Refunded', reason: refundReason.trim() || undefined });
+      setRefundTarget(null);
+      fetchTransactionHistory(historyStartDate, historyEndDate);
+    } catch (err) {
+      setRefundError(err.response?.data?.message || 'Failed to refund this payment.');
+    } finally {
+      setRefunding(false);
+    }
+  };
 
   useEffect(() => {
     fetchActiveVisits();
@@ -587,13 +618,15 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     <TableHead className="text-[10px] font-bold uppercase py-3">Payment Method</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-3">Reference #</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Amount Paid</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Date & Time</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {historyError ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-xs text-rose-600 font-semibold">
+                      <TableCell colSpan={8} className="text-center py-6 text-xs text-rose-600 font-semibold">
                         {historyError}{' '}
                         <button
                           type="button"
@@ -606,7 +639,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     </TableRow>
                   ) : historyLoading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 font-semibold">Loading transaction history…</TableCell>
+                      <TableCell colSpan={8} className="text-center py-6 text-xs text-gray-400 font-semibold">Loading transaction history…</TableCell>
                     </TableRow>
                   ) : historyTransactions.length > 0 ? (
                     historyTransactions.map(t => (
@@ -620,12 +653,28 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         </TableCell>
                         <TableCell className="py-3 text-xs font-mono text-gray-500">{t.reference_number || 'N/A (Cash)'}</TableCell>
                         <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">₱{parseFloat(t.amount).toFixed(2)}</TableCell>
+                        <TableCell className="py-3">
+                          <StatusBadge status={t.payment_status || 'Paid'} />
+                        </TableCell>
                         <TableCell className="py-3 text-xs text-gray-500 text-right">{new Date(t.paid_at).toLocaleString()}</TableCell>
+                        <TableCell className="py-3 text-right">
+                          {(t.payment_status || 'Paid') === 'Paid' && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => handleOpenRefund(t)}
+                              className="text-[11px] font-bold text-red-600 border-red-200 hover:bg-red-50 px-2.5 py-1 h-auto flex items-center space-x-1 ml-auto"
+                            >
+                              <Undo2 className="w-3 h-3" />
+                              <span>Refund</span>
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 italic">No payments processed in this date range.</TableCell>
+                      <TableCell colSpan={8} className="text-center py-6 text-xs text-gray-400 italic">No payments processed in this date range.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -634,6 +683,47 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
           </Card>
         </div>
         )}
+
+        <Dialog open={!!refundTarget} onOpenChange={(open) => !refunding && !open && setRefundTarget(null)}>
+          <DialogContent className="max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900">Refund Payment</DialogTitle>
+              <DialogDescription className="text-xs text-gray-500">
+                {refundTarget && `Refund ₱${parseFloat(refundTarget.amount).toFixed(2)} (Receipt ${refundTarget.receipt_number || `OR-${refundTarget.id}`})? This marks the payment as Refunded and cannot be undone from this screen.`}
+              </DialogDescription>
+            </DialogHeader>
+
+            {refundError && (
+              <div className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{refundError}</span>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-600 uppercase">Reason (optional)</label>
+              <Textarea
+                value={refundReason}
+                onChange={e => setRefundReason(e.target.value)}
+                placeholder="e.g. Duplicate charge, patient dispute..."
+                disabled={refunding}
+                className="text-xs rounded-xl"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setRefundTarget(null)} disabled={refunding}>Cancel</Button>
+              <Button
+                type="button"
+                onClick={confirmRefund}
+                disabled={refunding}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {refunding ? 'Refunding…' : 'Confirm Refund'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Payment confirmation — irreversible action, see .agents Phase 12 */}
         <ConfirmDialog
