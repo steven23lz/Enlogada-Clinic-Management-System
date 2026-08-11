@@ -11,6 +11,7 @@ import { SearchInput } from '../components/ui/search-input';
 import { StatusBadge } from '../components/ui/status-badge';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
+import { toastError } from '../lib/toast';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Stethoscope,
@@ -182,7 +183,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       fetchPendingTests(category);
     } catch (err) {
       console.error(err);
-      alert('Failed to update test status to Processing.');
+      toastError('Failed to update test status to Processing.');
     }
   };
 
@@ -668,7 +669,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
 
             <form onSubmit={handleUploadResult} className="space-y-4 pt-2">
               {uploadError && (
-                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{uploadError}</span>
                 </div>

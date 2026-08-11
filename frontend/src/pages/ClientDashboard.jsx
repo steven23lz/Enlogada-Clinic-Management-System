@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../lib/currency';
+import { toastError } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import { 
   Activity, 
@@ -83,7 +84,7 @@ const downloadResultFile = async (visitTestId, originalName) => {
     window.URL.revokeObjectURL(objectUrl);
   } catch (err) {
     console.error('Failed to download result file:', err);
-    alert('Failed to download the attachment. Please try again.');
+    toastError('Failed to download the attachment. Please try again.');
   }
 };
 
@@ -541,7 +542,7 @@ const ClientDashboard = ({ onNavigate }) => {
               </DialogHeader>
               <form onSubmit={handleAddProfile} className="space-y-4 pt-2">
                 {addProfileError && (
-                  <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{addProfileError}</span>
                   </div>
@@ -670,7 +671,7 @@ const ClientDashboard = ({ onNavigate }) => {
               </DialogHeader>
               <form onSubmit={handleEditProfile} className="space-y-4 pt-2">
                 {editProfileError && (
-                  <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{editProfileError}</span>
                   </div>
@@ -850,7 +851,7 @@ const ClientDashboard = ({ onNavigate }) => {
 
                   <form onSubmit={handleBookAppointment} className="space-y-4 pt-2">
                     {bookingError && (
-                      <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
+                      <div role="alert" className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
                         <span>{bookingError}</span>
                       </div>

@@ -315,7 +315,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         {view === 'cashier-queue' && (
         <>
         {queueError && (
-          <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center space-x-2">
+          <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-semibold rounded-xl flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{queueError}</span>
             <button type="button" onClick={retryQueueData} className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-800">Retry</button>
@@ -487,7 +487,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   {/* Payment Processor Form */}
                   <form onSubmit={handleProcessPayment} className="space-y-4">
                     {paymentError && (
-                      <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                      <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
                         <span>{paymentError}</span>
                       </div>
@@ -737,7 +737,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
             </DialogHeader>
 
             {refundError && (
-              <div className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs">
+              <div role="alert" className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{refundError}</span>
               </div>

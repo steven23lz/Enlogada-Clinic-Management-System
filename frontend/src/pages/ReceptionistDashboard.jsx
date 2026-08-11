@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
 import { formatCurrency } from '../lib/currency';
+import { toastError, toastInfo } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
 import {
@@ -142,7 +143,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [hmoProviderId, setHmoProviderId] = useState('');
   const [hmoApprovalCode, setHmoApprovalCode] = useState('');
   const [hmoError, setHmoError] = useState('');
-  const [hmoSuccess, setHmoSuccess] = useState('');
 
   const fetchActiveVisits = useCallback(async ({ page = 1, search = searchQuery, status = statusFilter } = {}) => {
     setLoading(true);
@@ -422,7 +422,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setShowTestsModal(false);
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to assign tests to visit');
+      toastError(err.response?.data?.message || 'Failed to assign tests to visit');
     }
   };
 
@@ -439,14 +439,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     setHmoProviderId('');
     setHmoApprovalCode('');
     setHmoError('');
-    setHmoSuccess('');
     setShowHmoModal(true);
   };
 
   const handleHmoSubmit = async (e) => {
     e.preventDefault();
     setHmoError('');
-    setHmoSuccess('');
 
     if (!activeVisitTest || !hmoProviderId) {
       setHmoError('Provider and Approval Code are required.');
@@ -460,12 +458,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         visitTestIds: [activeVisitTest.id]
       });
 
-      setHmoSuccess('HMO Pre-authorization logged successfully!');
-      setTimeout(() => {
-        setShowHmoModal(false);
-        setHmoSuccess('');
-        fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
-      }, 1500);
+      toastSuccess('HMO Pre-authorization logged successfully!');
+      setShowHmoModal(false);
+      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
     } catch (err) {
       setHmoError(err.response?.data?.message || 'Failed to log HMO authorization');
     }
@@ -477,7 +472,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       utterance.rate = 0.9;
       window.speechSynthesis.speak(utterance);
     } else {
-      alert(`Calling Queue Number ${queueNum}`);
+      toastInfo(`Calling Queue Number ${queueNum}`);
     }
   };
 
@@ -805,7 +800,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </div>
               )}
               {patientSearchError && (
-                <div role="alert" className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold flex items-center space-x-2">
+                <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{patientSearchError}</span>
                 </div>
@@ -880,7 +875,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               )}
 
               {registrationError && (
-                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold flex items-center space-x-2">
+                <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{registrationError}</span>
                 </div>
@@ -1043,7 +1038,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               </div>
 
               {verifyError && (
-                <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
+                <div role="alert" className="p-3 bg-red-50 text-red-600 text-xs rounded-xl flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{verifyError}</span>
                 </div>
@@ -1122,7 +1117,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         </Dialog>
 
         {/* HMO Pre-Authorization Logging Modal (Module 7: HMO request initiation) */}
-        <Dialog open={showHmoModal} onOpenChange={(open) => { setShowHmoModal(open); if (!open) { setHmoError(''); setHmoSuccess(''); } }}>
+        <Dialog open={showHmoModal} onOpenChange={(open) => { setShowHmoModal(open); if (!open) { setHmoError(''); } }}>
           <DialogContent className="max-w-md rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">Log HMO Pre-Authorization</DialogTitle>
@@ -1133,18 +1128,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
             <form onSubmit={handleHmoSubmit} className="space-y-4 pt-2">
               {hmoError && (
-                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{hmoError}</span>
                 </div>
               )}
-              {hmoSuccess && (
-                <div role="status" className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{hmoSuccess}</span>
-                </div>
-              )}
-
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-600 uppercase">HMO Provider <span className="text-rose-600">*</span></label>
                 <Select value={hmoProviderId} onValueChange={setHmoProviderId}>

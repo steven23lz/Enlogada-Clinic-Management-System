@@ -7,3 +7,7 @@ export function toastSuccess(message) {
 export function toastError(message) {
   toast.error(message);
 }
+
+export function toastInfo(message) {
+  toast(message);
+}
