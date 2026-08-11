@@ -54,6 +54,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
       { id: 'appointments-list', label: 'Appointments', icon: Calendar },
       { id: 'patient-records', label: 'Patient Records', icon: FolderKanban },
       { id: 'reports', label: 'Reports', icon: BarChart3 },
+      { id: 'activity', label: 'Activity Log', icon: Activity },
     ] : []),
     ...(userRoles.includes('SuperAdmin') ? [
       { id: 'superadmin', label: 'Super Admin', icon: ShieldCheck },

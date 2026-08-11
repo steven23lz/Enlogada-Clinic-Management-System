@@ -33,6 +33,17 @@ class ReportService {
 
     return { revenueTrend, serviceVolume, visitStatusBreakdown, paymentMethodBreakdown };
   }
+
+  async getStaffWorkload(startDate, endDate) {
+    assertValidRange(startDate, endDate);
+
+    const [receptionWorkload, diagnosticWorkload] = await Promise.all([
+      reportRepository.getReceptionWorkload(startDate, endDate),
+      reportRepository.getDiagnosticWorkload(startDate, endDate)
+    ]);
+
+    return { receptionWorkload, diagnosticWorkload };
+  }
 }
 
 module.exports = new ReportService();

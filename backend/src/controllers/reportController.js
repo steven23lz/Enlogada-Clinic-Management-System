@@ -13,6 +13,19 @@ class ReportController {
       next(err);
     }
   }
+
+  async getStaffWorkload(req, res, next) {
+    try {
+      const { startDate, endDate } = req.query;
+      const workload = await reportService.getStaffWorkload(startDate, endDate);
+      return res.status(200).json({
+        status: 'success',
+        data: { workload }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new ReportController();

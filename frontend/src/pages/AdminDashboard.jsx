@@ -15,6 +15,7 @@ import AppointmentsOversight from './admin/AppointmentsOversight';
 import PatientRecordsOversight from './admin/PatientRecordsOversight';
 import ReportsOverview from './admin/ReportsOverview';
 import SuperAdminManagement from './admin/SuperAdminManagement';
+import ActivityLog from './admin/ActivityLog';
 
 const NAV_TITLES = {
   dashboard: 'Management Console',
@@ -24,6 +25,7 @@ const NAV_TITLES = {
   'appointments-list': 'Appointments Oversight',
   'patient-records': 'Patient Records Oversight',
   reports: 'Clinic Reports',
+  activity: 'Activity Log',
   superadmin: 'Super Admin Management',
 };
 
@@ -251,6 +253,8 @@ const AdminDashboard = ({ activeNav = 'dashboard', onSelectNav }) => {
         return <PatientRecordsOversight />;
       case 'reports':
         return <ReportsOverview />;
+      case 'activity':
+        return <ActivityLog />;
       case 'superadmin':
         // Backend endpoints already enforce SuperAdmin-only; this just avoids rendering a
         // confusing broken tab for an Admin whose activeNav somehow ended up here (the nav

@@ -1,4 +1,5 @@
 const hmoRepository = require('../repositories/hmoRepository');
+const auditService = require('./auditService');
 
 class HmoService {
   async createRequest({ hmoProviderId, approvalCode, visitTestIds }) {
@@ -67,7 +68,7 @@ class HmoService {
     return await hmoRepository.findAllProviders();
   }
 
-  async createProvider(name) {
+  async createProvider(name, requestingUser) {
     if (!name || !name.trim()) {
       const error = new Error('Provider name is required.');
       error.statusCode = 400;
@@ -75,7 +76,15 @@ class HmoService {
     }
 
     try {
-      return await hmoRepository.createProvider(name.trim());
+      const provider = await hmoRepository.createProvider(name.trim());
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: 'hmo_provider.created',
+        entityType: 'hmo_provider',
+        entityId: provider.id,
+        description: `Added HMO provider "${provider.name}"`
+      });
+      return provider;
     } catch (err) {
       if (err.code === '23505') {
         const error = new Error(`An HMO provider named "${name.trim()}" already exists.`);
@@ -86,7 +95,7 @@ class HmoService {
     }
   }
 
-  async updateProvider(id, { name, isActive }) {
+  async updateProvider(id, { name, isActive }, requestingUser) {
     const provider = await hmoRepository.findProviderById(id);
     if (!provider) {
       const error = new Error('HMO provider not found');
@@ -95,10 +104,23 @@ class HmoService {
     }
 
     try {
-      return await hmoRepository.updateProvider(id, {
+      const updated = await hmoRepository.updateProvider(id, {
         name: name ? name.trim() : undefined,
         isActive: typeof isActive === 'boolean' ? isActive : undefined
       });
+
+      const changeDescription = typeof isActive === 'boolean' && isActive !== provider.is_active
+        ? `${isActive ? 'Activated' : 'Deactivated'} HMO provider "${provider.name}"`
+        : `Renamed HMO provider "${provider.name}" to "${updated.name}"`;
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: 'hmo_provider.updated',
+        entityType: 'hmo_provider',
+        entityId: id,
+        description: changeDescription
+      });
+
+      return updated;
     } catch (err) {
       if (err.code === '23505') {
         const error = new Error(`An HMO provider named "${name.trim()}" already exists.`);

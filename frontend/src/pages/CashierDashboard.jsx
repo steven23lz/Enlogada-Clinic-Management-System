@@ -51,6 +51,10 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [activeVisits, setActiveVisits] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Phase D finding 05: the billing queue, today's collections, and patient-type filter all
+  // previously failed silently (console.error only) — the queue would just render empty with
+  // no way to tell "no visits" apart from "the request failed."
+  const [queueError, setQueueError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
   const [sortOrder, setSortOrder] = useState('oldest');
@@ -90,8 +94,10 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     try {
       const response = await api.get('/visits/active');
       setActiveVisits(response.data.data.visits || []);
+      setQueueError('');
     } catch (err) {
       console.error('Failed to fetch active visits:', err);
+      setQueueError('Could not load the billing queue. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -103,6 +109,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       setTransactions(response.data.data.transactions || []);
     } catch (err) {
       console.error('Failed to fetch transaction logs:', err);
+      setQueueError('Could not load today\'s collections. Please try again.');
     }
   }, []);
 
@@ -114,6 +121,12 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       console.error('Failed to fetch patient types:', err);
     }
   }, []);
+
+  const retryQueueData = () => {
+    fetchActiveVisits();
+    fetchTransactions();
+    fetchPatientTypes();
+  };
 
   const fetchTransactionHistory = useCallback(async (startDate, endDate) => {
     setHistoryLoading(true);
@@ -128,6 +141,15 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       setHistoryLoading(false);
     }
   }, []);
+
+  // Phase D finding 03: Transaction History had no way to reopen a past receipt — the only
+  // "Print Receipt" affordance was the modal shown immediately after processing a *new* payment.
+  // Reuses that exact modal, just fed from a history row instead of a fresh processPayment response.
+  const handleReprintReceipt = (transaction) => {
+    setPaymentSuccess(transaction);
+    setBillDetails({ patientName: `${transaction.patient_first_name} ${transaction.patient_last_name}` });
+    setShowReceiptModal(true);
+  };
 
   const handleOpenRefund = (transaction) => {
     setRefundTarget(transaction);
@@ -290,6 +312,14 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
         {view === 'cashier-queue' && (
         <>
+        {queueError && (
+          <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{queueError}</span>
+            <button type="button" onClick={retryQueueData} className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-800">Retry</button>
+          </div>
+        )}
+
         {/* Collections Overview Metrics Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard label="Today's Collections" value={`₱${totalCollectionsToday.toFixed(2)}`} icon={DollarSign} tone="green" />
@@ -645,7 +675,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     historyTransactions.map(t => (
                       <TableRow key={t.id}>
                         <TableCell className="py-3 font-extrabold text-xs text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
-                        <TableCell className="py-3 text-xs font-bold text-gray-800">{t.first_name} {t.last_name}</TableCell>
+                        <TableCell className="py-3 text-xs font-bold text-gray-800">{t.patient_first_name} {t.patient_last_name}</TableCell>
                         <TableCell className="py-3 text-xs">
                           <Badge className="bg-gray-100 text-gray-800 font-bold border-gray-200">
                             {t.payment_method}
@@ -658,17 +688,28 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         </TableCell>
                         <TableCell className="py-3 text-xs text-gray-500 text-right">{new Date(t.paid_at).toLocaleString()}</TableCell>
                         <TableCell className="py-3 text-right">
-                          {(t.payment_status || 'Paid') === 'Paid' && (
+                          <div className="flex items-center justify-end space-x-2">
                             <Button
                               type="button"
                               variant="outline"
-                              onClick={() => handleOpenRefund(t)}
-                              className="text-[11px] font-bold text-red-600 border-red-200 hover:bg-red-50 px-2.5 py-1 h-auto flex items-center space-x-1 ml-auto"
+                              onClick={() => handleReprintReceipt(t)}
+                              className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
                             >
-                              <Undo2 className="w-3 h-3" />
-                              <span>Refund</span>
+                              <Printer className="w-3 h-3" />
+                              <span>Reprint</span>
                             </Button>
-                          )}
+                            {(t.payment_status || 'Paid') === 'Paid' && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleOpenRefund(t)}
+                                className="text-[11px] font-bold text-red-600 border-red-200 hover:bg-red-50 px-2.5 py-1 h-auto flex items-center space-x-1"
+                              >
+                                <Undo2 className="w-3 h-3" />
+                                <span>Refund</span>
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))

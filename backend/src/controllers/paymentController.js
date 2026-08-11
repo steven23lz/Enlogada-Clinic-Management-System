@@ -56,7 +56,7 @@ class PaymentController {
         });
       }
 
-      const payment = await paymentService.updatePaymentStatus(id, { status, reason });
+      const payment = await paymentService.updatePaymentStatus(id, { status, reason }, req.user);
       return res.status(200).json({
         status: 'success',
         message: `Payment marked ${status}.`,

@@ -1,5 +1,6 @@
 const paymentRepository = require('../repositories/paymentRepository');
 const notificationService = require('./notificationService');
+const auditService = require('./auditService');
 
 // Feature Gap Plan Phase A: payment_status's CHECK constraint has allowed 'Refunded'/'Cancelled'
 // since the schema baseline, but no endpoint ever set them — a duplicate or disputed charge had
@@ -88,7 +89,7 @@ class PaymentService {
     return payment;
   }
 
-  async updatePaymentStatus(paymentId, { status, reason }) {
+  async updatePaymentStatus(paymentId, { status, reason }, requestingUser) {
     if (!REVERSIBLE_TARGET_STATUSES.includes(status)) {
       const error = new Error(`Status must be one of: ${REVERSIBLE_TARGET_STATUSES.join(', ')}`);
       error.statusCode = 400;
@@ -113,6 +114,14 @@ class PaymentService {
       title: `Payment ${status}`,
       message: `Receipt #${payment.receipt_number} — ₱${parseFloat(payment.amount).toFixed(2)}${reason ? `: ${reason}` : ''}`,
       type: 'warning'
+    });
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: `payment.${status.toLowerCase()}`,
+      entityType: 'payment',
+      entityId: paymentId,
+      description: `Marked payment ${payment.receipt_number || `#${paymentId}`} (₱${parseFloat(payment.amount).toFixed(2)}) as ${status}${reason ? ` — ${reason}` : ''}`
     });
 
     return updated;

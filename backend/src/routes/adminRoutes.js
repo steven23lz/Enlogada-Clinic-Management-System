@@ -14,4 +14,8 @@ router.patch('/staff/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Adm
 // previously the only recourse was deactivating and recreating the account.
 router.patch('/staff/:id/password', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), adminController.resetStaffPassword);
 
+// Feature Gap Plan Phase D: recent activity across the sensitive actions this session's phases
+// added logging for (payments, staff accounts, HMO providers, result corrections).
+router.get('/activity', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), adminController.getActivity);
+
 module.exports = router;

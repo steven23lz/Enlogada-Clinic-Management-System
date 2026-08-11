@@ -65,9 +65,24 @@ class PatientRepository {
     return result.rows[0];
   }
 
+  // Feature Gap Plan Phase D: Reception's walk-in lookup previously showed name/type/demographics
+  // only — zero visit history or financial context, so a returning patient's unpaid balance from
+  // a prior visit was invisible at check-in. unpaid_visit_count treats a visit as unpaid when it
+  // isn't Cancelled and has no 'Paid' payment row, rather than reproducing getBillingSummary's
+  // full per-test HMO-aware total here just to flag "does this patient owe anything."
   async searchPatients(query) {
     const queryText = `
-      SELECT p.*, pt.name as patient_type_name
+      SELECT p.*, pt.name as patient_type_name,
+        (SELECT COUNT(*) FROM patient_visits pv WHERE pv.patient_id = p.id) as visit_count,
+        (SELECT MAX(pv.created_at) FROM patient_visits pv WHERE pv.patient_id = p.id) as last_visit_at,
+        (
+          SELECT COUNT(*) FROM patient_visits pv
+          WHERE pv.patient_id = p.id AND pv.status != 'Cancelled'
+            AND NOT EXISTS (
+              SELECT 1 FROM payments pay
+              WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
+            )
+        ) as unpaid_visit_count
       FROM patients p
       JOIN patient_types pt ON p.patient_type_id = pt.id
       WHERE (p.first_name || ' ' || p.last_name) ILIKE $1

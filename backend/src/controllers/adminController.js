@@ -1,6 +1,21 @@
 const adminService = require('../services/adminService');
+const auditService = require('../services/auditService');
 
 class AdminController {
+  async getActivity(req, res, next) {
+    try {
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = parseInt(req.query.limit, 10) || 25;
+      const activity = await auditService.getRecentActivity({ page, limit });
+      return res.status(200).json({
+        status: 'success',
+        data: activity
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getStaff(req, res, next) {
     try {
       const staff = await adminService.getStaffAccounts();
@@ -57,7 +72,7 @@ class AdminController {
         });
       }
 
-      await adminService.resetStaffPassword(id, newPassword);
+      await adminService.resetStaffPassword(id, newPassword, req.user);
       return res.status(200).json({
         status: 'success',
         message: 'Staff account password reset successfully.'
@@ -79,7 +94,7 @@ class AdminController {
         });
       }
 
-      const staffAccount = await adminService.updateStaffStatus(id, status);
+      const staffAccount = await adminService.updateStaffStatus(id, status, req.user);
       return res.status(200).json({
         status: 'success',
         message: `Staff account ${status ? 'activated' : 'deactivated'}.`,

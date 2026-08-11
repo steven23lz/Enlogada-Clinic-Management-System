@@ -50,6 +50,39 @@ class ReportRepository {
     const result = await db.query(queryText, [startDate, endDate]);
     return result.rows;
   }
+
+  // Feature Gap Plan Phase D: staff workload visibility existed for Cashier only
+  // (CashierMonitoring.jsx's own byCashier, computed client-side from transactions). These two
+  // mirror that pattern server-side for Reception and Diagnostic, the two departments Admin had
+  // no per-staff throughput view for at all.
+  async getReceptionWorkload(startDate, endDate) {
+    const queryText = `
+      SELECT u.id as staff_id, u.first_name, u.last_name, COUNT(*) as visit_count
+      FROM patient_visits pv
+      JOIN users u ON pv.created_by = u.id
+      WHERE pv.created_at::date BETWEEN $1 AND $2
+      GROUP BY u.id, u.first_name, u.last_name
+      ORDER BY visit_count DESC
+    `;
+    const result = await db.query(queryText, [startDate, endDate]);
+    return result.rows;
+  }
+
+  async getDiagnosticWorkload(startDate, endDate) {
+    const queryText = `
+      SELECT u.id as staff_id, u.first_name, u.last_name, tc.name as category_name, COUNT(*) as result_count
+      FROM test_results tr
+      JOIN users u ON tr.released_by = u.id
+      JOIN visit_tests vt ON tr.visit_test_id = vt.id
+      JOIN tests t ON vt.test_id = t.id
+      JOIN test_categories tc ON t.category_id = tc.id
+      WHERE tr.released_at::date BETWEEN $1 AND $2
+      GROUP BY u.id, u.first_name, u.last_name, tc.name
+      ORDER BY result_count DESC
+    `;
+    const result = await db.query(queryText, [startDate, endDate]);
+    return result.rows;
+  }
 }
 
 module.exports = new ReportRepository();

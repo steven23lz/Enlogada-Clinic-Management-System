@@ -110,7 +110,7 @@ class HmoController {
   async createProvider(req, res, next) {
     try {
       const { name } = req.body;
-      const provider = await hmoService.createProvider(name);
+      const provider = await hmoService.createProvider(name, req.user);
       return res.status(201).json({
         status: 'success',
         message: 'HMO provider added.',
@@ -125,7 +125,7 @@ class HmoController {
     try {
       const { id } = req.params;
       const { name, isActive } = req.body;
-      const provider = await hmoService.updateProvider(id, { name, isActive });
+      const provider = await hmoService.updateProvider(id, { name, isActive }, req.user);
       return res.status(200).json({
         status: 'success',
         message: 'HMO provider updated.',

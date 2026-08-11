@@ -5,6 +5,7 @@ const testRepository = require('../repositories/testRepository');
 const { sendEmail } = require('../config/email');
 const notificationService = require('./notificationService');
 const { UPLOAD_ROOT } = require('../config/upload');
+const auditService = require('./auditService');
 
 // Which test_categories a given diagnostic staff role is allowed to act on. Ultrasound Staff
 // covers '2D Echo' too — a distinct test_categories row that MODULE_SCOPE.md explicitly assigns
@@ -85,6 +86,12 @@ class ResultService {
   async uploadResult({ visitTestId, fileUrl, file, findings, remarks, releasedBy }, requestingUser) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
 
+    // Fetched once, up front: doubles as (a) the file-preservation source when neither a new
+    // file nor fileUrl is provided, and (b) the correction signal below — a result already
+    // existing before this call means this is an edit, not a first-time release.
+    const existing = await resultRepository.findResultByVisitTestId(visitTestId);
+    const isCorrection = !!existing;
+
     // Mark the visit_test as Completed
     await testRepository.updateVisitTestStatus(visitTestId, 'Completed');
 
@@ -100,19 +107,16 @@ class ResultService {
       fileMimeType = file.mimetype;
       fileSizeBytes = file.size;
       resolvedFileUrl = null;
-    } else if (!fileUrl) {
+    } else if (!fileUrl && existing) {
       // Phase C: this call now also handles correcting an already-released result (editing
       // findings/remarks without re-attaching a file) — without this, re-submitting would
       // silently wipe a previously uploaded file's metadata, since createResult's upsert
       // otherwise overwrites every column unconditionally.
-      const existing = await resultRepository.findResultByVisitTestId(visitTestId);
-      if (existing) {
-        filePath = existing.file_path;
-        fileOriginalName = existing.file_original_name;
-        fileMimeType = existing.file_mime_type;
-        fileSizeBytes = existing.file_size_bytes;
-        resolvedFileUrl = existing.file_url;
-      }
+      filePath = existing.file_path;
+      fileOriginalName = existing.file_original_name;
+      fileMimeType = existing.file_mime_type;
+      fileSizeBytes = existing.file_size_bytes;
+      resolvedFileUrl = existing.file_url;
     }
 
     const result = await resultRepository.createResult({
@@ -126,6 +130,19 @@ class ResultService {
       remarks,
       releasedBy
     });
+
+    // Phase D: only a correction is audit-worthy here — the first-time release of every result
+    // would make the log mostly noise from routine work, not the "something changed after the
+    // fact" signal an audit trail is for.
+    if (isCorrection) {
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: 'result.corrected',
+        entityType: 'test_result',
+        entityId: result.id,
+        description: `Corrected findings for visit test #${visitTestId}`
+      });
+    }
 
     return result;
   }

@@ -57,6 +57,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [testCatalog, setTestCatalog] = useState([]);
   const [patientTypes, setPatientTypes] = useState([]);
   const [hmoProviders, setHmoProviders] = useState([]);
+  const [staticDataError, setStaticDataError] = useState('');
   const [loading, setLoading] = useState(true);
   const [queueError, setQueueError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -188,6 +189,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   }, []);
 
   const fetchStaticData = useCallback(async () => {
+    setStaticDataError('');
     try {
       const testsRes = await api.get('/tests');
       setTestCatalog(testsRes.data.data.tests || []);
@@ -199,6 +201,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setHmoProviders((hmoRes.data.data.providers || []).filter(p => p.is_active));
     } catch (err) {
       console.error('Failed to fetch static data:', err);
+      // Phase D finding 05: this previously failed silently — the test catalog, patient types,
+      // and HMO provider dropdowns would just render empty with no explanation, right when
+      // Reception needs them mid-registration or mid-HMO-logging.
+      setStaticDataError('Could not load test catalog, patient types, or HMO providers. Some forms below may be incomplete.');
     }
   }, []);
 
@@ -477,6 +483,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   return (
     <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
       <div className="space-y-6">
+
+        {staticDataError && (
+          <div role="alert" className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold rounded-xl flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{staticDataError}</span>
+            <button type="button" onClick={fetchStaticData} className="underline font-bold border-0 bg-transparent cursor-pointer text-amber-900">Retry</button>
+          </div>
+        )}
 
         {view === 'reception-queue' && (
           <>
@@ -818,6 +832,21 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                         <div className="text-xs">
                           <span className="block font-bold text-slate-900">{patient.first_name} {patient.last_name} <span className="text-[10px] text-gray-400 font-normal">PT-{patient.id}</span></span>
                           <span className="block text-gray-500">{patient.patient_type_name} &middot; DOB {new Date(patient.birthdate).toLocaleDateString()}</span>
+                          {/* Phase D: previously zero visit/financial context at lookup — a
+                              returning patient's unpaid balance from a prior visit was invisible
+                              at check-in. */}
+                          <span className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] font-semibold text-gray-400">
+                              {Number(patient.visit_count) > 0
+                                ? `${patient.visit_count} prior visit${Number(patient.visit_count) === 1 ? '' : 's'} · last ${new Date(patient.last_visit_at).toLocaleDateString()}`
+                                : 'No prior visits'}
+                            </span>
+                            {Number(patient.unpaid_visit_count) > 0 && (
+                              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5">
+                                {patient.unpaid_visit_count} unpaid visit{Number(patient.unpaid_visit_count) === 1 ? '' : 's'}
+                              </span>
+                            )}
+                          </span>
                         </div>
                         <Button
                           type="button"
