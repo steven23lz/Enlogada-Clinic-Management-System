@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Input } from './ui/input';
+import { PasswordInput } from './ui/password-input';
 import { useAuth } from '../contexts/AuthContext';
 import { User, Mail, Phone, KeyRound, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -186,8 +187,7 @@ const AccountSettingsForm = ({ className = '' }) => {
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-gray-600 uppercase">Current Password <span className="text-rose-600">*</span></label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={passwordData.currentPassword}
                 onChange={e => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
                 disabled={isSavingPassword}
@@ -198,8 +198,7 @@ const AccountSettingsForm = ({ className = '' }) => {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-600 uppercase">New Password <span className="text-rose-600">*</span></label>
-                <Input
-                  type="password"
+                <PasswordInput
                   value={passwordData.newPassword}
                   onChange={e => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                   disabled={isSavingPassword}
@@ -208,8 +207,7 @@ const AccountSettingsForm = ({ className = '' }) => {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-600 uppercase">Confirm New Password <span className="text-rose-600">*</span></label>
-                <Input
-                  type="password"
+                <PasswordInput
                   value={passwordData.confirmNewPassword}
                   onChange={e => setPasswordData({ ...passwordData, confirmNewPassword: e.target.value })}
                   disabled={isSavingPassword}
