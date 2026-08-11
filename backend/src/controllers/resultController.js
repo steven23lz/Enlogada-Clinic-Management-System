@@ -60,6 +60,7 @@ class ResultController {
       const result = await resultService.uploadResult({
         visitTestId,
         fileUrl,
+        file: req.file,
         findings,
         remarks,
         releasedBy
@@ -70,6 +71,18 @@ class ResultController {
         message: 'Result uploaded successfully.',
         data: { result }
       });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async downloadResultFile(req, res, next) {
+    try {
+      const { visitTestId } = req.params;
+      const { absolutePath, originalName, mimeType } = await resultService.getResultFile(visitTestId, req.user);
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${originalName.replace(/"/g, '')}"`);
+      return res.sendFile(absolutePath);
     } catch (err) {
       next(err);
     }

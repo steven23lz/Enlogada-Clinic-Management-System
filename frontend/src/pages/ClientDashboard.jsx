@@ -66,6 +66,26 @@ const isSafeResultUrl = (url) => {
   }
 };
 
+// Phase B: a real uploaded file is served through an authenticated route, not a public URL — a
+// bare <a href> can't carry the Authorization header, so this fetches the file as a blob (the
+// `api` instance's request interceptor attaches the JWT) and opens it via a local object URL.
+const downloadResultFile = async (visitTestId, originalName) => {
+  try {
+    const res = await api.get(`/results/${visitTestId}/file`, { responseType: 'blob' });
+    const objectUrl = window.URL.createObjectURL(res.data);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = originalName || 'result';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  } catch (err) {
+    console.error('Failed to download result file:', err);
+    alert('Failed to download the attachment. Please try again.');
+  }
+};
+
 const ClientDashboard = ({ onNavigate }) => {
   const { user } = useAuth();
   const [profiles, setProfiles] = useState([]);
@@ -1144,13 +1164,22 @@ const ClientDashboard = ({ onNavigate }) => {
                                 </div>
                               )}
 
-                              {item.file_url && (
+                              {(item.file_path || item.file_url) && (
                                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between text-xs">
                                   <div className="flex items-center space-x-2">
                                     <FileText className="w-4 h-4 text-emerald-600" />
                                     <span className="font-bold text-emerald-800">Scanned Diagnostic Image / PDF Attachment</span>
                                   </div>
-                                  {isSafeResultUrl(item.file_url) ? (
+                                  {item.file_path ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadResultFile(item.visit_test_id, item.file_original_name)}
+                                      className="text-xs font-bold text-emerald-800 hover:underline flex items-center space-x-1 border-0 bg-transparent cursor-pointer"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                      <span>Download Attachment</span>
+                                    </button>
+                                  ) : isSafeResultUrl(item.file_url) ? (
                                   <a
                                     href={item.file_url}
                                     target="_blank"

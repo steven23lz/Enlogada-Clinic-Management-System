@@ -1,7 +1,10 @@
+const fs = require('fs');
+const path = require('path');
 const resultRepository = require('../repositories/resultRepository');
 const testRepository = require('../repositories/testRepository');
 const { sendEmail } = require('../config/email');
 const notificationService = require('./notificationService');
+const { UPLOAD_ROOT } = require('../config/upload');
 
 // Which test_categories a given diagnostic staff role is allowed to act on. Ultrasound Staff
 // covers '2D Echo' too — a distinct test_categories row that MODULE_SCOPE.md explicitly assigns
@@ -79,22 +82,71 @@ class ResultService {
     return await testRepository.updateVisitTestStatus(visitTestId, status);
   }
 
-  async uploadResult({ visitTestId, fileUrl, findings, remarks, releasedBy }, requestingUser) {
+  async uploadResult({ visitTestId, fileUrl, file, findings, remarks, releasedBy }, requestingUser) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
 
     // Mark the visit_test as Completed
     await testRepository.updateVisitTestStatus(visitTestId, 'Completed');
 
-    // Create the result record
+    // Phase B: a real uploaded file (via multer) takes precedence over the legacy fileUrl text
+    // field — both can't meaningfully apply at once, and the frontend only ever sends one or
+    // the other.
     const result = await resultRepository.createResult({
       visitTestId,
-      fileUrl,
+      fileUrl: file ? null : fileUrl,
+      filePath: file ? path.relative(UPLOAD_ROOT, file.path) : null,
+      fileOriginalName: file ? file.originalname : null,
+      fileMimeType: file ? file.mimetype : null,
+      fileSizeBytes: file ? file.size : null,
       findings,
       remarks,
       releasedBy
     });
 
     return result;
+  }
+
+  // Phase B: streams the physical file back for a result — never through a public static path,
+  // since these are PHI. Ownership mirrors the two checks already used elsewhere in this file/
+  // resultController: staff must own the test's category (assertStaffOwnsVisitTest, SuperAdmin/
+  // Admin bypass); a Client must own the patient the test belongs to (getPatientHistory's check).
+  async getResultFile(visitTestId, requestingUser) {
+    const ownership = await resultRepository.findOwnershipInfoByVisitTestId(visitTestId);
+    if (!ownership) {
+      const error = new Error('Visit test not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (requestingUser.roles.includes('Client')) {
+      if (ownership.patient_user_id !== requestingUser.userId) {
+        const error = new Error('Access forbidden. This result does not belong to your account.');
+        error.statusCode = 403;
+        throw error;
+      }
+    } else {
+      assertStaffAllowedCategory(requestingUser, ownership.category_name);
+    }
+
+    const result = await resultRepository.findResultByVisitTestId(visitTestId);
+    if (!result || !result.file_path) {
+      const error = new Error('No uploaded file exists for this result.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const absolutePath = path.join(UPLOAD_ROOT, result.file_path);
+    if (!fs.existsSync(absolutePath)) {
+      const error = new Error('The file for this result could not be found on the server.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return {
+      absolutePath,
+      originalName: result.file_original_name || 'result',
+      mimeType: result.file_mime_type || 'application/octet-stream'
+    };
   }
 
   async releaseResult({ visitTestId, releasedBy }, requestingUser) {

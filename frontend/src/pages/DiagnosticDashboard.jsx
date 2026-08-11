@@ -46,19 +46,10 @@ const TEMPLATES_BY_CATEGORY = {
   Ultrasound: [{ key: 'pelvic_us', label: '+ Normal Pelvic Ultrasound' }]
 };
 
-// The attachment URL is staff-entered free text with no format validation anywhere else in
-// the pipeline (it's rendered client-side in ClientDashboard.jsx behind a matching render-side
-// guard — see the Module 6 report). Validating it here, at the point of entry, stops an unsafe
-// value from ever being submitted in the first place.
-const isValidAttachmentUrl = (url) => {
-  if (!url) return true; // optional field
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-};
+// Phase B: mirrors backend/src/config/upload.js's own allowlist/size cap, so a mismatched file
+// is rejected instantly instead of round-tripping to the server first.
+const ALLOWED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024;
 
 const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const { user } = useAuth();
@@ -81,7 +72,9 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const [activeTest, setActiveTest] = useState(null);
   const [findings, setFindings] = useState('');
   const [remarks, setRemarks] = useState('');
-  const [fileUrl, setFileUrl] = useState('');
+  // Phase B: a real uploaded file, replacing the old free-text URL field — see
+  // database/migrations.md [1.7.0].
+  const [resultFile, setResultFile] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
@@ -176,9 +169,31 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     setActiveTest(test);
     setFindings('');
     setRemarks('');
-    setFileUrl('');
+    setResultFile(null);
     setUploadError('');
     setShowUploadModal(true);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setResultFile(null);
+      return;
+    }
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      setUploadError('Unsupported file type. Only PDF, JPEG, and PNG files are allowed.');
+      e.target.value = '';
+      setResultFile(null);
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setUploadError('File is too large. Maximum size is 15MB.');
+      e.target.value = '';
+      setResultFile(null);
+      return;
+    }
+    setUploadError('');
+    setResultFile(file);
   };
 
   const handleApplyTemplate = (templateType) => {
@@ -200,11 +215,6 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       return;
     }
 
-    if (!isValidAttachmentUrl(fileUrl)) {
-      setUploadError('Attachment URL must be a valid http:// or https:// link, or left blank.');
-      return;
-    }
-
     // Releasing a diagnostic result is clinically significant and effectively irreversible
     // from this screen — require explicit confirmation before it fires. See .agents Phase 12.
     setShowReleaseConfirm(true);
@@ -215,11 +225,19 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     setUploadError('');
 
     try {
-      await api.post(`/results/${activeTest.visit_test_id}`, {
-        findings,
-        remarks,
-        fileUrl: fileUrl || null
-      });
+      // Multipart when a file is attached (Phase B), plain JSON otherwise — the backend accepts
+      // both on the same endpoint (uploadResultFileMiddleware only engages for multipart bodies).
+      if (resultFile) {
+        const formData = new FormData();
+        formData.append('file', resultFile);
+        formData.append('findings', findings);
+        formData.append('remarks', remarks);
+        await api.post(`/results/${activeTest.visit_test_id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } else {
+        await api.post(`/results/${activeTest.visit_test_id}`, { findings, remarks });
+      }
 
       // The upload call above only records the findings — this is the actual "release" step
       // that notifies the patient by email. It was previously never called from this screen,
@@ -578,13 +596,17 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-600 uppercase">Image / Document URL Attachment (Optional)</label>
-                <Input
-                  placeholder="https://storage.enlogadaclinic.com/reports/sample.pdf"
-                  value={fileUrl}
-                  onChange={e => setFileUrl(e.target.value)}
-                  className="text-xs rounded-xl"
+                <label className="text-xs font-bold text-gray-600 uppercase">Attach Report File (Optional)</label>
+                <input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png"
+                  onChange={handleFileChange}
+                  className="w-full text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#769046]/10 file:text-[#769046] hover:file:bg-[#769046]/20 file:cursor-pointer cursor-pointer"
                 />
+                <p className="text-[11px] text-gray-400 m-0">PDF, JPEG, or PNG — up to 15MB.</p>
+                {resultFile && (
+                  <p className="text-[11px] font-semibold text-slate-700 m-0">{resultFile.name} ({(resultFile.size / 1024).toFixed(0)} KB)</p>
+                )}
               </div>
 
               <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">

@@ -9,6 +9,9 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
 
+# Uploaded diagnostic result files (PHI — never committed)
+backend/uploads/
+
 # Environment and Local Config
 .env
 .env.local
