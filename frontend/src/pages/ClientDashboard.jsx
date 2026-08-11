@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { StatusBadge } from '../components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import Pagination from '../components/ui/pagination';
+import BookingConfirmation from '../components/BookingConfirmation';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../lib/currency';
@@ -149,7 +150,10 @@ const ClientDashboard = ({ onNavigate }) => {
     hmoApprovalCode: ''
   });
 
-  const [bookingSuccess, setBookingSuccess] = useState('');
+  // UI/UX Modernization Phase 10: holds the full confirmation payload (not just a success
+  // string) so BookingConfirmation.jsx can render a durable QR/reference/queue-ticket card
+  // instead of the old plain-text message that auto-closed after 4 seconds.
+  const [bookingConfirmation, setBookingConfirmation] = useState(null);
   const [bookingError, setBookingError] = useState('');
 
   // Live slot availability for the selected date
@@ -373,7 +377,7 @@ const ClientDashboard = ({ onNavigate }) => {
   const handleBookAppointment = async (e) => {
     e.preventDefault();
     setBookingError('');
-    setBookingSuccess('');
+    setBookingConfirmation(null);
 
     const { scheduledDate, scheduledTime, notes, testIds, hmoProviderId, hmoApprovalCode } = bookingData;
     if (!scheduledDate || !scheduledTime || testIds.length === 0) {
@@ -410,7 +414,13 @@ const ClientDashboard = ({ onNavigate }) => {
         }
       }
 
-      setBookingSuccess(`Appointment booked successfully! Reference Code: ${appt.appointment_reference}. Physical Queue Ticket: ${appt.queue_number}`);
+      setBookingConfirmation({
+        referenceCode: appt.appointment_reference,
+        queueNumber: appt.queue_number,
+        patientName: selectedProfile ? `${selectedProfile.first_name} ${selectedProfile.last_name}` : '',
+        scheduledDate: formatAppointmentDate(bookingData.scheduledDate),
+        scheduledTime: bookingData.scheduledTime
+      });
       setBookingData({
         scheduledDate: '',
         scheduledTime: '',
@@ -419,13 +429,8 @@ const ClientDashboard = ({ onNavigate }) => {
         hmoProviderId: '',
         hmoApprovalCode: ''
       });
-      setBookingStep(1);
       fetchHistory(selectedProfileId);
       fetchAppointments();
-      setTimeout(() => {
-        setShowBooking(false);
-        setBookingSuccess('');
-      }, 4000);
     } catch (err) {
       setBookingError(err.response?.data?.message || 'Failed to book appointment');
       if (err.response?.status === 409 && bookingData.scheduledDate) {
@@ -836,11 +841,11 @@ const ClientDashboard = ({ onNavigate }) => {
                 if (!open) {
                   setBookingStep(1);
                   setBookingError('');
-                  setBookingSuccess('');
+                  setBookingConfirmation(null);
                 }
               }}>
                 <DialogTrigger asChild>
-                  <Button 
+                  <Button
                     disabled={!selectedProfileId}
                     className="bg-[#769046] hover:bg-[#657c3a] text-white py-5 px-6 font-bold flex items-center space-x-2 rounded-2xl shadow-lg border-0 cursor-pointer transition-all hover:scale-105 active:scale-95 text-sm"
                   >
@@ -849,6 +854,13 @@ const ClientDashboard = ({ onNavigate }) => {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-xl rounded-2xl">
+                  {bookingConfirmation ? (
+                    <BookingConfirmation
+                      {...bookingConfirmation}
+                      onClose={() => setShowBooking(false)}
+                    />
+                  ) : (
+                    <>
                   <DialogHeader>
                     <DialogTitle className="text-lg font-bold text-slate-900">
                       Book Diagnostic Appointment
@@ -856,7 +868,7 @@ const ClientDashboard = ({ onNavigate }) => {
                     <DialogDescription className="text-xs">
                       Schedule a diagnostic test for <strong>{selectedProfile?.first_name} {selectedProfile?.last_name}</strong>.
                     </DialogDescription>
-                    
+
                     {/* Visual Step Progress Bar */}
                     <div className="flex items-center justify-between pt-3 pb-1 border-b border-slate-100 my-2">
                       <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 1 ? 'text-[#769046]' : 'text-slate-400'}`}>
@@ -876,13 +888,6 @@ const ClientDashboard = ({ onNavigate }) => {
                       <div role="alert" className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
                         <span>{bookingError}</span>
-                      </div>
-                    )}
-
-                    {bookingSuccess && (
-                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
-                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                        <span>{bookingSuccess}</span>
                       </div>
                     )}
 
@@ -1035,6 +1040,8 @@ const ClientDashboard = ({ onNavigate }) => {
                       </div>
                     )}
                   </form>
+                    </>
+                  )}
                 </DialogContent>
               </Dialog>
             </div>

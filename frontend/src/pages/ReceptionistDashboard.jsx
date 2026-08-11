@@ -90,6 +90,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [verifyResult, setVerifyResult] = useState(null);
   const [verifyError, setVerifyError] = useState('');
   const [scanMode, setScanMode] = useState(false);
+  // UI/UX Modernization Phase 10: after a QR/reference check-in succeeds, verifyResult is
+  // cleared (so the form resets for the next patient) — this instead holds a short-lived
+  // "where to send them" message built from the visit's already-attached test categories.
+  const [checkInGuidance, setCheckInGuidance] = useState(null);
 
   // UI/UX Phase 3: check-in used to have two independent code paths — the QR/reference flow
   // went through a ConfirmDialog, but checking in an existing patient found via the Walk-In
@@ -143,6 +147,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [hmoProviderId, setHmoProviderId] = useState('');
   const [hmoApprovalCode, setHmoApprovalCode] = useState('');
   const [hmoError, setHmoError] = useState('');
+
+  // UI/UX Modernization Phase 10: read-only visibility into pending HMO requests, shown on the
+  // Active Queue landing view.
+  const [pendingHmoRequests, setPendingHmoRequests] = useState([]);
+  const [hmoRequestsLoading, setHmoRequestsLoading] = useState(true);
 
   const fetchActiveVisits = useCallback(async ({ page = 1, search = searchQuery, status = statusFilter } = {}) => {
     setLoading(true);
@@ -209,11 +218,28 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     }
   }, []);
 
+  // UI/UX Modernization Phase 10: GET /hmo/requests has always been authorized for
+  // Receptionist, but nothing on this dashboard ever called it — pending requests were
+  // effectively invisible unless someone already knew to look at Admin's Service Requests page.
+  // Read-only here: approving stays wherever it already lives, this just surfaces the list.
+  const fetchPendingHmoRequests = useCallback(async () => {
+    setHmoRequestsLoading(true);
+    try {
+      const res = await api.get('/hmo/requests', { params: { status: 'Pending' } });
+      setPendingHmoRequests(res.data.data.requests || []);
+    } catch (err) {
+      console.error('Failed to fetch pending HMO requests:', err);
+    } finally {
+      setHmoRequestsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchActiveVisits({ page: 1, search: '', status: 'All' });
     fetchStaticData();
+    fetchPendingHmoRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchActiveVisits, fetchStaticData]);
+  }, [fetchActiveVisits, fetchStaticData, fetchPendingHmoRequests]);
 
   // Lazy-load Visit History only once the tab is actually opened, not on every Receptionist
   // dashboard mount.
@@ -247,6 +273,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     e?.preventDefault?.();
     setVerifyError('');
     setVerifyResult(null);
+    setCheckInGuidance(null);
 
     const ref = refOverride ?? searchRef;
     if (!ref) return;
@@ -278,11 +305,15 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     setCheckInError('');
     try {
       if (checkInTarget.type === 'appointment') {
-        const { id: appointmentId, patient_visit_id: visitId } = checkInTarget.data;
+        const { id: appointmentId, patient_visit_id: visitId, first_name, last_name, categories } = checkInTarget.data;
         await api.patch(`/appointments/${appointmentId}/status`, { status: 'Confirmed' });
         await api.patch(`/visits/${visitId}/status`, { status: 'Processing' });
         setSearchRef('');
         setVerifyResult(null);
+        setCheckInGuidance({
+          patientName: `${first_name} ${last_name}`,
+          categories: categories || []
+        });
       } else {
         const patient = checkInTarget.data;
         const vRes = await api.post('/visits', {
@@ -461,6 +492,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       toastSuccess('HMO Pre-authorization logged successfully!');
       setShowHmoModal(false);
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
+      fetchPendingHmoRequests();
     } catch (err) {
       setHmoError(err.response?.data?.message || 'Failed to log HMO authorization');
     }
@@ -497,6 +529,37 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               <MetricCard label="In Diagnostic / Processing" value={queueProcessingCount} icon={ClipboardList} tone="indigo" />
               <MetricCard label="Walk-In Intake Today" value={queueWalkinCount} icon={UserPlus} tone="emerald" />
             </div>
+
+            {/* UI/UX Modernization Phase 10: read-only visibility into pending HMO requests —
+                approving one still happens from wherever it already does, this card only
+                surfaces that they exist. */}
+            {!hmoRequestsLoading && pendingHmoRequests.length > 0 && (
+              <Card className="border-amber-200 bg-amber-50/60 shadow-xs rounded-2xl overflow-hidden">
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                    <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wider m-0">
+                      {pendingHmoRequests.length} Pending HMO Request{pendingHmoRequests.length === 1 ? '' : 's'}
+                    </h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingHmoRequests.slice(0, 6).map(r => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1.5 bg-white border border-amber-200 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-amber-900"
+                      >
+                        <span className="font-bold">{r.provider_name}</span>
+                        <span className="text-amber-600">&bull;</span>
+                        <span>{r.approved_test_count}/{r.test_count} tests approved</span>
+                      </span>
+                    ))}
+                    {pendingHmoRequests.length > 6 && (
+                      <span className="text-[11px] font-semibold text-amber-700 self-center">+{pendingHmoRequests.length - 6} more</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Search + Status Filter Toolbar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
@@ -1041,6 +1104,22 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 <div role="alert" className="p-3 bg-red-50 text-red-600 text-xs rounded-xl flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{verifyError}</span>
+                </div>
+              )}
+
+              {checkInGuidance && (
+                <div role="status" className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl space-y-1.5 text-xs">
+                  <div className="flex items-center space-x-2 font-bold">
+                    <UserCheck className="w-4 h-4 flex-shrink-0" />
+                    <span>{checkInGuidance.patientName} is checked in.</span>
+                  </div>
+                  {checkInGuidance.categories.length > 0 ? (
+                    <p className="m-0">
+                      Please guide the patient to: <strong>{checkInGuidance.categories.join(', ')}</strong>.
+                    </p>
+                  ) : (
+                    <p className="m-0">No tests are attached to this visit yet — attach tests from the Active Queue before sending the patient anywhere.</p>
+                  )}
                 </div>
               )}
 

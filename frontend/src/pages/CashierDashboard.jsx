@@ -155,10 +155,21 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // Phase D finding 03: Transaction History had no way to reopen a past receipt — the only
   // "Print Receipt" affordance was the modal shown immediately after processing a *new* payment.
   // Reuses that exact modal, just fed from a history row instead of a fresh processPayment response.
-  const handleReprintReceipt = (transaction) => {
+  // UI/UX Modernization Phase 10: previously reconstructed billDetails with only patientName, so
+  // a reprinted receipt showed no itemized test breakdown even though the original one did —
+  // fetches the same GET /payments/bill/:visitId the checkout panel already uses, keyed on the
+  // transaction's own patient_visit_id, instead of hand-rolling a partial object.
+  const handleReprintReceipt = async (transaction) => {
     setPaymentSuccess(transaction);
     setBillDetails({ patientName: `${transaction.patient_first_name} ${transaction.patient_last_name}` });
     setShowReceiptModal(true);
+    try {
+      const response = await api.get(`/payments/bill/${transaction.patient_visit_id}`);
+      setBillDetails(response.data.data.bill);
+    } catch (err) {
+      console.error('Failed to load itemized bill for reprint:', err);
+      toastError('Could not load the itemized test list for this receipt.');
+    }
   };
 
   const handleOpenRefund = (transaction) => {
@@ -169,10 +180,16 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
   const confirmRefund = async () => {
     if (!refundTarget) return;
-    setRefunding(true);
     setRefundError('');
+
+    if (refundReason.trim().length < 3) {
+      setRefundError('A reason is required (at least 3 characters) — this becomes part of the audit trail.');
+      return;
+    }
+
+    setRefunding(true);
     try {
-      await api.patch(`/payments/${refundTarget.id}/status`, { status: 'Refunded', reason: refundReason.trim() || undefined });
+      await api.patch(`/payments/${refundTarget.id}/status`, { status: 'Refunded', reason: refundReason.trim() });
       setRefundTarget(null);
       fetchTransactionHistory(historyStartDate, historyEndDate);
     } catch (err) {
@@ -408,9 +425,18 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             <span className="block text-[10px] text-gray-400 font-bold uppercase">Ticket: {visit.queue_number || `V-${visit.id}`}</span>
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <Badge className="bg-amber-100 text-amber-800 text-[10px] font-bold">
-                              {visit.patient_type_name || 'Self Pay'}
-                            </Badge>
+                            <div className="flex items-center gap-1">
+                              <Badge
+                                className={`text-[10px] font-bold ${
+                                  visit.visit_type === 'Walk in' ? 'bg-slate-100 text-slate-700' : 'bg-indigo-100 text-indigo-700'
+                                }`}
+                              >
+                                {visit.visit_type}
+                              </Badge>
+                              <Badge className="bg-amber-100 text-amber-800 text-[10px] font-bold">
+                                {visit.patient_type_name || 'Self Pay'}
+                              </Badge>
+                            </div>
                             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${wait.tone}`}>
                               <Clock className="w-3 h-3" />
                               {wait.minutes}m waiting
@@ -765,12 +791,13 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
             )}
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-600 uppercase">Reason (optional)</label>
+              <label className="text-xs font-bold text-gray-600 uppercase">Reason <span className="text-red-600">*</span></label>
               <Textarea
                 value={refundReason}
                 onChange={e => setRefundReason(e.target.value)}
                 placeholder="e.g. Duplicate charge, patient dispute..."
                 disabled={refunding}
+                required
                 className="text-xs rounded-xl"
               />
             </div>
@@ -821,10 +848,23 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     <span className="text-gray-500 font-medium">Payment Mode:</span>
                     <span className="font-bold text-slate-900">{paymentSuccess.payment_method}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 font-medium">Amount Paid:</span>
-                    <span className="font-extrabold text-[#769046] text-sm">{formatCurrency(paymentSuccess.amount)}</span>
+                </div>
+
+                {billDetails.items && billDetails.items.length > 0 && (
+                  <div className="space-y-1.5 py-3 border-t border-b border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Items</span>
+                    {billDetails.items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between text-xs">
+                        <span className="text-gray-600">{item.name}</span>
+                        <span className="font-semibold text-slate-800">{formatCurrency(item.price)}</span>
+                      </div>
+                    ))}
                   </div>
+                )}
+
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500 font-medium">Amount Paid:</span>
+                  <span className="font-extrabold text-[#769046] text-sm">{formatCurrency(paymentSuccess.amount)}</span>
                 </div>
 
                 <div className="pt-3 border-t border-gray-100 flex justify-end space-x-2">
