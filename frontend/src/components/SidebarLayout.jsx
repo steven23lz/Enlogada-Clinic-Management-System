@@ -27,7 +27,8 @@ import {
   UserPlus,
   QrCode,
   History,
-  UserCog
+  UserCog,
+  Info
 } from 'lucide-react';
 
 const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectNav, children }) => {
@@ -37,6 +38,14 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
 
   const userRoles = user?.roles || [];
   const isSuperOrAdmin = userRoles.includes('SuperAdmin') || userRoles.includes('Admin');
+
+  // UI/UX Modernization Phase 7: opsNavGroups is deliberately shared — Admin/SuperAdmin see
+  // every department's screens, not just their own (§3a intentional superset, not a bug). The
+  // dense combined sidebar this produces was flagged as a clarity gap in the redesign audit: an
+  // Admin viewing e.g. the Receptionist's Active Queue had no on-screen signal they were on a
+  // screen "borrowed" from another role rather than an Admin-exclusive tool. Resolved below, not
+  // by shrinking the sidebar (Admin genuinely needs full operational access), but by naming the
+  // context once a borrowed screen is open.
 
   // Navigation Items. Most admin-console items are gated by isSuperOrAdmin (Admin and
   // SuperAdmin see the same thing); 'superadmin' is the first item restricted to SuperAdmin
@@ -99,6 +108,15 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
       ],
     },
   ];
+
+  // Resolve the currently-open ops screen (if any) and whether the viewer is genuinely acting
+  // outside their own department on it — i.e. Admin/SuperAdmin without the item's own operational
+  // role. A native Receptionist on Active Queue is just doing their job and sees nothing extra.
+  const activeOpsItem = opsNavGroups
+    .flatMap(group => group.items.map(item => ({ ...item, groupLabel: group.label })))
+    .find(item => item.id === activeNav);
+  const activeOpsNativeRole = activeOpsItem?.roleRequired.find(r => r !== 'Admin' && r !== 'SuperAdmin');
+  const isActingOutsideOwnRole = Boolean(activeOpsItem) && isSuperOrAdmin && !userRoles.includes(activeOpsNativeRole);
 
   // Module 18 (Notification): real, per-user notifications from the backend, replacing the
   // static 3-item mock list that previously rendered identically for every user regardless of
@@ -387,7 +405,15 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
         </header>
 
         {/* Dynamic Screen View Content */}
-        <main className="flex-1 p-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          {isActingOutsideOwnRole && (
+            <div className="mb-4 flex items-center space-x-2.5 bg-[#769046]/8 border border-[#769046]/25 text-[#536630] rounded-xl px-4 py-2.5 text-xs font-semibold">
+              <Info className="w-4 h-4 flex-shrink-0" />
+              <span>
+                Acting as: <strong>{activeOpsItem.groupLabel}</strong> — {activeOpsNativeRole} tools
+              </span>
+            </div>
+          )}
           {children}
         </main>
 
