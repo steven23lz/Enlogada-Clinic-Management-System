@@ -68,7 +68,7 @@ const ServicesPage = ({ onNavigate }) => {
       <PublicHeader currentTab="services" onNavigate={onNavigate} />
 
       {/* Page Title Dark Header matching Figma design */}
-      <section className="bg-primary-navy text-white py-14 px-8 border-b border-gray-800">
+      <section className="bg-primary-navy text-white py-10 sm:py-14 px-4 sm:px-6 lg:px-8 border-b border-gray-800">
         <div className="max-w-7xl mx-auto space-y-3">
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Our Services</h1>
           <p className="text-gray-300 text-sm max-w-2xl leading-relaxed">
@@ -78,7 +78,7 @@ const ServicesPage = ({ onNavigate }) => {
       </section>
 
       {/* Services Grid Section */}
-      <main className="flex-1 max-w-7xl mx-auto px-8 py-12 w-full space-y-8">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full space-y-8">
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center space-y-3">
             <div className="w-10 h-10 border-4 border-[#769046] border-t-transparent rounded-full animate-spin"></div>

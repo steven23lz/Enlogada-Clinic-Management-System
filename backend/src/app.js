@@ -23,9 +23,14 @@ app.use(morgan(morganFormat, {
 }));
 
 // 4. Rate Limiting Middleware
+// Production stays deliberately tight at 100/15min. The dev ceiling exists only so the
+// frontend/tests/e2e Playwright suite can run: that suite is now ~190 tests, most of which
+// perform several authenticated API calls, and it comfortably exceeded the previous 1000 —
+// exhausting the window mid-run and failing ~25 specs with a misleading
+// "Cannot read properties of undefined (reading 'token')" rather than an obvious 429.
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Higher threshold for automated testing in dev
+  max: process.env.NODE_ENV === 'production' ? 100 : 20000,
   message: {
     status: 'error',
     message: 'Too many requests from this IP, please try again after 15 minutes.'

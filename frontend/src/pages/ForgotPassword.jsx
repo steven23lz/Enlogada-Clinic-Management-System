@@ -40,7 +40,7 @@ const ForgotPassword = ({ onNavigate }) => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <PublicHeader currentTab="login" onNavigate={onNavigate} />
 
-      <main className="flex-1 max-w-7xl mx-auto px-8 py-12 flex items-center justify-center w-full">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex items-center justify-center w-full">
         <div className="w-full max-w-md">
           <Card className="border-gray-100 shadow-lg rounded-2xl border-t-4 border-t-[#769046] bg-white overflow-hidden">
             <CardHeader className="space-y-1.5 pt-6 pb-2 px-6">

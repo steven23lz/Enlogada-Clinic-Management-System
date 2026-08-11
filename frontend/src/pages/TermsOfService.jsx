@@ -42,7 +42,7 @@ const TermsOfService = ({ onNavigate }) => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <PublicHeader currentTab="terms" onNavigate={onNavigate} />
 
-      <section className="bg-primary-navy text-white py-14 px-8 border-b border-gray-800">
+      <section className="bg-primary-navy text-white py-10 sm:py-14 px-4 sm:px-6 lg:px-8 border-b border-gray-800">
         <div className="max-w-4xl mx-auto space-y-3">
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Terms of Service</h1>
           <p className="text-gray-300 text-sm max-w-2xl leading-relaxed">
@@ -52,7 +52,7 @@ const TermsOfService = ({ onNavigate }) => {
         </div>
       </section>
 
-      <main className="flex-1 max-w-4xl mx-auto px-8 py-12 w-full space-y-6">
+      <main className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full space-y-6">
         {SECTIONS.map(({ icon: Icon, title, body }) => (
           <div key={title} className="bg-white border border-gray-100 rounded-2xl shadow-xs p-6 space-y-3">
             <div className="flex items-center space-x-2.5">

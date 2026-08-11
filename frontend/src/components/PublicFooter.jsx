@@ -5,7 +5,7 @@ import { Phone, Mail, MapPin } from 'lucide-react';
 const PublicFooter = ({ onNavigate }) => {
   return (
     <footer className="w-full bg-primary-navy text-gray-300 pt-12 pb-8 border-t border-gray-800">
-      <div className="max-w-7xl mx-auto px-8 grid grid-cols-1 md:grid-cols-3 gap-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-10">
 
         {/* Brand Summary */}
         <div className="space-y-4">
@@ -52,7 +52,7 @@ const PublicFooter = ({ onNavigate }) => {
 
       </div>
 
-      <div className="max-w-7xl mx-auto px-8 pt-8 mt-8 border-t border-gray-800 flex flex-col md:flex-row items-center justify-between text-xs text-gray-500">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 mt-8 border-t border-gray-800 flex flex-col md:flex-row items-center justify-between text-xs text-gray-500">
         <p>© 2026 Enlogada Ultrasound & Diagnostic Clinic. All rights reserved.</p>
         <div className="flex items-center space-x-6 mt-4 md:mt-0">
           <button
