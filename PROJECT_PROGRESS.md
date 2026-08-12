@@ -1,6 +1,6 @@
 # Enlogada Clinic Management System — Master Project Status & Progress Report
 
-> **Last Updated**: August 7, 2026  
+> **Last Updated**: August 12, 2026  
 > **Repository**: [`steven23lz/Enlogada-Clinic-Management-System`](https://github.com/steven23lz/Enlogada-Clinic-Management-System)  
 > **Tech Stack**: React (Vite 8, Tailwind CSS v4), Node.js (Express 5), PostgreSQL (Local DB: `Enlogada`)
 
@@ -34,6 +34,55 @@ All 8 system roles have pre-seeded test accounts in PostgreSQL for local testing
 
 ---
 
+## 🎫 Ticket Lifecycle & Release Gating
+
+A diagnostic ticket reaches an Ultrasound / X-Ray / Laboratory worklist **only** when its visit is `Processing`, and a visit becomes `Processing` only when **both** conditions are met:
+
+1. **Payment confirmed** — a `payments` row with `payment_status = 'Paid'` (online via GCash/Maya, or recorded at the counter by a cashier), **and**
+2. **Staff confirmation** — an Appointment must be checked in at the front desk (QR scan / reference lookup, setting `appointments.status = 'Confirmed'`); a walk-in is confirmed by the act of being registered at reception.
+
+Whichever condition is satisfied last triggers the release. Both real-world routes converge on the same rule:
+
+| Flow | Path |
+|---|---|
+| **Online booking** | Client books → pays online (GCash/Maya) → receives QR booking pass → receptionist scans QR → **released to modality** |
+| **Walk-in** | Receptionist registers patient → cashier confirms payment → **released to modality** |
+
+This lives in one place: `visitService.releaseVisitIfReady()`. Nothing else may set a visit to `Processing` — a manual `PATCH /visits/:id/status` to `Processing` is refused with HTTP 409 unless both conditions hold (SuperAdmin/Admin may override).
+
+### Status model
+
+**`patient_visits.status`**: `Pending` (with reception/cashier) → `Processing` (released to modality) → `Completed` (all tests released)
+
+**`visit_tests.status`**:
+
+```
+Pending ──────────► Processing ──────────► Waiting for Release ──────► Completed
+(front desk /       (released; modality     (exam done, findings        (result released,
+ cashier only)       sees it)                recorded)                   patient emailed)
+```
+
+### Modality role boundaries
+
+- Diagnostic staff see **only** released tickets — enforced in the query (`pv.status = 'Processing'`) *and* re-checked server-side on every state-changing call, so a direct API call on an un-released ticket returns **403**, not just an empty list.
+- Diagnostic staff may set **only** `Waiting for Release` and `Completed`. They cannot set `Processing` — a ticket arrives that way. There is no "Start Processing" action.
+- Every modality status change is reflected on the receptionist's queue and notified to the front desk.
+
+---
+
+## 💳 Online Payment Gateway (GCash / Maya)
+
+Online payments use **PayMongo's hosted Checkout Session**, which redirects the payer to GCash's and Maya's own real payment pages. GCash and Maya do not issue direct merchant API credentials to applications — in the Philippines you onboard through a BSP-regulated processor, which is what PayMongo is.
+
+- Only **GCash** and **PayMaya** are offered. No cards, no other e-wallets.
+- `POST /api/payments/gateway/checkout` creates the session server-side (the amount is always recomputed from the bill, never taken from the client) and returns the provider's `checkout_url`.
+- `POST /api/payments/gateway/webhook` is the **only** thing that can mark an online payment `Paid`. It verifies the `Paymongo-Signature` HMAC-SHA256 over the raw request body before trusting anything, and is idempotent against PayMongo's delivery retries.
+- **Requires credentials.** With `PAYMONGO_SECRET_KEY` unset the gateway reports itself unavailable, the client UI offers no online option, and the clinic operates exactly as before — cashier-recorded payments only. See `backend/.env.example`.
+
+Once payment settles, the client's booking shows a **scannable QR booking pass** (`BookingPass.jsx`) encoding the `appointment_reference` — which is what the receptionist's existing camera scanner reads at check-in.
+
+---
+
 ## 🔐 Authentication & Session Architecture
 
 1. **Standard Password Auth**:
@@ -64,8 +113,8 @@ All 8 system roles have pre-seeded test accounts in PostgreSQL for local testing
 - `appointments`: `id`, `patient_visit_id`, `appointment_reference`, `scheduled_date`, `scheduled_time`, `status`
 - `test_categories`: `id`, `name` (`Laboratory`, `Xray`, `Ultrasound`, `2D Echo`, `ECG`)
 - `tests`: `id`, `category_id`, `name`, `price`, `is_active`
-- `visit_tests`: `id`, `patient_visit_id`, `test_id`, `status`, `price_at_time`, `remarks`
-- `payments`: `id`, `patient_visit_id`, `total_amount`, `payment_method`, `reference_number`, `status`, `processed_by`
+- `visit_tests`: `id`, `patient_visit_id`, `test_id`, `status` (`Pending`/`Approved`/`Processing`/`Waiting for Release`/`Completed`/`Cancelled`), `price_at_time`, `remarks`
+- `payments`: `id`, `patient_visit_id`, `amount`, `payment_method`, `reference_number`, `receipt_number`, `payment_status`, `processed_by`, `gateway_provider`, `gateway_session_id`, `gateway_payment_id`
 - `test_results`: `id`, `visit_test_id`, `file_url`, `findings`, `remarks`, `released_by`, `released_at`
 - `hmo_providers`: `id`, `name`
 - `hmo_requests`: `id`, `patient_visit_id`, `hmo_provider_id`, `approval_code`, `status`
@@ -82,6 +131,10 @@ All 8 system roles have pre-seeded test accounts in PostgreSQL for local testing
 - `GET /api/results/pending/:category` — Pending diagnostic queue (Lab, Xray, Ultrasound Staff)
 - `POST /api/results/:visitTestId` — Upload findings & set completed (Lab, Xray, Ultrasound Staff)
 - `POST /api/results/:visitTestId/release` — Release result & send email notification (Lab, Xray, Ultrasound Staff)
+- `GET /api/results/:visitTestId` — Fetch recorded findings for one ticket, so staff can edit a `Waiting for Release` entry
+- `GET /api/payments/gateway/status` — Is online payment configured? (any authenticated user)
+- `POST /api/payments/gateway/checkout` — Start a GCash/Maya payment, returns the provider checkout URL
+- `POST /api/payments/gateway/webhook` — PayMongo settlement callback (signature-verified, unauthenticated by design)
 
 ---
 
