@@ -3,7 +3,7 @@ import SidebarLayout from '../components/SidebarLayout';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import MetricCard from '../components/ui/metric-card';
-import { Badge } from '../components/ui/badge';
+import { StatusBadge } from '../components/ui/status-badge';
 import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
@@ -16,7 +16,6 @@ import {
   Stethoscope,
   FlaskConical,
   Scan,
-  Play,
   FileText,
   Send,
   Clock,
@@ -25,7 +24,10 @@ import {
   Eye
 } from 'lucide-react';
 
-const WORKLIST_STATUS_FILTERS = ['All', 'Pending', 'Processing'];
+// A ticket only reaches this console once the receptionist/cashier has released it, at which
+// point it is already 'Processing'. 'Pending' is therefore not a state this screen can ever
+// show — it belongs to the front desk and cashier.
+const WORKLIST_STATUS_FILTERS = ['All', 'Processing', 'Waiting for Release'];
 const PAGE_SIZE = 10;
 
 const NAV_TO_CATEGORY = {
@@ -86,6 +88,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const [uploadError, setUploadError] = useState('');
   const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
   const [releasingResult, setReleasingResult] = useState(false);
+  const [savingFindings, setSavingFindings] = useState(false);
 
   const determineCategory = useCallback((roles) => {
     if (roles.includes('Laboratory Staff')) {
@@ -162,23 +165,43 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     setHistoryPage(1);
   }, [category, searchQuery]);
 
-  const handleStartProcessing = async (visitTestId) => {
-    try {
-      await api.patch(`/results/test-status/${visitTestId}`, { status: 'Processing' });
-      fetchPendingTests(category);
-    } catch (err) {
-      console.error(err);
-      alert('Failed to update test status to Processing.');
-    }
+  const handleOpenReleaseConfirm = (test) => {
+    setActiveTest(test);
+    // Reset the findings-form state: this path releases a ticket directly from the table row,
+    // bypassing the upload modal entirely. Without this reset, `findings` could still hold
+    // leftover text from a PREVIOUS test's upload-modal session, and confirmReleaseResult's
+    // "was something typed but not saved yet" check below would then silently overwrite THIS
+    // ticket's already-recorded result with that stale, unrelated text before releasing it.
+    setFindings('');
+    setRemarks('');
+    setFileUrl('');
+    setUploadError('');
+    setShowReleaseConfirm(true);
   };
 
-  const handleOpenUploadModal = (test) => {
+  const handleOpenUploadModal = async (test) => {
     setActiveTest(test);
     setFindings('');
     setRemarks('');
     setFileUrl('');
     setUploadError('');
     setShowUploadModal(true);
+
+    // A ticket in 'Waiting for Release' already has findings recorded against it — load them
+    // so "Edit Findings" edits rather than silently blanking the previous entry.
+    if (test.test_status === 'Waiting for Release') {
+      try {
+        const res = await api.get(`/results/${test.visit_test_id}`);
+        const existing = res.data.data.result;
+        if (existing) {
+          setFindings(existing.findings || '');
+          setRemarks(existing.remarks || '');
+          setFileUrl(existing.file_url || '');
+        }
+      } catch {
+        // Non-fatal: the form simply starts empty, exactly as it did before.
+      }
+    }
   };
 
   const handleApplyTemplate = (templateType) => {
@@ -191,27 +214,39 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     }
   };
 
+  // Shared validation for both exits from the findings form.
+  const validateFindingsForm = () => {
+    if (!findings) {
+      setUploadError('Findings and diagnostic analysis text are required.');
+      return false;
+    }
+    if (!isValidAttachmentUrl(fileUrl)) {
+      setUploadError('Attachment URL must be a valid http:// or https:// link, or left blank.');
+      return false;
+    }
+    return true;
+  };
+
   const handleUploadResult = async (e) => {
     e.preventDefault();
     setUploadError('');
+    if (!validateFindingsForm()) return;
+    await handleRecordFindings();
+  };
 
-    if (!findings) {
-      setUploadError('Findings and diagnostic analysis text are required.');
-      return;
-    }
-
-    if (!isValidAttachmentUrl(fileUrl)) {
-      setUploadError('Attachment URL must be a valid http:// or https:// link, or left blank.');
-      return;
-    }
-
+  const handleSaveAndRelease = () => {
+    setUploadError('');
+    if (!validateFindingsForm()) return;
     // Releasing a diagnostic result is clinically significant and effectively irreversible
     // from this screen — require explicit confirmation before it fires. See .agents Phase 12.
     setShowReleaseConfirm(true);
   };
 
-  const confirmReleaseResult = async () => {
-    setReleasingResult(true);
+  // Recording findings and releasing them are now two distinct events, matching the two
+  // distinct ticket states the front desk sees. This call parks the ticket in
+  // 'Waiting for Release'; releaseResult below is what actually notifies the patient.
+  const handleRecordFindings = async () => {
+    setSavingFindings(true);
     setUploadError('');
 
     try {
@@ -220,17 +255,37 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         remarks,
         fileUrl: fileUrl || null
       });
+      setShowUploadModal(false);
+      fetchPendingTests(category);
+    } catch (err) {
+      setUploadError(err.response?.data?.message || 'Failed to record diagnostic result.');
+    } finally {
+      setSavingFindings(false);
+    }
+  };
 
-      // The upload call above only records the findings — this is the actual "release" step
-      // that notifies the patient by email. It was previously never called from this screen,
-      // so "Authorize & Release Result" recorded findings but never released/notified anyone.
+  const confirmReleaseResult = async () => {
+    setReleasingResult(true);
+    setUploadError('');
+
+    try {
+      // Findings may have been recorded in an earlier session (the ticket is sitting in
+      // 'Waiting for Release'), in which case there is nothing new to save — only release.
+      if (findings) {
+        await api.post(`/results/${activeTest.visit_test_id}`, {
+          findings,
+          remarks,
+          fileUrl: fileUrl || null
+        });
+      }
+
       await api.post(`/results/${activeTest.visit_test_id}/release`);
 
       setShowReleaseConfirm(false);
       setShowUploadModal(false);
       fetchPendingTests(category);
     } catch (err) {
-      setUploadError(err.response?.data?.message || 'Failed to record diagnostic result.');
+      setUploadError(err.response?.data?.message || 'Failed to release diagnostic result.');
       setShowReleaseConfirm(false);
     } finally {
       setReleasingResult(false);
@@ -259,9 +314,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const historyTotalPages = Math.max(1, Math.ceil(filteredReleased.length / PAGE_SIZE));
   const pagedReleased = filteredReleased.slice((historyPage - 1) * PAGE_SIZE, historyPage * PAGE_SIZE);
 
-  const pendingCount = pendingTests.filter(t => t.test_status === 'Pending').length;
   const categoryLabel = category === 'Ultrasound' ? 'Ultrasound (incl. 2D Echo)' : category;
+  // 'Processing' = released to this department, exam not yet done.
+  // 'Waiting for Release' = exam done and findings recorded, awaiting authorisation.
   const processingCount = pendingTests.filter(t => t.test_status === 'Processing').length;
+  const awaitingReleaseCount = pendingTests.filter(t => t.test_status === 'Waiting for Release').length;
   const pageTitle = mode === 'history' ? `${categoryLabel} Result History` : `${categoryLabel} Operations Worklist`;
 
   return (
@@ -278,8 +335,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             icon={category === 'Ultrasound' ? Stethoscope : category === 'Xray' ? Scan : FlaskConical}
             tone="green"
           />
-          <MetricCard label="Queue Awaiting Test" value={pendingCount} icon={Clock} tone="amber" />
-          <MetricCard label="Currently Processing" value={processingCount} icon={FileText} tone="indigo" />
+          <MetricCard label="Released — Awaiting Exam" value={processingCount} icon={Clock} tone="indigo" />
+          <MetricCard label="Awaiting Result Release" value={awaitingReleaseCount} icon={FileText} tone="amber" />
         </div>
 
         {/* Search + Status Filter Toolbar */}
@@ -349,30 +406,26 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                       </TableCell>
 
                       <TableCell className="py-3.5">
-                        <Badge className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                          test.test_status === 'Processing' ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {test.test_status}
-                        </Badge>
+                        <StatusBadge status={test.test_status} className="text-[10px] px-2.5 py-0.5 rounded-full" />
                       </TableCell>
 
                       <TableCell className="py-3.5 text-right">
                         <div className="flex items-center justify-end space-x-2">
-                          {test.test_status === 'Pending' ? (
+                          <Button
+                            onClick={() => handleOpenUploadModal(test)}
+                            variant="outline"
+                            className="text-xs font-bold px-3 py-1.5 rounded-xl border-gray-200 hover:bg-gray-50 flex items-center space-x-1.5 cursor-pointer"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>{test.test_status === 'Waiting for Release' ? 'Edit Findings' : 'Record Findings'}</span>
+                          </Button>
+                          {test.test_status === 'Waiting for Release' && (
                             <Button
-                              onClick={() => handleStartProcessing(test.visit_test_id)}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer"
-                            >
-                              <Play className="w-3.5 h-3.5" />
-                              <span>Start Processing</span>
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={() => handleOpenUploadModal(test)}
+                              onClick={() => handleOpenReleaseConfirm(test)}
                               className="bg-[#769046] hover:bg-[#657c3a] text-white text-xs font-bold px-3.5 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer"
                             >
-                              <FileText className="w-3.5 h-3.5" />
-                              <span>Record Findings & Release</span>
+                              <Send className="w-3.5 h-3.5" />
+                              <span>Release Result</span>
                             </Button>
                           )}
                         </div>
@@ -382,7 +435,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8 text-xs text-gray-400 font-semibold italic">
-                      No pending diagnostic examinations in the {categoryLabel} worklist.
+                      No tickets released to the {categoryLabel} department yet. A ticket appears here
+                      once the receptionist or cashier has confirmed payment and checked the patient in.
                     </TableCell>
                   </TableRow>
                 )}
@@ -525,7 +579,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
           <DialogContent className="max-w-2xl rounded-2xl p-6">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold text-slate-900">
-                Record Findings & Release Diagnostic Certificate
+                Record Findings &amp; Release Diagnostic Certificate
               </DialogTitle>
               <DialogDescription className="text-xs">
                 Patient: <strong>{activeTest?.first_name} {activeTest?.last_name}</strong> &bull; Examination: <strong>{activeTest?.test_name}</strong>
@@ -593,9 +647,22 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
 
               <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
                 <Button type="button" variant="outline" onClick={() => setShowUploadModal(false)}>Cancel</Button>
-                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold text-xs px-5 py-2 rounded-xl flex items-center space-x-1.5">
+                <Button
+                  type="submit"
+                  disabled={savingFindings}
+                  variant="outline"
+                  className="font-bold text-xs px-5 py-2 rounded-xl border-gray-200 flex items-center space-x-1.5"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>{savingFindings ? 'Saving…' : 'Save Findings'}</span>
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSaveAndRelease}
+                  className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold text-xs px-5 py-2 rounded-xl flex items-center space-x-1.5"
+                >
                   <Send className="w-4 h-4" />
-                  <span>Authorize & Release Result</span>
+                  <span>Authorize &amp; Release Result</span>
                 </Button>
               </div>
             </form>

@@ -13,6 +13,10 @@ import { Badge } from "./badge"
 const STATUS_STYLES = {
   Pending: "bg-amber-100 text-amber-800",
   Processing: "bg-indigo-100 text-indigo-800",
+  // visit_tests only: the modality has performed the exam and recorded findings, and the
+  // result is awaiting authorisation. Sits between Processing and Completed, so it gets its
+  // own hue rather than reusing either neighbour's.
+  "Waiting for Release": "bg-violet-100 text-violet-800",
   Approved: "bg-emerald-100 text-emerald-800",
   Confirmed: "bg-emerald-100 text-emerald-800",
   Completed: "bg-emerald-100 text-emerald-800",
