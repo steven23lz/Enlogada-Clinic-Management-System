@@ -172,7 +172,10 @@ CREATE TABLE visit_tests (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_visit_tests_visit FOREIGN KEY (patient_visit_id) REFERENCES patient_visits(id),
     CONSTRAINT fk_visit_tests_test FOREIGN KEY (test_id) REFERENCES tests(id),
-    CONSTRAINT chk_visit_tests_status CHECK (status IN ('Pending', 'Approved', 'Processing', 'Completed', 'Cancelled')),
+    -- 'Waiting for Release': the modality has performed the exam and recorded findings, but the
+    -- result has not yet been authorised/released to the patient. Sits between 'Processing'
+    -- (released to the modality, exam not yet done) and 'Completed' (result released).
+    CONSTRAINT chk_visit_tests_status CHECK (status IN ('Pending', 'Approved', 'Processing', 'Waiting for Release', 'Completed', 'Cancelled')),
     CONSTRAINT chk_visit_tests_price CHECK (price_at_time >= 0),
     CONSTRAINT uq_visit_tests_visit_test UNIQUE (patient_visit_id, test_id)
 );
@@ -232,12 +235,24 @@ CREATE TABLE payments (
     amount NUMERIC(10,2) NOT NULL,
     payment_status VARCHAR(50) DEFAULT 'Paid',
     paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Online payment gateway linkage (GCash / Maya via PayMongo hosted checkout). NULL for
+    -- payments recorded at the counter by a cashier. A gateway payment is inserted as
+    -- 'Pending' when checkout starts and only flips to 'Paid' when the signed
+    -- 'checkout_session.payment.paid' webhook arrives — never from the browser redirect,
+    -- which is attacker-controllable.
+    gateway_provider VARCHAR(30),
+    gateway_session_id VARCHAR(120),
+    gateway_payment_id VARCHAR(120),
     CONSTRAINT fk_payments_visit FOREIGN KEY (patient_visit_id) REFERENCES patient_visits(id),
     CONSTRAINT fk_payments_processed_by FOREIGN KEY (processed_by) REFERENCES users(id),
     CONSTRAINT chk_payment_method CHECK (payment_method IN ('Cash', 'GCash', 'PayMaya', 'Bank')),
     CONSTRAINT chk_payment_status CHECK (payment_status IN ('Pending', 'Paid', 'Failed', 'Refunded', 'Cancelled')),
-    CONSTRAINT chk_payment_amount CHECK (amount >= 0)
+    CONSTRAINT chk_payment_amount CHECK (amount >= 0),
+    CONSTRAINT uq_payments_gateway_session UNIQUE (gateway_session_id)
 );
+
+-- Webhook lookups resolve a checkout session back to its pending payment row.
+CREATE INDEX idx_payments_gateway_session ON payments(gateway_session_id);
 
 -- 8. Clinic Availability
 CREATE TABLE clinic_operating_hours (

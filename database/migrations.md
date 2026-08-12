@@ -1,5 +1,26 @@
 # Database Migration & Schema History
 
+## [1.6.0] - 2026-08-12 (Ticket Release Gating + Online Payment Gateway)
+
+### Changed
+* `visit_tests.chk_visit_tests_status` widened to allow **`'Waiting for Release'`**: the state between `'Processing'` (released to a modality, exam not yet performed) and `'Completed'` (result released to the patient). Recording findings and releasing them are two distinct clinical events and now have two distinct states, both visible to the front desk.
+
+### Added
+* `payments.gateway_provider`, `payments.gateway_session_id`, `payments.gateway_payment_id` — links a payment row to an online GCash/Maya checkout session (PayMongo hosted checkout). NULL for counter payments. Plus `uq_payments_gateway_session` (UNIQUE) and `idx_payments_gateway_session`, which the webhook uses to resolve a session back to its pending payment.
+* A gateway payment is inserted as `payment_status = 'Pending'` when the patient is redirected, and only flips to `'Paid'` when a signature-verified `checkout_session.payment.paid` webhook arrives. The browser's return to `success_url` is never trusted — it is a plain URL the patient can navigate to directly.
+
+### Migration
+* Applied additively by **`backend/src/scripts/migrateTicketFlow.js`** (idempotent, runs in a single transaction, safe to re-run) rather than by `migrateDb.js`, which is destructive and would discard accumulated seed/test data. Same approach as [1.4.0] and [1.5.0]. `schema.sql` remains canonical for fresh installs and already carries every change above.
+
+```bash
+cd backend && node src/scripts/migrateTicketFlow.js
+```
+
+### Behavioural consequence (no schema change, but load-bearing)
+* `resultRepository.findPendingByCategory` now joins `patient_visits` and requires `pv.status = 'Processing'`. Previously it filtered on `visit_tests.status` alone and never looked at the parent visit, so a ticket appeared on a modality worklist the instant a client attached tests during online booking — before confirmation, before payment, and even for cancelled visits.
+
+---
+
 ## [1.5.0] - 2026-08-10 (Module 18: Notification — normalization refinement)
 
 ### Changed
