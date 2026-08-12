@@ -11,7 +11,17 @@ const app = express();
 app.use(cors());
 
 // 2. Parse Incoming JSON and URL-encoded requests
-app.use(express.json());
+//
+// The `verify` hook stashes the raw request bytes on req.rawBody. The PayMongo payment webhook
+// signs the exact bytes it sent, so verifying against a re-serialised req.body would fail on
+// every legitimate delivery (key order and whitespace are not preserved by a parse/stringify
+// round trip). Capturing here — rather than mounting the webhook route ahead of this parser —
+// keeps route ordering, CORS, logging and rate limiting identical for every endpoint.
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // 3. HTTP Request Logging (using Morgan redirected to Winston logger)

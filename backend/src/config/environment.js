@@ -21,5 +21,22 @@ module.exports = {
   SMTP_PASS: process.env.SMTP_PASS || '',
   SMTP_FROM: process.env.SMTP_FROM || 'Enlogada Clinic <noreply@enlogadaclinic.com>',
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
-  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || ''
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
+
+  // --- Online payment gateway (GCash / Maya) --------------------------------------------
+  // GCash and Maya do not issue direct merchant API access to applications; in the Philippines
+  // you reach them through a BSP-regulated processor. This integration targets PayMongo's
+  // hosted Checkout Session, which redirects the payer to GCash's / Maya's own real payment
+  // pages and settles back over a signed webhook.
+  //
+  // Deliberately NOT in requiredEnvVars: with no key configured the gateway reports itself
+  // unavailable and the clinic falls back to the cashier-recorded payment path, which is
+  // exactly how the system behaved before online payment existed. Nothing breaks when these
+  // are blank.
+  //
+  // PAYMONGO_API_BASE is configurable rather than hardcoded because PayMongo documents this
+  // endpoint under both /v1 and /v2; set whichever your account's dashboard shows.
+  PAYMONGO_SECRET_KEY: process.env.PAYMONGO_SECRET_KEY || '',
+  PAYMONGO_WEBHOOK_SECRET: process.env.PAYMONGO_WEBHOOK_SECRET || '',
+  PAYMONGO_API_BASE: process.env.PAYMONGO_API_BASE || 'https://api.paymongo.com/v1'
 };
