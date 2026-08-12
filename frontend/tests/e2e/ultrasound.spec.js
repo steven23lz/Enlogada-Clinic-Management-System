@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { payAndReleaseWalkIn } from './helpers/ticketRelease.js';
 
 // Module 10 (Ultrasound Staff) coverage. This shares DiagnosticDashboard.jsx with Modules 9
 // and 11; Module 9 already fixed the release-notification wiring and attachment URL
@@ -62,6 +63,12 @@ async function createVisitTest(apiContext, recToken, categoryName) {
     data: { patientVisitId: visit.id, testIds: [test_.id] },
   });
   const visitTestId = (await vtRes.json()).data.visitTests[0].id;
+
+
+  // Ticket-release gating: a walk-in reaches a modality worklist only once payment is
+  // confirmed. Without this the fixture builds a visit that is correctly invisible to
+  // diagnostic staff, and every assertion below would fail for the right reason.
+  await payAndReleaseWalkIn(apiContext, API, visit.id);
 
   return { patient, visit, visitTestId, test: test_ };
 }
@@ -154,12 +161,13 @@ test.describe('Ultrasound Staff — browser flow', () => {
     await page.getByPlaceholder('Search patient, test, queue...').fill(patient.last_name);
     await expect(page.getByText(`M10 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
+    // No "Start Processing" step any more: the ticket arrives already Processing, put there by
+    // the release. Diagnostic staff cannot pull work into their own queue.
     const row = page.getByText(`M10 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
-    await row.getByRole('button', { name: 'Start Processing' }).click();
-    await expect(row.getByRole('button', { name: 'Record Findings & Release' })).toBeVisible({ timeout: 10000 });
+    await expect(row.getByRole('button', { name: 'Start Processing' })).toHaveCount(0);
 
-    await row.getByRole('button', { name: 'Record Findings & Release' }).click();
-    await page.locator('textarea').fill('Normal pediatric 2D echo findings.');
+    await row.getByRole('button', { name: 'Record Findings' }).click();
+    await page.locator('textarea').first().fill('Normal pediatric 2D echo findings.');
     await page.getByRole('button', { name: 'Authorize & Release Result' }).click();
     await page.getByRole('button', { name: 'Authorize & Release' }).click();
 

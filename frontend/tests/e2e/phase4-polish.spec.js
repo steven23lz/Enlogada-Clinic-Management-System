@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { payAndReleaseWalkIn } from './helpers/ticketRelease.js';
 
 // UI/UX Phase 4 (Polish) coverage: a real About Us page, Login's Sign In button matching
 // Register's green (and passing WCAG AA contrast), and Diagnostic's quick-fill templates now
@@ -35,6 +36,12 @@ async function createLabVisitTest(apiContext, recToken) {
     data: { patientVisitId: visit.id, testIds: [test_.id] },
   });
   const visitTestId = (await vtRes.json()).data.visitTests[0].id;
+
+  // Ticket-release gating: a walk-in reaches a modality worklist only once payment is
+  // confirmed. Without this the fixture builds a visit that is correctly invisible to
+  // diagnostic staff, and every assertion below would fail for the right reason.
+  await payAndReleaseWalkIn(apiContext, API, visit.id);
+
   return { patient, visitTestId };
 }
 
@@ -64,10 +71,9 @@ test.describe('Diagnostic — category-scoped quick templates (API-seeded)', () 
     const recToken = await loginAs(apiContext, RECEPTIONIST);
     const { patient, visitTestId } = await createLabVisitTest(apiContext, recToken);
     const labToken = await loginAs(apiContext, LAB_STAFF);
-    await apiContext.put(`${API}/results/test-status/${visitTestId}`, {
-      headers: { Authorization: `Bearer ${labToken}` },
-      data: { status: 'Processing' },
-    });
+    // The fixture's payment already released this ticket, which is what sets it to
+    // 'Processing'. The explicit status PUT that used to sit here is now both redundant and
+    // forbidden — diagnostic staff may no longer set 'Processing' themselves.
     await apiContext.dispose();
 
     await page.goto('/');
@@ -79,7 +85,7 @@ test.describe('Diagnostic — category-scoped quick templates (API-seeded)', () 
     await expect(page.getByText(`P4 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
     const row = page.getByText(`P4 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
-    await row.getByRole('button', { name: 'Record Findings & Release' }).click();
+    await row.getByRole('button', { name: 'Record Findings' }).click();
 
     await expect(page.getByText('Normal CBC Template')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Normal Chest X-Ray')).toHaveCount(0);
@@ -94,7 +100,7 @@ test.describe('Diagnostic — category-scoped quick templates (API-seeded)', () 
     await page.locator('button[type="submit"]').click();
     await expect(page.getByText('Active Modality')).toBeVisible({ timeout: 10000 });
     await page.getByRole('button', { name: 'Processing', exact: true }).click();
-    const releaseBtn = page.locator('table').getByRole('button', { name: 'Record Findings & Release' }).first();
+    const releaseBtn = page.locator('table').getByRole('button', { name: 'Record Findings' }).first();
     if (await releaseBtn.isVisible().catch(() => false)) {
       await releaseBtn.click();
       await expect(page.getByText('Normal Chest X-Ray')).toBeVisible({ timeout: 10000 });

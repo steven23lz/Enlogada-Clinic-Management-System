@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { payAndReleaseWalkIn } from './helpers/ticketRelease.js';
 
 // Module 11 (X-ray Staff) coverage. This shares DiagnosticDashboard.jsx with Modules 9 and 10,
 // both of which already fixed the shared bugs (dead release/notification call, missing
@@ -53,6 +54,12 @@ async function createXrayVisitTest(apiContext, recToken) {
     data: { patientVisitId: visit.id, testIds: [xrayTest.id] },
   });
   const visitTestId = (await vtRes.json()).data.visitTests[0].id;
+
+
+  // Ticket-release gating: a walk-in reaches a modality worklist only once payment is
+  // confirmed. Without this the fixture builds a visit that is correctly invisible to
+  // diagnostic staff, and every assertion below would fail for the right reason.
+  await payAndReleaseWalkIn(apiContext, API, visit.id);
 
   return { patient, visit, visitTestId, test: xrayTest };
 }
@@ -150,10 +157,11 @@ test.describe('X-ray Staff — browser flow', () => {
     await page.getByPlaceholder('Search patient, test, queue...').fill(patient.last_name);
     await expect(page.getByText(`M11 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
+    // No "Start Processing" step any more: the ticket arrives already Processing, put there by
+    // the release. Diagnostic staff cannot pull work into their own queue.
     const row = page.getByText(`M11 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
-    await row.getByRole('button', { name: 'Start Processing' }).click();
-    await expect(row.getByRole('button', { name: 'Record Findings & Release' })).toBeVisible({ timeout: 10000 });
-    await row.getByRole('button', { name: 'Record Findings & Release' }).click();
+    await expect(row.getByRole('button', { name: 'Start Processing' })).toHaveCount(0);
+    await row.getByRole('button', { name: 'Record Findings' }).click();
 
     await page.getByRole('button', { name: '+ Normal Chest X-Ray' }).click();
     await expect(page.locator('textarea')).toHaveValue(/CHEST X-RAY/);

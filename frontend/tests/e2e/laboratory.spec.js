@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { payAndReleaseWalkIn } from './helpers/ticketRelease.js';
 
 // Module 9 (Laboratory Staff) coverage. The worklist UI (start-processing, template-assisted
 // findings entry, confirm-before-release) was already built; the real gap found on inspection
@@ -52,6 +53,12 @@ async function createLabVisitTest(apiContext, recToken) {
     data: { patientVisitId: visit.id, testIds: [labTest.id] },
   });
   const visitTestId = (await vtRes.json()).data.visitTests[0].id;
+
+
+  // Ticket-release gating: a walk-in reaches a modality worklist only once payment is
+  // confirmed. Without this the fixture builds a visit that is correctly invisible to
+  // diagnostic staff, and every assertion below would fail for the right reason.
+  await payAndReleaseWalkIn(apiContext, API, visit.id);
 
   return { patient, visit, visitTestId };
 }
@@ -130,10 +137,9 @@ test.describe('Laboratory — browser flow', () => {
     const apiContext = await request.newContext();
     const recToken = await loginAs(apiContext, RECEPTIONIST);
     const { patient, visitTestId } = await createLabVisitTest(apiContext, recToken);
-    await apiContext.put(`${API}/results/test-status/${visitTestId}`, {
-      headers: { Authorization: `Bearer ${await loginAs(apiContext, LAB_STAFF)}` },
-      data: { status: 'Processing' },
-    });
+    // The fixture's payment already released this ticket, which is what sets it to
+    // 'Processing'. The explicit status PUT that used to sit here is now both redundant and
+    // forbidden — diagnostic staff may no longer set 'Processing' themselves.
     await apiContext.dispose();
 
     await page.goto('/');
@@ -149,7 +155,7 @@ test.describe('Laboratory — browser flow', () => {
     await expect(page.getByText(`M9 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
     const row1 = page.getByText(`M9 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
-    await row1.getByRole('button', { name: 'Record Findings & Release' }).click();
+    await row1.getByRole('button', { name: 'Record Findings' }).click();
     await page.locator('textarea').fill('Findings text.');
     await page.getByPlaceholder(/reports\/sample\.pdf/).fill('javascript:alert(1)');
     await page.getByRole('button', { name: 'Authorize & Release Result' }).click();
@@ -160,10 +166,9 @@ test.describe('Laboratory — browser flow', () => {
     const apiContext = await request.newContext();
     const recToken = await loginAs(apiContext, RECEPTIONIST);
     const { patient, visitTestId } = await createLabVisitTest(apiContext, recToken);
-    await apiContext.put(`${API}/results/test-status/${visitTestId}`, {
-      headers: { Authorization: `Bearer ${await loginAs(apiContext, LAB_STAFF)}` },
-      data: { status: 'Processing' },
-    });
+    // The fixture's payment already released this ticket, which is what sets it to
+    // 'Processing'. The explicit status PUT that used to sit here is now both redundant and
+    // forbidden — diagnostic staff may no longer set 'Processing' themselves.
     await apiContext.dispose();
 
     await page.goto('/');
@@ -176,7 +181,7 @@ test.describe('Laboratory — browser flow', () => {
     await expect(page.getByText(`M9 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
     const row2 = page.getByText(`M9 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
-    await row2.getByRole('button', { name: 'Record Findings & Release' }).click();
+    await row2.getByRole('button', { name: 'Record Findings' }).click();
     await page.locator('textarea').fill('Normal CBC findings.');
     await page.getByRole('button', { name: 'Authorize & Release Result' }).click();
     await page.getByRole('button', { name: 'Authorize & Release' }).click();

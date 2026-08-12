@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { payAndReleaseWalkIn } from './helpers/ticketRelease.js';
 
 // Module 16 (Diagnostic Result) coverage — the shared test_results data/logic layer itself
 // (resultRepository.js/resultService.js/resultController.js), not the per-department UIs
@@ -66,6 +67,12 @@ async function createVisitTestInCategory(apiContext, recToken, categoryName) {
     data: { patientVisitId: visit.id, testIds: [targetTest.id] },
   });
   const visitTest = (await vtRes.json()).data.visitTests[0];
+
+  // Ticket-release gating: this suite asserts cross-category authorization, which is only
+  // reachable once a ticket has actually been released to a department. Paying the walk-in is
+  // what releases it.
+  await payAndReleaseWalkIn(apiContext, API, visit.id);
+
   return visitTest.id;
 }
 
@@ -125,9 +132,11 @@ test.describe('Cross-category authorization (Module 16 fix)', () => {
 
   test('the rightful department can still act on its own category end to end', async () => {
     const visitTestId = await createVisitTestInCategory(apiContext, recToken, 'Xray');
+    // 'Processing' is no longer settable by staff — the release already put the ticket there.
+    // 'Waiting for Release' is the department's own first legitimate transition.
     const statusRes = await apiContext.patch(`${API}/results/test-status/${visitTestId}`, {
       headers: { Authorization: `Bearer ${xrayToken}` },
-      data: { status: 'Processing' },
+      data: { status: 'Waiting for Release' },
     });
     expect(statusRes.status()).toBe(200);
 
@@ -143,6 +152,8 @@ test.describe('Cross-category authorization (Module 16 fix)', () => {
 
   test('SuperAdmin bypasses the department check regardless of category', async () => {
     const visitTestId = await createVisitTestInCategory(apiContext, recToken, 'Xray');
+    // SuperAdmin also bypasses the modality-settable-status restriction, hence 'Processing'
+    // here where a department account would be refused.
     const res = await apiContext.patch(`${API}/results/test-status/${visitTestId}`, {
       headers: { Authorization: `Bearer ${superToken}` },
       data: { status: 'Processing' },
@@ -153,7 +164,7 @@ test.describe('Cross-category authorization (Module 16 fix)', () => {
   test('acting on a nonexistent visit_test returns 404, not a 500 or a false-pass', async () => {
     const res = await apiContext.patch(`${API}/results/test-status/999999999`, {
       headers: { Authorization: `Bearer ${xrayToken}` },
-      data: { status: 'Processing' },
+      data: { status: 'Waiting for Release' },
     });
     expect(res.status()).toBe(404);
   });
