@@ -91,6 +91,19 @@ class ResultController {
     }
   }
 
+  async getResult(req, res, next) {
+    try {
+      const { visitTestId } = req.params;
+      const result = await resultService.getResultByVisitTestId(visitTestId, req.user);
+      return res.status(200).json({
+        status: 'success',
+        data: { result: result || null }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getPatientHistory(req, res, next) {
     try {
       const { patientId } = req.params;

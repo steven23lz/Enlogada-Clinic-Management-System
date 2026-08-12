@@ -184,6 +184,112 @@ class VisitRepository {
     return result.rows;
   }
 
+  // Everything needed to decide whether a visit may be released to the modalities, in one
+  // round trip. `is_paid` is the authoritative payment gate; `is_confirmed` is the staff gate
+  // (an Appointment must have been checked in / QR-scanned by a receptionist, whereas a walk
+  // in is confirmed by the act of being registered at the front desk).
+  async findReleaseReadiness(visitId, client = db) {
+    const queryText = `
+      SELECT pv.id, pv.status, pv.visit_type, pv.queue_number, pv.patient_id,
+             p.first_name, p.last_name,
+             EXISTS (
+               SELECT 1 FROM payments pay
+               WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
+             ) AS is_paid,
+             CASE
+               WHEN pv.visit_type = 'Walk in' THEN TRUE
+               -- An 'Appointment'-type visit with no appointments row at all was created
+               -- directly by staff (POST /visits accepts either visit_type), so there is no QR
+               -- check-in to wait for. Without this branch such a visit could never satisfy the
+               -- confirmation condition and would be stuck at 'Pending' forever, unreachable by
+               -- any modality no matter how many times it was paid.
+               WHEN NOT EXISTS (
+                 SELECT 1 FROM appointments a WHERE a.patient_visit_id = pv.id
+               ) THEN TRUE
+               ELSE EXISTS (
+                 SELECT 1 FROM appointments a
+                 WHERE a.patient_visit_id = pv.id AND a.status = 'Confirmed'
+               )
+             END AS is_confirmed
+      FROM patient_visits pv
+      JOIN patients p ON pv.patient_id = p.id
+      WHERE pv.id = $1
+    `;
+    const result = await client.query(queryText, [visitId]);
+    return result.rows[0];
+  }
+
+  // Releasing a visit to the modalities is two writes that must not be separable: the visit
+  // becomes 'Processing' AND its not-yet-started tests become 'Processing' (which is what
+  // actually makes them appear on a modality worklist). A half-applied release would either
+  // strand a released visit with invisible tests or expose tests for an unreleased visit.
+  //
+  // The UPDATE ... WHERE status = 'Pending' is also the concurrency guard: two simultaneous
+  // callers (e.g. the payment webhook and a receptionist check-in landing together) race on
+  // this row, and only the one that actually flips it gets rows back. The loser returns
+  // undefined and skips the duplicate notification.
+  async releaseVisitToModalities(visitId) {
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const visitRes = await client.query(
+        `UPDATE patient_visits
+         SET status = 'Processing', updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND status = 'Pending'
+         RETURNING *`,
+        [visitId]
+      );
+
+      if (visitRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return undefined;
+      }
+
+      await client.query(
+        `UPDATE visit_tests
+         SET status = 'Processing', updated_at = CURRENT_TIMESTAMP
+         WHERE patient_visit_id = $1 AND status IN ('Pending', 'Approved')`,
+        [visitId]
+      );
+
+      await client.query('COMMIT');
+      return visitRes.rows[0];
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Distinct test categories attached to a visit — used to route the "your department has a
+  // new ticket" notification to only the modalities that actually have work on it.
+  async findTestCategoriesForVisit(visitId) {
+    const queryText = `
+      SELECT DISTINCT tc.name AS category_name
+      FROM visit_tests vt
+      JOIN tests t ON vt.test_id = t.id
+      JOIN test_categories tc ON t.category_id = tc.id
+      WHERE vt.patient_visit_id = $1
+    `;
+    const result = await db.query(queryText, [visitId]);
+    return result.rows.map((r) => r.category_name);
+  }
+
+  // True once no test on the visit is still outstanding — lets the last result release close
+  // the visit out instead of leaving it in 'Processing' forever.
+  async hasOutstandingTests(visitId) {
+    const queryText = `
+      SELECT 1 FROM visit_tests
+      WHERE patient_visit_id = $1
+        AND status NOT IN ('Completed', 'Cancelled')
+      LIMIT 1
+    `;
+    const result = await db.query(queryText, [visitId]);
+    return result.rows.length > 0;
+  }
+
   async getNextQueueNumber(client = db) {
     const queryText = `
       SELECT COUNT(*) as count

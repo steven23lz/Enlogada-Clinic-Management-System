@@ -15,11 +15,18 @@ class AppointmentRepository {
     return result.rows[0];
   }
 
+  // `is_paid` rides along so the receptionist's QR-scan panel can show, before they check the
+  // patient in, whether the online payment actually landed — check-in only releases the ticket
+  // to the modality if it did.
   async findByReference(reference) {
     const queryText = `
       SELECT a.*, pv.patient_id, pv.visit_type, pv.status as visit_status, pv.queue_number,
              p.first_name, p.last_name, p.contact_number, p.birthdate, p.sex,
-             pt.name as patient_type_name
+             pt.name as patient_type_name,
+             EXISTS (
+               SELECT 1 FROM payments pay
+               WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
+             ) AS is_paid
       FROM appointments a
       JOIN patient_visits pv ON a.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
@@ -43,10 +50,17 @@ class AppointmentRepository {
     return result.rows[0];
   }
 
+  // `is_paid` drives the client's booking pass: the QR code the receptionist scans is only
+  // issued once the online payment has actually settled, so an unpaid booking shows payment
+  // options instead of a scannable pass.
   async findByPatientUserId(userId) {
     const queryText = `
       SELECT a.*, pv.patient_id, pv.visit_type, pv.status as visit_status, pv.queue_number,
-             p.first_name, p.last_name
+             p.first_name, p.last_name,
+             EXISTS (
+               SELECT 1 FROM payments pay
+               WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
+             ) AS is_paid
       FROM appointments a
       JOIN patient_visits pv ON a.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id

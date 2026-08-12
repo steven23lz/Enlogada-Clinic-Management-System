@@ -1,11 +1,21 @@
 const db = require('../config/database');
 
 class ResultRepository {
+  // The modality worklist gate. This query previously filtered on vt.status alone and never
+  // looked at the parent visit at all, so a ticket appeared here the instant a client picked
+  // tests during online booking — before the receptionist confirmed anything, before payment,
+  // and for cancelled visits too. `pv.status = 'Processing'` is the whole gate: a visit only
+  // reaches that state through visitService.releaseVisitIfReady (paid + staff-confirmed).
+  //
+  // vt.status is correspondingly narrowed to the two states a released ticket can be in.
+  // 'Pending'/'Approved' tests are by definition not released and belong to the front desk
+  // and cashier only.
   async findPendingByCategory(categoryName) {
     const queryText = `
       SELECT vt.id as visit_test_id, vt.status as test_status, vt.price_at_time, vt.remarks,
              t.name as test_name, tc.name as category_name,
-             pv.id as visit_id, pv.queue_number,
+             pv.id as visit_id, pv.queue_number, pv.visit_type,
+             p.id as patient_id,
              p.first_name, p.last_name, p.birthdate, p.sex
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
@@ -13,11 +23,28 @@ class ResultRepository {
       JOIN patient_visits pv ON vt.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
       WHERE tc.name = $1
-        AND vt.status IN ('Pending', 'Approved', 'Processing')
+        AND pv.status = 'Processing'
+        AND vt.status IN ('Processing', 'Waiting for Release')
       ORDER BY pv.created_at ASC
     `;
     const result = await db.query(queryText, [categoryName]);
     return result.rows;
+  }
+
+  // Parent-visit release state for a single visit_test — backs the service-layer guard that
+  // stops a modality acting on a ticket that was never released to them, independently of
+  // whether the UI ever showed it.
+  async findVisitReleaseStateByVisitTestId(visitTestId) {
+    const queryText = `
+      SELECT pv.id as visit_id, pv.status as visit_status, tc.name as category_name
+      FROM visit_tests vt
+      JOIN tests t ON vt.test_id = t.id
+      JOIN test_categories tc ON t.category_id = tc.id
+      JOIN patient_visits pv ON vt.patient_visit_id = pv.id
+      WHERE vt.id = $1
+    `;
+    const result = await db.query(queryText, [visitTestId]);
+    return result.rows[0];
   }
 
   // UI/UX Phase 1: diagnostic staff previously had no way to review results they'd already
@@ -29,7 +56,7 @@ class ResultRepository {
       SELECT vt.id as visit_test_id, vt.status as test_status,
              t.name as test_name, tc.name as category_name,
              pv.id as visit_id, pv.queue_number,
-             p.first_name, p.last_name,
+             p.id as patient_id, p.first_name, p.last_name,
              tr.findings, tr.remarks as result_remarks, tr.file_url, tr.released_at,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM visit_tests vt
@@ -65,18 +92,6 @@ class ResultRepository {
       RETURNING *
     `;
     const result = await db.query(queryText, [visitTestId, fileUrl, findings, remarks, releasedBy]);
-    return result.rows[0];
-  }
-
-  async findVisitTestCategory(visitTestId) {
-    const queryText = `
-      SELECT tc.name as category_name
-      FROM visit_tests vt
-      JOIN tests t ON vt.test_id = t.id
-      JOIN test_categories tc ON t.category_id = tc.id
-      WHERE vt.id = $1
-    `;
-    const result = await db.query(queryText, [visitTestId]);
     return result.rows[0];
   }
 

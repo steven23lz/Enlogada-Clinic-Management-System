@@ -38,11 +38,15 @@ class PaymentRepository {
     `;
     const params = [];
 
+    // Only settled money. Online GCash/Maya checkouts insert a 'Pending' row the moment the
+    // patient is redirected to the provider, and that row must never reach the cashier's
+    // transaction log or daily collections total — it isn't revenue until the signed webhook
+    // confirms it. Every pre-gateway row is 'Paid', so this narrows nothing that existed before.
     if (startDate && endDate) {
-      queryText += ' WHERE pay.paid_at::date BETWEEN $1 AND $2';
+      queryText += " WHERE pay.payment_status = 'Paid' AND pay.paid_at::date BETWEEN $1 AND $2";
       params.push(startDate, endDate);
     } else {
-      queryText += ' WHERE pay.paid_at::date = CURRENT_DATE';
+      queryText += " WHERE pay.payment_status = 'Paid' AND pay.paid_at::date = CURRENT_DATE";
     }
 
     queryText += ' ORDER BY pay.paid_at DESC';
@@ -116,11 +120,90 @@ class PaymentRepository {
     return result.rows.length > 0;
   }
 
+  // --- Online payment gateway (GCash / Maya via PayMongo hosted checkout) -----------------
+
+  // Inserted as 'Pending' when the patient is redirected to the provider. Deliberately NOT
+  // 'Paid': the browser coming back to our success_url proves nothing (it is a plain URL the
+  // patient can visit directly), so only the signed webhook may settle this row.
+  async createPendingGatewayPayment({ patientVisitId, processedBy, paymentMethod, amount, gatewayProvider, gatewaySessionId }) {
+    const queryText = `
+      INSERT INTO payments (
+        patient_visit_id, processed_by, payment_method, amount,
+        payment_status, gateway_provider, gateway_session_id
+      )
+      VALUES ($1, $2, $3, $4, 'Pending', $5, $6)
+      RETURNING *
+    `;
+    const result = await db.query(queryText, [
+      patientVisitId, processedBy, paymentMethod, amount, gatewayProvider, gatewaySessionId
+    ]);
+    return result.rows[0];
+  }
+
+  async findByGatewaySessionId(gatewaySessionId) {
+    const queryText = `
+      SELECT pay.*, p.first_name, p.last_name
+      FROM payments pay
+      JOIN patient_visits pv ON pay.patient_visit_id = pv.id
+      JOIN patients p ON pv.patient_id = p.id
+      WHERE pay.gateway_session_id = $1
+    `;
+    const result = await db.query(queryText, [gatewaySessionId]);
+    return result.rows[0];
+  }
+
+  // The webhook settlement. `WHERE payment_status = 'Pending'` makes this idempotent: PayMongo
+  // retries webhook deliveries, and a redelivery of an already-settled session must not issue
+  // a second receipt number or re-trigger the ticket release. A no-op returns undefined.
+  async markGatewayPaymentPaid(gatewaySessionId, { gatewayPaymentId, receiptNumber }) {
+    const queryText = `
+      UPDATE payments
+      SET payment_status = 'Paid',
+          gateway_payment_id = $2,
+          receipt_number = $3,
+          paid_at = CURRENT_TIMESTAMP
+      WHERE gateway_session_id = $1 AND payment_status = 'Pending'
+      RETURNING *
+    `;
+    const result = await db.query(queryText, [gatewaySessionId, gatewayPaymentId, receiptNumber]);
+    return result.rows[0];
+  }
+
+  async cancelPendingGatewayPayments(patientVisitId) {
+    const queryText = `
+      UPDATE payments
+      SET payment_status = 'Cancelled'
+      WHERE patient_visit_id = $1
+        AND payment_status = 'Pending'
+        AND gateway_session_id IS NOT NULL
+      RETURNING *
+    `;
+    const result = await db.query(queryText, [patientVisitId]);
+    return result.rows;
+  }
+
+  async findPendingGatewayPaymentForVisit(patientVisitId) {
+    const queryText = `
+      SELECT * FROM payments
+      WHERE patient_visit_id = $1
+        AND payment_status = 'Pending'
+        AND gateway_session_id IS NOT NULL
+      ORDER BY paid_at DESC
+      LIMIT 1
+    `;
+    const result = await db.query(queryText, [patientVisitId]);
+    return result.rows[0];
+  }
+
   async getNextReceiptNumber() {
+    // payment_status = 'Paid' matters now that online checkouts insert a 'Pending' row (with
+    // paid_at defaulting to CURRENT_TIMESTAMP at insert time, before any money has actually
+    // moved) — without this filter, an abandoned or in-flight GCash/Maya checkout would count
+    // toward today's receipt sequence and skew the numbering for real, settled payments.
     const queryText = `
       SELECT COUNT(*) as count
       FROM payments
-      WHERE paid_at::date = CURRENT_DATE
+      WHERE payment_status = 'Paid' AND paid_at::date = CURRENT_DATE
     `;
     const result = await db.query(queryText);
     const count = parseInt(result.rows[0].count, 10);

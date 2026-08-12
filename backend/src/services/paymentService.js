@@ -1,5 +1,6 @@
 const paymentRepository = require('../repositories/paymentRepository');
 const notificationService = require('./notificationService');
+const visitService = require('./visitService');
 
 class PaymentService {
   async getBillingSummary(visitId) {
@@ -71,6 +72,11 @@ class PaymentService {
       amount: authoritativeTotal
     });
 
+    // A counter payment supersedes any online checkout the patient started but never finished
+    // for this visit — otherwise an abandoned GCash/Maya session would linger as a 'Pending'
+    // payment row against an already-settled visit.
+    await paymentRepository.cancelPendingGatewayPayments(patientVisitId);
+
     // Module 18 (Notification): Admin/SuperAdmin financial oversight, matching Reports/Cashier
     // Monitoring — not the processing Cashier themselves, who already sees this live in their
     // own receipt flow.
@@ -79,6 +85,13 @@ class PaymentService {
       message: `Receipt #${receiptNumber} — ${bill.patientName}, ₱${authoritativeTotal.toFixed(2)}`,
       type: 'success'
     });
+
+    // Payment is one of the two release conditions. Attempting the release here — server-side,
+    // in the same call that took the money — replaces the CashierDashboard's separate follow-up
+    // PATCH, where a network blip between the two requests stranded a fully paid visit at
+    // 'Pending' with no ticket ever reaching a modality. A walk-in releases immediately; an
+    // appointment still waits for its QR check-in, and this is a no-op until then.
+    await visitService.releaseVisitIfReady(patientVisitId);
 
     return payment;
   }

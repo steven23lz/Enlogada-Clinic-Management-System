@@ -4,6 +4,7 @@ const visitRepository = require('../repositories/visitRepository');
 const scheduleRepository = require('../repositories/scheduleRepository');
 const patientService = require('./patientService');
 const notificationService = require('./notificationService');
+const visitService = require('./visitService');
 
 async function assertClientOwnsPatient(requestingUser, patientId) {
   if (!requestingUser?.roles?.includes('Client')) return; // staff roles are not ownership-restricted
@@ -197,7 +198,18 @@ class AppointmentService {
       error.statusCode = 404;
       throw error;
     }
-    return await appointmentRepository.updateAppointmentStatus(id, status);
+    const updated = await appointmentRepository.updateAppointmentStatus(id, status);
+
+    // Confirming an appointment IS the receptionist's half of the release rule (the QR scan /
+    // reference check-in at the front desk). If the booking was already paid online, this is
+    // the moment the ticket reaches the modality; if it wasn't, releaseVisitIfReady reports
+    // 'unpaid' and the visit correctly stays with the cashier. Reception no longer sets the
+    // visit status itself — that call is the release rule's alone.
+    if (status === 'Confirmed') {
+      await visitService.releaseVisitIfReady(appointment.patient_visit_id);
+    }
+
+    return updated;
   }
 }
 

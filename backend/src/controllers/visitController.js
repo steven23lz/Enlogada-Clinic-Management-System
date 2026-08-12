@@ -82,7 +82,7 @@ class VisitController {
         });
       }
 
-      const visit = await visitService.updateStatus(id, status);
+      const visit = await visitService.updateStatus(id, status, req.user);
       return res.status(200).json({
         status: 'success',
         message: `Visit status updated to ${status}.`,

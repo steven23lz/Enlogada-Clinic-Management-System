@@ -23,4 +23,10 @@ router.post('/:visitTestId/release', verifyToken, authorizeRoles('SuperAdmin', '
 // View patient result history (staff or client viewing own patient)
 router.get('/history/:patientId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff', 'Client'), resultController.getPatientHistory);
 
+// Fetch the recorded result for one visit_test, so staff can edit findings already saved
+// against a 'Waiting for Release' ticket. Registered last: a bare '/:visitTestId' would
+// otherwise shadow nothing here (every route above has two segments), but keeping catch-all
+// shapes at the bottom is the convention this codebase already follows in visitRoutes.
+router.get('/:visitTestId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), resultController.getResult);
+
 module.exports = router;
