@@ -93,6 +93,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [checkInTarget, setCheckInTarget] = useState(null); // { type: 'appointment' | 'walkin', data }
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkInError, setCheckInError] = useState('');
+  const [checkInNotice, setCheckInNotice] = useState('');
 
   // Assign Tests Dialog State
   const [selectedVisitId, setSelectedVisitId] = useState(null);
@@ -250,6 +251,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     // and visit status, or creates a brand-new visit — so both paths require explicit
     // confirmation before firing. See .agents Phase 12.
     setCheckInError('');
+    setCheckInNotice('');
     setCheckInTarget({ type, data });
   };
 
@@ -259,9 +261,17 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     setCheckInError('');
     try {
       if (checkInTarget.type === 'appointment') {
-        const { id: appointmentId, patient_visit_id: visitId } = checkInTarget.data;
+        const { id: appointmentId, is_paid: isPaid } = checkInTarget.data;
+        // Confirming the appointment is the front desk's half of the release rule. The backend
+        // releases the ticket to the modalities only if payment has also landed — this screen
+        // no longer PATCHes the visit status itself, which used to push unpaid visits straight
+        // onto the diagnostic worklists.
         await api.patch(`/appointments/${appointmentId}/status`, { status: 'Confirmed' });
-        await api.patch(`/visits/${visitId}/status`, { status: 'Processing' });
+        setCheckInNotice(
+          isPaid
+            ? 'Checked in and released — the ticket is now on the department worklist.'
+            : 'Checked in. Payment is still outstanding, so please send the patient to the cashier — the ticket reaches the department once payment is confirmed.'
+        );
         setSearchRef('');
         setVerifyResult(null);
       } else {
@@ -571,13 +581,17 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                           </TableCell>
 
                           <TableCell className="py-3">
-                            <Badge className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
-                              visit.visit_status === 'Processing' ? 'bg-indigo-100 text-indigo-800' :
-                              visit.visit_status === 'Completed' ? 'bg-emerald-100 text-emerald-800' :
-                              'bg-amber-100 text-amber-800'
-                            }`}>
-                              {visit.visit_status}
-                            </Badge>
+                            <StatusBadge status={visit.visit_status} className="text-[10px] px-2.5 py-0.5 rounded-full" />
+                            {/* Where the ticket actually is, in the front desk's own terms.
+                                'Pending' alone doesn't say whether reception or the cashier is
+                                holding it up, which is the question this row exists to answer. */}
+                            <span className="block text-[10px] text-gray-400 font-semibold mt-1">
+                              {visit.visit_status === 'Pending'
+                                ? 'Awaiting payment — with cashier'
+                                : visit.visit_status === 'Processing'
+                                  ? 'Released to department'
+                                  : ''}
+                            </span>
                           </TableCell>
 
                           <TableCell className="py-3 text-right">
@@ -965,9 +979,16 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               </div>
 
               {verifyError && (
-                <div className="p-3 bg-rose-50 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
+                <div role="alert" className="p-3 bg-rose-50 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{verifyError}</span>
+                </div>
+              )}
+
+              {checkInNotice && (
+                <div role="status" className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  <span>{checkInNotice}</span>
                 </div>
               )}
 
@@ -985,6 +1006,21 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     <span className="font-bold text-gray-500 uppercase">Queue Ticket</span>
                     <Badge className="bg-[#769046] text-white font-extrabold">{verifyResult.queue_number}</Badge>
                   </div>
+
+                  {/* Payment is the other half of the release rule, so the front desk needs to
+                      see it before checking anyone in — otherwise they check the patient in,
+                      nothing appears at the modality, and nobody knows why. */}
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-gray-500 uppercase">Payment</span>
+                    <StatusBadge status={verifyResult.is_paid ? 'Paid' : 'Pending'} />
+                  </div>
+
+                  {!verifyResult.is_paid && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
+                      This booking has no confirmed payment yet. You can still check the patient in, but the
+                      ticket will only reach the department once the cashier confirms payment.
+                    </p>
+                  )}
 
                   <Button
                     type="button"

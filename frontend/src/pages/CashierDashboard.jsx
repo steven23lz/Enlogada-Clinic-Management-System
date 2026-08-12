@@ -210,9 +210,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
       const payment = response.data.data.payment;
 
-      // Update visit status to Processing (ready for lab/xray)
-      await api.patch(`/visits/${selectedVisit.id}/status`, { status: 'Processing' });
-
+      // The visit is advanced server-side, inside POST /payments itself. It used to be a
+      // separate PATCH from here, which meant a network blip between the two requests left a
+      // fully paid visit stuck at 'Pending' with its ticket never reaching a modality. A
+      // walk-in is released the moment this returns; an appointment additionally needs its
+      // front-desk check-in, and the backend handles that ordering either way.
       setShowPaymentConfirm(false);
       setPaymentSuccess(payment);
       setShowReceiptModal(true);
