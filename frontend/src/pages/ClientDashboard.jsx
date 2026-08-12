@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import { validatePatientProfile } from '../validations/patientValidation';
+import BookingPass from '../components/BookingPass';
 import { 
   Activity, 
   Calendar, 
@@ -140,6 +141,13 @@ const ClientDashboard = ({ onNavigate }) => {
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
 
+  // Online payment (GCash / Maya). `gateway.available` is false whenever the deployment has no
+  // merchant credentials configured, in which case no online-payment option is rendered at all
+  // and the patient simply pays at the counter — the pre-existing behaviour.
+  const [gateway, setGateway] = useState({ available: false, methods: [] });
+  const [payingAppointmentId, setPayingAppointmentId] = useState(null);
+  const [payError, setPayError] = useState('');
+
   const fetchProfiles = useCallback(async () => {
     try {
       const response = await api.get('/patients/my-profiles');
@@ -203,6 +211,34 @@ const ClientDashboard = ({ onNavigate }) => {
     }
   }, []);
 
+  const fetchGatewayStatus = useCallback(async () => {
+    try {
+      const response = await api.get('/payments/gateway/status');
+      setGateway(response.data.data.gateway || { available: false, methods: [] });
+    } catch {
+      // Treat any failure as "not available" — never offer a payment route we can't confirm.
+      setGateway({ available: false, methods: [] });
+    }
+  }, []);
+
+  // Redirects the browser to the provider's own hosted page (GCash / Maya). The visit is NOT
+  // marked paid here or on return — only the signed provider webhook can do that — so this
+  // function's job ends at the redirect.
+  const handlePayOnline = async (appointment, method) => {
+    setPayError('');
+    setPayingAppointmentId(appointment.id);
+    try {
+      const response = await api.post('/payments/gateway/checkout', {
+        patientVisitId: appointment.patient_visit_id,
+        paymentMethod: method
+      });
+      window.location.href = response.data.data.checkout.checkoutUrl;
+    } catch (err) {
+      setPayError(err.response?.data?.message || `Could not start the ${method} payment. Please try again.`);
+      setPayingAppointmentId(null);
+    }
+  };
+
   const fetchAvailability = useCallback(async (date) => {
     setSlotsLoading(true);
     try {
@@ -223,7 +259,29 @@ const ClientDashboard = ({ onNavigate }) => {
     fetchStaticData();
     fetchAppointments();
     fetchPaymentHistory();
-  }, [fetchProfiles, fetchStaticData, fetchAppointments, fetchPaymentHistory]);
+    fetchGatewayStatus();
+  }, [fetchProfiles, fetchStaticData, fetchAppointments, fetchPaymentHistory, fetchGatewayStatus]);
+
+  // Returning from the provider's hosted page. The URL flag is presentational only — it says
+  // "the browser came back", not "the money arrived", and is deliberately not trusted to mark
+  // anything paid. The authoritative update is the signed webhook, so we simply re-fetch and
+  // let the server state speak. The query string is then stripped so a refresh doesn't replay
+  // the banner.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get('payment');
+    if (!outcome) return;
+
+    if (outcome === 'success') {
+      setPayError('');
+      fetchAppointments();
+      fetchPaymentHistory();
+    } else if (outcome === 'cancelled') {
+      setPayError('Payment was cancelled. Your booking is still reserved — you can pay again below or at the clinic.');
+    }
+
+    window.history.replaceState({}, '', window.location.pathname);
+  }, [fetchAppointments, fetchPaymentHistory]);
 
   useEffect(() => {
     if (bookingData.scheduledDate) {
@@ -1228,6 +1286,12 @@ const ClientDashboard = ({ onNavigate }) => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-3">
+                {payError && (
+                  <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                    <XCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{payError}</span>
+                  </div>
+                )}
                 {appointmentsLoading ? (
                   <p className="text-xs text-gray-400 text-center py-4">Loading appointments…</p>
                 ) : appointments.length === 0 ? (
@@ -1235,6 +1299,11 @@ const ClientDashboard = ({ onNavigate }) => {
                 ) : (
                   appointments.map((appt) => {
                     const isCancellable = appt.status === 'Pending' || appt.status === 'Confirmed';
+                    const isOpen = appt.status !== 'Cancelled' && appt.status !== 'Completed';
+                    // The booking pass is issued only once payment has settled — that is what
+                    // makes it a pass. An unpaid booking shows how to pay instead.
+                    const showPass = isOpen && appt.is_paid;
+                    const showPayOptions = isOpen && !appt.is_paid && gateway.available;
                     return (
                       <div key={appt.id} className="border border-gray-100 rounded-xl p-3 space-y-2 bg-gray-50/50">
                         <div className="flex justify-between items-start">
@@ -1246,7 +1315,45 @@ const ClientDashboard = ({ onNavigate }) => {
                           </div>
                           <StatusBadge status={appt.status} />
                         </div>
-                        <span className="block text-[10px] text-gray-400 font-mono">{appt.appointment_reference}</span>
+
+                        {showPass ? (
+                          <BookingPass
+                            reference={appt.appointment_reference}
+                            queueNumber={appt.queue_number}
+                          />
+                        ) : (
+                          <span className="block text-[10px] text-gray-400 font-mono">{appt.appointment_reference}</span>
+                        )}
+
+                        {showPayOptions && (
+                          <div className="space-y-2 pt-1">
+                            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
+                              Payment is required before your visit. Once paid, your QR booking pass appears
+                              here — show it at the front desk on arrival.
+                            </p>
+                            <div className="flex gap-2">
+                              {gateway.methods.map((method) => (
+                                <Button
+                                  key={method}
+                                  type="button"
+                                  disabled={payingAppointmentId === appt.id}
+                                  onClick={() => handlePayOnline(appt, method)}
+                                  className="flex-1 bg-[#769046] hover:bg-[#657c3a] text-white text-[11px] font-bold rounded-lg py-1.5"
+                                >
+                                  {payingAppointmentId === appt.id ? 'Redirecting…' : `Pay with ${method}`}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {isOpen && !appt.is_paid && !gateway.available && (
+                          <p className="text-[11px] text-gray-500 bg-gray-100 border border-gray-200 rounded-lg p-2 m-0">
+                            Please settle payment at the clinic counter on arrival. Your reference code above
+                            is what the receptionist needs to check you in.
+                          </p>
+                        )}
+
                         {isCancellable && (
                           <Button
                             type="button"
