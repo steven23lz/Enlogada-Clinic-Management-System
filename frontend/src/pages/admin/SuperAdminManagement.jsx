@@ -8,11 +8,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
+import Pagination from '../../components/ui/pagination';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../config/api';
 import { UserPlus, ShieldCheck, Edit, AlertCircle } from 'lucide-react';
 
 const ELEVATED_ROLES = ['Admin', 'SuperAdmin'];
+
+// UI/UX Modernization Phase 4: both tables below are fetched in one shot with no server-side
+// pagination endpoint, so a client-side page size is proportionate (VISUAL_IDENTITY.md §3a #11).
+const PAGE_SIZE = 15;
 
 // --- Role-Permission Matrix -------------------------------------------------------------
 const RoleMatrix = () => {
@@ -20,6 +25,7 @@ const RoleMatrix = () => {
   const [permissions, setPermissions] = useState([]);
   const [rolePermissions, setRolePermissions] = useState({});
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   const [editingRole, setEditingRole] = useState(null);
   const [checkedIds, setCheckedIds] = useState(new Set());
@@ -48,6 +54,9 @@ const RoleMatrix = () => {
     acc[p.module].push(p);
     return acc;
   }, {});
+
+  const totalPages = Math.max(1, Math.ceil(roles.length / PAGE_SIZE));
+  const pagedRoles = roles.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleOpenEdit = (role) => {
     setSaveError('');
@@ -99,7 +108,7 @@ const RoleMatrix = () => {
               {loading ? (
                 <TableRow><TableCell colSpan={3} className="text-center py-6 text-xs text-gray-400">Loading role matrix…</TableCell></TableRow>
               ) : (
-                roles.map(role => (
+                pagedRoles.map(role => (
                   <TableRow key={role.id} className="hover:bg-gray-50/50 transition-colors align-top">
                     <TableCell className="py-3 font-bold text-xs text-slate-900 whitespace-nowrap">{role.name}</TableCell>
                     <TableCell className="py-3">
@@ -129,6 +138,7 @@ const RoleMatrix = () => {
             </TableBody>
           </Table>
         </CardContent>
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${roles.length} total`} />
       </Card>
 
       <Dialog open={!!editingRole} onOpenChange={(open) => { if (!open) setEditingRole(null); }}>
@@ -139,7 +149,7 @@ const RoleMatrix = () => {
           </DialogHeader>
 
           {saveError && (
-            <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+            <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>{saveError}</span>
             </div>
@@ -186,6 +196,7 @@ const ElevatedAccounts = () => {
   const { user: currentUser } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', contactNumber: '', password: '', role: '' });
@@ -255,6 +266,9 @@ const ElevatedAccounts = () => {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(accounts.length / PAGE_SIZE));
+  const pagedAccounts = accounts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
@@ -276,12 +290,12 @@ const ElevatedAccounts = () => {
             </DialogHeader>
             <form onSubmit={handleAdd} className="space-y-4 pt-2">
               {formError && (
-                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{formError}</span>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-gray-600 uppercase">First Name</label>
                   <Input value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} disabled={submitting} required />
@@ -342,8 +356,8 @@ const ElevatedAccounts = () => {
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={4} className="text-center py-6 text-xs text-gray-400">Loading elevated accounts…</TableCell></TableRow>
-              ) : accounts.length > 0 ? (
-                accounts.map(a => {
+              ) : pagedAccounts.length > 0 ? (
+                pagedAccounts.map(a => {
                   const isSelf = currentUser?.id === a.id;
                   return (
                     <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors">
@@ -371,6 +385,7 @@ const ElevatedAccounts = () => {
             </TableBody>
           </Table>
         </CardContent>
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${accounts.length} total`} />
       </Card>
 
       <ConfirmDialog

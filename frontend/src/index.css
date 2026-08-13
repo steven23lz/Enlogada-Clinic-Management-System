@@ -96,3 +96,23 @@ body {
 .animate-pulse-glow {
   animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Print-one-element trick: mark the printable content with .print-area and everything else on
+   the page (dashboard sidebar/nav, dialog overlay chrome) is hidden for that print job instead
+   of printing the whole dark-themed app shell. Used by DiagnosticDashboard.jsx's and
+   ClientDashboard.jsx's report print buttons. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+}

@@ -1,10 +1,13 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const userRepository = require('../repositories/userRepository');
 const passwordResetRepository = require('../repositories/passwordResetRepository');
 const env = require('../config/environment');
 const { sendEmail } = require('../config/email');
+const { AVATAR_UPLOAD_ROOT } = require('../config/upload');
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -80,7 +83,8 @@ class AuthService {
         email: user.email,
         contactNumber: user.contact_number,
         roles: cleanRoles,
-        permissions: cleanPermissions
+        permissions: cleanPermissions,
+        hasAvatar: Boolean(user.avatar_path)
       }
     };
   }
@@ -186,7 +190,8 @@ class AuthService {
       email: user.email,
       contactNumber: user.contact_number,
       roles: cleanRoles,
-      permissions: cleanPermissions
+      permissions: cleanPermissions,
+      hasAvatar: Boolean(user.avatar_path)
     };
   }
 
@@ -278,9 +283,45 @@ class AuthService {
         email: user.email,
         contactNumber: user.contact_number,
         roles: cleanRoles,
-        permissions: cleanPermissions
+        permissions: cleanPermissions,
+        hasAvatar: Boolean(user.avatar_path)
       }
     };
+  }
+
+  // UI/UX Modernization Phase 8: self-service profile photo. Replacing an existing avatar
+  // deletes the previous file from disk — best-effort, a cleanup failure shouldn't fail the
+  // request since the DB row (the source of truth for what's "current") already updated.
+  async uploadAvatar(userId, file) {
+    const previousPath = await userRepository.replaceAvatar(userId, file.filename, file.mimetype);
+    if (previousPath) {
+      fs.unlink(path.join(AVATAR_UPLOAD_ROOT, previousPath), () => {});
+    }
+  }
+
+  async deleteAvatar(userId) {
+    const previousPath = await userRepository.clearAvatar(userId);
+    if (previousPath) {
+      fs.unlink(path.join(AVATAR_UPLOAD_ROOT, previousPath), () => {});
+    }
+  }
+
+  async getAvatarFile(userId) {
+    const row = await userRepository.findAvatarById(userId);
+    if (!row || !row.avatar_path) {
+      const error = new Error('No avatar uploaded.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const absolutePath = path.join(AVATAR_UPLOAD_ROOT, row.avatar_path);
+    if (!fs.existsSync(absolutePath)) {
+      const error = new Error('The avatar file could not be found on the server.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return { absolutePath, mimeType: row.avatar_mime_type || 'image/jpeg' };
   }
 }
 

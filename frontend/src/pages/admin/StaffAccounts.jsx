@@ -4,20 +4,30 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
+import { SearchInput } from '../../components/ui/search-input';
+import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
-import { UserPlus, AlertCircle } from 'lucide-react';
+import { toastSuccess } from '../../lib/toast';
+import { UserPlus, AlertCircle, KeyRound, CheckCircle2, Pencil } from 'lucide-react';
 
 // Module 12: staff account management, scoped to the 5 operational roles only (Admin/SuperAdmin
 // account management is Module 13's explicit responsibility — see adminService.js's
 // MANAGEABLE_ROLES, enforced server-side, not just hidden here).
 const MANAGEABLE_ROLES = ['Receptionist', 'Cashier', 'Laboratory Staff', 'Ultrasound Staff', 'Xray Staff'];
 
+// Visual Design Improvement Plan Phase V1: this list has no server-side pagination endpoint,
+// so a client-side page size over an already-fetched, search-filtered array is proportionate —
+// see VISUAL_IDENTITY.md §3a #11.
+const PAGE_SIZE = 15;
+
 const StaffAccounts = () => {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', contactNumber: '', password: '', role: '' });
@@ -27,6 +37,23 @@ const StaffAccounts = () => {
   const [statusTarget, setStatusTarget] = useState(null);
   const [togglingStatus, setTogglingStatus] = useState(false);
   const [statusError, setStatusError] = useState('');
+
+  // Feature Gap Plan Phase A: a locked-out staff member (forgotten password + no access to the
+  // email tied to their account) previously had no recourse short of deactivate-and-recreate,
+  // which loses the account's history association.
+  const [resetPwdTarget, setResetPwdTarget] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resettingPwd, setResettingPwd] = useState(false);
+  const [resetPwdError, setResetPwdError] = useState('');
+  const [resetPwdSuccess, setResetPwdSuccess] = useState(false);
+
+  // UI/UX Modernization Phase 11: previously the only recourse for a typo'd name/email/contact
+  // number was deactivating and recreating the whole account. Deliberately excludes role — that
+  // stays a separate, more sensitive action.
+  const [editTarget, setEditTarget] = useState(null);
+  const [editData, setEditData] = useState({ firstName: '', lastName: '', email: '', contactNumber: '' });
+  const [editError, setEditError] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const fetchStaff = useCallback(async () => {
     try {
@@ -89,6 +116,71 @@ const StaffAccounts = () => {
     }
   };
 
+  const handleOpenResetPwd = (s) => {
+    setResetPwdTarget(s);
+    setNewPassword('');
+    setResetPwdError('');
+    setResetPwdSuccess(false);
+  };
+
+  const confirmResetPassword = async (e) => {
+    e.preventDefault();
+    if (!resetPwdTarget) return;
+    if (newPassword.length < 8) {
+      setResetPwdError('Password must be at least 8 characters.');
+      return;
+    }
+    setResettingPwd(true);
+    setResetPwdError('');
+    try {
+      await api.patch(`/admin/staff/${resetPwdTarget.id}/password`, { newPassword });
+      setResetPwdSuccess(true);
+    } catch (err) {
+      setResetPwdError(err.response?.data?.message || 'Failed to reset password.');
+    } finally {
+      setResettingPwd(false);
+    }
+  };
+
+  const handleOpenEdit = (s) => {
+    setEditTarget(s);
+    setEditData({ firstName: s.first_name, lastName: s.last_name, email: s.email, contactNumber: s.contact_number || '' });
+    setEditError('');
+  };
+
+  const confirmEditStaff = async (e) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    if (!editData.firstName.trim() || !editData.lastName.trim() || !editData.email.trim()) {
+      setEditError('First name, last name, and email are required.');
+      return;
+    }
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      await api.patch(`/admin/staff/${editTarget.id}`, editData);
+      setEditTarget(null);
+      toastSuccess('Staff account details updated.');
+      fetchStaff();
+    } catch (err) {
+      setEditError(err.response?.data?.message || 'Failed to update staff account.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const filteredStaff = staff.filter(s => {
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return (
+      `${s.first_name} ${s.last_name}`.toLowerCase().includes(q) ||
+      s.email.toLowerCase().includes(q) ||
+      (s.roles?.[0] || '').toLowerCase().includes(q)
+    );
+  });
+  const totalPages = Math.max(1, Math.ceil(filteredStaff.length / PAGE_SIZE));
+  const pagedStaff = filteredStaff.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
@@ -117,7 +209,7 @@ const StaffAccounts = () => {
                   <span>{formError}</span>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-gray-600 uppercase">First Name</label>
                   <Input value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} disabled={submitting} required />
@@ -165,8 +257,17 @@ const StaffAccounts = () => {
       </div>
 
       <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="border-b border-gray-100 py-4 px-6">
-          <CardTitle className="text-sm font-bold text-slate-800">{staff.length} Staff Account{staff.length === 1 ? '' : 's'}</CardTitle>
+        <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <CardTitle className="text-sm font-bold text-slate-800">
+            {filteredStaff.length} Staff Account{filteredStaff.length === 1 ? '' : 's'}
+            {search && <span className="text-xs font-normal text-gray-400"> of {staff.length} total</span>}
+          </CardTitle>
+          <SearchInput
+            placeholder="Search name, email, or role..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            containerClassName="w-full sm:w-72"
+          />
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -177,16 +278,17 @@ const StaffAccounts = () => {
                 <TableHead className="text-[10px] font-bold uppercase py-3">Role</TableHead>
                 <TableHead className="text-[10px] font-bold uppercase py-3">Contact</TableHead>
                 <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
+                <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading staff accounts…</TableCell></TableRow>
-              ) : staff.length > 0 ? (
-                staff.map(s => (
+                <TableRow><TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400">Loading staff accounts…</TableCell></TableRow>
+              ) : pagedStaff.length > 0 ? (
+                pagedStaff.map(s => (
                   <TableRow key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                    <TableCell className="py-3 font-bold text-xs text-slate-900">{s.first_name} {s.last_name}</TableCell>
-                    <TableCell className="py-3 text-xs text-gray-600">{s.email}</TableCell>
+                    <TableCell className="py-3 font-bold text-xs text-slate-900 max-w-[180px] truncate" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
+                    <TableCell className="py-3 text-xs text-gray-600 max-w-[220px] truncate" title={s.email}>{s.email}</TableCell>
                     <TableCell className="py-3 text-xs">
                       <Badge variant="outline" className="text-[10px] font-bold border-gray-200">{s.roles?.[0]}</Badge>
                     </TableCell>
@@ -201,15 +303,129 @@ const StaffAccounts = () => {
                         {s.status ? 'Active' : 'Deactivated'}
                       </Badge>
                     </TableCell>
+                    <TableCell className="py-3 text-right">
+                      <div className="flex items-center justify-end space-x-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleOpenEdit(s)}
+                          className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>Edit</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => handleOpenResetPwd(s)}
+                          className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
+                        >
+                          <KeyRound className="w-3 h-3" />
+                          <span>Reset Password</span>
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400 italic">No staff accounts yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 italic">{search ? 'No staff accounts match your search.' : 'No staff accounts yet.'}</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            totalLabel={`${filteredStaff.length} account${filteredStaff.length === 1 ? '' : 's'}`}
+          />
         </CardContent>
       </Card>
+
+      <Dialog open={!!resetPwdTarget} onOpenChange={(open) => !resettingPwd && !open && setResetPwdTarget(null)}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900">Reset Password</DialogTitle>
+            <DialogDescription className="text-xs">
+              {resetPwdTarget && `Set a new temporary password for ${resetPwdTarget.first_name} ${resetPwdTarget.last_name}. Share it with them securely — they should change it after logging in.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {resetPwdSuccess ? (
+            <div className="space-y-4">
+              <div role="status" className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span>Password reset successfully.</span>
+              </div>
+              <DialogFooter>
+                <Button type="button" onClick={() => setResetPwdTarget(null)} className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold">Done</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <form onSubmit={confirmResetPassword} className="space-y-4">
+              {resetPwdError && (
+                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{resetPwdError}</span>
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-600 uppercase">New Temporary Password</label>
+                <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={resettingPwd} required autoFocus />
+                <p className="text-[11px] text-gray-400 m-0">At least 8 characters.</p>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setResetPwdTarget(null)} disabled={resettingPwd}>Cancel</Button>
+                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold" disabled={resettingPwd}>
+                  {resettingPwd ? 'Resetting…' : 'Reset Password'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editTarget} onOpenChange={(open) => !savingEdit && !open && setEditTarget(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900">Edit Staff Account</DialogTitle>
+            <DialogDescription className="text-xs">
+              {editTarget && `Update contact details for ${editTarget.first_name} ${editTarget.last_name}. Role and password are managed separately.`}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={confirmEditStaff} className="space-y-4">
+            {editError && (
+              <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{editError}</span>
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-600 uppercase">First Name</label>
+                <Input value={editData.firstName} onChange={e => setEditData({ ...editData, firstName: e.target.value })} disabled={savingEdit} required />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-600 uppercase">Last Name</label>
+                <Input value={editData.lastName} onChange={e => setEditData({ ...editData, lastName: e.target.value })} disabled={savingEdit} required />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-600 uppercase">Email</label>
+              <Input type="email" value={editData.email} onChange={e => setEditData({ ...editData, email: e.target.value })} disabled={savingEdit} required />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-600 uppercase">Contact Number</label>
+              <Input value={editData.contactNumber} onChange={e => setEditData({ ...editData, contactNumber: e.target.value })} disabled={savingEdit} />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>Cancel</Button>
+              <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold" disabled={savingEdit}>
+                {savingEdit ? 'Saving…' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={!!statusTarget}

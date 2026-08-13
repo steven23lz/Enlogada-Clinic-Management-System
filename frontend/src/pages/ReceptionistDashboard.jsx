@@ -13,6 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
+import { formatCurrency } from '../lib/currency';
+import { toastError, toastInfo } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
 import {
@@ -34,7 +36,9 @@ import {
   Camera,
   Keyboard,
   History,
-  RefreshCw
+  RefreshCw,
+  XCircle,
+  UserX
 } from 'lucide-react';
 
 const PAGE_TITLES = {
@@ -55,6 +59,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [testCatalog, setTestCatalog] = useState([]);
   const [patientTypes, setPatientTypes] = useState([]);
   const [hmoProviders, setHmoProviders] = useState([]);
+  const [staticDataError, setStaticDataError] = useState('');
   const [loading, setLoading] = useState(true);
   const [queueError, setQueueError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,6 +90,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [verifyResult, setVerifyResult] = useState(null);
   const [verifyError, setVerifyError] = useState('');
   const [scanMode, setScanMode] = useState(false);
+  // UI/UX Modernization Phase 10: after a QR/reference check-in succeeds, verifyResult is
+  // cleared (so the form resets for the next patient) — this instead holds a short-lived
+  // "where to send them" message built from the visit's already-attached test categories.
+  const [checkInGuidance, setCheckInGuidance] = useState(null);
 
   // UI/UX Phase 3: check-in used to have two independent code paths — the QR/reference flow
   // went through a ConfirmDialog, but checking in an existing patient found via the Walk-In
@@ -94,6 +103,16 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkInError, setCheckInError] = useState('');
   const [checkInNotice, setCheckInNotice] = useState('');
+
+  // Feature Gap Plan Phase A: both endpoints already accepted 'Cancelled'/'No Show' — nothing
+  // in the Receptionist UI ever sent either value. A no-show appointment or a mis-registered
+  // walk-in had no way to be removed from the active queue.
+  const [cancelVisitTarget, setCancelVisitTarget] = useState(null);
+  const [cancelingVisit, setCancelingVisit] = useState(false);
+  const [cancelVisitError, setCancelVisitError] = useState('');
+  const [noShowTarget, setNoShowTarget] = useState(null);
+  const [markingNoShow, setMarkingNoShow] = useState(false);
+  const [noShowError, setNoShowError] = useState('');
 
   // Assign Tests Dialog State
   const [selectedVisitId, setSelectedVisitId] = useState(null);
@@ -129,7 +148,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [hmoProviderId, setHmoProviderId] = useState('');
   const [hmoApprovalCode, setHmoApprovalCode] = useState('');
   const [hmoError, setHmoError] = useState('');
-  const [hmoSuccess, setHmoSuccess] = useState('');
+
+  // UI/UX Modernization Phase 10: read-only visibility into pending HMO requests, shown on the
+  // Active Queue landing view.
+  const [pendingHmoRequests, setPendingHmoRequests] = useState([]);
+  const [hmoRequestsLoading, setHmoRequestsLoading] = useState(true);
 
   const fetchActiveVisits = useCallback(async ({ page = 1, search = searchQuery, status = statusFilter } = {}) => {
     setLoading(true);
@@ -177,6 +200,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   }, []);
 
   const fetchStaticData = useCallback(async () => {
+    setStaticDataError('');
     try {
       const testsRes = await api.get('/tests');
       setTestCatalog(testsRes.data.data.tests || []);
@@ -185,17 +209,38 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setPatientTypes(typesRes.data.data.patientTypes || []);
 
       const hmoRes = await api.get('/hmo/providers');
-      setHmoProviders(hmoRes.data.data.providers || []);
+      setHmoProviders((hmoRes.data.data.providers || []).filter(p => p.is_active));
     } catch (err) {
       console.error('Failed to fetch static data:', err);
+      // Phase D finding 05: this previously failed silently — the test catalog, patient types,
+      // and HMO provider dropdowns would just render empty with no explanation, right when
+      // Reception needs them mid-registration or mid-HMO-logging.
+      setStaticDataError('Could not load test catalog, patient types, or HMO providers. Some forms below may be incomplete.');
+    }
+  }, []);
+
+  // UI/UX Modernization Phase 10: GET /hmo/requests has always been authorized for
+  // Receptionist, but nothing on this dashboard ever called it — pending requests were
+  // effectively invisible unless someone already knew to look at Admin's Service Requests page.
+  // Read-only here: approving stays wherever it already lives, this just surfaces the list.
+  const fetchPendingHmoRequests = useCallback(async () => {
+    setHmoRequestsLoading(true);
+    try {
+      const res = await api.get('/hmo/requests', { params: { status: 'Pending' } });
+      setPendingHmoRequests(res.data.data.requests || []);
+    } catch (err) {
+      console.error('Failed to fetch pending HMO requests:', err);
+    } finally {
+      setHmoRequestsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchActiveVisits({ page: 1, search: '', status: 'All' });
     fetchStaticData();
+    fetchPendingHmoRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchActiveVisits, fetchStaticData]);
+  }, [fetchActiveVisits, fetchStaticData, fetchPendingHmoRequests]);
 
   // Lazy-load Visit History only once the tab is actually opened, not on every Receptionist
   // dashboard mount.
@@ -229,6 +274,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     e?.preventDefault?.();
     setVerifyError('');
     setVerifyResult(null);
+    setCheckInGuidance(null);
 
     const ref = refOverride ?? searchRef;
     if (!ref) return;
@@ -261,7 +307,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     setCheckInError('');
     try {
       if (checkInTarget.type === 'appointment') {
-        const { id: appointmentId, is_paid: isPaid } = checkInTarget.data;
+        const { id: appointmentId, is_paid: isPaid, first_name, last_name, categories } = checkInTarget.data;
         // Confirming the appointment is the front desk's half of the release rule. The backend
         // releases the ticket to the modalities only if payment has also landed — this screen
         // no longer PATCHes the visit status itself, which used to push unpaid visits straight
@@ -274,6 +320,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         );
         setSearchRef('');
         setVerifyResult(null);
+        setCheckInGuidance({
+          patientName: `${first_name} ${last_name}`,
+          categories: categories || []
+        });
       } else {
         const patient = checkInTarget.data;
         const vRes = await api.post('/visits', {
@@ -293,6 +343,37 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setCheckInError(err.response?.data?.message || 'Failed to check in patient');
     } finally {
       setCheckingIn(false);
+    }
+  };
+
+  const confirmCancelVisit = async () => {
+    if (!cancelVisitTarget) return;
+    setCancelingVisit(true);
+    setCancelVisitError('');
+    try {
+      await api.patch(`/visits/${cancelVisitTarget.id}/status`, { status: 'Cancelled' });
+      setCancelVisitTarget(null);
+      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
+    } catch (err) {
+      setCancelVisitError(err.response?.data?.message || 'Failed to cancel this visit.');
+    } finally {
+      setCancelingVisit(false);
+    }
+  };
+
+  const confirmMarkNoShow = async () => {
+    if (!noShowTarget) return;
+    setMarkingNoShow(true);
+    setNoShowError('');
+    try {
+      await api.patch(`/appointments/${noShowTarget.id}/status`, { status: 'No Show' });
+      setNoShowTarget(null);
+      setVerifyResult(null);
+      setSearchRef('');
+    } catch (err) {
+      setNoShowError(err.response?.data?.message || 'Failed to mark this appointment as a no-show.');
+    } finally {
+      setMarkingNoShow(false);
     }
   };
 
@@ -382,7 +463,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setShowTestsModal(false);
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to assign tests to visit');
+      toastError(err.response?.data?.message || 'Failed to assign tests to visit');
     }
   };
 
@@ -399,14 +480,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     setHmoProviderId('');
     setHmoApprovalCode('');
     setHmoError('');
-    setHmoSuccess('');
     setShowHmoModal(true);
   };
 
   const handleHmoSubmit = async (e) => {
     e.preventDefault();
     setHmoError('');
-    setHmoSuccess('');
 
     if (!activeVisitTest || !hmoProviderId) {
       setHmoError('Provider and Approval Code are required.');
@@ -420,12 +499,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         visitTestIds: [activeVisitTest.id]
       });
 
-      setHmoSuccess('HMO Pre-authorization logged successfully!');
-      setTimeout(() => {
-        setShowHmoModal(false);
-        setHmoSuccess('');
-        fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
-      }, 1500);
+      toastSuccess('HMO Pre-authorization logged successfully!');
+      setShowHmoModal(false);
+      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
+      fetchPendingHmoRequests();
     } catch (err) {
       setHmoError(err.response?.data?.message || 'Failed to log HMO authorization');
     }
@@ -437,13 +514,21 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       utterance.rate = 0.9;
       window.speechSynthesis.speak(utterance);
     } else {
-      alert(`Calling Queue Number ${queueNum}`);
+      toastInfo(`Calling Queue Number ${queueNum}`);
     }
   };
 
   return (
     <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
       <div className="space-y-6">
+
+        {staticDataError && (
+          <div role="alert" className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold rounded-xl flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{staticDataError}</span>
+            <button type="button" onClick={fetchStaticData} className="underline font-bold border-0 bg-transparent cursor-pointer text-amber-900">Retry</button>
+          </div>
+        )}
 
         {view === 'reception-queue' && (
           <>
@@ -454,6 +539,37 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               <MetricCard label="In Diagnostic / Processing" value={queueProcessingCount} icon={ClipboardList} tone="indigo" />
               <MetricCard label="Walk-In Intake Today" value={queueWalkinCount} icon={UserPlus} tone="emerald" />
             </div>
+
+            {/* UI/UX Modernization Phase 10: read-only visibility into pending HMO requests —
+                approving one still happens from wherever it already does, this card only
+                surfaces that they exist. */}
+            {!hmoRequestsLoading && pendingHmoRequests.length > 0 && (
+              <Card className="border-amber-200 bg-amber-50/60 shadow-xs rounded-2xl overflow-hidden">
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                    <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wider m-0">
+                      {pendingHmoRequests.length} Pending HMO Request{pendingHmoRequests.length === 1 ? '' : 's'}
+                    </h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {pendingHmoRequests.slice(0, 6).map(r => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1.5 bg-white border border-amber-200 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-amber-900"
+                      >
+                        <span className="font-bold">{r.provider_name}</span>
+                        <span className="text-amber-600">&bull;</span>
+                        <span>{r.approved_test_count}/{r.test_count} tests approved</span>
+                      </span>
+                    ))}
+                    {pendingHmoRequests.length > 6 && (
+                      <span className="text-[11px] font-semibold text-amber-700 self-center">+{pendingHmoRequests.length - 6} more</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Search + Status Filter Toolbar */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
@@ -581,7 +697,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                           </TableCell>
 
                           <TableCell className="py-3">
-                            <StatusBadge status={visit.visit_status} className="text-[10px] px-2.5 py-0.5 rounded-full" />
+                            <StatusBadge status={visit.visit_status} className="px-2.5 py-0.5" />
                             {/* Where the ticket actually is, in the front desk's own terms.
                                 'Pending' alone doesn't say whether reception or the cashier is
                                 holding it up, which is the question this row exists to answer. */}
@@ -603,6 +719,17 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                               >
                                 + Attach Tests
                               </Button>
+                              {!['Completed', 'Cancelled'].includes(visit.visit_status) && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setCancelVisitError(''); setCancelVisitTarget(visit); }}
+                                  title="Cancel this visit"
+                                  aria-label={`Cancel visit for ${visit.first_name} ${visit.last_name}`}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 border-0 bg-transparent cursor-pointer"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -756,7 +883,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </div>
               )}
               {patientSearchError && (
-                <div role="alert" className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold flex items-center space-x-2">
+                <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{patientSearchError}</span>
                 </div>
@@ -784,6 +911,21 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                         <div className="text-xs">
                           <span className="block font-bold text-slate-900">{patient.first_name} {patient.last_name} <span className="text-[10px] text-gray-400 font-normal">PT-{patient.id}</span></span>
                           <span className="block text-gray-500">{patient.patient_type_name} &middot; DOB {new Date(patient.birthdate).toLocaleDateString()}</span>
+                          {/* Phase D: previously zero visit/financial context at lookup — a
+                              returning patient's unpaid balance from a prior visit was invisible
+                              at check-in. */}
+                          <span className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] font-semibold text-gray-400">
+                              {Number(patient.visit_count) > 0
+                                ? `${patient.visit_count} prior visit${Number(patient.visit_count) === 1 ? '' : 's'} · last ${new Date(patient.last_visit_at).toLocaleDateString()}`
+                                : 'No prior visits'}
+                            </span>
+                            {Number(patient.unpaid_visit_count) > 0 && (
+                              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5">
+                                {patient.unpaid_visit_count} unpaid visit{Number(patient.unpaid_visit_count) === 1 ? '' : 's'}
+                              </span>
+                            )}
+                          </span>
                         </div>
                         <Button
                           type="button"
@@ -816,14 +958,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               )}
 
               {registrationError && (
-                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold flex items-center space-x-2">
+                <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{registrationError}</span>
                 </div>
               )}
 
               <form onSubmit={handleWalkInRegister} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
                     <Input
@@ -846,8 +988,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-1 col-span-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1 sm:col-span-2">
                     <label className="text-xs font-bold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
                     <Input
                       type="date"
@@ -875,7 +1017,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-600 uppercase">Contact Number</label>
                     <Input
@@ -991,6 +1133,21 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   <span>{checkInNotice}</span>
                 </div>
               )}
+              {checkInGuidance && (
+                <div role="status" className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl space-y-1.5 text-xs">
+                  <div className="flex items-center space-x-2 font-bold">
+                    <UserCheck className="w-4 h-4 flex-shrink-0" />
+                    <span>{checkInGuidance.patientName} is checked in.</span>
+                  </div>
+                  {checkInGuidance.categories.length > 0 ? (
+                    <p className="m-0">
+                      Please guide the patient to: <strong>{checkInGuidance.categories.join(', ')}</strong>.
+                    </p>
+                  ) : (
+                    <p className="m-0">No tests are attached to this visit yet — attach tests from the Active Queue before sending the patient anywhere.</p>
+                  )}
+                </div>
+              )}
 
               {verifyResult && (
                 <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3 text-xs">
@@ -1029,6 +1186,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   >
                     Confirm Check-In Patient
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => { setNoShowError(''); setNoShowTarget(verifyResult); }}
+                    className="w-full flex items-center justify-center space-x-1.5 text-[11px] font-bold text-red-600 hover:text-red-700 border-0 bg-transparent cursor-pointer py-1"
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                    <span>Mark as No-Show instead</span>
+                  </button>
                 </div>
               )}
             </form>
@@ -1057,7 +1222,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     />
                     <div className="flex-1 flex justify-between items-center">
                       <span className="font-bold text-gray-800">{t.name} <span className="text-[10px] text-gray-400 font-normal">({t.category_name})</span></span>
-                      <span className="font-extrabold text-slate-900">₱{parseFloat(t.price).toFixed(2)}</span>
+                      <span className="font-extrabold text-slate-900">{formatCurrency(t.price)}</span>
                     </div>
                   </label>
                 ))}
@@ -1072,29 +1237,22 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         </Dialog>
 
         {/* HMO Pre-Authorization Logging Modal (Module 7: HMO request initiation) */}
-        <Dialog open={showHmoModal} onOpenChange={(open) => { setShowHmoModal(open); if (!open) { setHmoError(''); setHmoSuccess(''); } }}>
+        <Dialog open={showHmoModal} onOpenChange={(open) => { setShowHmoModal(open); if (!open) { setHmoError(''); } }}>
           <DialogContent className="max-w-md rounded-2xl">
             <DialogHeader>
               <DialogTitle className="text-base font-bold text-slate-900">Log HMO Pre-Authorization</DialogTitle>
               <DialogDescription className="text-xs">
-                For <strong>{activeVisitTest?.test_name}</strong>. This logs the initial HMO request; approval is confirmed separately once the provider responds.
+                For <strong>{activeVisitTest?.test_name}</strong>. This logs the request for Admin review — it does not approve coverage on its own, even if a code is entered below.
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleHmoSubmit} className="space-y-4 pt-2">
               {hmoError && (
-                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{hmoError}</span>
                 </div>
               )}
-              {hmoSuccess && (
-                <div role="status" className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl flex items-center space-x-2">
-                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{hmoSuccess}</span>
-                </div>
-              )}
-
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-600 uppercase">HMO Provider <span className="text-rose-600">*</span></label>
                 <Select value={hmoProviderId} onValueChange={setHmoProviderId}>
@@ -1112,9 +1270,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-600 uppercase">Approval / LOA Code (if already available)</label>
+                <label className="text-xs font-bold text-gray-600 uppercase">Card / LOA Number (if shown by patient)</label>
                 <Input
-                  placeholder="Enter approval or card LOA number"
+                  placeholder="Enter the code shown on the HMO card or LOA"
                   value={hmoApprovalCode}
                   onChange={e => setHmoApprovalCode(e.target.value)}
                 />
@@ -1145,6 +1303,28 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           onConfirm={confirmCheckIn}
           loading={checkingIn}
           error={checkInError}
+        />
+
+        <ConfirmDialog
+          open={!!cancelVisitTarget}
+          onOpenChange={(open) => { if (!open) { setCancelVisitTarget(null); setCancelVisitError(''); } }}
+          title="Cancel Visit"
+          description={cancelVisitTarget && `Cancel the visit for ${cancelVisitTarget.first_name} ${cancelVisitTarget.last_name} (Queue ${cancelVisitTarget.queue_number})? This removes it from the active queue.`}
+          confirmLabel="Cancel Visit"
+          onConfirm={confirmCancelVisit}
+          loading={cancelingVisit}
+          error={cancelVisitError}
+        />
+
+        <ConfirmDialog
+          open={!!noShowTarget}
+          onOpenChange={(open) => { if (!open) { setNoShowTarget(null); setNoShowError(''); } }}
+          title="Mark as No-Show"
+          description={noShowTarget && `Mark ${noShowTarget.first_name} ${noShowTarget.last_name}'s appointment (Queue ${noShowTarget.queue_number}) as a no-show? This does not check them in.`}
+          confirmLabel="Mark No-Show"
+          onConfirm={confirmMarkNoShow}
+          loading={markingNoShow}
+          error={noShowError}
         />
 
       </div>

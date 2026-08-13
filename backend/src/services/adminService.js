@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const userRepository = require('../repositories/userRepository');
+const auditService = require('./auditService');
 
 // Module 12 (Admin Dashboard) manages the 5 operational staff roles only. Creating or managing
 // Admin/SuperAdmin accounts is Module 13 (Super Admin Management)'s explicit responsibility —
@@ -40,7 +41,7 @@ class AdminService {
     return { ...user, roles: [role] };
   }
 
-  async updateStaffStatus(userId, status) {
+  async resetStaffPassword(userId, newPassword, requestingUser) {
     const user = await userRepository.findById(userId);
     if (!user) {
       const error = new Error('Staff account not found');
@@ -55,7 +56,86 @@ class AdminService {
       throw error;
     }
 
-    return await userRepository.updateUserStatus(userId, status);
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+    await userRepository.updatePasswordHash(userId, passwordHash);
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: 'staff.password_reset',
+      entityType: 'user',
+      entityId: userId,
+      description: `Reset password for ${user.first_name} ${user.last_name} (${user.email})`
+    });
+  }
+
+  // UI/UX Modernization Phase 11: previously only status-toggle and password-reset existed —
+  // there was no way to fix a staff member's own typo'd name/email/contact number after account
+  // creation short of deactivating and recreating the whole account. Role is intentionally not a
+  // parameter here — reassigning a role is a separate, more sensitive action.
+  async updateStaffDetails(userId, { firstName, lastName, email, contactNumber }, requestingUser) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      const error = new Error('Staff account not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const isManageableStaff = (user.roles || []).some((r) => MANAGEABLE_ROLES.includes(r));
+    if (!isManageableStaff) {
+      const error = new Error('This account is not a staff account managed by this endpoint.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    if (email !== user.email) {
+      const existing = await userRepository.findByEmail(email);
+      if (existing && existing.id !== Number(userId)) {
+        const error = new Error('Email is already registered to another account.');
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+
+    const updated = await userRepository.updateStaffDetails(userId, { firstName, lastName, email, contactNumber });
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: 'staff.details_updated',
+      entityType: 'user',
+      entityId: userId,
+      description: `Updated contact details for ${updated.first_name} ${updated.last_name} (${updated.email})`
+    });
+
+    return updated;
+  }
+
+  async updateStaffStatus(userId, status, requestingUser) {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      const error = new Error('Staff account not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const isManageableStaff = (user.roles || []).some((r) => MANAGEABLE_ROLES.includes(r));
+    if (!isManageableStaff) {
+      const error = new Error('This account is not a staff account managed by this endpoint.');
+      error.statusCode = 403;
+      throw error;
+    }
+
+    const updated = await userRepository.updateUserStatus(userId, status);
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: status ? 'staff.activated' : 'staff.deactivated',
+      entityType: 'user',
+      entityId: userId,
+      description: `${status ? 'Activated' : 'Deactivated'} staff account ${user.first_name} ${user.last_name} (${user.email})`
+    });
+
+    return updated;
   }
 }
 

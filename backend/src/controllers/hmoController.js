@@ -35,7 +35,7 @@ class HmoController {
         });
       }
 
-      const request = await hmoService.approveRequest(id, { approvalCode });
+      const request = await hmoService.approveRequest(id, { approvalCode }, req.user);
       return res.status(200).json({
         status: 'success',
         message: 'HMO request approved.',
@@ -71,7 +71,7 @@ class HmoController {
         });
       }
 
-      const updated = await hmoService.updateTestApproval(hmoRequestTestId, approvalStatus);
+      const updated = await hmoService.updateTestApproval(hmoRequestTestId, approvalStatus, req.user);
       return res.status(200).json({
         status: 'success',
         message: `Test approval status updated to ${approvalStatus}.`,
@@ -101,6 +101,35 @@ class HmoController {
       return res.status(200).json({
         status: 'success',
         data: { providers }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async createProvider(req, res, next) {
+    try {
+      const { name } = req.body;
+      const provider = await hmoService.createProvider(name, req.user);
+      return res.status(201).json({
+        status: 'success',
+        message: 'HMO provider added.',
+        data: { provider }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateProvider(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { name, isActive } = req.body;
+      const provider = await hmoService.updateProvider(id, { name, isActive }, req.user);
+      return res.status(200).json({
+        status: 'success',
+        message: 'HMO provider updated.',
+        data: { provider }
       });
     } catch (err) {
       next(err);

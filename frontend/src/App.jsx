@@ -7,8 +7,7 @@ import AboutUs from './pages/AboutUs';
 import ServicesPage from './pages/ServicesPage';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
-import Login from './pages/Login';
-import Register from './pages/Register';
+import AuthPage from './pages/AuthPage';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ClientDashboard from './pages/ClientDashboard';
@@ -66,7 +65,7 @@ const MainApp = () => {
       return <Home onNavigate={handleNavigate} />;
     }
     if (currentTab === 'register') {
-      return <Register onToggleView={() => setCurrentTab('login')} onNavigate={handleNavigate} />;
+      return <AuthPage key={currentTab} initialMode="register" onNavigate={handleNavigate} />;
     }
     if (currentTab === 'forgot-password') {
       return <ForgotPassword onNavigate={handleNavigate} />;
@@ -75,7 +74,7 @@ const MainApp = () => {
       return <ResetPassword token={resetToken} onNavigate={handleNavigate} />;
     }
     // Default fallback to login
-    return <Login onToggleView={() => setCurrentTab('register')} onNavigate={handleNavigate} />;
+    return <AuthPage key={currentTab} initialMode="login" onNavigate={handleNavigate} />;
   }
 
   // If user IS logged in
@@ -155,7 +154,7 @@ function App() {
 
   // Mount the provider only when a real client ID exists. It loads Google's Identity Services
   // script on mount, and with no usable client ID that script can only fail — so when Google
-  // Sign-In is unconfigured we skip it entirely and Login.jsx renders its explanatory notice
+  // Sign-In is unconfigured we skip it entirely and LoginForm.jsx renders its explanatory notice
   // in place of the button (rendering <GoogleLogin> outside this provider would throw).
   if (!isGoogleAuthConfigured) {
     return app;

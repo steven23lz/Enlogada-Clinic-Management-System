@@ -10,8 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { StatusBadge } from '../components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import Pagination from '../components/ui/pagination';
+import BookingConfirmation from '../components/BookingConfirmation';
 import api from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
+import { formatCurrency } from '../lib/currency';
+import { toastError } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import BookingPass from '../components/BookingPass';
 import { 
@@ -51,6 +55,11 @@ const CATEGORY_ICONS = {
   ECG: <Activity className="w-5 h-5" />
 };
 
+// UI/UX Modernization Phase 4: My Appointments and Payment History are fetched in one shot with
+// no server-side pagination, so a client-side page size over each already-fetched array is
+// proportionate (VISUAL_IDENTITY.md §3a #11).
+const LIST_PAGE_SIZE = 8;
+
 // test_results.file_url is staff-entered free text with no format validation anywhere in the
 // upload pipeline (see backend/src/controllers/resultController.js uploadResult). Rendered
 // directly as an <a href>, an unvalidated value (e.g. a "javascript:" URI) would execute in the
@@ -64,6 +73,26 @@ const isSafeResultUrl = (url) => {
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
   } catch {
     return false;
+  }
+};
+
+// Phase B: a real uploaded file is served through an authenticated route, not a public URL — a
+// bare <a href> can't carry the Authorization header, so this fetches the file as a blob (the
+// `api` instance's request interceptor attaches the JWT) and opens it via a local object URL.
+const downloadResultFile = async (visitTestId, originalName) => {
+  try {
+    const res = await api.get(`/results/${visitTestId}/file`, { responseType: 'blob' });
+    const objectUrl = window.URL.createObjectURL(res.data);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = originalName || 'result';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  } catch (err) {
+    console.error('Failed to download result file:', err);
+    toastError('Failed to download the attachment. Please try again.');
   }
 };
 
@@ -122,7 +151,10 @@ const ClientDashboard = ({ onNavigate }) => {
     hmoApprovalCode: ''
   });
 
-  const [bookingSuccess, setBookingSuccess] = useState('');
+  // UI/UX Modernization Phase 10: holds the full confirmation payload (not just a success
+  // string) so BookingConfirmation.jsx can render a durable QR/reference/queue-ticket card
+  // instead of the old plain-text message that auto-closed after 4 seconds.
+  const [bookingConfirmation, setBookingConfirmation] = useState(null);
   const [bookingError, setBookingError] = useState('');
 
   // Live slot availability for the selected date
@@ -133,6 +165,7 @@ const ClientDashboard = ({ onNavigate }) => {
   // My Appointments (Module 3: view/cancel own appointments)
   const [appointments, setAppointments] = useState([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
+  const [appointmentsPage, setAppointmentsPage] = useState(1);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
@@ -140,6 +173,7 @@ const ClientDashboard = ({ onNavigate }) => {
   // Payment History (Module 14: client-side payment visibility)
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
+  const [paymentHistoryPage, setPaymentHistoryPage] = useState(1);
 
   // Online payment (GCash / Maya). `gateway.available` is false whenever the deployment has no
   // merchant credentials configured, in which case no online-payment option is rendered at all
@@ -172,7 +206,7 @@ const ClientDashboard = ({ onNavigate }) => {
       setPatientTypes(typesRes.data.data.patientTypes);
 
       const hmoRes = await api.get('/hmo/providers');
-      setHmoProviders(hmoRes.data.data.providers || []);
+      setHmoProviders((hmoRes.data.data.providers || []).filter(p => p.is_active));
     } catch (err) {
       console.error('Failed to fetch catalog data:', err);
     }
@@ -401,7 +435,7 @@ const ClientDashboard = ({ onNavigate }) => {
   const handleBookAppointment = async (e) => {
     e.preventDefault();
     setBookingError('');
-    setBookingSuccess('');
+    setBookingConfirmation(null);
 
     const { scheduledDate, scheduledTime, notes, testIds, hmoProviderId, hmoApprovalCode } = bookingData;
     if (!scheduledDate || !scheduledTime || testIds.length === 0) {
@@ -438,7 +472,13 @@ const ClientDashboard = ({ onNavigate }) => {
         }
       }
 
-      setBookingSuccess(`Appointment booked successfully! Reference Code: ${appt.appointment_reference}. Physical Queue Ticket: ${appt.queue_number}`);
+      setBookingConfirmation({
+        referenceCode: appt.appointment_reference,
+        queueNumber: appt.queue_number,
+        patientName: selectedProfile ? `${selectedProfile.first_name} ${selectedProfile.last_name}` : '',
+        scheduledDate: formatAppointmentDate(bookingData.scheduledDate),
+        scheduledTime: bookingData.scheduledTime
+      });
       setBookingData({
         scheduledDate: '',
         scheduledTime: '',
@@ -447,13 +487,8 @@ const ClientDashboard = ({ onNavigate }) => {
         hmoProviderId: '',
         hmoApprovalCode: ''
       });
-      setBookingStep(1);
       fetchHistory(selectedProfileId);
       fetchAppointments();
-      setTimeout(() => {
-        setShowBooking(false);
-        setBookingSuccess('');
-      }, 4000);
     } catch (err) {
       setBookingError(err.response?.data?.message || 'Failed to book appointment');
       if (err.response?.status === 409 && bookingData.scheduledDate) {
@@ -509,17 +544,6 @@ const ClientDashboard = ({ onNavigate }) => {
     }, 0);
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Completed': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case 'Pending': return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'Processing': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
-      case 'Approved': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'Cancelled': return 'bg-rose-100 text-rose-800 border-rose-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
-
   const filteredHistory = history.filter(item => {
     const matchesCategory = filterCategory === 'All' || item.category_name === filterCategory;
     const matchesSearch = !searchFilter || 
@@ -541,6 +565,20 @@ const ClientDashboard = ({ onNavigate }) => {
       </DashboardLayout>
     );
   }
+
+  const appointmentsTotalPages = Math.max(1, Math.ceil(appointments.length / LIST_PAGE_SIZE));
+  const safeAppointmentsPage = Math.min(appointmentsPage, appointmentsTotalPages);
+  const pagedAppointments = appointments.slice(
+    (safeAppointmentsPage - 1) * LIST_PAGE_SIZE,
+    safeAppointmentsPage * LIST_PAGE_SIZE
+  );
+
+  const paymentHistoryTotalPages = Math.max(1, Math.ceil(paymentHistory.length / LIST_PAGE_SIZE));
+  const safePaymentHistoryPage = Math.min(paymentHistoryPage, paymentHistoryTotalPages);
+  const pagedPaymentHistory = paymentHistory.slice(
+    (safePaymentHistoryPage - 1) * LIST_PAGE_SIZE,
+    safePaymentHistoryPage * LIST_PAGE_SIZE
+  );
 
   return (
     <DashboardLayout onNavigate={onNavigate} activeTab="dashboard">
@@ -589,12 +627,12 @@ const ClientDashboard = ({ onNavigate }) => {
               </DialogHeader>
               <form onSubmit={handleAddProfile} className="space-y-4 pt-2">
                 {addProfileError && (
-                  <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{addProfileError}</span>
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
                     <Input
@@ -617,8 +655,8 @@ const ClientDashboard = ({ onNavigate }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1.5 col-span-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1.5 sm:col-span-2">
                     <label className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
                     <Input
                       type="date"
@@ -646,7 +684,7 @@ const ClientDashboard = ({ onNavigate }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-600 uppercase">Contact Number</label>
                     <Input
@@ -718,12 +756,12 @@ const ClientDashboard = ({ onNavigate }) => {
               </DialogHeader>
               <form onSubmit={handleEditProfile} className="space-y-4 pt-2">
                 {editProfileError && (
-                  <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{editProfileError}</span>
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
                     <Input
@@ -746,8 +784,8 @@ const ClientDashboard = ({ onNavigate }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1.5 col-span-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1.5 sm:col-span-2">
                     <label className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
                     <Input
                       type="date"
@@ -775,7 +813,7 @@ const ClientDashboard = ({ onNavigate }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-600 uppercase">Contact Number</label>
                     <Input
@@ -861,11 +899,11 @@ const ClientDashboard = ({ onNavigate }) => {
                 if (!open) {
                   setBookingStep(1);
                   setBookingError('');
-                  setBookingSuccess('');
+                  setBookingConfirmation(null);
                 }
               }}>
                 <DialogTrigger asChild>
-                  <Button 
+                  <Button
                     disabled={!selectedProfileId}
                     className="bg-[#769046] hover:bg-[#657c3a] text-white py-5 px-6 font-bold flex items-center space-x-2 rounded-2xl shadow-lg border-0 cursor-pointer transition-all hover:scale-105 active:scale-95 text-sm"
                   >
@@ -874,6 +912,13 @@ const ClientDashboard = ({ onNavigate }) => {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-xl rounded-2xl">
+                  {bookingConfirmation ? (
+                    <BookingConfirmation
+                      {...bookingConfirmation}
+                      onClose={() => setShowBooking(false)}
+                    />
+                  ) : (
+                    <>
                   <DialogHeader>
                     <DialogTitle className="text-lg font-bold text-slate-900">
                       Book Diagnostic Appointment
@@ -881,7 +926,7 @@ const ClientDashboard = ({ onNavigate }) => {
                     <DialogDescription className="text-xs">
                       Schedule a diagnostic test for <strong>{selectedProfile?.first_name} {selectedProfile?.last_name}</strong>.
                     </DialogDescription>
-                    
+
                     {/* Visual Step Progress Bar */}
                     <div className="flex items-center justify-between pt-3 pb-1 border-b border-slate-100 my-2">
                       <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 1 ? 'text-[#769046]' : 'text-slate-400'}`}>
@@ -898,16 +943,9 @@ const ClientDashboard = ({ onNavigate }) => {
 
                   <form onSubmit={handleBookAppointment} className="space-y-4 pt-2">
                     {bookingError && (
-                      <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
+                      <div role="alert" className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
                         <span>{bookingError}</span>
-                      </div>
-                    )}
-
-                    {bookingSuccess && (
-                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
-                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                        <span>{bookingSuccess}</span>
                       </div>
                     )}
 
@@ -979,7 +1017,7 @@ const ClientDashboard = ({ onNavigate }) => {
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-center">
                             <label className="text-xs font-bold text-gray-600 uppercase">Select Diagnostic Tests</label>
-                            <span className="text-xs font-extrabold text-[#769046]">Total: ₱{calculateTotalPrice().toFixed(2)}</span>
+                            <span className="text-xs font-extrabold text-[#769046]">Total: {formatCurrency(calculateTotalPrice())}</span>
                           </div>
                           <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-xl p-2.5 space-y-2 bg-gray-50/50">
                             {testCatalog.map(test => (
@@ -992,7 +1030,7 @@ const ClientDashboard = ({ onNavigate }) => {
                                 />
                                 <div className="flex-1 flex justify-between items-center text-xs">
                                   <span className="font-bold text-gray-800">{test.name} <span className="text-[10px] text-gray-400 font-medium">({test.category_name})</span></span>
-                                  <span className="font-extrabold text-slate-900">₱{parseFloat(test.price).toFixed(2)}</span>
+                                  <span className="font-extrabold text-slate-900">{formatCurrency(test.price)}</span>
                                 </div>
                               </label>
                             ))}
@@ -1060,6 +1098,8 @@ const ClientDashboard = ({ onNavigate }) => {
                       </div>
                     )}
                   </form>
+                    </>
+                  )}
                 </DialogContent>
               </Dialog>
             </div>
@@ -1142,9 +1182,7 @@ const ClientDashboard = ({ onNavigate }) => {
                         <div className="space-y-1">
                           <div className="flex items-center space-x-2">
                             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">REQ-{item.visit_test_id}</span>
-                            <Badge className={`${getStatusColor(item.test_status)} text-[10px] font-bold px-2 py-0.5 rounded-full border`}>
-                              {item.test_status}
-                            </Badge>
+                            <StatusBadge status={item.test_status} className="text-[10px] px-2 py-0.5" />
                           </div>
                           <h3 className="font-bold text-slate-900 text-sm m-0">
                             {item.category_name} - {item.test_name}
@@ -1175,7 +1213,8 @@ const ClientDashboard = ({ onNavigate }) => {
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-2xl rounded-2xl p-6">
-                            
+
+                          <div className="print-area space-y-4">
                             {/* Official Lab Report Simulation Header */}
                             <div className="border-b border-gray-200 pb-4 text-center space-y-1">
                               <h2 className="text-base font-extrabold text-slate-900 uppercase tracking-wide m-0">ENLOGADA ULTRASOUND & DIAGNOSTIC CLINIC</h2>
@@ -1215,13 +1254,22 @@ const ClientDashboard = ({ onNavigate }) => {
                                 </div>
                               )}
 
-                              {item.file_url && (
+                              {(item.file_path || item.file_url) && (
                                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between text-xs">
                                   <div className="flex items-center space-x-2">
                                     <FileText className="w-4 h-4 text-emerald-600" />
                                     <span className="font-bold text-emerald-800">Scanned Diagnostic Image / PDF Attachment</span>
                                   </div>
-                                  {isSafeResultUrl(item.file_url) ? (
+                                  {item.file_path ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadResultFile(item.visit_test_id, item.file_original_name)}
+                                      className="text-xs font-bold text-emerald-800 hover:underline flex items-center space-x-1 border-0 bg-transparent cursor-pointer"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                      <span>Download Attachment</span>
+                                    </button>
+                                  ) : isSafeResultUrl(item.file_url) ? (
                                   <a
                                     href={item.file_url}
                                     target="_blank"
@@ -1239,17 +1287,21 @@ const ClientDashboard = ({ onNavigate }) => {
                             </div>
 
                             {/* Footer Release Stamp */}
-                            <div className="flex items-center justify-between pt-4 border-t border-gray-100 text-[11px]">
+                            <div className="pt-4 border-t border-gray-100 text-[11px]">
                               <span className="text-gray-400 font-medium">Released: {new Date(item.released_at).toLocaleString()}</span>
-                              <Button 
-                                onClick={() => window.print()}
-                                variant="outline" 
-                                className="text-xs font-bold flex items-center space-x-1.5"
-                              >
-                                <Printer className="w-3.5 h-3.5" />
-                                <span>Print Official Copy</span>
-                              </Button>
                             </div>
+                          </div>
+
+                          <div className="flex justify-end pt-2">
+                            <Button
+                              onClick={() => window.print()}
+                              variant="outline"
+                              className="text-xs font-bold flex items-center space-x-1.5"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>Print Official Copy</span>
+                            </Button>
+                          </div>
 
                           </DialogContent>
                         </Dialog>
@@ -1297,7 +1349,7 @@ const ClientDashboard = ({ onNavigate }) => {
                 ) : appointments.length === 0 ? (
                   <p className="text-xs text-gray-400 text-center py-4 italic">No appointments booked yet.</p>
                 ) : (
-                  appointments.map((appt) => {
+                  pagedAppointments.map((appt) => {
                     const isCancellable = appt.status === 'Pending' || appt.status === 'Confirmed';
                     const isOpen = appt.status !== 'Cancelled' && appt.status !== 'Completed';
                     // The booking pass is issued only once payment has settled — that is what
@@ -1370,6 +1422,14 @@ const ClientDashboard = ({ onNavigate }) => {
                   })
                 )}
               </CardContent>
+              {appointments.length > 0 && (
+                <Pagination
+                  page={safeAppointmentsPage}
+                  totalPages={appointmentsTotalPages}
+                  onPageChange={setAppointmentsPage}
+                  totalLabel={`${appointments.length} total`}
+                />
+              )}
             </Card>
           </TabsContent>
 
@@ -1390,11 +1450,11 @@ const ClientDashboard = ({ onNavigate }) => {
                 ) : paymentHistory.length === 0 ? (
                   <p className="text-xs text-gray-400 text-center py-4 italic">No payments recorded yet.</p>
                 ) : (
-                  paymentHistory.map((pay) => (
+                  pagedPaymentHistory.map((pay) => (
                     <div key={pay.id} className="border border-gray-100 rounded-xl p-3 space-y-1.5 bg-gray-50/50">
                       <div className="flex justify-between items-start">
                         <div>
-                          <span className="block text-xs font-extrabold text-slate-900">₱{parseFloat(pay.amount).toFixed(2)}</span>
+                          <span className="block text-xs font-extrabold text-slate-900">{formatCurrency(pay.amount)}</span>
                           <span className="block text-[11px] text-gray-500 font-medium">{pay.patient_first_name} {pay.patient_last_name}</span>
                         </div>
                         <StatusBadge status={pay.payment_status} />
@@ -1407,6 +1467,14 @@ const ClientDashboard = ({ onNavigate }) => {
                   ))
                 )}
               </CardContent>
+              {paymentHistory.length > 0 && (
+                <Pagination
+                  page={safePaymentHistoryPage}
+                  totalPages={paymentHistoryTotalPages}
+                  onPageChange={setPaymentHistoryPage}
+                  totalLabel={`${paymentHistory.length} total`}
+                />
+              )}
             </Card>
           </TabsContent>
 

@@ -1,5 +1,5 @@
 /**
- * Additive migration [1.6.0] — Ticket Release Gating + Online Payment Gateway.
+ * Additive migration [1.10.0] — Ticket Release Gating + Online Payment Gateway.
  *
  * Applied directly against the live dev database rather than via `migrateDb.js`, which is
  * destructive (it drops and recreates every table from schema.sql and would discard the
@@ -56,15 +56,15 @@ const run = async () => {
   try {
     await client.query('BEGIN');
     for (const step of steps) {
-      logger.info(`[1.6.0] ${step.name}`);
+      logger.info(`[1.10.0] ${step.name}`);
       await client.query(step.sql);
     }
     await client.query('COMMIT');
-    logger.info('[1.6.0] Ticket-flow migration completed successfully.');
+    logger.info('[1.10.0] Ticket-flow migration completed successfully.');
     process.exit(0);
   } catch (err) {
     await client.query('ROLLBACK');
-    logger.error('[1.6.0] Ticket-flow migration failed — rolled back, database unchanged:', err);
+    logger.error('[1.10.0] Ticket-flow migration failed — rolled back, database unchanged:', err);
     process.exit(1);
   } finally {
     client.release();

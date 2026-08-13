@@ -2,6 +2,7 @@
 -- Database: PostgreSQL (Local/Supabase hosted)
 
 -- Drop existing tables to allow clean recreation
+DROP TABLE IF EXISTS audit_log CASCADE;
 DROP TABLE IF EXISTS notification_reads CASCADE;
 DROP TABLE IF EXISTS notification_events CASCADE;
 DROP TABLE IF EXISTS clinic_operating_hours CASCADE;
@@ -38,6 +39,8 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     contact_number VARCHAR(20),
     status BOOLEAN DEFAULT TRUE,
+    avatar_path VARCHAR(255),
+    avatar_mime_type VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -183,7 +186,8 @@ CREATE TABLE visit_tests (
 -- 5. HMO Integrations (Manual Record Keeping)
 CREATE TABLE hmo_providers (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE
+    name VARCHAR(100) NOT NULL UNIQUE,
+    is_active BOOLEAN DEFAULT TRUE
 );
 
 CREATE TABLE hmo_requests (
@@ -216,6 +220,10 @@ CREATE TABLE test_results (
     id SERIAL PRIMARY KEY,
     visit_test_id INT NOT NULL UNIQUE,
     file_url TEXT,
+    file_path TEXT,
+    file_original_name TEXT,
+    file_mime_type TEXT,
+    file_size_bytes INT,
     findings TEXT,
     remarks TEXT,
     released_by INT NOT NULL,
@@ -234,6 +242,7 @@ CREATE TABLE payments (
     receipt_number VARCHAR(100), -- Explicitly added for cashier tracking
     amount NUMERIC(10,2) NOT NULL,
     payment_status VARCHAR(50) DEFAULT 'Paid',
+    refund_reason TEXT,
     paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- Online payment gateway linkage (GCash / Maya via PayMongo hosted checkout). NULL for
     -- payments recorded at the counter by a cashier. A gateway payment is inserted as
@@ -293,6 +302,24 @@ CREATE TABLE notification_reads (
     CONSTRAINT uq_notification_reads_event_user UNIQUE (event_id, user_id)
 );
 CREATE INDEX idx_notification_reads_user ON notification_reads(user_id, is_read);
+
+-- 10. Audit Log (Feature Gap Plan Phase D). Denormalized actor_name (rather than requiring a
+-- join to users every time the log is read) since the log must remain legible even if the
+-- actor's account is later deleted or renamed — it's a record of what happened, not a live
+-- view of current user data. Scoped to the sensitive actions this phase's other work
+-- introduced (payment status changes, staff account changes, HMO provider changes, result
+-- corrections) rather than instrumenting every write in the app.
+CREATE TABLE audit_log (
+    id SERIAL PRIMARY KEY,
+    actor_id INT REFERENCES users(id),
+    actor_name VARCHAR(200) NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id INT,
+    description TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_audit_log_created_at ON audit_log(created_at DESC);
 
 -- Seed Initial Data
 INSERT INTO roles (name) VALUES

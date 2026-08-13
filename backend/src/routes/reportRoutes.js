@@ -8,4 +8,8 @@ const router = express.Router();
 // matching the convention already established for /rbac/matrix and /admin/*.
 router.get('/summary', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), reportController.getSummary);
 
+// Feature Gap Plan Phase D: per-staff workload for Reception (check-ins) and Diagnostic
+// (results released) — previously only Cashier had this kind of throughput visibility.
+router.get('/staff-workload', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), reportController.getStaffWorkload);
+
 module.exports = router;

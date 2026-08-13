@@ -15,8 +15,14 @@ class ResultRepository {
       SELECT vt.id as visit_test_id, vt.status as test_status, vt.price_at_time, vt.remarks,
              t.name as test_name, tc.name as category_name,
              pv.id as visit_id, pv.queue_number, pv.visit_type,
-             p.id as patient_id,
-             p.first_name, p.last_name, p.birthdate, p.sex
+             p.id as patient_id, p.first_name, p.last_name, p.birthdate, p.sex,
+             (
+               SELECT hrt.approval_status
+               FROM hmo_request_tests hrt
+               WHERE hrt.visit_test_id = vt.id
+               ORDER BY hrt.created_at DESC
+               LIMIT 1
+             ) as hmo_approval_status
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
@@ -57,7 +63,7 @@ class ResultRepository {
              t.name as test_name, tc.name as category_name,
              pv.id as visit_id, pv.queue_number,
              p.id as patient_id, p.first_name, p.last_name,
-             tr.findings, tr.remarks as result_remarks, tr.file_url, tr.released_at,
+             tr.findings, tr.remarks as result_remarks, tr.file_url, tr.file_path, tr.released_at,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
@@ -74,24 +80,55 @@ class ResultRepository {
     return result.rows;
   }
 
-  async createResult({ visitTestId, fileUrl, findings, remarks, releasedBy }) {
+  async createResult({ visitTestId, fileUrl, filePath, fileOriginalName, fileMimeType, fileSizeBytes, findings, remarks, releasedBy }) {
     // Upsert, not a plain insert: the caller always follows this with a separate release call
     // (see resultService.releaseResult) for the same clinically-significant action. If that
     // second call fails (e.g. a network blip) after this one already succeeded, the only way
     // to recover is to retry the whole sequence from the top — which would otherwise violate
     // visit_test_id's UNIQUE constraint and leave the result permanently stuck un-released.
+    //
+    // Phase B: file_path/file_original_name/file_mime_type/file_size_bytes back a real uploaded
+    // file; file_url remains as a nullable legacy fallback. Re-uploading a corrected file (a new
+    // POST for the same visit_test_id) overwrites the previous file's metadata row here, but the
+    // old physical file on disk is intentionally left in place rather than deleted — this upsert
+    // is the one existing code path that already handles "the caller made a mistake and re-sent
+    // the request," and adding disk cleanup to it is a separate, riskier concern than this phase
+    // set out to solve.
     const queryText = `
-      INSERT INTO test_results (visit_test_id, file_url, findings, remarks, released_by)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO test_results (visit_test_id, file_url, file_path, file_original_name, file_mime_type, file_size_bytes, findings, remarks, released_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (visit_test_id) DO UPDATE
       SET file_url = EXCLUDED.file_url,
+          file_path = EXCLUDED.file_path,
+          file_original_name = EXCLUDED.file_original_name,
+          file_mime_type = EXCLUDED.file_mime_type,
+          file_size_bytes = EXCLUDED.file_size_bytes,
           findings = EXCLUDED.findings,
           remarks = EXCLUDED.remarks,
           released_by = EXCLUDED.released_by,
           released_at = CURRENT_TIMESTAMP
       RETURNING *
     `;
-    const result = await db.query(queryText, [visitTestId, fileUrl, findings, remarks, releasedBy]);
+    const result = await db.query(queryText, [
+      visitTestId, fileUrl || null, filePath || null, fileOriginalName || null, fileMimeType || null, fileSizeBytes || null, findings, remarks, releasedBy
+    ]);
+    return result.rows[0];
+  }
+
+  // Phase B: single query backing the download route's ownership check — needs both the
+  // patient's user_id (Client-ownership check) and the test's category (staff-department check),
+  // matching the two branches assertStaffOwnsVisitTest/getPatientHistory already use elsewhere.
+  async findOwnershipInfoByVisitTestId(visitTestId) {
+    const queryText = `
+      SELECT tc.name as category_name, p.user_id as patient_user_id
+      FROM visit_tests vt
+      JOIN tests t ON vt.test_id = t.id
+      JOIN test_categories tc ON t.category_id = tc.id
+      JOIN patient_visits pv ON vt.patient_visit_id = pv.id
+      JOIN patients p ON pv.patient_id = p.id
+      WHERE vt.id = $1
+    `;
+    const result = await db.query(queryText, [visitTestId]);
     return result.rows[0];
   }
 
@@ -112,7 +149,7 @@ class ResultRepository {
              t.name as test_name, tc.name as category_name,
              pv.created_at as visit_date, pv.queue_number,
              tr.id as result_id, tr.findings, tr.remarks as result_remarks,
-             tr.file_url, tr.released_at,
+             tr.file_url, tr.file_path, tr.file_original_name, tr.released_at,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id

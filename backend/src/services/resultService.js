@@ -1,8 +1,12 @@
+const fs = require('fs');
+const path = require('path');
 const resultRepository = require('../repositories/resultRepository');
 const testRepository = require('../repositories/testRepository');
 const visitRepository = require('../repositories/visitRepository');
 const { sendEmail } = require('../config/email');
 const notificationService = require('./notificationService');
+const { UPLOAD_ROOT } = require('../config/upload');
+const auditService = require('./auditService');
 const {
   STAFF_ROLE_TO_CATEGORIES: STAFF_CATEGORY_MAP,
   DIAGNOSTIC_CATEGORIES,
@@ -103,24 +107,113 @@ class ResultService {
     return await testRepository.updateVisitTestStatus(visitTestId, status);
   }
 
-  async uploadResult({ visitTestId, fileUrl, findings, remarks, releasedBy }, requestingUser) {
+  async uploadResult({ visitTestId, fileUrl, file, findings, remarks, releasedBy }, requestingUser) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
+
+    // Fetched once, up front: doubles as (a) the file-preservation source when neither a new
+    // file nor fileUrl is provided, and (b) the correction signal below — a result already
+    // existing before this call means this is an edit, not a first-time release.
+    const existing = await resultRepository.findResultByVisitTestId(visitTestId);
+    const isCorrection = !!existing;
 
     // Recording findings is not the same event as releasing them. The ticket parks in
     // 'Waiting for Release' — visible as such to the front desk — until releaseResult below
     // authorises it and notifies the patient.
     await testRepository.updateVisitTestStatus(visitTestId, 'Waiting for Release');
 
-    // Create the result record
+    // Phase B: a real uploaded file (via multer) takes precedence over the legacy fileUrl text
+    // field — both can't meaningfully apply at once, and the frontend only ever sends one or
+    // the other.
+    let resolvedFileUrl = fileUrl || null;
+    let filePath = null, fileOriginalName = null, fileMimeType = null, fileSizeBytes = null;
+
+    if (file) {
+      filePath = path.relative(UPLOAD_ROOT, file.path);
+      fileOriginalName = file.originalname;
+      fileMimeType = file.mimetype;
+      fileSizeBytes = file.size;
+      resolvedFileUrl = null;
+    } else if (!fileUrl && existing) {
+      // Phase C: this call now also handles correcting an already-released result (editing
+      // findings/remarks without re-attaching a file) — without this, re-submitting would
+      // silently wipe a previously uploaded file's metadata, since createResult's upsert
+      // otherwise overwrites every column unconditionally.
+      filePath = existing.file_path;
+      fileOriginalName = existing.file_original_name;
+      fileMimeType = existing.file_mime_type;
+      fileSizeBytes = existing.file_size_bytes;
+      resolvedFileUrl = existing.file_url;
+    }
+
     const result = await resultRepository.createResult({
       visitTestId,
-      fileUrl,
+      fileUrl: resolvedFileUrl,
+      filePath,
+      fileOriginalName,
+      fileMimeType,
+      fileSizeBytes,
       findings,
       remarks,
       releasedBy
     });
 
+    // Phase D: only a correction is audit-worthy here — the first-time release of every result
+    // would make the log mostly noise from routine work, not the "something changed after the
+    // fact" signal an audit trail is for.
+    if (isCorrection) {
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: 'result.corrected',
+        entityType: 'test_result',
+        entityId: result.id,
+        description: `Corrected findings for visit test #${visitTestId}`
+      });
+    }
+
     return result;
+  }
+
+  // Phase B: streams the physical file back for a result — never through a public static path,
+  // since these are PHI. Ownership mirrors the two checks already used elsewhere in this file/
+  // resultController: staff must own the test's category (assertStaffOwnsVisitTest, SuperAdmin/
+  // Admin bypass); a Client must own the patient the test belongs to (getPatientHistory's check).
+  async getResultFile(visitTestId, requestingUser) {
+    const ownership = await resultRepository.findOwnershipInfoByVisitTestId(visitTestId);
+    if (!ownership) {
+      const error = new Error('Visit test not found.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (requestingUser.roles.includes('Client')) {
+      if (ownership.patient_user_id !== requestingUser.userId) {
+        const error = new Error('Access forbidden. This result does not belong to your account.');
+        error.statusCode = 403;
+        throw error;
+      }
+    } else {
+      assertStaffAllowedCategory(requestingUser, ownership.category_name);
+    }
+
+    const result = await resultRepository.findResultByVisitTestId(visitTestId);
+    if (!result || !result.file_path) {
+      const error = new Error('No uploaded file exists for this result.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const absolutePath = path.join(UPLOAD_ROOT, result.file_path);
+    if (!fs.existsSync(absolutePath)) {
+      const error = new Error('The file for this result could not be found on the server.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return {
+      absolutePath,
+      originalName: result.file_original_name || 'result',
+      mimeType: result.file_mime_type || 'application/octet-stream'
+    };
   }
 
   async releaseResult({ visitTestId, releasedBy }, requestingUser) {
@@ -147,10 +240,14 @@ class ResultService {
       await visitRepository.updateVisitStatus(releaseState.visit_id, 'Completed');
     }
 
-    // Attempt to send email notification to patient
+    // Attempt to send email notification to patient. sendEmail() never throws (it swallows
+    // SMTP failures and returns {error}/{skipped} instead, per backend/src/config/email.js) —
+    // UI/UX Modernization Phase 11: previously that return value was discarded here, so the
+    // controller always reported "patient notified via email" even when nothing was sent.
     const patientInfo = await resultRepository.findPatientEmailByVisitTestId(visitTestId);
+    let emailStatus = 'no_email';
     if (patientInfo && patientInfo.email) {
-      await sendEmail({
+      const emailResult = await sendEmail({
         to: patientInfo.email,
         subject: `Your ${patientInfo.test_name} Results Are Ready - Enlogada Clinic`,
         html: `
@@ -164,6 +261,7 @@ class ResultService {
           </div>
         `
       });
+      emailStatus = (emailResult?.error || emailResult?.skipped) ? 'failed' : 'sent';
     }
 
     // Module 18 (Notification): Admin/SuperAdmin oversight of diagnostic throughput, matching
@@ -180,7 +278,7 @@ class ResultService {
       });
     }
 
-    return result;
+    return { ...result, emailStatus };
   }
 
   // Lets the modality re-open a ticket that is already 'Waiting for Release' and edit the

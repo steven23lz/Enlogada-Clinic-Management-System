@@ -8,9 +8,14 @@ import { Input } from '../components/ui/input';
 import { SearchInput } from '../components/ui/search-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
+import { StatusBadge } from '../components/ui/status-badge';
+import { Textarea } from '../components/ui/textarea';
+import Pagination from '../components/ui/pagination';
 import api from '../config/api';
+import { formatCurrency } from '../lib/currency';
+import { toastError } from '../lib/toast';
 import {
   Receipt,
   Wallet,
@@ -22,7 +27,8 @@ import {
   AlertCircle,
   Clock,
   ArrowUpDown,
-  RefreshCw
+  RefreshCw,
+  Undo2
 } from 'lucide-react';
 
 const PAGE_TITLES = {
@@ -31,6 +37,11 @@ const PAGE_TITLES = {
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 const todayStr = () => new Date().toISOString().slice(0, 10);
+
+// UI/UX Modernization Phase 4: Transaction History has no server-side pagination endpoint, so a
+// client-side page size over the already-fetched, date-range-filtered array is proportionate —
+// same pattern as StaffAccounts.jsx (VISUAL_IDENTITY.md §3a #11).
+const HISTORY_PAGE_SIZE = 15;
 
 // Wait-time triage badge on the billing queue: green under 15 minutes, amber 15-30, rose 30+.
 const getWaitInfo = (createdAt) => {
@@ -48,6 +59,10 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [activeVisits, setActiveVisits] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Phase D finding 05: the billing queue, today's collections, and patient-type filter all
+  // previously failed silently (console.error only) — the queue would just render empty with
+  // no way to tell "no visits" apart from "the request failed."
+  const [queueError, setQueueError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
   const [sortOrder, setSortOrder] = useState('oldest');
@@ -63,6 +78,14 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [historyStartDate, setHistoryStartDate] = useState(todayStr());
   const [historyEndDate, setHistoryEndDate] = useState(todayStr());
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+
+  // Feature Gap Plan Phase A: payment_status has always allowed 'Refunded'/'Cancelled', but
+  // nothing in the app ever set them — a duplicate or disputed charge had no reversal path.
+  const [refundTarget, setRefundTarget] = useState(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [refunding, setRefunding] = useState(false);
+  const [refundError, setRefundError] = useState('');
 
   // Selected Billing Item in POS Layout
   const [selectedVisit, setSelectedVisit] = useState(null);
@@ -80,8 +103,10 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     try {
       const response = await api.get('/visits/active');
       setActiveVisits(response.data.data.visits || []);
+      setQueueError('');
     } catch (err) {
       console.error('Failed to fetch active visits:', err);
+      setQueueError('Could not load the billing queue. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -93,6 +118,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       setTransactions(response.data.data.transactions || []);
     } catch (err) {
       console.error('Failed to fetch transaction logs:', err);
+      setQueueError('Could not load today\'s collections. Please try again.');
     }
   }, []);
 
@@ -105,12 +131,19 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     }
   }, []);
 
+  const retryQueueData = () => {
+    fetchActiveVisits();
+    fetchTransactions();
+    fetchPatientTypes();
+  };
+
   const fetchTransactionHistory = useCallback(async (startDate, endDate) => {
     setHistoryLoading(true);
     setHistoryError('');
     try {
       const response = await api.get('/payments/transactions', { params: { startDate, endDate } });
       setHistoryTransactions(response.data.data.transactions || []);
+      setHistoryPage(1);
     } catch (err) {
       console.error('Failed to fetch transaction history:', err);
       setHistoryError('Could not load transaction history. Please try again.');
@@ -118,6 +151,53 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       setHistoryLoading(false);
     }
   }, []);
+
+  // Phase D finding 03: Transaction History had no way to reopen a past receipt — the only
+  // "Print Receipt" affordance was the modal shown immediately after processing a *new* payment.
+  // Reuses that exact modal, just fed from a history row instead of a fresh processPayment response.
+  // UI/UX Modernization Phase 10: previously reconstructed billDetails with only patientName, so
+  // a reprinted receipt showed no itemized test breakdown even though the original one did —
+  // fetches the same GET /payments/bill/:visitId the checkout panel already uses, keyed on the
+  // transaction's own patient_visit_id, instead of hand-rolling a partial object.
+  const handleReprintReceipt = async (transaction) => {
+    setPaymentSuccess(transaction);
+    setBillDetails({ patientName: `${transaction.patient_first_name} ${transaction.patient_last_name}` });
+    setShowReceiptModal(true);
+    try {
+      const response = await api.get(`/payments/bill/${transaction.patient_visit_id}`);
+      setBillDetails(response.data.data.bill);
+    } catch (err) {
+      console.error('Failed to load itemized bill for reprint:', err);
+      toastError('Could not load the itemized test list for this receipt.');
+    }
+  };
+
+  const handleOpenRefund = (transaction) => {
+    setRefundTarget(transaction);
+    setRefundReason('');
+    setRefundError('');
+  };
+
+  const confirmRefund = async () => {
+    if (!refundTarget) return;
+    setRefundError('');
+
+    if (refundReason.trim().length < 3) {
+      setRefundError('A reason is required (at least 3 characters) — this becomes part of the audit trail.');
+      return;
+    }
+
+    setRefunding(true);
+    try {
+      await api.patch(`/payments/${refundTarget.id}/status`, { status: 'Refunded', reason: refundReason.trim() });
+      setRefundTarget(null);
+      fetchTransactionHistory(historyStartDate, historyEndDate);
+    } catch (err) {
+      setRefundError(err.response?.data?.message || 'Failed to refund this payment.');
+    } finally {
+      setRefunding(false);
+    }
+  };
 
   useEffect(() => {
     fetchActiveVisits();
@@ -143,7 +223,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
   const handleSelectVisitForBilling = async (visit) => {
     if (paidVisitIds.has(visit.id)) {
-      alert('This visit has already been paid today. Refresh the queue if this looks wrong.');
+      toastError('This visit has already been paid today. Refresh the queue if this looks wrong.');
       return;
     }
     setSelectedVisit(visit);
@@ -159,7 +239,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       setAmountTendered((bill?.totalAmount ?? 0).toString());
     } catch (err) {
       console.error(err);
-      alert('Failed to retrieve billing summary.');
+      toastError('Failed to retrieve billing summary.');
     }
   };
 
@@ -181,7 +261,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     const tendered = parseFloat(amountTendered);
 
     if (paymentMethod === 'Cash' && (isNaN(tendered) || tendered < totalDue)) {
-      setPaymentError(`Cash tendered (₱${tendered || 0}) is less than total amount due (₱${totalDue}).`);
+      setPaymentError(`Cash tendered (${formatCurrency(tendered || 0)}) is less than total amount due (${formatCurrency(totalDue)}).`);
       return;
     }
 
@@ -261,11 +341,19 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
         {view === 'cashier-queue' && (
         <>
+        {queueError && (
+          <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-semibold rounded-xl flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{queueError}</span>
+            <button type="button" onClick={retryQueueData} className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-800">Retry</button>
+          </div>
+        )}
+
         {/* Collections Overview Metrics Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard label="Today's Collections" value={`₱${totalCollectionsToday.toFixed(2)}`} icon={DollarSign} tone="green" />
-          <MetricCard label="Cash Collected" value={`₱${cashTotal.toFixed(2)}`} icon={Banknote} tone="emerald" />
-          <MetricCard label="E-Wallet (GCash/PayMaya)" value={`₱${eWalletTotal.toFixed(2)}`} icon={Wallet} tone="indigo" />
+          <MetricCard label="Today's Collections" value={formatCurrency(totalCollectionsToday)} icon={DollarSign} tone="green" />
+          <MetricCard label="Cash Collected" value={formatCurrency(cashTotal)} icon={Banknote} tone="emerald" />
+          <MetricCard label="E-Wallet (GCash/PayMaya)" value={formatCurrency(eWalletTotal)} icon={Wallet} tone="indigo" />
           <MetricCard label="Receipts Processed" value={transactions.length} icon={Receipt} tone="slate" />
         </div>
 
@@ -339,9 +427,18 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             <span className="block text-[10px] text-gray-400 font-bold uppercase">Ticket: {visit.queue_number || `V-${visit.id}`}</span>
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <Badge className="bg-amber-100 text-amber-800 text-[10px] font-bold">
-                              {visit.patient_type_name || 'Self Pay'}
-                            </Badge>
+                            <div className="flex items-center gap-1">
+                              <Badge
+                                className={`text-[10px] font-bold ${
+                                  visit.visit_type === 'Walk in' ? 'bg-slate-100 text-slate-700' : 'bg-indigo-100 text-indigo-700'
+                                }`}
+                              >
+                                {visit.visit_type}
+                              </Badge>
+                              <Badge className="bg-amber-100 text-amber-800 text-[10px] font-bold">
+                                {visit.patient_type_name || 'Self Pay'}
+                              </Badge>
+                            </div>
                             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${wait.tone}`}>
                               <Clock className="w-3 h-3" />
                               {wait.minutes}m waiting
@@ -399,7 +496,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             <TableRow key={idx}>
                               <TableCell className="py-2.5 text-xs font-bold text-slate-900">{item.name}</TableCell>
                               <TableCell className="py-2.5 text-xs text-gray-500">{item.category}</TableCell>
-                              <TableCell className="py-2.5 text-xs font-bold text-slate-900 text-right">₱{parseFloat(item.price).toFixed(2)}</TableCell>
+                              <TableCell className="py-2.5 text-xs font-bold text-slate-900 text-right">{formatCurrency(item.price)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -411,22 +508,22 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-2 text-xs">
                     <div className="flex justify-between items-center text-gray-600">
                       <span>Gross Services Subtotal:</span>
-                      <span className="font-bold text-slate-900">₱{parseFloat(billDetails.subtotal).toFixed(2)}</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(billDetails.subtotal)}</span>
                     </div>
                     <div className="flex justify-between items-center text-gray-600">
                       <span>HMO Coverage / Discount:</span>
-                      <span className="font-bold text-emerald-600">- ₱{parseFloat(billDetails.hmoCoverage || 0).toFixed(2)}</span>
+                      <span className="font-bold text-emerald-600">- {formatCurrency(billDetails.hmoCoverage || 0)}</span>
                     </div>
                     <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-sm font-extrabold text-slate-900">
                       <span>NET AMOUNT DUE:</span>
-                      <span className="text-base text-[#769046]">₱{parseFloat(billDetails.totalAmount).toFixed(2)}</span>
+                      <span className="text-base text-[#769046]">{formatCurrency(billDetails.totalAmount)}</span>
                     </div>
                   </div>
 
                   {/* Payment Processor Form */}
                   <form onSubmit={handleProcessPayment} className="space-y-4">
                     {paymentError && (
-                      <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                      <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
                         <span>{paymentError}</span>
                       </div>
@@ -434,7 +531,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-gray-600 uppercase block">Select Payment Method</label>
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {['Cash', 'GCash', 'PayMaya', 'Bank'].map(method => (
                           <button
                             key={method}
@@ -460,7 +557,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
                           <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                           <span>
-                            <strong>HMO Partner Accredited</strong> — ₱{parseFloat(billDetails.hmoCoverage).toFixed(2)} covered
+                            <strong>HMO Partner Accredited</strong> — {formatCurrency(billDetails.hmoCoverage)} covered
                             {parseFloat(billDetails.hmoCoverage) >= parseFloat(billDetails.subtotal) ? ' (full coverage, ₱0.00 out of pocket).' : ' (partial coverage — remaining balance due).'}
                           </span>
                         </div>
@@ -474,7 +571,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                     {paymentMethod === 'Cash' ? (
                       <div className="space-y-2 bg-white p-3 rounded-xl border border-gray-200">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
                             <label className="text-[10px] font-bold text-gray-500 uppercase">Cash Tendered (₱)</label>
                             <Input
@@ -489,7 +586,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           </div>
                           <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-gray-100">
                             <span className="text-[10px] font-bold text-gray-400 uppercase block">Change Due</span>
-                            <span className="text-base font-extrabold text-emerald-600">₱{calculateChange().toFixed(2)}</span>
+                            <span className="text-base font-extrabold text-emerald-600">{formatCurrency(calculateChange())}</span>
                           </div>
                         </div>
 
@@ -550,7 +647,13 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         </>
         )}
 
-        {view === 'cashier-history' && (
+        {view === 'cashier-history' && (() => {
+          const historyTotalPages = Math.max(1, Math.ceil(historyTransactions.length / HISTORY_PAGE_SIZE));
+          const pagedHistoryTransactions = historyTransactions.slice(
+            (historyPage - 1) * HISTORY_PAGE_SIZE,
+            historyPage * HISTORY_PAGE_SIZE
+          );
+          return (
         <div className="space-y-6">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
             <div className="space-y-1">
@@ -589,13 +692,15 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     <TableHead className="text-[10px] font-bold uppercase py-3">Payment Method</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-3">Reference #</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Amount Paid</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
                     <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Date & Time</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {historyError ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-xs text-rose-600 font-semibold">
+                      <TableCell colSpan={8} className="text-center py-6 text-xs text-rose-600 font-semibold">
                         {historyError}{' '}
                         <button
                           type="button"
@@ -608,41 +713,117 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     </TableRow>
                   ) : historyLoading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 font-semibold">Loading transaction history…</TableCell>
+                      <TableCell colSpan={8} className="text-center py-6 text-xs text-gray-400 font-semibold">Loading transaction history…</TableCell>
                     </TableRow>
-                  ) : historyTransactions.length > 0 ? (
-                    historyTransactions.map(t => (
+                  ) : pagedHistoryTransactions.length > 0 ? (
+                    pagedHistoryTransactions.map(t => (
                       <TableRow key={t.id}>
                         <TableCell className="py-3 font-extrabold text-xs text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
-                        <TableCell className="py-3 text-xs font-bold text-gray-800">{t.first_name} {t.last_name}</TableCell>
+                        <TableCell className="py-3 text-xs font-bold text-gray-800">{t.patient_first_name} {t.patient_last_name}</TableCell>
                         <TableCell className="py-3 text-xs">
                           <Badge className="bg-gray-100 text-gray-800 font-bold border-gray-200">
                             {t.payment_method}
                           </Badge>
                         </TableCell>
                         <TableCell className="py-3 text-xs font-mono text-gray-500">{t.reference_number || 'N/A (Cash)'}</TableCell>
-                        <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">₱{parseFloat(t.amount).toFixed(2)}</TableCell>
+                        <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">{formatCurrency(t.amount)}</TableCell>
+                        <TableCell className="py-3">
+                          <StatusBadge status={t.payment_status || 'Paid'} />
+                        </TableCell>
                         <TableCell className="py-3 text-xs text-gray-500 text-right">{new Date(t.paid_at).toLocaleString()}</TableCell>
+                        <TableCell className="py-3 text-right">
+                          <div className="flex items-center justify-end space-x-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => handleReprintReceipt(t)}
+                              className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
+                            >
+                              <Printer className="w-3 h-3" />
+                              <span>Reprint</span>
+                            </Button>
+                            {(t.payment_status || 'Paid') === 'Paid' && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleOpenRefund(t)}
+                                className="text-[11px] font-bold text-red-600 border-red-200 hover:bg-red-50 px-2.5 py-1 h-auto flex items-center space-x-1"
+                              >
+                                <Undo2 className="w-3 h-3" />
+                                <span>Refund</span>
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 italic">No payments processed in this date range.</TableCell>
+                      <TableCell colSpan={8} className="text-center py-6 text-xs text-gray-400 italic">No payments processed in this date range.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
             </div>
+            <Pagination
+              page={historyPage}
+              totalPages={historyTotalPages}
+              onPageChange={setHistoryPage}
+              totalLabel={`${historyTransactions.length} total`}
+            />
           </Card>
         </div>
-        )}
+          );
+        })()}
+
+        <Dialog open={!!refundTarget} onOpenChange={(open) => !refunding && !open && setRefundTarget(null)}>
+          <DialogContent className="max-w-sm rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900">Refund Payment</DialogTitle>
+              <DialogDescription className="text-xs text-gray-500">
+                {refundTarget && `Refund ${formatCurrency(refundTarget.amount)} (Receipt ${refundTarget.receipt_number || `OR-${refundTarget.id}`})? This marks the payment as Refunded and cannot be undone from this screen.`}
+              </DialogDescription>
+            </DialogHeader>
+
+            {refundError && (
+              <div role="alert" className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{refundError}</span>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-600 uppercase">Reason <span className="text-red-600">*</span></label>
+              <Textarea
+                value={refundReason}
+                onChange={e => setRefundReason(e.target.value)}
+                placeholder="e.g. Duplicate charge, patient dispute..."
+                disabled={refunding}
+                required
+                className="text-xs rounded-xl"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setRefundTarget(null)} disabled={refunding}>Cancel</Button>
+              <Button
+                type="button"
+                onClick={confirmRefund}
+                disabled={refunding}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {refunding ? 'Refunding…' : 'Confirm Refund'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Payment confirmation — irreversible action, see .agents Phase 12 */}
         <ConfirmDialog
           open={showPaymentConfirm}
           onOpenChange={setShowPaymentConfirm}
           title="Confirm Payment"
-          description={billDetails ? `Charge ₱${parseFloat(billDetails.totalAmount).toFixed(2)} via ${paymentMethod} for ${billDetails.patientName}? This will issue a receipt and cannot be undone from this screen.` : ''}
+          description={billDetails ? `Charge ${formatCurrency(billDetails.totalAmount)} via ${paymentMethod} for ${billDetails.patientName}? This will issue a receipt and cannot be undone from this screen.` : ''}
           confirmLabel="Confirm & Process"
           onConfirm={confirmProcessPayment}
           loading={confirmingPayment}
@@ -669,10 +850,23 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     <span className="text-gray-500 font-medium">Payment Mode:</span>
                     <span className="font-bold text-slate-900">{paymentSuccess.payment_method}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 font-medium">Amount Paid:</span>
-                    <span className="font-extrabold text-[#769046] text-sm">₱{parseFloat(paymentSuccess.amount).toFixed(2)}</span>
+                </div>
+
+                {billDetails.items && billDetails.items.length > 0 && (
+                  <div className="space-y-1.5 py-3 border-t border-b border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Items</span>
+                    {billDetails.items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between text-xs">
+                        <span className="text-gray-600">{item.name}</span>
+                        <span className="font-semibold text-slate-800">{formatCurrency(item.price)}</span>
+                      </div>
+                    ))}
                   </div>
+                )}
+
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500 font-medium">Amount Paid:</span>
+                  <span className="font-extrabold text-[#769046] text-sm">{formatCurrency(paymentSuccess.amount)}</span>
                 </div>
 
                 <div className="pt-3 border-t border-gray-100 flex justify-end space-x-2">

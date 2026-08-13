@@ -3,14 +3,15 @@ import SidebarLayout from '../components/SidebarLayout';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import MetricCard from '../components/ui/metric-card';
-import { StatusBadge } from '../components/ui/status-badge';
 import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { SearchInput } from '../components/ui/search-input';
+import { StatusBadge } from '../components/ui/status-badge';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
+import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Stethoscope,
@@ -21,7 +22,11 @@ import {
   Clock,
   AlertCircle,
   History,
-  Eye
+  Eye,
+  Pencil,
+  Printer,
+  ShieldCheck,
+  CheckCircle2
 } from 'lucide-react';
 
 // A ticket only reaches this console once the receptionist/cashier has released it, at which
@@ -48,19 +53,10 @@ const TEMPLATES_BY_CATEGORY = {
   Ultrasound: [{ key: 'pelvic_us', label: '+ Normal Pelvic Ultrasound' }]
 };
 
-// The attachment URL is staff-entered free text with no format validation anywhere else in
-// the pipeline (it's rendered client-side in ClientDashboard.jsx behind a matching render-side
-// guard — see the Module 6 report). Validating it here, at the point of entry, stops an unsafe
-// value from ever being submitted in the first place.
-const isValidAttachmentUrl = (url) => {
-  if (!url) return true; // optional field
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-};
+// Phase B: mirrors backend/src/config/upload.js's own allowlist/size cap, so a mismatched file
+// is rejected instantly instead of round-tripping to the server first.
+const ALLOWED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024;
 
 const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const { user } = useAuth();
@@ -71,6 +67,10 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const [pendingTests, setPendingTests] = useState([]);
   const [releasedTests, setReleasedTests] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Phase C finding 01: a failed fetch previously looked identical to a genuinely empty
+  // worklist (console.error only) — see VISUAL_IDENTITY.md §3b's 5-state pattern.
+  const [worklistError, setWorklistError] = useState('');
+  const [historyError, setHistoryError] = useState('');
   const [viewingResult, setViewingResult] = useState(null);
   const [category, setCategory] = useState('Laboratory');
   const [categoryResolved, setCategoryResolved] = useState(false);
@@ -83,12 +83,26 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const [activeTest, setActiveTest] = useState(null);
   const [findings, setFindings] = useState('');
   const [remarks, setRemarks] = useState('');
-  const [fileUrl, setFileUrl] = useState('');
+  // Phase B: a real uploaded file, replacing the old free-text URL field — see
+  // database/migrations.md [1.7.0].
+  const [resultFile, setResultFile] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  // UI/UX Modernization Phase 11: shown in place of the upload form immediately after a
+  // successful release, so "Print Now" doesn't require navigating away to History and finding
+  // this same result again.
+  const [justReleased, setJustReleased] = useState(null);
   const [showReleaseConfirm, setShowReleaseConfirm] = useState(false);
   const [releasingResult, setReleasingResult] = useState(false);
   const [savingFindings, setSavingFindings] = useState(false);
+  // Phase C finding 03: correcting an already-released result — reuses the same modal/upsert
+  // path, just pre-filled and opened from the History table instead of the worklist.
+  const [isEditingResult, setIsEditingResult] = useState(false);
+  // Phase C finding 02: past results for this same patient, for context while writing new
+  // findings — GET /results/history/:patientId already existed but nothing on this screen
+  // called it.
+  const [patientHistory, setPatientHistory] = useState([]);
+  const [patientHistoryLoading, setPatientHistoryLoading] = useState(false);
 
   const determineCategory = useCallback((roles) => {
     if (roles.includes('Laboratory Staff')) {
@@ -103,6 +117,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   }, []);
 
   const fetchPendingTests = useCallback(async (catName) => {
+    setWorklistError('');
     try {
       // '2D Echo' is a distinct test_categories row, but MODULE_SCOPE.md assigns it to the
       // Ultrasound Staff role — merge both into one worklist for that role only.
@@ -111,18 +126,23 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       setPendingTests(responses.flatMap(r => r.data.data.pending || []));
     } catch (err) {
       console.error('Failed to fetch pending diagnostics:', err);
+      setWorklistError('Could not load the worklist. Please try again.');
+      setPendingTests([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
   const fetchReleasedTests = useCallback(async (catName) => {
+    setHistoryError('');
     try {
       const categoriesToFetch = catName === 'Ultrasound' ? ['Ultrasound', '2D Echo'] : [catName];
       const responses = await Promise.all(categoriesToFetch.map(c => api.get(`/results/released/${c}`)));
       setReleasedTests(responses.flatMap(r => r.data.data.released || []));
     } catch (err) {
       console.error('Failed to fetch released diagnostics:', err);
+      setHistoryError('Could not load result history. Please try again.');
+      setReleasedTests([]);
     } finally {
       setLoading(false);
     }
@@ -174,17 +194,39 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     // ticket's already-recorded result with that stale, unrelated text before releasing it.
     setFindings('');
     setRemarks('');
-    setFileUrl('');
+    setResultFile(null);
     setUploadError('');
     setShowReleaseConfirm(true);
   };
 
+  const fetchPatientHistory = useCallback(async (patientId, excludeVisitTestId) => {
+    if (!patientId) {
+      setPatientHistory([]);
+      return;
+    }
+    setPatientHistoryLoading(true);
+    try {
+      const res = await api.get(`/results/history/${patientId}`);
+      const rows = (res.data.data.results || [])
+        .filter(r => r.result_id && r.visit_test_id !== excludeVisitTestId)
+        .slice(0, 5);
+      setPatientHistory(rows);
+    } catch (err) {
+      console.error('Failed to fetch patient result history:', err);
+      setPatientHistory([]);
+    } finally {
+      setPatientHistoryLoading(false);
+    }
+  }, []);
+
   const handleOpenUploadModal = async (test) => {
     setActiveTest(test);
+    setIsEditingResult(false);
     setFindings('');
     setRemarks('');
-    setFileUrl('');
+    setResultFile(null);
     setUploadError('');
+    setJustReleased(null);
     setShowUploadModal(true);
 
     // A ticket in 'Waiting for Release' already has findings recorded against it — load them
@@ -196,12 +238,51 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         if (existing) {
           setFindings(existing.findings || '');
           setRemarks(existing.remarks || '');
-          setFileUrl(existing.file_url || '');
         }
       } catch {
         // Non-fatal: the form simply starts empty, exactly as it did before.
       }
     }
+
+    fetchPatientHistory(test.patient_id, test.visit_test_id);
+  };
+
+  // Phase C finding 03: opened from the History table's new Edit action — same modal, pre-filled
+  // with the existing findings/remarks. Re-submitting reuses the same upsert + release call the
+  // original upload used, so a correction also re-notifies the patient by email (deliberate: they
+  // should know the result they were sent has since been corrected).
+  const handleOpenEditModal = (test) => {
+    setActiveTest(test);
+    setIsEditingResult(true);
+    setFindings(test.findings || '');
+    setRemarks(test.result_remarks || '');
+    setResultFile(null);
+    setUploadError('');
+    setJustReleased(null);
+    setShowUploadModal(true);
+    fetchPatientHistory(test.patient_id, test.visit_test_id);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setResultFile(null);
+      return;
+    }
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      setUploadError('Unsupported file type. Only PDF, JPEG, and PNG files are allowed.');
+      e.target.value = '';
+      setResultFile(null);
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setUploadError('File is too large. Maximum size is 15MB.');
+      e.target.value = '';
+      setResultFile(null);
+      return;
+    }
+    setUploadError('');
+    setResultFile(file);
   };
 
   const handleApplyTemplate = (templateType) => {
@@ -218,10 +299,6 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const validateFindingsForm = () => {
     if (!findings) {
       setUploadError('Findings and diagnostic analysis text are required.');
-      return false;
-    }
-    if (!isValidAttachmentUrl(fileUrl)) {
-      setUploadError('Attachment URL must be a valid http:// or https:// link, or left blank.');
       return false;
     }
     return true;
@@ -242,6 +319,23 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     setShowReleaseConfirm(true);
   };
 
+  // One submit path for both exits from the form. Multipart when a file is attached, plain
+  // JSON otherwise — the backend accepts both on the same endpoint (uploadResultFileMiddleware
+  // only engages for multipart bodies).
+  const submitFindings = async () => {
+    if (resultFile) {
+      const formData = new FormData();
+      formData.append('file', resultFile);
+      formData.append('findings', findings);
+      formData.append('remarks', remarks);
+      await api.post(`/results/${activeTest.visit_test_id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return;
+    }
+    await api.post(`/results/${activeTest.visit_test_id}`, { findings, remarks });
+  };
+
   // Recording findings and releasing them are now two distinct events, matching the two
   // distinct ticket states the front desk sees. This call parks the ticket in
   // 'Waiting for Release'; releaseResult below is what actually notifies the patient.
@@ -250,11 +344,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     setUploadError('');
 
     try {
-      await api.post(`/results/${activeTest.visit_test_id}`, {
-        findings,
-        remarks,
-        fileUrl: fileUrl || null
-      });
+      await submitFindings();
       setShowUploadModal(false);
       fetchPendingTests(category);
     } catch (err) {
@@ -272,18 +362,40 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       // Findings may have been recorded in an earlier session (the ticket is sitting in
       // 'Waiting for Release'), in which case there is nothing new to save — only release.
       if (findings) {
-        await api.post(`/results/${activeTest.visit_test_id}`, {
-          findings,
-          remarks,
-          fileUrl: fileUrl || null
-        });
+        await submitFindings();
       }
 
-      await api.post(`/results/${activeTest.visit_test_id}/release`);
+      // The upload call above only records the findings — this is the actual "release" step
+      // that notifies the patient by email. It was previously never called from this screen,
+      // so "Authorize & Release Result" recorded findings but never released/notified anyone.
+      const releaseRes = await api.post(`/results/${activeTest.visit_test_id}/release`);
+      const emailStatus = releaseRes.data.data.result?.emailStatus;
+
+      // Previously this always showed a blanket "released and notified" success, even when
+      // sendEmail() had actually failed or skipped silently (SMTP unconfigured) — the backend
+      // now reports what really happened via emailStatus.
+      if (emailStatus === 'sent') {
+        toastSuccess('Result released and the patient was notified by email.');
+      } else if (emailStatus === 'failed') {
+        toastError('Result released — email notification failed, patient was not notified.');
+      } else {
+        toastInfo('Result released. No email on file, so the patient was not notified.');
+      }
 
       setShowReleaseConfirm(false);
-      setShowUploadModal(false);
-      fetchPendingTests(category);
+      setJustReleased({
+        ...activeTest,
+        findings,
+        result_remarks: remarks,
+        released_at: new Date().toISOString(),
+        released_by_first_name: user?.firstName,
+        released_by_last_name: user?.lastName
+      });
+      if (isEditingResult) {
+        fetchReleasedTests(category);
+      } else {
+        fetchPendingTests(category);
+      }
     } catch (err) {
       setUploadError(err.response?.data?.message || 'Failed to release diagnostic result.');
       setShowReleaseConfirm(false);
@@ -382,7 +494,20 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
+                {worklistError ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-xs text-rose-600 font-semibold">
+                      {worklistError}{' '}
+                      <button
+                        type="button"
+                        onClick={() => fetchPendingTests(category)}
+                        className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
+                      >
+                        Retry
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ) : loading ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading worklist…</TableCell>
                   </TableRow>
@@ -406,7 +531,18 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                       </TableCell>
 
                       <TableCell className="py-3.5">
-                        <StatusBadge status={test.test_status} className="text-[10px] px-2.5 py-0.5 rounded-full" />
+                        <div className="flex flex-col items-start gap-1">
+                          <StatusBadge status={test.test_status} className="px-2.5 py-0.5" />
+                          {/* Phase C finding 05: HMO-approval status wasn't surfaced anywhere on
+                              the worklist — a tech had no on-screen signal that an expensive
+                              test's authorization was rejected before running it. */}
+                          {test.hmo_approval_status && (
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
+                              <ShieldCheck className="w-3 h-3" />
+                              HMO:&nbsp;<StatusBadge status={test.hmo_approval_status} className="px-1.5 py-0" />
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
 
                       <TableCell className="py-3.5 text-right">
@@ -485,7 +621,20 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
+                {historyError ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-xs text-rose-600 font-semibold">
+                      {historyError}{' '}
+                      <button
+                        type="button"
+                        onClick={() => fetchReleasedTests(category)}
+                        className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
+                      >
+                        Retry
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ) : loading ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading result history…</TableCell>
                   </TableRow>
@@ -515,14 +664,24 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                       </TableCell>
 
                       <TableCell className="py-3.5 text-right">
-                        <Button
-                          onClick={() => setViewingResult(test)}
-                          variant="outline"
-                          className="text-[11px] font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5 ml-auto"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>View Report</span>
-                        </Button>
+                        <div className="flex items-center justify-end space-x-2">
+                          <Button
+                            onClick={() => setViewingResult(test)}
+                            variant="outline"
+                            className="text-[11px] font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>View Report</span>
+                          </Button>
+                          <Button
+                            onClick={() => handleOpenEditModal(test)}
+                            variant="outline"
+                            className="text-[11px] font-bold border-gray-200 hover:bg-slate-800 hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -555,7 +714,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 Patient: <strong>{viewingResult?.first_name} {viewingResult?.last_name}</strong> &bull; Examination: <strong>{viewingResult?.test_name}</strong>
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="print-area space-y-4">
               <div className="space-y-1.5">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Findings &amp; Impression</span>
                 <p className="whitespace-pre-wrap text-xs bg-gray-50 border border-gray-200 rounded-xl p-3 m-0">{viewingResult?.findings || '—'}</p>
@@ -571,26 +730,111 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 {viewingResult?.released_by_first_name && ` by ${viewingResult.released_by_first_name} ${viewingResult.released_by_last_name}`}
               </div>
             </div>
+            <div className="flex justify-end pt-2 border-t border-gray-100">
+              <Button
+                onClick={() => window.print()}
+                variant="outline"
+                className="text-xs font-bold flex items-center space-x-1.5"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Report</span>
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
 
         {/* Record Diagnostic Findings & Result Entry Modal */}
-        <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
+        <Dialog
+          open={showUploadModal}
+          onOpenChange={(open) => {
+            setShowUploadModal(open);
+            if (!open) setJustReleased(null);
+          }}
+        >
           <DialogContent className="max-w-2xl rounded-2xl p-6">
+            {justReleased ? (
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                  <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                  <span className="text-sm font-bold">Result released successfully.</span>
+                </div>
+
+                <div className="print-area space-y-3 bg-white rounded-2xl border border-gray-100 p-5">
+                  <div className="text-center border-b border-gray-100 pb-3 space-y-0.5">
+                    <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide m-0">Enlogada Ultrasound &amp; Diagnostic Clinic</h3>
+                    <p className="text-xs text-gray-500 m-0">Diagnostic Result Certificate</p>
+                  </div>
+                  <p className="text-xs m-0">
+                    Patient: <strong>{justReleased.first_name} {justReleased.last_name}</strong> &bull; Examination: <strong>{justReleased.test_name}</strong>
+                  </p>
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Findings</span>
+                    <p className="whitespace-pre-wrap text-xs bg-gray-50 border border-gray-200 rounded-xl p-3 m-0">{justReleased.findings || '—'}</p>
+                  </div>
+                  {justReleased.result_remarks && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Remarks</span>
+                      <p className="text-xs m-0">{justReleased.result_remarks}</p>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-400 m-0 pt-2 border-t border-gray-100">
+                    Released {new Date(justReleased.released_at).toLocaleString()}
+                    {justReleased.released_by_first_name && ` by ${justReleased.released_by_first_name} ${justReleased.released_by_last_name}`}
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-2">
+                  <Button type="button" variant="outline" onClick={() => window.print()} className="text-xs font-bold flex items-center space-x-1.5">
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print Now</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => { setShowUploadModal(false); setJustReleased(null); }}
+                    className="bg-[#769046] hover:bg-[#657c3a] text-white text-xs font-bold"
+                  >
+                    Done
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
             <DialogHeader>
               <DialogTitle className="text-lg font-bold text-slate-900">
-                Record Findings &amp; Release Diagnostic Certificate
+                {isEditingResult ? 'Correct Released Result' : 'Record Findings & Release Diagnostic Certificate'}
               </DialogTitle>
               <DialogDescription className="text-xs">
                 Patient: <strong>{activeTest?.first_name} {activeTest?.last_name}</strong> &bull; Examination: <strong>{activeTest?.test_name}</strong>
+                {isEditingResult && ' — re-submitting will notify the patient again by email.'}
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleUploadResult} className="space-y-4 pt-2">
               {uploadError && (
-                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{uploadError}</span>
+                </div>
+              )}
+
+              {/* Phase C finding 02: past results for this same patient, surfaced at the point
+                  of writing new findings — GET /results/history/:patientId already existed but
+                  nothing on this screen ever called it. */}
+              {(patientHistoryLoading || patientHistory.length > 0) && (
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Past Results for This Patient</span>
+                  {patientHistoryLoading ? (
+                    <p className="text-[11px] text-gray-400 m-0">Loading history…</p>
+                  ) : (
+                    <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 max-h-32 overflow-y-auto">
+                      {patientHistory.map(h => (
+                        <div key={h.visit_test_id} className="px-3 py-2 flex items-center justify-between gap-2 text-[11px]">
+                          <span className="font-semibold text-gray-700 truncate">{h.category_name} &middot; {h.test_name}</span>
+                          <span className="text-gray-400 whitespace-nowrap">{new Date(h.visit_date).toLocaleDateString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -636,13 +880,20 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-600 uppercase">Image / Document URL Attachment (Optional)</label>
-                <Input
-                  placeholder="https://storage.enlogadaclinic.com/reports/sample.pdf"
-                  value={fileUrl}
-                  onChange={e => setFileUrl(e.target.value)}
-                  className="text-xs rounded-xl"
+                <label className="text-xs font-bold text-gray-600 uppercase">Attach Report File (Optional)</label>
+                <input
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png"
+                  onChange={handleFileChange}
+                  className="w-full text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#769046]/10 file:text-[#769046] hover:file:bg-[#769046]/20 file:cursor-pointer cursor-pointer"
                 />
+                <p className="text-[11px] text-gray-400 m-0">
+                  PDF, JPEG, or PNG — up to 15MB.
+                  {isEditingResult && (activeTest?.file_path || activeTest?.file_url) && !resultFile && ' A file is already attached — leave blank to keep it, or attach a new one to replace it.'}
+                </p>
+                {resultFile && (
+                  <p className="text-[11px] font-semibold text-slate-700 m-0">{resultFile.name} ({(resultFile.size / 1024).toFixed(0)} KB)</p>
+                )}
               </div>
 
               <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
@@ -662,10 +913,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold text-xs px-5 py-2 rounded-xl flex items-center space-x-1.5"
                 >
                   <Send className="w-4 h-4" />
-                  <span>Authorize &amp; Release Result</span>
+                  <span>{isEditingResult ? 'Save Correction & Re-notify' : 'Authorize & Release Result'}</span>
                 </Button>
               </div>
             </form>
+              </>
+            )}
           </DialogContent>
         </Dialog>
 
@@ -673,9 +926,13 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         <ConfirmDialog
           open={showReleaseConfirm}
           onOpenChange={setShowReleaseConfirm}
-          title="Authorize & Release Result"
-          description={activeTest ? `Release ${activeTest.test_name} findings for ${activeTest.first_name} ${activeTest.last_name}? This finalizes the result and cannot be undone from this screen.` : ''}
-          confirmLabel="Authorize & Release"
+          title={isEditingResult ? 'Save Correction' : 'Authorize & Release Result'}
+          description={activeTest ? (
+            isEditingResult
+              ? `Save the corrected ${activeTest.test_name} findings for ${activeTest.first_name} ${activeTest.last_name}? The patient will receive a new "results ready" email.`
+              : `Release ${activeTest.test_name} findings for ${activeTest.first_name} ${activeTest.last_name}? This finalizes the result and cannot be undone from this screen.`
+          ) : ''}
+          confirmLabel={isEditingResult ? 'Save Correction' : 'Authorize & Release'}
           onConfirm={confirmReleaseResult}
           loading={releasingResult}
           error={uploadError}

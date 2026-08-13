@@ -60,6 +60,7 @@ class ResultController {
       const result = await resultService.uploadResult({
         visitTestId,
         fileUrl,
+        file: req.file,
         findings,
         remarks,
         releasedBy
@@ -75,15 +76,33 @@ class ResultController {
     }
   }
 
+  async downloadResultFile(req, res, next) {
+    try {
+      const { visitTestId } = req.params;
+      const { absolutePath, originalName, mimeType } = await resultService.getResultFile(visitTestId, req.user);
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${originalName.replace(/"/g, '')}"`);
+      return res.sendFile(absolutePath);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async releaseResult(req, res, next) {
     try {
       const { visitTestId } = req.params;
       const releasedBy = req.user.userId;
 
       const result = await resultService.releaseResult({ visitTestId, releasedBy }, req.user);
+      const message = result.emailStatus === 'sent'
+        ? 'Result released and patient notified via email.'
+        : result.emailStatus === 'failed'
+        ? 'Result released — email notification failed, patient was not notified.'
+        : 'Result released. No email on file, so the patient was not notified.';
+
       return res.status(200).json({
         status: 'success',
-        message: 'Result released and patient notified via email.',
+        message,
         data: { result }
       });
     } catch (err) {

@@ -30,7 +30,9 @@ node src/scripts/seedUsers.js     # seeds one test user per role (password: Pass
 node src/scripts/testRbacEndpoints.js  # manual RBAC endpoint smoke test
 ```
 
-There is no automated test suite (no `test` script in either `package.json`) — verify changes by running the app and exercising the flow manually, or via the manual RBAC script above.
+There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds ~24 Playwright specs (~190 tests) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
+
+Run it before and after any non-trivial change and compare the pass/fail counts — several specs assert exact UI copy, sidebar nav labels, and RBAC boundaries, so intentional changes to those will legitimately turn specs red and the spec must be updated alongside the code. A run takes ~1–2 minutes.
 
 Env files: `backend/.env` and `frontend/.env`, based on the respective `.env.example`. Backend needs `DATABASE_URL`, `JWT_SECRET`, SMTP settings (for result-release emails), and Google OAuth credentials. Frontend needs `VITE_GOOGLE_CLIENT_ID` and the API base URL.
 

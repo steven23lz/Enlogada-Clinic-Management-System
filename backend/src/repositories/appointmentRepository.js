@@ -19,6 +19,11 @@ class AppointmentRepository {
   // patient in, whether the online payment actually landed — check-in only releases the ticket
   // to the modality if it did.
   async findByReference(reference) {
+    // UI/UX Modernization Phase 10: categories aggregates the visit's already-attached tests'
+    // departments (Laboratory/Ultrasound/Xray/...), so Reception can tell the patient exactly
+    // where to go right after check-in instead of just clearing the screen with no next step.
+    // Empty for a walk-in visit checked in before any tests are attached — that path shows no
+    // guidance message, per ReceptionistDashboard.jsx's own handling.
     const queryText = `
       SELECT a.*, pv.patient_id, pv.visit_type, pv.status as visit_status, pv.queue_number,
              p.first_name, p.last_name, p.contact_number, p.birthdate, p.sex,
@@ -26,12 +31,17 @@ class AppointmentRepository {
              EXISTS (
                SELECT 1 FROM payments pay
                WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
-             ) AS is_paid
+             ) AS is_paid,
+             COALESCE(ARRAY_AGG(DISTINCT tc.name) FILTER (WHERE tc.name IS NOT NULL), '{}') as categories
       FROM appointments a
       JOIN patient_visits pv ON a.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
       JOIN patient_types pt ON p.patient_type_id = pt.id
+      LEFT JOIN visit_tests vt ON vt.patient_visit_id = pv.id
+      LEFT JOIN tests t ON vt.test_id = t.id
+      LEFT JOIN test_categories tc ON t.category_id = tc.id
       WHERE a.appointment_reference = $1
+      GROUP BY a.id, pv.id, pv.patient_id, pv.visit_type, pv.status, pv.queue_number, p.first_name, p.last_name, p.contact_number, p.birthdate, p.sex, pt.name
     `;
     const result = await db.query(queryText, [reference]);
     return result.rows[0];
