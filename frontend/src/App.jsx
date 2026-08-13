@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { GOOGLE_CLIENT_ID, isGoogleAuthConfigured } from './config/googleAuth';
 import Home from './pages/Home';
 import AboutUs from './pages/AboutUs';
 import ServicesPage from './pages/ServicesPage';
@@ -145,14 +146,24 @@ const MainApp = () => {
   );
 };
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'dummy_client_id';
-
 function App() {
+  const app = (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
+  );
+
+  // Mount the provider only when a real client ID exists. It loads Google's Identity Services
+  // script on mount, and with no usable client ID that script can only fail — so when Google
+  // Sign-In is unconfigured we skip it entirely and Login.jsx renders its explanatory notice
+  // in place of the button (rendering <GoogleLogin> outside this provider would throw).
+  if (!isGoogleAuthConfigured) {
+    return app;
+  }
+
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <AuthProvider>
-        <MainApp />
-      </AuthProvider>
+      {app}
     </GoogleOAuthProvider>
   );
 }

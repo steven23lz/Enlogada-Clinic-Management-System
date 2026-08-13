@@ -213,7 +213,16 @@ class AuthService {
     }
 
     const payload = ticket.getPayload();
-    const { email, given_name, family_name } = payload;
+    const { email, email_verified, given_name, family_name } = payload;
+
+    // This flow provisions an account keyed on nothing but the email in the token, so an
+    // unverified address would let a Google account claim an email it never proved it owns —
+    // and, if that email already belongs to a staff member here, sign in as them.
+    if (!email || !email_verified) {
+      const error = new Error('Your Google account has no verified email address, so it cannot be used to sign in.');
+      error.statusCode = 401;
+      throw error;
+    }
 
     // Check if user exists
     let user = await userRepository.findByEmail(email);

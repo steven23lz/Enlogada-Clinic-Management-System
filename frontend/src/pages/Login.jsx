@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
+import { isGoogleAuthConfigured } from '../config/googleAuth';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -40,11 +41,13 @@ const Login = ({ onToggleView, onNavigate }) => {
     setSubmitting(true);
     try {
       if (!credentialResponse.credential) {
-        throw new Error('No Google credential returned.');
+        // Not thrown as an Error: the catch below feeds `error` straight into JSX, and every
+        // other failure path here (googleLogin) rejects with a plain message string.
+        throw 'Google did not return a sign-in credential. Please try again.';
       }
       await googleLogin(credentialResponse.credential);
     } catch (err) {
-      setError(err);
+      setError(typeof err === 'string' ? err : err?.message || 'Google login failed.');
     } finally {
       setSubmitting(false);
     }
@@ -136,17 +139,36 @@ const Login = ({ onToggleView, onNavigate }) => {
                   <div className="flex-grow border-t border-gray-100"></div>
                 </div>
 
-                <div className="flex justify-center w-full">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={() => setError('Google Sign In was cancelled or failed.')}
-                    useOneTap={false}
-                    shape="pill"
-                    theme="outline"
-                    text="continue_with"
-                    width="100%"
-                  />
-                </div>
+                {isGoogleAuthConfigured ? (
+                  <div className="flex justify-center w-full">
+                    {/* Google's Identity Services button takes a pixel width only — it rejects
+                        percentages, which is why this is a number and not the "100%" that
+                        matched the form's full-width Sign In button above. 360 is the widest
+                        value that still fits the card at its narrowest supported layout, and
+                        Google caps the button at 400px regardless. */}
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={() => setError('Google Sign In was cancelled or failed.')}
+                      useOneTap={false}
+                      shape="pill"
+                      theme="outline"
+                      text="continue_with"
+                      width={360}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-start space-x-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-800">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-px" />
+                    <span>
+                      Google Sign-In is not configured on this installation. Set{' '}
+                      <code className="font-mono">VITE_GOOGLE_CLIENT_ID</code> in{' '}
+                      <code className="font-mono">frontend/.env</code> (and{' '}
+                      <code className="font-mono">GOOGLE_CLIENT_ID</code> in{' '}
+                      <code className="font-mono">backend/.env</code>), then restart both servers.
+                      Signing in with an email and password works as usual.
+                    </span>
+                  </div>
+                )}
               </CardContent>
 
               <CardFooter className="flex justify-center border-t border-gray-100 py-4 bg-gray-50/50">
