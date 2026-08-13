@@ -171,6 +171,10 @@ test.describe('Ultrasound Staff — browser flow', () => {
     await page.getByRole('button', { name: 'Authorize & Release Result' }).click();
     await page.getByRole('button', { name: 'Authorize & Release' }).click();
 
-    await expect(page.getByText(`M10 ${patient.last_name}`)).toHaveCount(0, { timeout: 10000 });
+    // Scoped to the worklist table, not the page: releasing opens the printable
+    // certificate dialog, which legitimately still shows the patient's name.
+    await expect(
+      page.locator('table').getByText(`M10 ${patient.last_name}`)
+    ).toHaveCount(0, { timeout: 10000 });
   });
 });

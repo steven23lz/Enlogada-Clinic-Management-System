@@ -157,9 +157,15 @@ test.describe('Laboratory — browser flow', () => {
     const row1 = page.getByText(`M9 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
     await row1.getByRole('button', { name: 'Record Findings' }).click();
     await page.locator('textarea').fill('Findings text.');
-    await page.getByPlaceholder(/reports\/sample\.pdf/).fill('javascript:alert(1)');
-    await page.getByRole('button', { name: 'Authorize & Release Result' }).click();
-    await expect(page.getByText('Attachment URL must be a valid')).toBeVisible();
+
+    // The free-text attachment URL field this test used to drive was replaced by a real file
+    // upload, so the unsafe-attachment guard is now a MIME allowlist rather than URL parsing.
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'payload.html',
+      mimeType: 'text/html',
+      buffer: Buffer.from('<script>alert(1)</script>')
+    });
+    await expect(page.getByText('Unsupported file type')).toBeVisible();
   });
 
   test('recording findings and releasing removes the test from the worklist', async ({ page }) => {
@@ -186,6 +192,10 @@ test.describe('Laboratory — browser flow', () => {
     await page.getByRole('button', { name: 'Authorize & Release Result' }).click();
     await page.getByRole('button', { name: 'Authorize & Release' }).click();
 
-    await expect(page.getByText(`M9 ${patient.last_name}`)).toHaveCount(0, { timeout: 10000 });
+    // Scoped to the worklist table, not the page: releasing opens the printable
+    // certificate dialog, which legitimately still shows the patient's name.
+    await expect(
+      page.locator('table').getByText(`M9 ${patient.last_name}`)
+    ).toHaveCount(0, { timeout: 10000 });
   });
 });
