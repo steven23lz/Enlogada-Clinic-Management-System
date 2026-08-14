@@ -12,8 +12,14 @@ router.get('/bill/:visitId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 
 // being logged in (matches /patients/my-profiles, /appointments/my-bookings).
 router.get('/my-payments', verifyToken, paymentController.getMyPayments);
 
-// Process a payment
-router.post('/', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), paymentController.processPayment);
+// Process a payment.
+//
+// Capture is Cashier work (SuperAdmin retains it as break-glass). The receipt names whoever took
+// the money, so an Admin capturing payment misattributes the transaction — and Admin is the role
+// that reviews cash-ups via Cashier Monitoring, which stops meaning anything if the reviewer can
+// also be the one taking payments. Refund/cancel below deliberately KEEPS Admin: reversing a
+// transaction is a manager decision, and auditService already records who authorised it.
+router.post('/', verifyToken, authorizeRoles('SuperAdmin', 'Cashier'), paymentController.processPayment);
 
 // View transactions (with optional date range filters)
 router.get('/transactions', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), paymentController.getTransactions);

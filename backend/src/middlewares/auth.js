@@ -59,6 +59,20 @@ const authorizeRoles = (...allowedRoles) => {
 // change): either complete the permission taxonomy and make authorizePermissions the
 // primary authorization layer, or formally retire it and keep the RBAC matrix UI as
 // informational/future-proofing only. Do not wire this onto routes ad hoc.
+//
+// 2026-08-14 — interim decision: keep the middleware, and stop the UI implying it works.
+// The Role-Permission Matrix now carries an "advisory only, not yet enforced" notice
+// (frontend/src/pages/admin/SuperAdminManagement.jsx), because the screen let a SuperAdmin
+// revoke e.g. billing:process from Cashier, watch it save, and reasonably conclude access had
+// been removed while cashiers kept taking payments. A screen that lies about access is worse
+// than no screen.
+//
+// Completing the taxonomy was deliberately NOT attempted in that pass: it means mapping 83
+// routes onto a 13-permission vocabulary, and the E2E suite was cut to 5 specs the same day,
+// so the safety net for a sweeping authorization change is far thinner than it looks. When it
+// is picked up, the existing authorizeRoles list on each route is the ground truth for who
+// should hold the derived permission — derive from those rather than inventing a new model,
+// grant the full set before enforcing any of it, and grow test coverage first.
 const authorizePermissions = (...requiredPermissions) => {
   return (req, res, next) => {
     if (!req.user) {

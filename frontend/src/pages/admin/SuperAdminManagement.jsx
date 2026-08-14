@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import Pagination from '../../components/ui/pagination';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../config/api';
-import { UserPlus, ShieldCheck, Edit, AlertCircle } from 'lucide-react';
+import { UserPlus, ShieldCheck, Edit, AlertCircle, Info } from 'lucide-react';
 
 const ELEVATED_ROLES = ['Admin', 'SuperAdmin'];
 
@@ -91,6 +91,26 @@ const RoleMatrix = () => {
 
   return (
     <div className="space-y-4">
+      {/* This matrix records intent, not enforcement, and says so rather than letting an admin
+          believe otherwise. authorizePermissions (backend/src/middlewares/auth.js) is wired to
+          zero of the API's 83 routes — access is decided by role name alone — so revoking a
+          permission here saves and displays correctly while changing nothing about what the role
+          can actually do. Silently implying otherwise is worse than not having the screen: it
+          invites someone to "remove" access and walk away believing they did. */}
+      <div
+        role="status"
+        className="flex items-start space-x-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900"
+      >
+        <Info className="w-4 h-4 flex-shrink-0 mt-px" />
+        <span>
+          <strong className="font-bold">Advisory only — not yet enforced.</strong> These
+          assignments are recorded and reportable, but the API currently authorises requests by
+          role, not by permission. Changing a permission here does <strong>not</strong> change
+          what a role can do. To actually restrict access today, change the role assigned to the
+          user under <em>Elevated Accounts</em> or <em>Staff Accounts</em>.
+        </span>
+      </div>
+
       <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
         <CardHeader className="border-b border-gray-100 py-4 px-6">
           <CardTitle className="text-sm font-bold text-slate-800">Roles &amp; Their Assigned Permissions</CardTitle>
@@ -266,8 +286,20 @@ const ElevatedAccounts = () => {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(accounts.length / PAGE_SIZE));
-  const pagedAccounts = accounts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // Pin the signed-in account to the top. The server returns elevated accounts newest-first
+  // (userRepository.findStaffUsers → ORDER BY u.created_at DESC), so the founding SuperAdmin
+  // is the OLDEST row and drifts further down every time an elevated account is added — on a
+  // paginated list it eventually falls off page 1 entirely. That is the one row this screen
+  // must always show, since it is the row the panel's own warning is about ("You cannot
+  // deactivate your own account"). Sorted here rather than in the repository because
+  // findStaffUsers is shared with the Staff Accounts screen, which has no "self" to pin.
+  const sortedAccounts = React.useMemo(() => {
+    if (!currentUser) return accounts;
+    return [...accounts].sort((a, b) => (b.id === currentUser.id) - (a.id === currentUser.id));
+  }, [accounts, currentUser]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedAccounts.length / PAGE_SIZE));
+  const pagedAccounts = sortedAccounts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-4">
