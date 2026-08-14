@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
+import { usePolling } from '../hooks/usePolling';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import MetricCard from '../components/ui/metric-card';
@@ -214,6 +215,20 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     fetchTransactions();
     fetchPatientTypes();
   }, [fetchActiveVisits, fetchTransactions, fetchPatientTypes]);
+
+  // Keep the billing queue current: visits released by the front desk, and payments taken at a
+  // second terminal, both used to be invisible here until the cashier changed a filter. Suspended
+  // while a visit is selected for billing — refetching mid-checkout would rewrite the list under
+  // the cashier's cursor, and `paidVisitIds` is derived from transactions, so a refresh could
+  // pull the row they are actively charging out from under them.
+  usePolling(
+    () => {
+      fetchActiveVisits();
+      fetchTransactions();
+    },
+    30000,
+    { enabled: view === 'cashier-queue' && !selectedVisit }
+  );
 
   // Lazy-load Transaction History only once that tab is actually opened.
   useEffect(() => {

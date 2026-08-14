@@ -228,12 +228,16 @@ class VisitRepository {
   // callers (e.g. the payment webhook and a receptionist check-in landing together) race on
   // this row, and only the one that actually flips it gets rows back. The loser returns
   // undefined and skips the duplicate notification.
+  //
+  // Goes through withTransaction rather than checking out its own client. That matters now that
+  // paymentService.processPayment wraps the capture and this release together: a self-managed
+  // client would open a SECOND, independent transaction that commits on its own, so a payment
+  // that later rolled back would leave the visit already released to the modalities — a ticket
+  // on a worklist with no payment behind it, which is the exact inverse of the bug the payment
+  // transaction exists to prevent. Nested here, this joins the caller's transaction instead.
   async releaseVisitToModalities(visitId) {
-    const client = await db.pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const visitRes = await client.query(
+    return await db.withTransaction(async () => {
+      const visitRes = await db.query(
         `UPDATE patient_visits
          SET status = 'Processing', updated_at = CURRENT_TIMESTAMP
          WHERE id = $1 AND status = 'Pending'
@@ -241,26 +245,22 @@ class VisitRepository {
         [visitId]
       );
 
-      if (visitRes.rows.length === 0) {
-        await client.query('ROLLBACK');
-        return undefined;
-      }
+      // Compare-and-swap. Zero rows means another caller already released this visit — the
+      // payment webhook and a front-desk check-in landing together is the real case. Nothing was
+      // written, so there is nothing to undo; returning undefined lets the loser skip the
+      // duplicate notification. (This used to ROLLBACK here, which would now abort the caller's
+      // transaction as well — a no-op release must not undo the payment that triggered it.)
+      if (visitRes.rows.length === 0) return undefined;
 
-      await client.query(
+      await db.query(
         `UPDATE visit_tests
          SET status = 'Processing', updated_at = CURRENT_TIMESTAMP
          WHERE patient_visit_id = $1 AND status IN ('Pending', 'Approved')`,
         [visitId]
       );
 
-      await client.query('COMMIT');
       return visitRes.rows[0];
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   // Distinct test categories attached to a visit — used to route the "your department has a

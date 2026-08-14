@@ -1,4 +1,5 @@
 const paymentRepository = require('../repositories/paymentRepository');
+const db = require('../config/database');
 const notificationService = require('./notificationService');
 const visitService = require('./visitService');
 const auditService = require('./auditService');
@@ -67,21 +68,50 @@ class PaymentService {
       throw error;
     }
 
+    // Taking the money and releasing the visit is one event, so it commits as one.
+    //
+    // These were four independent auto-committed writes. Dying anywhere in the middle — deploy,
+    // process restart, OOM — left the clinic in a state no screen can explain and no user can
+    // repair:
+    //
+    //   payment written, visit not released:  the patient has paid, but the visit is still
+    //     'Pending' and its tests are still 'Pending', and every modality worklist filters on
+    //     pv.status = 'Processing'. The ticket is invisible to every department. The cashier
+    //     cannot retake the payment either — hasPaidPayment now returns true, so the retry is
+    //     rejected with "already been paid". The patient waits for an exam nobody can see.
+    //
+    //   payment written, stale gateway row not cancelled: an abandoned GCash session stays
+    //     'Pending' against a settled visit and keeps being offered back to the patient.
+    //
+    // releaseVisitIfReady is included deliberately: it is the step that makes the payment
+    // *mean* something operationally, and it is internally atomic already, so joining this
+    // transaction just extends the same guarantee across the pair.
     const receiptNumber = await paymentRepository.getNextReceiptNumber();
 
-    const payment = await paymentRepository.createPayment({
-      patientVisitId,
-      processedBy,
-      paymentMethod,
-      referenceNumber,
-      receiptNumber,
-      amount: authoritativeTotal
-    });
+    const payment = await db.withTransaction(async () => {
+      const created = await paymentRepository.createPayment({
+        patientVisitId,
+        processedBy,
+        paymentMethod,
+        referenceNumber,
+        receiptNumber,
+        amount: authoritativeTotal
+      });
 
-    // A counter payment supersedes any online checkout the patient started but never finished
-    // for this visit — otherwise an abandoned GCash/Maya session would linger as a 'Pending'
-    // payment row against an already-settled visit.
-    await paymentRepository.cancelPendingGatewayPayments(patientVisitId);
+      // A counter payment supersedes any online checkout the patient started but never finished
+      // for this visit — otherwise an abandoned GCash/Maya session would linger as a 'Pending'
+      // payment row against an already-settled visit.
+      await paymentRepository.cancelPendingGatewayPayments(patientVisitId);
+
+      // Payment is one of the two release conditions. Attempting the release here — server-side,
+      // in the same call that took the money — replaces the CashierDashboard's separate follow-up
+      // PATCH, where a network blip between the two requests stranded a fully paid visit at
+      // 'Pending' with no ticket ever reaching a modality. A walk-in releases immediately; an
+      // appointment still waits for its QR check-in, and this is a no-op until then.
+      await visitService.releaseVisitIfReady(patientVisitId);
+
+      return created;
+    });
 
     // Module 18 (Notification): Admin/SuperAdmin financial oversight, matching Reports/Cashier
     // Monitoring — not the processing Cashier themselves, who already sees this live in their
@@ -91,13 +121,6 @@ class PaymentService {
       message: `Receipt #${receiptNumber} — ${bill.patientName}, ₱${authoritativeTotal.toFixed(2)}`,
       type: 'success'
     });
-
-    // Payment is one of the two release conditions. Attempting the release here — server-side,
-    // in the same call that took the money — replaces the CashierDashboard's separate follow-up
-    // PATCH, where a network blip between the two requests stranded a fully paid visit at
-    // 'Pending' with no ticket ever reaching a modality. A walk-in releases immediately; an
-    // appointment still waits for its QR check-in, and this is a no-op until then.
-    await visitService.releaseVisitIfReady(patientVisitId);
 
     return payment;
   }

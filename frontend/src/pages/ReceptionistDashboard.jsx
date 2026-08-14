@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
+import { usePolling } from '../hooks/usePolling';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import MetricCard from '../components/ui/metric-card';
@@ -115,6 +116,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [selectedVisitId, setSelectedVisitId] = useState(null);
   const [selectedTestIds, setSelectedTestIds] = useState([]);
   const [showTestsModal, setShowTestsModal] = useState(false);
+  const [isAttachingTests, setIsAttachingTests] = useState(false);
 
   // Existing Patient Lookup State (Module 7: patient record lookup)
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
@@ -238,6 +240,16 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     fetchPendingHmoRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchActiveVisits, fetchStaticData, fetchPendingHmoRequests]);
+
+  // Keep the queue live. Walk-ins registered at another terminal, tickets the cashier has just
+  // settled, and the wait-time badges (which recompute on render) all went stale the moment this
+  // screen loaded — a receptionist who opened the queue at 08:00 saw the 08:00 queue all shift.
+  // Only while the queue is actually on screen; paused automatically when the tab is hidden.
+  usePolling(
+    () => fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter }),
+    30000,
+    { enabled: view === 'reception-queue' }
+  );
 
   // Lazy-load Visit History only once the tab is actually opened, not on every Receptionist
   // dashboard mount.
@@ -367,6 +379,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setNoShowTarget(null);
       setVerifyResult(null);
       setSearchRef('');
+      // Refetch the queue, which its three sibling handlers (check-in, cancel visit, walk-in
+      // register) all do and this one did not. Without it the no-showed patient stayed on the
+      // Active Queue for the rest of the session, so staff could go chasing — or re-check-in —
+      // someone already marked absent.
+      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
     } catch (err) {
       setNoShowError(err.response?.data?.message || 'Failed to mark this appointment as a no-show.');
     } finally {
@@ -451,6 +468,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const handleAssignTestsSubmit = async (e) => {
     e.preventDefault();
     if (!selectedVisitId || selectedTestIds.length === 0) return;
+    // Guard against double-submission. Every other mutation on this screen is guarded
+    // (isRegistering, checkingIn, cancelingVisit); this one was not, and it is the one that costs
+    // the patient money — visit_tests rows carry price_at_time, so a double-click on a slow
+    // connection attaches the same X-ray twice and bills for both.
+    if (isAttachingTests) return;
+    setIsAttachingTests(true);
 
     try {
       await api.post('/tests/visit-tests', {
@@ -461,6 +484,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
     } catch (err) {
       toastError(err.response?.data?.message || 'Failed to assign tests to visit');
+    } finally {
+      setIsAttachingTests(false);
     }
   };
 
@@ -1227,7 +1252,13 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
               <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
                 <Button type="button" variant="outline" onClick={() => setShowTestsModal(false)}>Cancel</Button>
-                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold">Attach Selected Tests</Button>
+                <Button
+                  type="submit"
+                  disabled={isAttachingTests || selectedTestIds.length === 0}
+                  className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold"
+                >
+                  {isAttachingTests ? 'Attaching…' : 'Attach Selected Tests'}
+                </Button>
               </div>
             </form>
           </DialogContent>

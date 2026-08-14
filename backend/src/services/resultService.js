@@ -138,11 +138,6 @@ class ResultService {
     const existing = await resultRepository.findResultByVisitTestId(visitTestId);
     const isCorrection = !!existing;
 
-    // Recording findings is not the same event as releasing them. The ticket parks in
-    // 'Waiting for Release' — visible as such to the front desk — until releaseResult below
-    // authorises it and notifies the patient.
-    await testRepository.updateVisitTestStatus(visitTestId, 'Waiting for Release');
-
     // Phase B: a real uploaded file (via multer) takes precedence over the legacy fileUrl text
     // field — both can't meaningfully apply at once, and the frontend only ever sends one or
     // the other.
@@ -167,30 +162,50 @@ class ResultService {
       resolvedFileUrl = existing.file_url;
     }
 
-    const result = await resultRepository.createResult({
-      visitTestId,
-      fileUrl: resolvedFileUrl,
-      filePath,
-      fileOriginalName,
-      fileMimeType,
-      fileSizeBytes,
-      findings,
-      remarks,
-      releasedBy
-    });
+    // Recording the findings and moving the ticket are one event.
+    //
+    // The status update used to run first, on its own, before createResult. If createResult then
+    // failed, the ticket sat in 'Waiting for Release' — which the front desk reads as "findings
+    // recorded, awaiting authorisation" — with no findings anywhere behind it. Releasing it then
+    // fails with "No result found for this visit test", and nothing on any screen explains why a
+    // ticket that says it is ready cannot be released.
+    const result = await db.withTransaction(async () => {
+      // Recording findings is not the same event as releasing them. The ticket parks in
+      // 'Waiting for Release' — visible as such to the front desk — until releaseResult below
+      // authorises it and notifies the patient.
+      await testRepository.updateVisitTestStatus(visitTestId, 'Waiting for Release');
 
-    // Phase D: only a correction is audit-worthy here — the first-time release of every result
-    // would make the log mostly noise from routine work, not the "something changed after the
-    // fact" signal an audit trail is for.
-    if (isCorrection) {
-      await auditService.log({
-        actorId: requestingUser?.userId,
-        action: 'result.corrected',
-        entityType: 'test_result',
-        entityId: result.id,
-        description: `Corrected findings for visit test #${visitTestId}`
+      const created = await resultRepository.createResult({
+        visitTestId,
+        fileUrl: resolvedFileUrl,
+        filePath,
+        fileOriginalName,
+        fileMimeType,
+        fileSizeBytes,
+        findings,
+        remarks,
+        releasedBy
       });
-    }
+
+      // Phase D: only a correction is audit-worthy here — the first-time release of every result
+      // would make the log mostly noise from routine work, not the "something changed after the
+      // fact" signal an audit trail is for.
+      //
+      // Inside the transaction on purpose: an audit entry describing a correction that was then
+      // rolled back is worse than no entry, because the log is the artifact whose whole value is
+      // being trustworthy.
+      if (isCorrection) {
+        await auditService.log({
+          actorId: requestingUser?.userId,
+          action: 'result.corrected',
+          entityType: 'test_result',
+          entityId: created.id,
+          description: `Corrected findings for visit test #${visitTestId}`
+        });
+      }
+
+      return created;
+    });
 
     return result;
   }

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Logo from './Logo';
 import ErrorBoundary from './ErrorBoundary';
+import { usePolling } from '../hooks/usePolling';
 import { Button } from './ui/button';
 import api from '../config/api';
 import {
@@ -80,6 +81,11 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  // The bell only ever refreshed when it was clicked, so the unread dot could not appear on its
+  // own — staff had to guess there was something to look at. Slower than the queues because a
+  // notification is an FYI, not something anyone is waiting on.
+  usePolling(fetchNotifications, 60000);
 
   const handleToggleNotifications = () => {
     const opening = !showNotifications;

@@ -1,5 +1,7 @@
+const fs = require('fs');
 const resultService = require('../services/resultService');
 const patientService = require('../services/patientService');
+const logger = require('../config/logger');
 
 class ResultController {
   async getPending(req, res, next) {
@@ -72,6 +74,21 @@ class ResultController {
         data: { result }
       });
     } catch (err) {
+      // multer runs as route middleware, so by the time this handler executes the file is
+      // already on disk — including for requests that are about to be refused. Without this,
+      // every rejected upload (wrong department, ticket not released yet, a validation failure,
+      // a rolled-back transaction) left a PHI-bearing file on the clinic's disk with no database
+      // row pointing at it and nothing that would ever delete it. Unlinking here keeps that set
+      // empty rather than letting it grow with every mis-click.
+      if (req.file?.path) {
+        fs.unlink(req.file.path, (unlinkErr) => {
+          if (unlinkErr) {
+            // Reported, never thrown: failing to tidy up must not replace the real error the
+            // caller needs to see.
+            logger.warn(`Could not remove orphaned upload ${req.file.path}: ${unlinkErr.message}`);
+          }
+        });
+      }
       next(err);
     }
   }

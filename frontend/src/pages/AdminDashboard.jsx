@@ -59,6 +59,7 @@ const DashboardOverview = ({ onSelectNav }) => {
   const [recentVisits, setRecentVisits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [secondaryError, setSecondaryError] = useState(false);
+  const [primaryError, setPrimaryError] = useState(false);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -73,8 +74,15 @@ const DashboardOverview = ({ onSelectNav }) => {
       setTodayRevenue((txRes.data.data.transactions || []).reduce((s, t) => s + parseFloat(t.amount || 0), 0));
       setRoleCount((rbacRes.data.data.roles || []).length);
       setHmoPartnerCount((hmoRes.data.data.providers || []).filter(p => p.is_active).length);
+      setPrimaryError(false);
     } catch (err) {
       console.error('Failed to fetch dashboard overview:', err);
+      // Without this the four metric cards keep their initial zeros and render them as fact:
+      // "Today's Revenue ₱0.00", "0 Roles", "0 Services". An administrator cannot tell a quiet
+      // morning from an unreachable backend, and ₱0.00 is the more alarming of the two readings
+      // to get wrong. The cards show an em dash instead while this is set — the same treatment
+      // `secondaryError` already gives the charts below.
+      setPrimaryError(true);
     } finally {
       setLoading(false);
     }
@@ -111,29 +119,29 @@ const DashboardOverview = ({ onSelectNav }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <MetricCard
           label="Total Services Catalog"
-          value={loading ? '…' : catalogCount}
+          value={loading ? '…' : primaryError ? '—' : catalogCount}
           caption="Lab, X-Ray, Ultrasound & more"
           icon={FileText}
           tone="green"
         />
         <MetricCard
           label="Today's Revenue"
-          value={loading ? '…' : formatCurrency(todayRevenue)}
-          caption="See Reports for trend"
+          value={loading ? '…' : primaryError ? '—' : formatCurrency(todayRevenue)}
+          caption={primaryError ? "Could not load — check connection" : "See Reports for trend"}
           captionTone="slate"
           icon={DollarSign}
           tone="emerald"
         />
         <MetricCard
           label="Clinic Operational Roles"
-          value={loading ? '…' : `${roleCount} Roles`}
+          value={loading ? '…' : primaryError ? '—' : `${roleCount} Roles`}
           caption="RBAC Enforced"
           icon={Shield}
           tone="indigo"
         />
         <MetricCard
           label="HMO Partners"
-          value={loading ? '…' : `${hmoPartnerCount} Partner${hmoPartnerCount === 1 ? '' : 's'}`}
+          value={loading ? '…' : primaryError ? '—' : `${hmoPartnerCount} Partner${hmoPartnerCount === 1 ? '' : 's'}`}
           caption="Accredited Providers"
           icon={UserCheck}
           tone="purple"

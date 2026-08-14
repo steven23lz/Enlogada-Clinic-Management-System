@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
+import { usePolling } from '../hooks/usePolling';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import MetricCard from '../components/ui/metric-card';
@@ -176,6 +177,19 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
       }
     }
   }, [category, categoryResolved, mode, fetchPendingTests, fetchReleasedTests]);
+
+  // Keep the worklist live. A ticket only reaches a department once the cashier takes payment and
+  // the front desk checks the patient in — both of which happen at other terminals, so without
+  // this the technician had no way to learn work had arrived except by re-navigating. The wait
+  // badges recompute on these re-renders too, which is what makes them usable for triage.
+  //
+  // Suspended while a modal is open: refetching under an open findings dialog would swap the
+  // underlying list while someone is typing into it.
+  usePolling(
+    () => (mode === 'history' ? fetchReleasedTests(category) : fetchPendingTests(category)),
+    30000,
+    { enabled: categoryResolved && !!category && !showUploadModal }
+  );
 
   // Reset to page 1 whenever the filtered set could change shape, so a stale page number never
   // points past the end of a newly-filtered/newly-fetched list.

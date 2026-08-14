@@ -14,6 +14,24 @@ class TestRepository {
     return result.rows;
   }
 
+  /**
+   * Batch form of findTestById — one round trip for a whole set of ids.
+   *
+   * Used when attaching tests to a visit, which previously issued a findTestById per test. Ids
+   * absent from the result are simply missing; the caller compares counts to report which.
+   */
+  async findTestsByIds(ids) {
+    if (!ids || ids.length === 0) return [];
+    const queryText = `
+      SELECT t.*, tc.name as category_name
+      FROM tests t
+      JOIN test_categories tc ON t.category_id = tc.id
+      WHERE t.id = ANY($1::int[])
+    `;
+    const result = await db.query(queryText, [ids.map((id) => parseInt(id, 10))]);
+    return result.rows;
+  }
+
   async findTestById(id) {
     const queryText = `
       SELECT t.*, tc.name as category_name

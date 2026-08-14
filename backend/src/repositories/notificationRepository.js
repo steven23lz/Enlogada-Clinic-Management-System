@@ -10,30 +10,33 @@ const SELECT_COLUMNS = `
 `;
 
 class NotificationRepository {
+  /**
+   * Writes one event plus its per-recipient fan-out rows as a unit.
+   *
+   * Goes through withTransaction rather than checking out its own client. Notifications are
+   * raised from inside other operations — releasing a visit to the modalities happens within the
+   * payment transaction — and a self-managed client would take a SECOND connection while the
+   * caller still holds its own. With a bounded pool that is a deadlock waiting to happen: once
+   * every connection is held by a transaction that needs one more connection to finish, none of
+   * them can proceed and the whole API stalls until connectionTimeoutMillis fires. Nested here,
+   * this simply joins the transaction already in progress and takes no extra connection.
+   */
   async createForUsers(userIds, { title, message, type }) {
     if (!userIds || userIds.length === 0) return [];
-    const client = await db.pool.connect();
-    try {
-      await client.query('BEGIN');
-      const eventResult = await client.query(
+    return await db.withTransaction(async () => {
+      const eventResult = await db.query(
         `INSERT INTO notification_events (title, message, type) VALUES ($1, $2, $3) RETURNING id, created_at`,
         [title, message, type]
       );
       const event = eventResult.rows[0];
-      const readsResult = await client.query(
+      const readsResult = await db.query(
         `INSERT INTO notification_reads (event_id, user_id)
          SELECT $1, unnest($2::int[])
          RETURNING id, user_id, is_read`,
         [event.id, userIds]
       );
-      await client.query('COMMIT');
       return readsResult.rows.map((row) => ({ ...row, title, message, type, created_at: event.created_at }));
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   async findForUser(userId, limit = 20) {
