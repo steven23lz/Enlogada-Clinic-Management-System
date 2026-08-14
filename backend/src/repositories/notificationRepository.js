@@ -71,6 +71,61 @@ class NotificationRepository {
     const queryText = `UPDATE notification_reads SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE`;
     await db.query(queryText, [userId]);
   }
+
+  /**
+   * Deletes notification history past its useful life.
+   *
+   * This table is a fan-out: every event writes one row per recipient, so its size is
+   * events x staff, not events. Nothing ever deleted from it, which meant it grew faster than
+   * any other table in the schema and never stopped — a bell that shows the latest handful of
+   * items was retaining years of rows to do it.
+   *
+   * Two different ages on purpose. A read notification has already served its entire purpose and
+   * goes early. An unread one is kept longer because deleting it silently removes something a
+   * user has not seen yet, but it is still not kept forever: a notification nobody opened in
+   * months is not going to be opened, and keeping it only costs storage and index depth.
+   *
+   * Events are cleaned up once no recipient row references them; notification_reads cascades
+   * from notification_events, so orphaned parents are the only ones that need removing.
+   */
+  async pruneOlderThan({ readAfterDays, unreadAfterDays }) {
+    const readDeleted = await db.query(
+      `DELETE FROM notification_reads nr
+       USING notification_events ne
+       WHERE ne.id = nr.event_id
+         AND nr.is_read = TRUE
+         AND ne.created_at < NOW() - ($1 || ' days')::interval`,
+      [String(readAfterDays)]
+    );
+
+    const unreadDeleted = await db.query(
+      `DELETE FROM notification_reads nr
+       USING notification_events ne
+       WHERE ne.id = nr.event_id
+         AND ne.created_at < NOW() - ($1 || ' days')::interval`,
+      [String(unreadAfterDays)]
+    );
+
+    const eventsDeleted = await db.query(
+      `DELETE FROM notification_events ne
+       WHERE NOT EXISTS (SELECT 1 FROM notification_reads nr WHERE nr.event_id = ne.id)`
+    );
+
+    return {
+      readRowsDeleted: readDeleted.rowCount,
+      staleRowsDeleted: unreadDeleted.rowCount,
+      eventsDeleted: eventsDeleted.rowCount,
+    };
+  }
+
+  async countAll() {
+    const res = await db.query(
+      `SELECT
+         (SELECT COUNT(*)::int FROM notification_events) AS events,
+         (SELECT COUNT(*)::int FROM notification_reads) AS reads`
+    );
+    return res.rows[0];
+  }
 }
 
 module.exports = new NotificationRepository();

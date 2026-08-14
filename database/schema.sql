@@ -379,3 +379,34 @@ INSERT INTO clinic_operating_hours (day_of_week, is_open, open_time, close_time,
 (4, TRUE, '08:00', '17:00', 30, 1),
 (5, TRUE, '08:00', '17:00', 30, 1),
 (6, TRUE, '08:00', '12:00', 30, 1);
+
+-- 11. Indexes on foreign keys and status columns ([1.11.0]).
+--
+-- PostgreSQL indexes PRIMARY KEY and UNIQUE columns automatically but NOT foreign keys. Without
+-- these, every join across the visit chain and every queue filter is a sequential scan, and each
+-- delete of a parent row scans the whole child table to check for references. Harmless on a small
+-- database; it is the kind of thing that turns instant screens slow all at once after a year of
+-- real visits. Mirrored by src/scripts/migrateIndexes.js for existing databases.
+CREATE INDEX IF NOT EXISTS idx_patients_user ON patients(user_id);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_patient ON patient_visits(patient_id);
+CREATE INDEX IF NOT EXISTS idx_visit_tests_visit ON visit_tests(patient_visit_id);
+CREATE INDEX IF NOT EXISTS idx_visit_tests_test ON visit_tests(test_id);
+CREATE INDEX IF NOT EXISTS idx_test_results_visit_test ON test_results(visit_test_id);
+CREATE INDEX IF NOT EXISTS idx_payments_visit ON payments(patient_visit_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_visit ON appointments(patient_visit_id);
+CREATE INDEX IF NOT EXISTS idx_hmo_request_tests_request ON hmo_request_tests(hmo_request_id);
+CREATE INDEX IF NOT EXISTS idx_hmo_request_tests_visit_test ON hmo_request_tests(visit_test_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role_id);
+CREATE INDEX IF NOT EXISTS idx_notification_reads_event ON notification_reads(event_id);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_tests_category ON tests(category_id);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_status ON patient_visits(status);
+CREATE INDEX IF NOT EXISTS idx_visit_tests_status ON visit_tests(status);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(payment_status);
+CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
+CREATE INDEX IF NOT EXISTS idx_appointments_scheduled ON appointments(scheduled_date, scheduled_time);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_created ON patient_visits(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_test_results_released_by ON test_results(released_by);
+CREATE INDEX IF NOT EXISTS idx_notification_events_created ON notification_events(created_at DESC);
