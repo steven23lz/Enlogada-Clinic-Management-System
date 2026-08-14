@@ -116,7 +116,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
               <button
                 type="button"
                 onClick={() => onNavigate('forgot-password')}
-                className="text-[11px] font-semibold text-[#769046] hover:underline bg-transparent border-0 cursor-pointer"
+                className="text-fine font-semibold text-[#769046] hover:underline bg-transparent border-0 cursor-pointer"
               >
                 Forgot password?
               </button>
@@ -146,7 +146,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
 
         <div className="relative flex py-2 items-center">
           <div className="flex-grow border-t border-gray-100"></div>
-          <span className="flex-shrink mx-3 text-[11px] text-gray-400 font-medium">Or continue with Google</span>
+          <span className="flex-shrink mx-3 text-fine text-gray-400 font-medium">Or continue with Google</span>
           <div className="flex-grow border-t border-gray-100"></div>
         </div>
 
@@ -175,7 +175,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         )}
 
         {!isGoogleAuthConfigured && (
-          <div className="flex items-start space-x-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-800">
+          <div className="flex items-start space-x-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-fine text-amber-800">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-px" />
             <span>
               Google Sign-In is not configured on this installation. Set{' '}
@@ -189,7 +189,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         )}
 
         {isGoogleAuthConfigured && googleButtonBroken && (
-          <div className="flex items-start space-x-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-800">
+          <div className="flex items-start space-x-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-fine text-amber-800">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-px" />
             <span>
               Google Sign-In is unavailable on this address. The configured client ID does not

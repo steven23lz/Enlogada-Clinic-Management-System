@@ -553,7 +553,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     {pendingHmoRequests.slice(0, 6).map(r => (
                       <span
                         key={r.id}
-                        className="inline-flex items-center gap-1.5 bg-white border border-amber-200 rounded-lg px-2.5 py-1 text-[11px] font-semibold text-amber-900"
+                        className="inline-flex items-center gap-1.5 bg-white border border-amber-200 rounded-lg px-2.5 py-1 text-fine font-semibold text-amber-900"
                       >
                         <span className="font-bold">{r.provider_name}</span>
                         <span className="text-amber-600">&bull;</span>
@@ -561,7 +561,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                       </span>
                     ))}
                     {pendingHmoRequests.length > 6 && (
-                      <span className="text-[11px] font-semibold text-amber-700 self-center">+{pendingHmoRequests.length - 6} more</span>
+                      <span className="text-fine font-semibold text-amber-700 self-center">+{pendingHmoRequests.length - 6} more</span>
                     )}
                   </div>
                 </CardContent>
@@ -599,13 +599,13 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 <Table>
                   <TableHeader className="bg-gray-50/80 border-b border-gray-100">
                     <TableRow>
-                      <TableHead className="text-[10px] font-bold uppercase tracking-wider text-gray-500 py-3">Queue Ticket</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase tracking-wider text-gray-500 py-3">Patient Name</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase tracking-wider text-gray-500 py-3">Visit Type</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase tracking-wider text-gray-500 py-3">Patient Category</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase tracking-wider text-gray-500 py-3">Assigned Tests</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase tracking-wider text-gray-500 py-3">Status</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase tracking-wider text-gray-500 py-3 text-right">Actions</TableHead>
+                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Queue Ticket</TableHead>
+                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Patient Name</TableHead>
+                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Visit Type</TableHead>
+                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Patient Category</TableHead>
+                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Assigned Tests</TableHead>
+                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Status</TableHead>
+                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -655,11 +655,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
                           <TableCell className="py-3 font-bold text-xs text-slate-900">
                             {visit.first_name} {visit.last_name}
-                            <span className="block text-[10px] text-gray-400 font-normal">PT-{visit.patient_id}</span>
+                            <span className="block text-meta text-gray-400 font-normal">PT-{visit.patient_id}</span>
                           </TableCell>
 
                           <TableCell className="py-3 text-xs">
-                            <Badge variant="outline" className="text-[10px] font-bold border-gray-200">
+                            <Badge variant="outline" className="text-meta font-bold border-gray-200">
                               {visit.visit_type}
                             </Badge>
                           </TableCell>
@@ -673,7 +673,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                               <div className="flex flex-wrap gap-1">
                                 {visit.tests.map(t => (
                                   <span key={t.id} className="inline-flex items-center gap-1">
-                                    <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100 text-[10px] font-semibold border-gray-200">
+                                    <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100 text-meta font-semibold border-gray-200">
                                       {t.test_name} ({t.test_status})
                                     </Badge>
                                     <button
@@ -689,7 +689,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                                 ))}
                               </div>
                             ) : (
-                              <span className="text-gray-400 text-[11px] italic">No tests attached</span>
+                              <span className="text-gray-400 text-fine italic">No tests attached</span>
                             )}
                           </TableCell>
 
@@ -698,7 +698,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                             {/* Where the ticket actually is, in the front desk's own terms.
                                 'Pending' alone doesn't say whether reception or the cashier is
                                 holding it up, which is the question this row exists to answer. */}
-                            <span className="block text-[10px] text-gray-400 font-semibold mt-1">
+                            <span className="block text-meta text-gray-400 font-semibold mt-1">
                               {visit.visit_status === 'Pending'
                                 ? 'Awaiting payment — with cashier'
                                 : visit.visit_status === 'Processing'
@@ -712,7 +712,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                               <Button
                                 onClick={() => handleOpenAssignTests(visit.id)}
                                 variant="outline"
-                                className="text-[11px] font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5"
+                                className="text-fine font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5"
                               >
                                 + Attach Tests
                               </Button>
@@ -759,7 +759,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   <History className="w-5 h-5 text-[#769046]" />
                   <span>Visit History</span>
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-1">Look up past patient visits, of any status, by date range.</p>
+                <p className="text-fine text-gray-500 mt-1">Look up past patient visits, of any status, by date range.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <SearchInput
@@ -790,12 +790,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 <Table>
                   <TableHeader className="bg-gray-50/80">
                     <TableRow>
-                      <TableHead className="text-[10px] font-bold uppercase py-3">Queue Ticket</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-3">Patient</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-3">Visit Type</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-3">Tests</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Date</TableHead>
+                      <TableHead className="text-meta font-bold uppercase py-3">Queue Ticket</TableHead>
+                      <TableHead className="text-meta font-bold uppercase py-3">Patient</TableHead>
+                      <TableHead className="text-meta font-bold uppercase py-3">Visit Type</TableHead>
+                      <TableHead className="text-meta font-bold uppercase py-3">Tests</TableHead>
+                      <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
+                      <TableHead className="text-meta font-bold uppercase py-3 text-right">Date</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -828,10 +828,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                           </TableCell>
                           <TableCell className="py-3 font-bold text-xs text-slate-900">
                             {v.first_name} {v.last_name}
-                            <span className="block text-[10px] text-gray-400 font-normal">{v.patient_type_name}</span>
+                            <span className="block text-meta text-gray-400 font-normal">{v.patient_type_name}</span>
                           </TableCell>
                           <TableCell className="py-3 text-xs">
-                            <Badge variant="outline" className="text-[10px] font-bold border-gray-200">
+                            <Badge variant="outline" className="text-meta font-bold border-gray-200">
                               {v.visit_type}
                             </Badge>
                           </TableCell>
@@ -870,7 +870,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   <Users className="w-5 h-5 text-[#769046]" />
                   <span>Find Existing Patient</span>
                 </h3>
-                <p className="text-[11px] text-gray-500 mt-1">Search before registering — a returning patient should be checked in, not re-registered.</p>
+                <p className="text-fine text-gray-500 mt-1">Search before registering — a returning patient should be checked in, not re-registered.</p>
               </div>
 
               {lookupCheckInSuccess && (
@@ -906,19 +906,19 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     patientSearchResults.map(patient => (
                       <div key={patient.id} className="flex items-center justify-between border border-gray-100 rounded-xl p-3 bg-gray-50/50">
                         <div className="text-xs">
-                          <span className="block font-bold text-slate-900">{patient.first_name} {patient.last_name} <span className="text-[10px] text-gray-400 font-normal">PT-{patient.id}</span></span>
+                          <span className="block font-bold text-slate-900">{patient.first_name} {patient.last_name} <span className="text-meta text-gray-400 font-normal">PT-{patient.id}</span></span>
                           <span className="block text-gray-500">{patient.patient_type_name} &middot; DOB {new Date(patient.birthdate).toLocaleDateString()}</span>
                           {/* Phase D: previously zero visit/financial context at lookup — a
                               returning patient's unpaid balance from a prior visit was invisible
                               at check-in. */}
                           <span className="flex items-center gap-2 mt-1">
-                            <span className="text-[10px] font-semibold text-gray-400">
+                            <span className="text-meta font-semibold text-gray-400">
                               {Number(patient.visit_count) > 0
                                 ? `${patient.visit_count} prior visit${Number(patient.visit_count) === 1 ? '' : 's'} · last ${new Date(patient.last_visit_at).toLocaleDateString()}`
                                 : 'No prior visits'}
                             </span>
                             {Number(patient.unpaid_visit_count) > 0 && (
-                              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5">
+                              <span className="text-meta font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-full px-2 py-0.5">
                                 {patient.unpaid_visit_count} unpaid visit{Number(patient.unpaid_visit_count) === 1 ? '' : 's'}
                               </span>
                             )}
@@ -927,7 +927,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                         <Button
                           type="button"
                           onClick={() => requestCheckIn('walkin', patient)}
-                          className="bg-[#769046] hover:bg-[#657c3a] text-white text-[11px] font-bold rounded-lg flex items-center space-x-1.5 px-3 py-1.5"
+                          className="bg-[#769046] hover:bg-[#657c3a] text-white text-fine font-bold rounded-lg flex items-center space-x-1.5 px-3 py-1.5"
                         >
                           <CheckCircle className="w-3.5 h-3.5" />
                           <span>Check In This Patient</span>
@@ -1082,7 +1082,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 <QrCode className="w-5 h-5 text-[#769046]" />
                 <span>Verify Appointment Reference</span>
               </h3>
-              <p className="text-[11px] text-gray-500 mt-1">
+              <p className="text-fine text-gray-500 mt-1">
                 Scan or enter the appointment reference code (e.g. <code>APPT-XXXXX</code>) to check a patient in.
               </p>
             </div>
@@ -1090,7 +1090,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             <button
               type="button"
               onClick={() => setScanMode(m => !m)}
-              className="flex items-center space-x-1.5 text-[11px] font-bold text-[#769046] hover:text-[#657c3a] cursor-pointer mb-3"
+              className="flex items-center space-x-1.5 text-fine font-bold text-[#769046] hover:text-[#657c3a] cursor-pointer mb-3"
             >
               {scanMode ? <Keyboard className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
               <span>{scanMode ? 'Switch to manual entry' : 'Scan QR with camera'}</span>
@@ -1170,7 +1170,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   </div>
 
                   {!verifyResult.is_paid && (
-                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
+                    <p className="text-fine text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
                       This booking has no confirmed payment yet. You can still check the patient in, but the
                       ticket will only reach the department once the cashier confirms payment.
                     </p>
@@ -1186,7 +1186,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   <button
                     type="button"
                     onClick={() => { setNoShowError(''); setNoShowTarget(verifyResult); }}
-                    className="w-full flex items-center justify-center space-x-1.5 text-[11px] font-bold text-red-600 hover:text-red-700 border-0 bg-transparent cursor-pointer py-1"
+                    className="w-full flex items-center justify-center space-x-1.5 text-fine font-bold text-red-600 hover:text-red-700 border-0 bg-transparent cursor-pointer py-1"
                   >
                     <UserX className="w-3.5 h-3.5" />
                     <span>Mark as No-Show instead</span>
@@ -1218,7 +1218,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                       className="rounded text-[#769046] focus:ring-[#769046]"
                     />
                     <div className="flex-1 flex justify-between items-center">
-                      <span className="font-bold text-gray-800">{t.name} <span className="text-[10px] text-gray-400 font-normal">({t.category_name})</span></span>
+                      <span className="font-bold text-gray-800">{t.name} <span className="text-meta text-gray-400 font-normal">({t.category_name})</span></span>
                       <span className="font-extrabold text-slate-900">{formatCurrency(t.price)}</span>
                     </div>
                   </label>

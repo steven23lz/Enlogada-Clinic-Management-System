@@ -73,7 +73,7 @@ const Home = ({ onNavigate }) => {
               4's earlier decision to keep this hero brand-forward rather than reach for imagery. */}
           <div className="flex justify-center">
             <div className="glass-card rounded-3xl p-6 sm:p-7 w-full max-w-sm shadow-2xl">
-              <span className="text-[11px] font-bold text-[#657c3a] uppercase tracking-widest">What We Offer</span>
+              <span className="text-fine font-bold text-[#657c3a] uppercase tracking-widest">What We Offer</span>
               <h3 className="text-lg font-bold text-dark-slate mt-1 mb-5">Our Diagnostic Services</h3>
               <ul className="space-y-3 list-none p-0 m-0">
                 {SERVICE_PREVIEW.map(({ label, icon: Icon }) => (

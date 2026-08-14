@@ -9,7 +9,7 @@ const Pagination = ({ page, totalPages, onPageChange, totalLabel, className = ''
 
   return (
     <div className={`flex items-center justify-between px-4 py-3 border-t border-gray-100 ${className}`}>
-      <span className="text-[11px] font-semibold text-gray-400">{totalLabel}</span>
+      <span className="text-fine font-semibold text-gray-400">{totalLabel}</span>
       <div className="flex items-center space-x-2">
         <button
           type="button"
@@ -20,7 +20,7 @@ const Pagination = ({ page, totalPages, onPageChange, totalLabel, className = ''
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
-        <span className="text-[11px] font-bold text-gray-600 whitespace-nowrap">
+        <span className="text-fine font-bold text-gray-600 whitespace-nowrap">
           Page {page} of {totalPages || 1}
         </span>
         <button

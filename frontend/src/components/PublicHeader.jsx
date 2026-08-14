@@ -41,7 +41,7 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
           <Logo className="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0" />
           <div className="flex flex-col min-w-0">
             <span className="font-bold text-sm sm:text-base leading-tight tracking-wider text-[#769046]">ENLOGADA</span>
-            <span className="hidden sm:block text-[10px] text-gray-500 font-semibold tracking-wide uppercase truncate">
+            <span className="hidden sm:block text-meta text-gray-500 font-semibold tracking-wide uppercase truncate">
               Ultrasound &amp; Diagnostic Clinic
             </span>
           </div>

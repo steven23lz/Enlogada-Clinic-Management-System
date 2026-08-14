@@ -50,7 +50,7 @@ const BookingPass = ({ reference, queueNumber }) => {
 
   return (
     <div className="flex flex-col items-center gap-2 p-4 bg-white border border-gray-200 rounded-xl">
-      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+      <span className="text-meta font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
         <QrCode className="w-3.5 h-3.5 text-[#769046]" aria-hidden="true" />
         Present this at the front desk
       </span>
@@ -64,7 +64,7 @@ const BookingPass = ({ reference, queueNumber }) => {
       ) : failed ? (
         <div
           role="alert"
-          className="w-40 h-40 flex items-center justify-center text-center text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2"
+          className="w-40 h-40 flex items-center justify-center text-center text-meta text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2"
         >
           <span className="flex flex-col items-center gap-1">
             <AlertCircle className="w-4 h-4" aria-hidden="true" />
@@ -77,7 +77,7 @@ const BookingPass = ({ reference, queueNumber }) => {
 
       <span className="text-xs font-mono font-bold text-slate-900 tracking-wide">{reference}</span>
       {queueNumber && (
-        <span className="text-[10px] text-gray-500 font-semibold">Queue Ticket {queueNumber}</span>
+        <span className="text-meta text-gray-500 font-semibold">Queue Ticket {queueNumber}</span>
       )}
     </div>
   );

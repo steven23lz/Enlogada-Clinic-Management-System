@@ -61,7 +61,7 @@ const WaitBadge = ({ since, className }) => {
     <span
       title={level.label}
       className={cn(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums whitespace-nowrap',
+        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-meta font-bold tabular-nums whitespace-nowrap',
         level.tone,
         className
       )}

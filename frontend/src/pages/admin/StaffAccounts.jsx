@@ -230,7 +230,7 @@ const StaffAccounts = () => {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-600 uppercase">Temporary Password</label>
                 <Input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} disabled={submitting} required />
-                <p className="text-[11px] text-gray-400 m-0">At least 8 characters.</p>
+                <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-600 uppercase">Role</label>
@@ -273,12 +273,12 @@ const StaffAccounts = () => {
           <Table>
             <TableHeader className="bg-gray-50/80">
               <TableRow>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Name</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Email</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Role</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Contact</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Name</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Email</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Role</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Contact</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -290,13 +290,13 @@ const StaffAccounts = () => {
                     <TableCell className="py-3 font-bold text-xs text-slate-900 max-w-[180px] truncate" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
                     <TableCell className="py-3 text-xs text-gray-600 max-w-[220px] truncate" title={s.email}>{s.email}</TableCell>
                     <TableCell className="py-3 text-xs">
-                      <Badge variant="outline" className="text-[10px] font-bold border-gray-200">{s.roles?.[0]}</Badge>
+                      <Badge variant="outline" className="text-meta font-bold border-gray-200">{s.roles?.[0]}</Badge>
                     </TableCell>
                     <TableCell className="py-3 text-xs text-gray-500">{s.contact_number || 'N/A'}</TableCell>
                     <TableCell className="py-3">
                       <Badge
                         onClick={() => { setStatusError(''); setStatusTarget(s); }}
-                        className={`cursor-pointer text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                        className={`cursor-pointer text-meta font-bold px-2.5 py-0.5 rounded-full ${
                           s.status ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
                         }`}
                       >
@@ -309,7 +309,7 @@ const StaffAccounts = () => {
                           type="button"
                           variant="outline"
                           onClick={() => handleOpenEdit(s)}
-                          className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
+                          className="text-fine font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
                         >
                           <Pencil className="w-3 h-3" />
                           <span>Edit</span>
@@ -318,7 +318,7 @@ const StaffAccounts = () => {
                           type="button"
                           variant="outline"
                           onClick={() => handleOpenResetPwd(s)}
-                          className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
+                          className="text-fine font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
                         >
                           <KeyRound className="w-3 h-3" />
                           <span>Reset Password</span>
@@ -371,7 +371,7 @@ const StaffAccounts = () => {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-600 uppercase">New Temporary Password</label>
                 <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={resettingPwd} required autoFocus />
-                <p className="text-[11px] text-gray-400 m-0">At least 8 characters.</p>
+                <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setResetPwdTarget(null)} disabled={resettingPwd}>Cancel</Button>

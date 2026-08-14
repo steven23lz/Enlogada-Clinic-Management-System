@@ -71,20 +71,20 @@ const MetricCard = ({ label, value, icon: Icon, tone = 'green', captionTone, cap
       <div className="space-y-1 min-w-0">
         {/* gray-500 rather than gray-400: at 10px uppercase this is the smallest text on the
             screen, and gray-400 on white falls below the WCAG AA contrast floor. */}
-        <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label}</span>
+        <span className={`text-meta font-bold uppercase tracking-wider block ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label}</span>
         {/* tabular-nums keeps digits on a fixed advance width, so figures line up across a row
             of cards and a counter ticking 9 -> 10 does not shift the layout under the reader. */}
-        <div className={`text-[28px] leading-none font-extrabold tracking-tight tabular-nums break-words ${isDark ? (DARK_VALUE_TONE[tone] || 'text-white') : 'text-slate-900'}`}>
+        <div className={`text-stat leading-none font-extrabold tracking-tight tabular-nums break-words ${isDark ? (DARK_VALUE_TONE[tone] || 'text-white') : 'text-slate-900'}`}>
           {value}
         </div>
         {trend && (
-          <div className={`flex items-center space-x-1 text-[11px] font-bold ${TREND_TONE[trend.direction]}`}>
+          <div className={`flex items-center space-x-1 text-fine font-bold ${TREND_TONE[trend.direction]}`}>
             {trend.direction === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             <span>{trend.label}</span>
           </div>
         )}
         {caption && !trend && (
-          <div className={`text-[11px] font-bold ${isDark ? 'text-gray-300' : (CAPTION_TONE[resolvedCaptionTone] || 'text-gray-400')}`}>
+          <div className={`text-fine font-bold ${isDark ? 'text-gray-300' : (CAPTION_TONE[resolvedCaptionTone] || 'text-gray-400')}`}>
             {caption}
           </div>
         )}

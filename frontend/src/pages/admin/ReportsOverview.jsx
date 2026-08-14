@@ -105,7 +105,7 @@ const TodaySnapshot = () => {
         />
 
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-5 space-y-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Payment Methods (Today)</span>
+          <span className="text-meta font-bold uppercase tracking-wider text-gray-400">Payment Methods (Today)</span>
           {loading ? (
             <div className="text-2xl font-extrabold text-slate-900">…</div>
           ) : Object.keys(methodBreakdown).length === 0 ? (
@@ -113,7 +113,7 @@ const TodaySnapshot = () => {
           ) : (
             <div className="space-y-0.5 pt-1">
               {Object.entries(methodBreakdown).map(([method, amt]) => (
-                <div key={method} className="flex justify-between text-[11px] font-semibold text-gray-700">
+                <div key={method} className="flex justify-between text-fine font-semibold text-gray-700">
                   <span>{method}</span>
                   <span className="font-bold text-slate-900">{formatCurrency(amt)}</span>
                 </div>
@@ -213,7 +213,7 @@ const DateRangeReports = () => {
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
           <CardHeader className="border-b border-gray-100 py-4 px-6 space-y-0.5">
             <CardTitle className="text-sm font-bold text-slate-800">Revenue Trend</CardTitle>
-            <p className="text-[11px] text-gray-500 m-0">Total for range: <span className="font-bold text-slate-900">{formatCurrency(totalRevenue)}</span></p>
+            <p className="text-fine text-gray-500 m-0">Total for range: <span className="font-bold text-slate-900">{formatCurrency(totalRevenue)}</span></p>
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
@@ -255,7 +255,7 @@ const DateRangeReports = () => {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {visitStatusBreakdown.map((row) => (
-                  <Badge key={row.status} variant="outline" className={`text-[11px] font-bold px-3 py-1.5 ${STATUS_COLORS[row.status] || 'border-gray-200 text-gray-700'}`}>
+                  <Badge key={row.status} variant="outline" className={`text-fine font-bold px-3 py-1.5 ${STATUS_COLORS[row.status] || 'border-gray-200 text-gray-700'}`}>
                     {row.status}: {row.visit_count} ({totalVisits > 0 ? Math.round((row.visit_count / totalVisits) * 100) : 0}%)
                   </Badge>
                 ))}
@@ -272,9 +272,9 @@ const DateRangeReports = () => {
             <Table>
               <TableHeader className="bg-gray-50/80">
                 <TableRow>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Method</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Payments</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Total</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3">Method</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3 text-right">Payments</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3 text-right">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -337,8 +337,8 @@ const RbacMatrixReport = () => {
           <Table>
             <TableHeader className="bg-gray-50/80">
               <TableRow>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Role</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Permissions</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Role</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Permissions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -352,10 +352,10 @@ const RbacMatrixReport = () => {
                       <div className="flex flex-wrap gap-1 max-w-2xl">
                         {(rolePermissions[role.name] || []).length > 0 ? (
                           (rolePermissions[role.name] || []).map((permName) => (
-                            <Badge key={permName} variant="outline" className="text-[10px] font-semibold border-gray-200">{permName}</Badge>
+                            <Badge key={permName} variant="outline" className="text-meta font-semibold border-gray-200">{permName}</Badge>
                           ))
                         ) : (
-                          <span className="text-[11px] text-gray-400 italic">No permissions assigned</span>
+                          <span className="text-fine text-gray-400 italic">No permissions assigned</span>
                         )}
                       </div>
                     </TableCell>
@@ -366,7 +366,7 @@ const RbacMatrixReport = () => {
           </Table>
         </CardContent>
       </Card>
-      <p className="text-[11px] text-gray-400 px-1">Read-only. Editing role permissions is a SuperAdmin-only capability under Super Admin Management.</p>
+      <p className="text-fine text-gray-400 px-1">Read-only. Editing role permissions is a SuperAdmin-only capability under Super Admin Management.</p>
     </div>
   );
 };
@@ -455,7 +455,7 @@ const StaffWorkload = () => {
             ) : (
               receptionWorkload.map(row => (
                 <div key={row.staff_id} className="space-y-1">
-                  <div className="flex justify-between text-[11px] font-semibold text-gray-700">
+                  <div className="flex justify-between text-fine font-semibold text-gray-700">
                     <span>{row.first_name} {row.last_name}</span>
                     <span className="font-bold text-slate-900">{row.visit_count}</span>
                   </div>
@@ -486,7 +486,7 @@ const StaffWorkload = () => {
             ) : (
               diagnosticRows.map(row => (
                 <div key={row.staff_id} className="space-y-1">
-                  <div className="flex justify-between text-[11px] font-semibold text-gray-700">
+                  <div className="flex justify-between text-fine font-semibold text-gray-700">
                     <span>
                       {row.first_name} {row.last_name}
                       <span className="text-gray-400 font-normal"> &middot; {row.byCategory.map(c => `${c.category} ${c.count}`).join(', ')}</span>

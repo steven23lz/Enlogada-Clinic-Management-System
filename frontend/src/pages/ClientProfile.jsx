@@ -61,10 +61,10 @@ const ClientProfile = ({ onNavigate }) => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-1.5">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Assigned Role(s)</span>
+                <span className="text-meta text-gray-400 font-bold uppercase tracking-wider block">Assigned Role(s)</span>
                 <div className="flex flex-wrap gap-1.5">
                   {roles.length > 0 ? roles.map(role => (
-                    <Badge key={role} className="bg-[#769046]/10 text-[#769046] text-[11px] font-bold px-2.5 py-1 rounded-full border-0">
+                    <Badge key={role} className="bg-[#769046]/10 text-[#769046] text-fine font-bold px-2.5 py-1 rounded-full border-0">
                       {role}
                     </Badge>
                   )) : (

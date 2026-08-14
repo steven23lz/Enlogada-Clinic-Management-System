@@ -386,7 +386,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   type="button"
                   onClick={() => setSortOrder(o => (o === 'oldest' ? 'newest' : 'oldest'))}
                   title="Toggle sort order"
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-[11px] font-bold text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors whitespace-nowrap"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-fine font-bold text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors whitespace-nowrap"
                 >
                   <ArrowUpDown className="w-3.5 h-3.5" />
                   <span>{sortOrder === 'oldest' ? 'Oldest First' : 'Newest First'}</span>
@@ -412,25 +412,25 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         <div className="flex justify-between items-start">
                           <div>
                             <span className="font-extrabold text-xs text-slate-900">{visit.first_name} {visit.last_name}</span>
-                            <span className="block text-[10px] text-gray-400 font-bold uppercase">Ticket: {visit.queue_number || `V-${visit.id}`}</span>
+                            <span className="block text-meta text-gray-400 font-bold uppercase">Ticket: {visit.queue_number || `V-${visit.id}`}</span>
                           </div>
                           <div className="flex flex-col items-end gap-1">
                             <div className="flex items-center gap-1">
                               <Badge
-                                className={`text-[10px] font-bold ${
+                                className={`text-meta font-bold ${
                                   visit.visit_type === 'Walk in' ? 'bg-slate-100 text-slate-700' : 'bg-indigo-100 text-indigo-700'
                                 }`}
                               >
                                 {visit.visit_type}
                               </Badge>
-                              <Badge className="bg-amber-100 text-amber-800 text-[10px] font-bold">
+                              <Badge className="bg-amber-100 text-amber-800 text-meta font-bold">
                                 {visit.patient_type_name || 'Self Pay'}
                               </Badge>
                             </div>
                             <WaitBadge since={visit.created_at} />
                           </div>
                         </div>
-                        <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center text-[11px]">
+                        <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center text-fine">
                           <span className="text-gray-500">{visit.tests?.length || 0} diagnostic item(s)</span>
                           <span className="font-bold text-[#769046]">Select for Checkout &rarr;</span>
                         </div>
@@ -455,7 +455,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   {/* Header Patient Summary */}
                   <div className="border-b border-gray-100 pb-4 flex justify-between items-start">
                     <div>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Official Billing Terminal</span>
+                      <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Official Billing Terminal</span>
                       <h2 className="text-lg font-bold text-slate-900 m-0">{billDetails.patientName}</h2>
                       <span className="text-xs text-gray-500">Ticket #: {selectedVisit.queue_number} &bull; Type: {selectedVisit.patient_type_name}</span>
                     </div>
@@ -471,9 +471,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       <Table>
                         <TableHeader className="bg-gray-50/80">
                           <TableRow>
-                            <TableHead className="text-[10px] font-bold uppercase py-2">Test Name</TableHead>
-                            <TableHead className="text-[10px] font-bold uppercase py-2">Category</TableHead>
-                            <TableHead className="text-[10px] font-bold uppercase py-2 text-right">Price</TableHead>
+                            <TableHead className="text-meta font-bold uppercase py-2">Test Name</TableHead>
+                            <TableHead className="text-meta font-bold uppercase py-2">Category</TableHead>
+                            <TableHead className="text-meta font-bold uppercase py-2 text-right">Price</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -558,7 +558,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       <div className="space-y-2 bg-white p-3 rounded-xl border border-gray-200">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase">Cash Tendered (₱)</label>
+                            <label className="text-meta font-bold text-gray-500 uppercase">Cash Tendered (₱)</label>
                             <Input
                               type="number"
                               step="0.01"
@@ -570,20 +570,20 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             />
                           </div>
                           <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase block">Change Due</span>
+                            <span className="text-meta font-bold text-gray-400 uppercase block">Change Due</span>
                             <span className="text-base font-extrabold text-emerald-600">{formatCurrency(calculateChange())}</span>
                           </div>
                         </div>
 
                         {/* Quick Cash Presets */}
                         <div className="flex items-center space-x-1.5 pt-1">
-                          <span className="text-[10px] font-extrabold text-slate-400 uppercase mr-1">Presets:</span>
+                          <span className="text-meta font-extrabold text-slate-400 uppercase mr-1">Presets:</span>
                           {['100', '500', '1000'].map(val => (
                             <button
                               key={val}
                               type="button"
                               onClick={() => setAmountTendered(val)}
-                              className="px-2 py-0.5 bg-slate-100 hover:bg-[#769046] hover:text-white rounded-md text-[10px] font-bold text-slate-700 transition-all border border-slate-200 cursor-pointer"
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-[#769046] hover:text-white rounded-md text-meta font-bold text-slate-700 transition-all border border-slate-200 cursor-pointer"
                             >
                               ₱{val}
                             </button>
@@ -591,7 +591,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           <button
                             type="button"
                             onClick={() => setAmountTendered((billDetails?.totalAmount ?? 0).toString())}
-                            className="px-2 py-0.5 bg-[#769046]/10 text-[#769046] hover:bg-[#769046] hover:text-white rounded-md text-[10px] font-bold transition-all border border-[#769046]/30 cursor-pointer"
+                            className="px-2 py-0.5 bg-[#769046]/10 text-[#769046] hover:bg-[#769046] hover:text-white rounded-md text-meta font-bold transition-all border border-[#769046]/30 cursor-pointer"
                           >
                             Exact
                           </button>
@@ -639,16 +639,16 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   </div>
 
                   <div className="border-t border-gray-100 pt-5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-3">
+                    <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block mb-3">
                       This shift so far
                     </span>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block">Receipts issued</span>
+                        <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Receipts issued</span>
                         <span className="text-lg font-extrabold text-slate-900 tabular-nums">{transactions.length}</span>
                       </div>
                       <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block">Average per receipt</span>
+                        <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Average per receipt</span>
                         <span className="text-lg font-extrabold text-slate-900 tabular-nums">
                           {transactions.length > 0
                             ? formatCurrency(
@@ -662,7 +662,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                   {transactions.length > 0 && (
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-2">
+                      <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block mb-2">
                         Recent receipts
                       </span>
                       <div className="space-y-1.5">
@@ -675,7 +675,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                               <span className="block text-xs font-bold text-slate-900 truncate">
                                 {t.patient_first_name} {t.patient_last_name}
                               </span>
-                              <span className="block text-[10px] text-gray-400 font-mono">#{t.receipt_number}</span>
+                              <span className="block text-meta text-gray-400 font-mono">#{t.receipt_number}</span>
                             </div>
                             <span className="text-xs font-extrabold text-slate-900 tabular-nums flex-shrink-0">
                               {formatCurrency(parseFloat(t.amount || 0))}
@@ -734,14 +734,14 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
               <Table>
                 <TableHeader className="bg-gray-50/80">
                   <TableRow>
-                    <TableHead className="text-[10px] font-bold uppercase py-3">Receipt #</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-3">Patient Name</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-3">Payment Method</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-3">Reference #</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Amount Paid</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Date & Time</TableHead>
-                    <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
+                    <TableHead className="text-meta font-bold uppercase py-3">Receipt #</TableHead>
+                    <TableHead className="text-meta font-bold uppercase py-3">Patient Name</TableHead>
+                    <TableHead className="text-meta font-bold uppercase py-3">Payment Method</TableHead>
+                    <TableHead className="text-meta font-bold uppercase py-3">Reference #</TableHead>
+                    <TableHead className="text-meta font-bold uppercase py-3 text-right">Amount Paid</TableHead>
+                    <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
+                    <TableHead className="text-meta font-bold uppercase py-3 text-right">Date & Time</TableHead>
+                    <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -782,7 +782,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                               type="button"
                               variant="outline"
                               onClick={() => handleReprintReceipt(t)}
-                              className="text-[11px] font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
+                              className="text-fine font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
                             >
                               <Printer className="w-3 h-3" />
                               <span>Reprint</span>
@@ -792,7 +792,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                                 type="button"
                                 variant="outline"
                                 onClick={() => handleOpenRefund(t)}
-                                className="text-[11px] font-bold text-red-600 border-red-200 hover:bg-red-50 px-2.5 py-1 h-auto flex items-center space-x-1"
+                                className="text-fine font-bold text-red-600 border-red-200 hover:bg-red-50 px-2.5 py-1 h-auto flex items-center space-x-1"
                               >
                                 <Undo2 className="w-3 h-3" />
                                 <span>Refund</span>
@@ -882,8 +882,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
               <div className="space-y-4">
                 <div className="text-center border-b border-gray-200 pb-3">
                   <h2 className="text-base font-extrabold text-slate-900 uppercase m-0">ENLOGADA CLINIC</h2>
-                  <p className="text-[10px] text-gray-500 uppercase font-bold m-0">Official Payment Receipt</p>
-                  <span className="text-[11px] font-extrabold text-[#769046] block mt-1">Receipt #: {paymentSuccess.receipt_number || `OR-${paymentSuccess.id}`}</span>
+                  <p className="text-meta text-gray-500 uppercase font-bold m-0">Official Payment Receipt</p>
+                  <span className="text-fine font-extrabold text-[#769046] block mt-1">Receipt #: {paymentSuccess.receipt_number || `OR-${paymentSuccess.id}`}</span>
                 </div>
 
                 <div className="space-y-2 text-xs">
@@ -899,7 +899,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                 {billDetails.items && billDetails.items.length > 0 && (
                   <div className="space-y-1.5 py-3 border-t border-b border-gray-100">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Items</span>
+                    <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Items</span>
                     {billDetails.items.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-xs">
                         <span className="text-gray-600">{item.name}</span>

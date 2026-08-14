@@ -99,7 +99,7 @@ const RoleMatrix = () => {
           invites someone to "remove" access and walk away believing they did. */}
       <div
         role="status"
-        className="flex items-start space-x-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900"
+        className="flex items-start space-x-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-fine text-amber-900"
       >
         <Info className="w-4 h-4 flex-shrink-0 mt-px" />
         <span>
@@ -119,9 +119,9 @@ const RoleMatrix = () => {
           <Table>
             <TableHeader className="bg-gray-50/80">
               <TableRow>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Role</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Permissions</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Role</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Permissions</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -135,10 +135,10 @@ const RoleMatrix = () => {
                       <div className="flex flex-wrap gap-1 max-w-2xl">
                         {(rolePermissions[role.name] || []).length > 0 ? (
                           (rolePermissions[role.name] || []).map(permName => (
-                            <Badge key={permName} variant="outline" className="text-[10px] font-semibold border-gray-200">{permName}</Badge>
+                            <Badge key={permName} variant="outline" className="text-meta font-semibold border-gray-200">{permName}</Badge>
                           ))
                         ) : (
-                          <span className="text-[11px] text-gray-400 italic">No permissions assigned</span>
+                          <span className="text-fine text-gray-400 italic">No permissions assigned</span>
                         )}
                       </div>
                     </TableCell>
@@ -146,7 +146,7 @@ const RoleMatrix = () => {
                       <Button
                         onClick={() => handleOpenEdit(role)}
                         variant="outline"
-                        className="text-[11px] font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5"
+                        className="text-fine font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5"
                       >
                         <Edit className="w-3.5 h-3.5 mr-1" />
                         Edit
@@ -178,7 +178,7 @@ const RoleMatrix = () => {
           <div className="max-h-80 overflow-y-auto space-y-4 pr-1">
             {Object.entries(permissionsByModule).map(([module, perms]) => (
               <div key={module} className="space-y-1.5">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">{module}</span>
+                <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">{module}</span>
                 <div className="space-y-1">
                   {perms.map(p => (
                     <label key={p.id} className="flex items-center space-x-2.5 p-2 bg-gray-50/70 hover:bg-gray-50 rounded-lg cursor-pointer border border-gray-100">
@@ -190,7 +190,7 @@ const RoleMatrix = () => {
                       />
                       <div className="text-xs">
                         <span className="font-bold text-gray-800 block">{p.name}</span>
-                        {p.description && <span className="text-[11px] text-gray-500">{p.description}</span>}
+                        {p.description && <span className="text-fine text-gray-500">{p.description}</span>}
                       </div>
                     </label>
                   ))}
@@ -348,7 +348,7 @@ const ElevatedAccounts = () => {
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-600 uppercase">Temporary Password</label>
                 <Input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} disabled={submitting} required />
-                <p className="text-[11px] text-gray-400 m-0">At least 8 characters.</p>
+                <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-600 uppercase">Role</label>
@@ -379,10 +379,10 @@ const ElevatedAccounts = () => {
           <Table>
             <TableHeader className="bg-gray-50/80">
               <TableRow>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Name</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Email</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Role</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Name</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Email</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Role</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -394,14 +394,14 @@ const ElevatedAccounts = () => {
                   return (
                     <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors">
                       <TableCell className="py-3 font-bold text-xs text-slate-900">
-                        {a.first_name} {a.last_name} {isSelf && <span className="text-[10px] text-gray-400 font-normal">(you)</span>}
+                        {a.first_name} {a.last_name} {isSelf && <span className="text-meta text-gray-400 font-normal">(you)</span>}
                       </TableCell>
                       <TableCell className="py-3 text-xs text-gray-600">{a.email}</TableCell>
-                      <TableCell className="py-3 text-xs"><Badge variant="outline" className="text-[10px] font-bold border-gray-200">{a.roles?.[0]}</Badge></TableCell>
+                      <TableCell className="py-3 text-xs"><Badge variant="outline" className="text-meta font-bold border-gray-200">{a.roles?.[0]}</Badge></TableCell>
                       <TableCell className="py-3">
                         <Badge
                           onClick={() => { if (isSelf) return; setStatusError(''); setStatusTarget(a); }}
-                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${isSelf ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${
+                          className={`text-meta font-bold px-2.5 py-0.5 rounded-full ${isSelf ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${
                             a.status ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
                           }`}
                         >

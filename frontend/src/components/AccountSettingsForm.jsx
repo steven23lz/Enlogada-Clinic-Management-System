@@ -92,7 +92,7 @@ const AccountSettingsForm = ({ className = '' }) => {
             <User className="w-4 h-4 text-[#769046]" />
             <span>Account Information</span>
           </CardTitle>
-          <p className="text-[11px] text-gray-500 m-0">Your name, contact number, and profile photo.</p>
+          <p className="text-fine text-gray-500 m-0">Your name, contact number, and profile photo.</p>
         </CardHeader>
         <CardContent className="p-5 space-y-5">
           <AvatarUpload />
@@ -132,7 +132,7 @@ const AccountSettingsForm = ({ className = '' }) => {
                 <span>Email Address</span>
               </label>
               <Input value={user?.email || ''} disabled className="bg-gray-50 text-gray-500" />
-              <p className="text-[11px] text-gray-400 m-0">Your email is your login and cannot be changed here.</p>
+              <p className="text-fine text-gray-400 m-0">Your email is your login and cannot be changed here.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -164,7 +164,7 @@ const AccountSettingsForm = ({ className = '' }) => {
             <KeyRound className="w-4 h-4 text-[#769046]" />
             <span>Change Password</span>
           </CardTitle>
-          <p className="text-[11px] text-gray-500 m-0">Choose a strong password you don't use elsewhere.</p>
+          <p className="text-fine text-gray-500 m-0">Choose a strong password you don't use elsewhere.</p>
         </CardHeader>
         <CardContent className="p-5">
           <form onSubmit={handleChangePassword} className="space-y-4">
@@ -205,7 +205,7 @@ const AccountSettingsForm = ({ className = '' }) => {
                 />
               </div>
             </div>
-            <p className="text-[11px] text-gray-400 m-0">Must be at least 8 characters.</p>
+            <p className="text-fine text-gray-400 m-0">Must be at least 8 characters.</p>
 
             <div className="flex justify-end pt-2 border-t border-gray-100">
               <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white" disabled={isSavingPassword}>

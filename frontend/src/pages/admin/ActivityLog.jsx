@@ -88,11 +88,11 @@ const ActivityLog = () => {
                 <li key={entry.id} className="flex items-start justify-between gap-3 px-6 py-3.5">
                   <div className="min-w-0 space-y-1">
                     <p className="text-xs font-semibold text-slate-800 m-0">{entry.description}</p>
-                    <p className="text-[11px] text-gray-400 m-0">
+                    <p className="text-fine text-gray-400 m-0">
                       {entry.actor_name} &middot; {new Date(entry.created_at).toLocaleString()}
                     </p>
                   </div>
-                  <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full border whitespace-nowrap ${ACTION_TONES[entry.action] || DEFAULT_TONE}`}>
+                  <span className={`text-meta font-bold uppercase tracking-wide px-2 py-1 rounded-full border whitespace-nowrap ${ACTION_TONES[entry.action] || DEFAULT_TONE}`}>
                     {entry.action.replace(/[._]/g, ' ')}
                   </span>
                 </li>

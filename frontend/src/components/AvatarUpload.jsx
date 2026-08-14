@@ -125,7 +125,7 @@ const AvatarUpload = () => {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="text-[11px] font-bold text-[#769046] hover:underline bg-transparent border-0 p-0 cursor-pointer disabled:opacity-50"
+            className="text-fine font-bold text-[#769046] hover:underline bg-transparent border-0 p-0 cursor-pointer disabled:opacity-50"
           >
             {objectUrl ? 'Change' : 'Upload'}
           </button>
@@ -136,14 +136,14 @@ const AvatarUpload = () => {
                 type="button"
                 onClick={handleRemove}
                 disabled={uploading}
-                className="text-[11px] font-bold text-red-600 hover:underline bg-transparent border-0 p-0 cursor-pointer disabled:opacity-50"
+                className="text-fine font-bold text-red-600 hover:underline bg-transparent border-0 p-0 cursor-pointer disabled:opacity-50"
               >
                 Remove
               </button>
             </>
           )}
         </div>
-        <p className="text-[10px] text-gray-400 m-0">JPEG, PNG, or WebP. Max 3MB.</p>
+        <p className="text-meta text-gray-400 m-0">JPEG, PNG, or WebP. Max 3MB.</p>
       </div>
     </div>
   );

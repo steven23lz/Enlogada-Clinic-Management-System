@@ -123,12 +123,12 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
         <Logo className="w-9 h-9 flex-shrink-0" />
         <div className="flex flex-col overflow-hidden">
           <span className="font-bold text-xs leading-tight tracking-wide text-slate-900 truncate">Enlogada Ultrasound</span>
-          <span className="text-[9px] text-gray-500 font-semibold uppercase tracking-wider truncate">& Diagnostic Clinic</span>
+          <span className="text-micro text-gray-500 font-semibold uppercase tracking-wider truncate">& Diagnostic Clinic</span>
         </div>
       </div>
 
       <div className="space-y-1">
-        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-3">Main Navigation</span>
+        <span className="text-meta font-extrabold text-slate-400 uppercase tracking-widest px-3">Main Navigation</span>
         <nav className="space-y-1 pt-1">
           {mainNavItems.map(item => {
             const Icon = item.icon;
@@ -155,13 +155,13 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
       </div>
 
       <div className="space-y-3 pt-2">
-        <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-3">Clinical Operations</span>
+        <span className="text-meta font-extrabold text-slate-400 uppercase tracking-widest px-3">Clinical Operations</span>
         {opsNavGroups.map(group => {
           const visibleItems = group.items.filter(item => !item.roleRequired || item.roleRequired.some(r => userRoles.includes(r)));
           if (visibleItems.length === 0) return null;
           return (
             <div key={group.label} className="space-y-1">
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider px-3">{group.label}</span>
+              <span className="text-micro font-bold text-slate-500 uppercase tracking-wider px-3">{group.label}</span>
               <nav className="space-y-1 pt-0.5">
                 {visibleItems.map(item => {
                   const Icon = item.icon;
@@ -211,7 +211,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
             </div>
             <div className="flex flex-col min-w-0">
               <span className="text-xs font-bold text-white truncate">{user?.firstName} {user?.lastName}</span>
-              <span className="text-[10px] text-gray-400 truncate">{userRoles.join(', ')}</span>
+              <span className="text-meta text-gray-400 truncate">{userRoles.join(', ')}</span>
             </div>
           </div>
           <UserCog className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -243,7 +243,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
                 </div>
                 <div className="flex flex-col min-w-0">
                   <span className="text-xs font-bold text-white truncate">{user?.firstName} {user?.lastName}</span>
-                  <span className="text-[10px] text-gray-400 truncate">{userRoles.join(', ')}</span>
+                  <span className="text-meta text-gray-400 truncate">{userRoles.join(', ')}</span>
                 </div>
               </div>
               <UserCog className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -290,7 +290,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
                       {unreadCount > 0 && (
                         <button
                           onClick={handleMarkAllAsRead}
-                          className="text-[10px] font-bold text-[#769046] hover:underline border-0 bg-transparent cursor-pointer uppercase tracking-wide"
+                          className="text-meta font-bold text-[#769046] hover:underline border-0 bg-transparent cursor-pointer uppercase tracking-wide"
                         >
                           Mark all read
                         </button>
@@ -302,9 +302,9 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
                   </div>
                   <div className="space-y-2 max-h-64 overflow-y-auto">
                     {notifLoading ? (
-                      <p className="text-[11px] text-gray-400 text-center py-4">Loading…</p>
+                      <p className="text-fine text-gray-400 text-center py-4">Loading…</p>
                     ) : notifications.length === 0 ? (
-                      <p className="text-[11px] text-gray-400 italic text-center py-4">No notifications yet.</p>
+                      <p className="text-fine text-gray-400 italic text-center py-4">No notifications yet.</p>
                     ) : (
                       notifications.map(n => (
                         <button
@@ -319,9 +319,9 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
                               {!n.is_read && <span className="w-1.5 h-1.5 rounded-full bg-[#769046] flex-shrink-0" />}
                               <span>{n.title}</span>
                             </span>
-                            <span className="text-[10px] text-gray-400 font-normal whitespace-nowrap">{timeAgo(n.created_at)}</span>
+                            <span className="text-meta text-gray-400 font-normal whitespace-nowrap">{timeAgo(n.created_at)}</span>
                           </div>
-                          <p className="text-[11px] text-gray-600 leading-snug">{n.message}</p>
+                          <p className="text-fine text-gray-600 leading-snug">{n.message}</p>
                         </button>
                       ))
                     )}

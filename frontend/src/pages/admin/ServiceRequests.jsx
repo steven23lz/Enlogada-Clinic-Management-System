@@ -135,11 +135,11 @@ const ServiceRequests = () => {
           <Table>
             <TableHeader className="bg-gray-50/80">
               <TableRow>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Provider</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Requested</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Tests Approved</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Provider</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Requested</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Tests Approved</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -156,7 +156,7 @@ const ServiceRequests = () => {
                       <Button
                         onClick={() => openDetail(r.id)}
                         variant="outline"
-                        className="text-[11px] font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5"
+                        className="text-fine font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5"
                       >
                         Review
                       </Button>
@@ -213,13 +213,13 @@ const ServiceRequests = () => {
               )}
 
               <div className="space-y-1.5">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Linked Tests</span>
+                <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Linked Tests</span>
                 <div className="space-y-1.5 max-h-64 overflow-y-auto">
                   {(detailRequest?.tests || []).map(t => (
                     <div key={t.id} className="flex items-center justify-between p-2.5 bg-gray-50/70 rounded-lg border border-gray-100 text-xs">
                       <div>
                         <span className="font-bold text-gray-800 block">{t.test_name}</span>
-                        <span className="text-[11px] text-gray-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
+                        <span className="text-fine text-gray-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
                       </div>
                       <div className="flex items-center space-x-1.5">
                         <StatusBadge status={t.approval_status} />

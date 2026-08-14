@@ -120,14 +120,14 @@ const PatientRecordsOversight = () => {
                   >
                     <div className="text-xs space-y-0.5">
                       <span className="block font-bold text-slate-900">
-                        {patient.first_name} {patient.last_name} <span className="text-[10px] text-gray-400 font-normal">PT-{patient.id}</span>
+                        {patient.first_name} {patient.last_name} <span className="text-meta text-gray-400 font-normal">PT-{patient.id}</span>
                       </span>
                       <span className="block text-gray-500">
                         {patient.sex} &bull; DOB {new Date(patient.birthdate).toLocaleDateString()} &bull; {patient.contact_number || 'No contact on file'}
                       </span>
                     </div>
                     <div className="flex items-center space-x-2 flex-shrink-0">
-                      <Badge variant="secondary" className="font-bold text-[10px] bg-[#769046]/10 text-[#769046]">
+                      <Badge variant="secondary" className="font-bold text-meta bg-[#769046]/10 text-[#769046]">
                         {patient.patient_type_name}
                       </Badge>
                       <ChevronRight className="w-4 h-4 text-gray-300" />
@@ -176,15 +176,15 @@ const PatientRecordsOversight = () => {
                 {patientHistory.map(item => (
                   <div key={item.visit_test_id} className="border border-gray-100 rounded-xl p-3 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">{item.test_name} <span className="text-[10px] text-gray-400 font-normal">({item.category_name})</span></span>
+                      <span className="text-xs font-bold text-slate-900">{item.test_name} <span className="text-meta text-gray-400 font-normal">({item.category_name})</span></span>
                       <StatusBadge status={item.test_status} />
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-gray-500">
+                    <div className="flex items-center justify-between text-fine text-gray-500">
                       <span>{new Date(item.visit_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &bull; {formatCurrency(item.price_at_time)}</span>
                       {item.released_at && <span>Released {new Date(item.released_at).toLocaleDateString()}</span>}
                     </div>
                     {item.findings && (
-                      <p className="text-[11px] text-gray-600 whitespace-pre-wrap m-0 pt-1 border-t border-gray-100">{item.findings}</p>
+                      <p className="text-fine text-gray-600 whitespace-pre-wrap m-0 pt-1 border-t border-gray-100">{item.findings}</p>
                     )}
                   </div>
                 ))}

@@ -75,11 +75,11 @@ const AppointmentsOversight = () => {
           <Table>
             <TableHeader className="bg-gray-50/80">
               <TableRow>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Reference</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Patient</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Scheduled</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Visit Type</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Reference</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Patient</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Scheduled</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Visit Type</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

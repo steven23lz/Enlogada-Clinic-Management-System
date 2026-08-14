@@ -101,7 +101,7 @@ const DashboardOverview = ({ onSelectNav }) => {
   return (
     <div className="space-y-6">
       <div className="bg-[#192534] text-white p-6 rounded-3xl shadow-md">
-        <span className="text-[10px] font-bold text-[#769046] uppercase tracking-wider block">Clinic Administration</span>
+        <span className="text-meta font-bold text-[#769046] uppercase tracking-wider block">Clinic Administration</span>
         <h2 className="text-2xl font-bold tracking-tight m-0 text-white">System Command Center</h2>
         <p className="text-xs text-gray-300 m-0 mt-1">
           Welcome back, {user?.firstName || 'Admin'}. Use the sidebar to manage staff, monitor cashiers, and oversee appointments and patient records.
@@ -171,7 +171,7 @@ const DashboardOverview = ({ onSelectNav }) => {
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
           <CardHeader className="border-b border-gray-100 py-4 px-6 space-y-0.5">
             <CardTitle className="text-sm font-bold text-slate-800">Revenue Trend</CardTitle>
-            <p className="text-[11px] text-gray-500 m-0">Last 7 days</p>
+            <p className="text-fine text-gray-500 m-0">Last 7 days</p>
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
@@ -199,7 +199,7 @@ const DashboardOverview = ({ onSelectNav }) => {
                   <li key={v.id} className="flex items-center justify-between px-6 py-3 gap-3">
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-slate-900 m-0 truncate">{v.first_name} {v.last_name}</p>
-                      <p className="text-[11px] text-gray-400 m-0">{v.visit_type} &middot; {new Date(v.created_at).toLocaleString()}</p>
+                      <p className="text-fine text-gray-400 m-0">{v.visit_type} &middot; {new Date(v.created_at).toLocaleString()}</p>
                     </div>
                     <StatusBadge status={v.visit_status} className="flex-shrink-0" />
                   </li>

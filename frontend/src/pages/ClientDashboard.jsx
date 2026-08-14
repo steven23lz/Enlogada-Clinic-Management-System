@@ -602,7 +602,7 @@ const ClientDashboard = ({ onNavigate }) => {
               <User className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Active Profile</span>
+              <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Active Profile</span>
               {profiles.length > 0 ? (
                 <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
                   <SelectTrigger className="w-64 border-0 p-0 font-bold text-slate-800 focus:ring-0 focus:outline-none bg-transparent">
@@ -941,12 +941,12 @@ const ClientDashboard = ({ onNavigate }) => {
                     {/* Visual Step Progress Bar */}
                     <div className="flex items-center justify-between pt-3 pb-1 border-b border-slate-100 my-2">
                       <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 1 ? 'text-[#769046]' : 'text-slate-400'}`}>
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${bookingStep === 1 ? 'bg-[#769046] text-white' : 'bg-slate-200 text-slate-600'}`}>1</span>
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-meta ${bookingStep === 1 ? 'bg-[#769046] text-white' : 'bg-slate-200 text-slate-600'}`}>1</span>
                         <span>Select Tests</span>
                       </div>
                       <div className="h-[2px] flex-1 mx-3 bg-slate-200" />
                       <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 2 ? 'text-[#769046]' : 'text-slate-400'}`}>
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${bookingStep === 2 ? 'bg-[#769046] text-white' : 'bg-slate-200 text-slate-600'}`}>2</span>
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-meta ${bookingStep === 2 ? 'bg-[#769046] text-white' : 'bg-slate-200 text-slate-600'}`}>2</span>
                         <span>Schedule & HMO</span>
                       </div>
                     </div>
@@ -1040,7 +1040,7 @@ const ClientDashboard = ({ onNavigate }) => {
                                   className="rounded text-[#769046] focus:ring-[#769046]"
                                 />
                                 <div className="flex-1 flex justify-between items-center text-xs">
-                                  <span className="font-bold text-gray-800">{test.name} <span className="text-[10px] text-gray-400 font-medium">({test.category_name})</span></span>
+                                  <span className="font-bold text-gray-800">{test.name} <span className="text-meta text-gray-400 font-medium">({test.category_name})</span></span>
                                   <span className="font-extrabold text-slate-900">{formatCurrency(test.price)}</span>
                                 </div>
                               </label>
@@ -1192,8 +1192,8 @@ const ClientDashboard = ({ onNavigate }) => {
 
                         <div className="space-y-1">
                           <div className="flex items-center space-x-2">
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">REQ-{item.visit_test_id}</span>
-                            <StatusBadge status={item.test_status} className="text-[10px] px-2 py-0.5" />
+                            <span className="text-meta text-gray-400 font-bold uppercase tracking-wider">REQ-{item.visit_test_id}</span>
+                            <StatusBadge status={item.test_status} className="text-meta px-2 py-0.5" />
                           </div>
                           <h3 className="font-bold text-slate-900 text-sm m-0">
                             {item.category_name} - {item.test_name}
@@ -1229,22 +1229,22 @@ const ClientDashboard = ({ onNavigate }) => {
                             {/* Official Lab Report Simulation Header */}
                             <div className="border-b border-gray-200 pb-4 text-center space-y-1">
                               <h2 className="text-base font-extrabold text-slate-900 uppercase tracking-wide m-0">ENLOGADA ULTRASOUND & DIAGNOSTIC CLINIC</h2>
-                              <p className="text-[11px] text-gray-500 font-semibold m-0">Official Diagnostic Examination Report</p>
-                              <span className="text-[10px] text-[#769046] font-bold block">CONFIDENTIAL MEDICAL DOCUMENT</span>
+                              <p className="text-fine text-gray-500 font-semibold m-0">Official Diagnostic Examination Report</p>
+                              <span className="text-meta text-[#769046] font-bold block">CONFIDENTIAL MEDICAL DOCUMENT</span>
                             </div>
 
                             {/* Patient Info Summary Block */}
                             <div className="bg-gray-50 border border-gray-100 rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                               <div>
-                                <span className="text-gray-400 font-bold text-[10px] uppercase block">Patient Name</span>
+                                <span className="text-gray-400 font-bold text-meta uppercase block">Patient Name</span>
                                 <span className="font-bold text-slate-900">{selectedProfile?.first_name} {selectedProfile?.last_name}</span>
                               </div>
                               <div>
-                                <span className="text-gray-400 font-bold text-[10px] uppercase block">Examination</span>
+                                <span className="text-gray-400 font-bold text-meta uppercase block">Examination</span>
                                 <span className="font-bold text-slate-900">{item.test_name}</span>
                               </div>
                               <div>
-                                <span className="text-gray-400 font-bold text-[10px] uppercase block">Category</span>
+                                <span className="text-gray-400 font-bold text-meta uppercase block">Category</span>
                                 <span className="font-bold text-slate-900">{item.category_name}</span>
                               </div>
                             </div>
@@ -1260,7 +1260,7 @@ const ClientDashboard = ({ onNavigate }) => {
 
                               {item.remarks && (
                                 <div className="border-l-4 border-[#769046] pl-3 py-1">
-                                  <h4 className="text-[11px] font-bold text-gray-500 uppercase m-0">Remarks</h4>
+                                  <h4 className="text-fine font-bold text-gray-500 uppercase m-0">Remarks</h4>
                                   <p className="text-xs text-gray-700 m-0">{item.remarks}</p>
                                 </div>
                               )}
@@ -1298,7 +1298,7 @@ const ClientDashboard = ({ onNavigate }) => {
                             </div>
 
                             {/* Footer Release Stamp */}
-                            <div className="pt-4 border-t border-gray-100 text-[11px]">
+                            <div className="pt-4 border-t border-gray-100 text-fine">
                               <span className="text-gray-400 font-medium">Released: {new Date(item.released_at).toLocaleString()}</span>
                             </div>
                           </div>
@@ -1374,7 +1374,7 @@ const ClientDashboard = ({ onNavigate }) => {
                             <span className="block text-xs font-extrabold text-slate-900">
                               {formatAppointmentDate(appt.scheduled_date)}
                             </span>
-                            <span className="block text-[11px] text-gray-500 font-medium">{appt.scheduled_time?.slice(0, 5)}</span>
+                            <span className="block text-fine text-gray-500 font-medium">{appt.scheduled_time?.slice(0, 5)}</span>
                           </div>
                           <StatusBadge status={appt.status} />
                         </div>
@@ -1385,12 +1385,12 @@ const ClientDashboard = ({ onNavigate }) => {
                             queueNumber={appt.queue_number}
                           />
                         ) : (
-                          <span className="block text-[10px] text-gray-400 font-mono">{appt.appointment_reference}</span>
+                          <span className="block text-meta text-gray-400 font-mono">{appt.appointment_reference}</span>
                         )}
 
                         {showPayOptions && (
                           <div className="space-y-2 pt-1">
-                            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
+                            <p className="text-fine text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
                               Payment is required before your visit. Once paid, your QR booking pass appears
                               here — show it at the front desk on arrival.
                             </p>
@@ -1401,7 +1401,7 @@ const ClientDashboard = ({ onNavigate }) => {
                                   type="button"
                                   disabled={payingAppointmentId === appt.id}
                                   onClick={() => handlePayOnline(appt, method)}
-                                  className="flex-1 bg-[#769046] hover:bg-[#657c3a] text-white text-[11px] font-bold rounded-lg py-1.5"
+                                  className="flex-1 bg-[#769046] hover:bg-[#657c3a] text-white text-fine font-bold rounded-lg py-1.5"
                                 >
                                   {payingAppointmentId === appt.id ? 'Redirecting…' : `Pay with ${method}`}
                                 </Button>
@@ -1411,7 +1411,7 @@ const ClientDashboard = ({ onNavigate }) => {
                         )}
 
                         {isOpen && !appt.is_paid && !gateway.available && (
-                          <p className="text-[11px] text-gray-500 bg-gray-100 border border-gray-200 rounded-lg p-2 m-0">
+                          <p className="text-fine text-gray-500 bg-gray-100 border border-gray-200 rounded-lg p-2 m-0">
                             Please settle payment at the clinic counter on arrival. Your reference code above
                             is what the receptionist needs to check you in.
                           </p>
@@ -1422,7 +1422,7 @@ const ClientDashboard = ({ onNavigate }) => {
                             type="button"
                             variant="outline"
                             onClick={() => handleRequestCancelAppointment(appt)}
-                            className="w-full text-[11px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 rounded-lg py-1.5 flex items-center justify-center space-x-1.5"
+                            className="w-full text-fine font-bold text-rose-600 border-rose-200 hover:bg-rose-50 rounded-lg py-1.5 flex items-center justify-center space-x-1.5"
                           >
                             <XCircle className="w-3.5 h-3.5" />
                             <span>Cancel Appointment</span>
@@ -1466,11 +1466,11 @@ const ClientDashboard = ({ onNavigate }) => {
                       <div className="flex justify-between items-start">
                         <div>
                           <span className="block text-xs font-extrabold text-slate-900">{formatCurrency(pay.amount)}</span>
-                          <span className="block text-[11px] text-gray-500 font-medium">{pay.patient_first_name} {pay.patient_last_name}</span>
+                          <span className="block text-fine text-gray-500 font-medium">{pay.patient_first_name} {pay.patient_last_name}</span>
                         </div>
                         <StatusBadge status={pay.payment_status} />
                       </div>
-                      <div className="flex items-center justify-between text-[10px] text-gray-400">
+                      <div className="flex items-center justify-between text-meta text-gray-400">
                         <span className="font-mono">{pay.receipt_number || `OR-${pay.id}`}</span>
                         <span>{new Date(pay.paid_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                       </div>
@@ -1525,7 +1525,7 @@ const ClientDashboard = ({ onNavigate }) => {
                   </div>
                   <div className="flex justify-between items-center text-xs pb-1">
                     <span className="text-gray-500 font-medium">Category:</span>
-                    <Badge variant="secondary" className="font-bold text-[10px] bg-[#769046]/10 text-[#769046]">
+                    <Badge variant="secondary" className="font-bold text-meta bg-[#769046]/10 text-[#769046]">
                       {selectedProfile.patient_type_name}
                     </Badge>
                   </div>

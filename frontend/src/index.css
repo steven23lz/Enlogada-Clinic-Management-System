@@ -3,6 +3,26 @@
 
 /* Tailwind v4 CSS-based theme configuration */
 @theme {
+  /* Type scale below Tailwind's `text-xs` (12px).
+   *
+   * These four sizes were already the app's scale — 10px appeared 155 times and 11px 77 times,
+   * written as arbitrary `text-meta` values with no single place to change them and nothing
+   * naming what each was for. Two consequences: adjusting the small end of the scale meant a
+   * find-and-replace across thirty files, and every new screen picked a size by eye, which is
+   * how a fourth and fifth size appear without anyone deciding to add one.
+   *
+   * Named for the job rather than the pixel count, so a future change to what "meta" measures
+   * does not leave every class lying about its own size.
+   *   micro — dense identifiers where space is genuinely scarce
+   *   meta  — uppercase labels, captions, record IDs
+   *   fine  — secondary body text sitting under a primary value
+   *   stat  — the headline number on a metric card
+   */
+  --text-micro: 0.5625rem;  /*  9px */
+  --text-meta: 0.625rem;    /* 10px */
+  --text-fine: 0.6875rem;   /* 11px */
+  --text-stat: 1.75rem;     /* 28px */
+
   /* Colors */
   --color-primary: #769046;
   --color-primary-hover: #657c3a;

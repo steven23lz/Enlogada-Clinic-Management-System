@@ -330,7 +330,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                       <TableCell>
                         <Badge
                           onClick={() => { setToggleError(''); setConfirmTarget(test); }}
-                          className={`cursor-pointer text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                          className={`cursor-pointer text-meta font-bold px-2.5 py-0.5 rounded-full ${
                             test.is_active 
                               ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200' 
                               : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
@@ -396,7 +396,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                       <TableCell>
                         <Badge
                           onClick={() => { setProviderToggleError(''); setProviderConfirmTarget(provider); }}
-                          className={`cursor-pointer text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
+                          className={`cursor-pointer text-meta font-bold px-2.5 py-0.5 rounded-full ${
                             provider.is_active
                               ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200'
                               : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'

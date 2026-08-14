@@ -28,15 +28,15 @@ const BookingConfirmation = ({ referenceCode, queueNumber, patientName, schedule
           </div>
         </div>
 
-        <p className="text-[11px] text-gray-400 m-0">Present this code at the front desk, or let reception scan it on arrival.</p>
+        <p className="text-fine text-gray-400 m-0">Present this code at the front desk, or let reception scan it on arrival.</p>
 
         <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
           <div className="space-y-0.5">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Reference Code</span>
+            <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Reference Code</span>
             <span className="text-sm font-extrabold text-slate-900 font-mono">{referenceCode}</span>
           </div>
           <div className="space-y-0.5">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Queue Ticket</span>
+            <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Queue Ticket</span>
             <span className="text-lg font-extrabold text-[#769046]">{queueNumber}</span>
           </div>
         </div>

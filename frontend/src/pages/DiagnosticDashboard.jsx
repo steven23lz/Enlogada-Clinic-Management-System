@@ -488,11 +488,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             <Table>
               <TableHeader className="bg-gray-50/80">
                 <TableRow>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Queue Ticket</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Patient Name</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Diagnostic Examination</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Status</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3">Queue Ticket</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3">Patient Name</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3">Diagnostic Examination</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -527,12 +527,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                               this screen gave no indication of age at all. */}
                           <WaitBadge since={test.visit_created_at} />
                         </div>
-                        <span className="block text-[10px] text-gray-400 font-normal">PT-{test.patient_id}</span>
+                        <span className="block text-meta text-gray-400 font-normal">PT-{test.patient_id}</span>
                       </TableCell>
 
                       <TableCell className="py-3.5 text-xs font-bold text-gray-800">
                         {test.test_name}
-                        <span className="block text-[10px] text-gray-400 font-normal">{test.category_name}</span>
+                        <span className="block text-meta text-gray-400 font-normal">{test.category_name}</span>
                       </TableCell>
 
                       <TableCell className="py-3.5">
@@ -542,7 +542,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                               the worklist — a tech had no on-screen signal that an expensive
                               test's authorization was rejected before running it. */}
                           {test.hmo_approval_status && (
-                            <span className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
+                            <span className="flex items-center gap-1 text-meta font-bold text-gray-400">
                               <ShieldCheck className="w-3 h-3" />
                               HMO:&nbsp;<StatusBadge status={test.hmo_approval_status} className="px-1.5 py-0" />
                             </span>
@@ -618,11 +618,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             <Table>
               <TableHeader className="bg-gray-50/80">
                 <TableRow>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Queue Ticket</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Patient Name</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Diagnostic Examination</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3">Released</TableHead>
-                  <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Actions</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3">Queue Ticket</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3">Patient Name</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3">Diagnostic Examination</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3">Released</TableHead>
+                  <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -656,13 +656,13 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
 
                       <TableCell className="py-3.5 text-xs font-bold text-gray-800">
                         {test.test_name}
-                        <span className="block text-[10px] text-gray-400 font-normal">{test.category_name}</span>
+                        <span className="block text-meta text-gray-400 font-normal">{test.category_name}</span>
                       </TableCell>
 
                       <TableCell className="py-3.5 text-xs text-gray-500">
                         {test.released_at ? new Date(test.released_at).toLocaleString() : '—'}
                         {test.released_by_first_name && (
-                          <span className="block text-[10px] text-gray-400">by {test.released_by_first_name} {test.released_by_last_name}</span>
+                          <span className="block text-meta text-gray-400">by {test.released_by_first_name} {test.released_by_last_name}</span>
                         )}
                       </TableCell>
 
@@ -671,7 +671,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                           <Button
                             onClick={() => setViewingResult(test)}
                             variant="outline"
-                            className="text-[11px] font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5"
+                            className="text-fine font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5"
                           >
                             <Eye className="w-3.5 h-3.5" />
                             <span>View Report</span>
@@ -679,7 +679,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                           <Button
                             onClick={() => handleOpenEditModal(test)}
                             variant="outline"
-                            className="text-[11px] font-bold border-gray-200 hover:bg-slate-800 hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5"
+                            className="text-fine font-bold border-gray-200 hover:bg-slate-800 hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                             <span>Edit</span>
@@ -719,16 +719,16 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             </DialogHeader>
             <div className="print-area space-y-4">
               <div className="space-y-1.5">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Findings &amp; Impression</span>
+                <span className="text-meta font-bold text-gray-500 uppercase tracking-wider block">Findings &amp; Impression</span>
                 <p className="whitespace-pre-wrap text-xs bg-gray-50 border border-gray-200 rounded-xl p-3 m-0">{viewingResult?.findings || '—'}</p>
               </div>
               {viewingResult?.result_remarks && (
                 <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Remarks</span>
+                  <span className="text-meta font-bold text-gray-500 uppercase tracking-wider block">Remarks</span>
                   <p className="text-xs m-0">{viewingResult.result_remarks}</p>
                 </div>
               )}
-              <div className="text-[11px] text-gray-400">
+              <div className="text-fine text-gray-400">
                 Released {viewingResult?.released_at ? new Date(viewingResult.released_at).toLocaleString() : '—'}
                 {viewingResult?.released_by_first_name && ` by ${viewingResult.released_by_first_name} ${viewingResult.released_by_last_name}`}
               </div>
@@ -771,16 +771,16 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                     Patient: <strong>{justReleased.first_name} {justReleased.last_name}</strong> &bull; Examination: <strong>{justReleased.test_name}</strong>
                   </p>
                   <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Findings</span>
+                    <span className="text-meta font-bold text-gray-500 uppercase tracking-wider block">Findings</span>
                     <p className="whitespace-pre-wrap text-xs bg-gray-50 border border-gray-200 rounded-xl p-3 m-0">{justReleased.findings || '—'}</p>
                   </div>
                   {justReleased.result_remarks && (
                     <div className="space-y-1">
-                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Remarks</span>
+                      <span className="text-meta font-bold text-gray-500 uppercase tracking-wider block">Remarks</span>
                       <p className="text-xs m-0">{justReleased.result_remarks}</p>
                     </div>
                   )}
-                  <p className="text-[11px] text-gray-400 m-0 pt-2 border-t border-gray-100">
+                  <p className="text-fine text-gray-400 m-0 pt-2 border-t border-gray-100">
                     Released {new Date(justReleased.released_at).toLocaleString()}
                     {justReleased.released_by_first_name && ` by ${justReleased.released_by_first_name} ${justReleased.released_by_last_name}`}
                   </p>
@@ -825,13 +825,13 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   nothing on this screen ever called it. */}
               {(patientHistoryLoading || patientHistory.length > 0) && (
                 <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Past Results for This Patient</span>
+                  <span className="text-meta font-bold text-gray-500 uppercase tracking-wider block">Past Results for This Patient</span>
                   {patientHistoryLoading ? (
-                    <p className="text-[11px] text-gray-400 m-0">Loading history…</p>
+                    <p className="text-fine text-gray-400 m-0">Loading history…</p>
                   ) : (
                     <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 max-h-32 overflow-y-auto">
                       {patientHistory.map(h => (
-                        <div key={h.visit_test_id} className="px-3 py-2 flex items-center justify-between gap-2 text-[11px]">
+                        <div key={h.visit_test_id} className="px-3 py-2 flex items-center justify-between gap-2 text-fine">
                           <span className="font-semibold text-gray-700 truncate">{h.category_name} &middot; {h.test_name}</span>
                           <span className="text-gray-400 whitespace-nowrap">{new Date(h.visit_date).toLocaleDateString()}</span>
                         </div>
@@ -844,14 +844,14 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               {/* Quick Template Generator Buttons — scoped to this department's category */}
               {TEMPLATES_BY_CATEGORY[category]?.length > 0 && (
                 <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Clinical Report Templates</span>
+                  <span className="text-meta font-bold text-gray-500 uppercase tracking-wider block">Clinical Report Templates</span>
                   <div className="flex flex-wrap gap-2">
                     {TEMPLATES_BY_CATEGORY[category].map(t => (
                       <button
                         key={t.key}
                         type="button"
                         onClick={() => handleApplyTemplate(t.key)}
-                        className="text-[11px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded-lg border border-gray-200 cursor-pointer"
+                        className="text-fine font-bold bg-gray-100 hover:bg-gray-200 text-gray-700 px-2.5 py-1 rounded-lg border border-gray-200 cursor-pointer"
                       >
                         {t.label}
                       </button>
@@ -890,12 +890,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   onChange={handleFileChange}
                   className="w-full text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#769046]/10 file:text-[#769046] hover:file:bg-[#769046]/20 file:cursor-pointer cursor-pointer"
                 />
-                <p className="text-[11px] text-gray-400 m-0">
+                <p className="text-fine text-gray-400 m-0">
                   PDF, JPEG, or PNG — up to 15MB.
                   {isEditingResult && (activeTest?.file_path || activeTest?.file_url) && !resultFile && ' A file is already attached — leave blank to keep it, or attach a new one to replace it.'}
                 </p>
                 {resultFile && (
-                  <p className="text-[11px] font-semibold text-slate-700 m-0">{resultFile.name} ({(resultFile.size / 1024).toFixed(0)} KB)</p>
+                  <p className="text-fine font-semibold text-slate-700 m-0">{resultFile.name} ({(resultFile.size / 1024).toFixed(0)} KB)</p>
                 )}
               </div>
 

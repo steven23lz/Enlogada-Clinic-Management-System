@@ -14,7 +14,7 @@ const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
         <Logo className="w-9 h-9 sm:w-11 sm:h-11 flex-shrink-0" />
         <div className="flex flex-col min-w-0">
           <span className="font-bold text-base sm:text-lg leading-tight tracking-wider text-dark-slate truncate">ENLOGADA</span>
-          <span className="hidden sm:block text-[10px] text-gray-500 font-medium tracking-wide uppercase truncate">Ultrasound & Diagnostic Clinic</span>
+          <span className="hidden sm:block text-meta text-gray-500 font-medium tracking-wide uppercase truncate">Ultrasound & Diagnostic Clinic</span>
         </div>
       </div>
 

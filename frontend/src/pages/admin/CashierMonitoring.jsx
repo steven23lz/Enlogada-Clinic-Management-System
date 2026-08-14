@@ -74,16 +74,16 @@ const CashierMonitoring = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Collections (Range)</span>
+          <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Total Collections (Range)</span>
           <span className="text-2xl font-extrabold text-slate-900">{formatCurrency(total)}</span>
         </Card>
         <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Transactions</span>
+          <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Transactions</span>
           <span className="text-2xl font-extrabold text-slate-900">{transactions.length}</span>
         </Card>
         {Object.entries(byCashier).slice(0, 2).map(([name, amt]) => (
           <Card key={name} className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">{name}</span>
+            <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">{name}</span>
             <span className="text-2xl font-extrabold text-emerald-600">{formatCurrency(amt)}</span>
           </Card>
         ))}
@@ -98,12 +98,12 @@ const CashierMonitoring = () => {
           <Table>
             <TableHeader className="bg-gray-50/80">
               <TableRow>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Receipt #</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Cashier</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Patient</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3">Method</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Amount</TableHead>
-                <TableHead className="text-[10px] font-bold uppercase py-3 text-right">Paid At</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Receipt #</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Cashier</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Patient</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3">Method</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3 text-right">Amount</TableHead>
+                <TableHead className="text-meta font-bold uppercase py-3 text-right">Paid At</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
