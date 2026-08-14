@@ -19,6 +19,8 @@
  * Actually perform the reset:
  *   node src/scripts/resetDemoData.js --confirm
  */
+const fs = require('fs');
+const path = require('path');
 const db = require('../config/database');
 const logger = require('../config/logger');
 
@@ -51,6 +53,35 @@ const TRANSACTIONAL_TABLES = [
   'patient_visits',
   'password_reset_tokens',
 ];
+
+/**
+ * Removes uploaded result files that no database row references any more.
+ *
+ * Compares the files on disk against test_results.file_path and deletes only the difference, so
+ * a file belonging to a surviving result is never at risk. Failures are reported rather than
+ * thrown: losing a stray file is not worth aborting a reset over.
+ */
+async function pruneOrphanedResultFiles() {
+  const uploadsDir = path.resolve(__dirname, '..', '..', 'uploads', 'results');
+  if (!fs.existsSync(uploadsDir)) return;
+
+  const referenced = new Set(
+    (await db.query('SELECT file_path FROM test_results WHERE file_path IS NOT NULL')).rows
+      .map((r) => path.basename(r.file_path))
+  );
+
+  let removed = 0;
+  for (const name of fs.readdirSync(uploadsDir)) {
+    if (referenced.has(name)) continue;
+    try {
+      fs.unlinkSync(path.join(uploadsDir, name));
+      removed += 1;
+    } catch (err) {
+      logger.warn(`  could not remove orphaned file ${name}: ${err.message}`);
+    }
+  }
+  logger.info(`  orphaned result files    ${removed} removed`);
+}
 
 async function tableCount(table, where = '') {
   try {
@@ -109,6 +140,18 @@ async function main() {
     // Staff-owned patient profiles (walk-ins registered by reception) have no user_id and are
     // removed wholesale — every one of them belongs to a cleared visit by this point.
     await db.query('DELETE FROM patients WHERE user_id IS NULL');
+
+    // Uploaded result files whose database row has just been deleted.
+    //
+    // Nothing in the app has ever removed a result file from disk — resultRepository's upsert
+    // says so explicitly, and this script inherited the same gap: it cleared test_results and
+    // left the PDFs and images behind. Harmless while they are 50-byte test fixtures, and not
+    // harmless at all in production, where they are real scans accumulating with no ceiling and
+    // no reference pointing at them. Same shape as the notification fan-out, just slower.
+    //
+    // Deletes only files the database no longer knows about, so a file belonging to a surviving
+    // result is never touched.
+    await pruneOrphanedResultFiles();
     logger.info('Reset complete. Reference data and seeded accounts left intact.');
     logger.info('Re-run `node src/scripts/seedUsers.js` if any seeded account is missing.');
   } else {
