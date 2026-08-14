@@ -1,0 +1,75 @@
+import React from 'react';
+import { Clock, AlertTriangle } from 'lucide-react';
+import { cn } from '../../lib/utils';
+
+// How long a patient has been waiting, shown the same way in every queue.
+//
+// In a clinic the oldest ticket usually IS the priority, so this is the one number that should
+// decide what staff pick up next. It previously existed only on the billing queue, hand-rolled
+// inside CashierDashboard, and the modality worklists showed no waiting time at all — a patient
+// could sit in Laboratory indefinitely with nothing on screen saying so.
+//
+// Escalation is carried by an icon change as well as colour, for the same reason the status
+// badges are: a red pill and an amber pill are the same pale rectangle on a bright reception
+// monitor, and to a red-green colour blind user the "fine" and "overdue" states were the two
+// hardest to tell apart of the whole set.
+
+const THRESHOLDS = [
+  // Ordered longest-first; the first match wins.
+  { minAge: 60, tone: 'bg-rose-100 text-rose-800 ring-1 ring-rose-300', icon: AlertTriangle, label: 'Waiting over an hour' },
+  { minAge: 30, tone: 'bg-rose-50 text-rose-700 ring-1 ring-rose-200', icon: AlertTriangle, label: 'Waiting over 30 minutes' },
+  { minAge: 15, tone: 'bg-amber-50 text-amber-800 ring-1 ring-amber-200', icon: Clock, label: 'Waiting over 15 minutes' },
+  { minAge: 0, tone: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', icon: Clock, label: 'Recently arrived' },
+];
+
+/**
+ * Minutes into something a person can read at a glance.
+ *
+ * The billing queue used to render raw minutes, which is fine at "12m" and useless by "294m" —
+ * nobody converts that to just under five hours while a patient is standing there. Past an hour
+ * it reads as hours and minutes, and past a day as days, so the number stays meaningful however
+ * long a ticket has been neglected.
+ */
+export function formatWaitDuration(totalMinutes) {
+  const minutes = Math.max(0, Math.floor(totalMinutes));
+  if (minutes < 60) return `${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours < 24) return remainder === 0 ? `${hours}h` : `${hours}h ${remainder}m`;
+
+  const days = Math.floor(hours / 24);
+  const leftoverHours = hours % 24;
+  return leftoverHours === 0 ? `${days}d` : `${days}d ${leftoverHours}h`;
+}
+
+export function minutesSince(timestamp) {
+  const parsed = new Date(timestamp).getTime();
+  if (Number.isNaN(parsed)) return null;
+  return Math.max(0, Math.floor((Date.now() - parsed) / 60000));
+}
+
+const WaitBadge = ({ since, className }) => {
+  const minutes = minutesSince(since);
+  // An unparseable or absent timestamp renders nothing rather than "NaNm" or a misleading 0m.
+  if (minutes === null) return null;
+
+  const level = THRESHOLDS.find((t) => minutes >= t.minAge) ?? THRESHOLDS[THRESHOLDS.length - 1];
+  const Icon = level.icon;
+
+  return (
+    <span
+      title={level.label}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums whitespace-nowrap',
+        level.tone,
+        className
+      )}
+    >
+      <Icon aria-hidden="true" className="w-3 h-3 flex-shrink-0" />
+      {formatWaitDuration(minutes)} waiting
+    </span>
+  );
+};
+
+export default WaitBadge;

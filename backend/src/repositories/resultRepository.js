@@ -15,6 +15,10 @@ class ResultRepository {
       SELECT vt.id as visit_test_id, vt.status as test_status, vt.price_at_time, vt.remarks,
              t.name as test_name, tc.name as category_name,
              pv.id as visit_id, pv.queue_number, pv.visit_type,
+             -- How long this patient has been in the building. The worklist previously showed no
+             -- waiting time at all, so a ticket could sit in a department indefinitely with
+             -- nothing on screen saying so; the billing queue had this and the modalities did not.
+             pv.created_at as visit_created_at,
              p.id as patient_id, p.first_name, p.last_name, p.birthdate, p.sex,
              (
                SELECT hrt.approval_status

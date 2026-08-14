@@ -12,6 +12,7 @@ import { StatusBadge } from '../components/ui/status-badge';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
 import { toastSuccess, toastError, toastInfo } from '../lib/toast';
+import WaitBadge from '../components/ui/wait-badge';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Stethoscope,
@@ -521,7 +522,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                       </TableCell>
 
                       <TableCell className="py-3.5 font-bold text-xs text-slate-900">
-                        {test.first_name} {test.last_name}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span>{test.first_name} {test.last_name}</span>
+                          {/* The oldest ticket is usually the one to pick up next, and until now
+                              this screen gave no indication of age at all. */}
+                          <WaitBadge since={test.visit_created_at} />
+                        </div>
                         <span className="block text-[10px] text-gray-400 font-normal">PT-{test.patient_id}</span>
                       </TableCell>
 

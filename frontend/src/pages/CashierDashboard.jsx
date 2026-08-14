@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { StatusBadge } from '../components/ui/status-badge';
+import WaitBadge from '../components/ui/wait-badge';
 import { Textarea } from '../components/ui/textarea';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
@@ -24,7 +25,6 @@ import {
   Printer,
   DollarSign,
   AlertCircle,
-  Clock,
   ArrowUpDown,
   RefreshCw,
   Undo2
@@ -41,15 +41,6 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 // client-side page size over the already-fetched, date-range-filtered array is proportionate —
 // same pattern as StaffAccounts.jsx (VISUAL_IDENTITY.md §3a #11).
 const HISTORY_PAGE_SIZE = 15;
-
-// Wait-time triage badge on the billing queue: green under 15 minutes, amber 15-30, rose 30+.
-const getWaitInfo = (createdAt) => {
-  const minutes = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000));
-  let tone = 'bg-emerald-100 text-emerald-700';
-  if (minutes >= 30) tone = 'bg-rose-100 text-rose-700';
-  else if (minutes >= 15) tone = 'bg-amber-100 text-amber-700';
-  return { minutes, tone };
-};
 
 const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
@@ -409,7 +400,6 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 ) : filteredVisits.length > 0 ? (
                   filteredVisits.map(visit => {
                     const isSelected = selectedVisit?.id === visit.id;
-                    const wait = getWaitInfo(visit.created_at);
                     return (
                       <div
                         key={visit.id}
@@ -438,10 +428,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                                 {visit.patient_type_name || 'Self Pay'}
                               </Badge>
                             </div>
-                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${wait.tone}`}>
-                              <Clock className="w-3 h-3" />
-                              {wait.minutes}m waiting
-                            </span>
+                            <WaitBadge since={visit.created_at} />
                           </div>
                         </div>
                         <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center text-[11px]">
