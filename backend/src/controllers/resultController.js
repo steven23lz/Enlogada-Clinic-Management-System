@@ -138,7 +138,9 @@ class ResultController {
         }
       }
 
-      const results = await resultService.getPatientHistory(patientId);
+      // requestingUser drives the department scoping in the service — a diagnostic role sees only
+      // its own categories here, matching every other result route.
+      const results = await resultService.getPatientHistory(patientId, req.user);
       return res.status(200).json({
         status: 'success',
         data: { results }

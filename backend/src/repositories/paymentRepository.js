@@ -217,20 +217,35 @@ class PaymentRepository {
     return result.rows[0];
   }
 
+  /**
+   * Issues the next receipt number for today, atomically.
+   *
+   * This was `SELECT COUNT(*) … WHERE payment_status = 'Paid' AND paid_at::date = CURRENT_DATE`
+   * followed by a separate INSERT of count+1, which produced duplicate official receipt numbers
+   * two different ways:
+   *
+   *   - Concurrently: two cashiers settling in the same moment both read 5 and both mint
+   *     RCT-YYYYMMDD-0006. Two patients leave holding the same receipt number, and the drawer can
+   *     no longer be reconciled against the system.
+   *   - With no concurrency at all: refunding a payment drops it out of the 'Paid' count, so the
+   *     very next sale that day reuses a receipt number that has already been printed and handed
+   *     to a patient.
+   *
+   * The counter fixes both. It counts issuances rather than surviving rows, so a refund cannot
+   * rewind it, and ON CONFLICT DO UPDATE takes a row lock so concurrent callers serialise. A
+   * unique index on receipt_number backs it at the schema level — see migrateDataIntegrity.js.
+   */
   async getNextReceiptNumber() {
-    // payment_status = 'Paid' matters now that online checkouts insert a 'Pending' row (with
-    // paid_at defaulting to CURRENT_TIMESTAMP at insert time, before any money has actually
-    // moved) — without this filter, an abandoned or in-flight GCash/Maya checkout would count
-    // toward today's receipt sequence and skew the numbering for real, settled payments.
     const queryText = `
-      SELECT COUNT(*) as count
-      FROM payments
-      WHERE payment_status = 'Paid' AND paid_at::date = CURRENT_DATE
+      INSERT INTO daily_counters (counter_date, counter_name, last_number)
+      VALUES (CURRENT_DATE, 'receipt', 1)
+      ON CONFLICT (counter_date, counter_name)
+      DO UPDATE SET last_number = daily_counters.last_number + 1
+      RETURNING last_number
     `;
     const result = await db.query(queryText);
-    const count = parseInt(result.rows[0].count, 10);
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    return `RCT-${today}-${String(count + 1).padStart(4, '0')}`;
+    return `RCT-${today}-${String(result.rows[0].last_number).padStart(4, '0')}`;
   }
 }
 

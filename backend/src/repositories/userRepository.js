@@ -1,5 +1,27 @@
 const db = require('../config/database');
 
+/**
+ * Join condition for a role grant that is in force *right now*.
+ *
+ * user_roles has carried starts_at and expires_at since the original schema, and nothing read
+ * either one — the join checked only is_active. So a deliberately time-bounded grant ("give the
+ * locum Xray Staff until the 30th") never actually ended: the role kept coming back from these
+ * queries, kept landing in req.user.roles, and kept being honoured by authorizeRoles, forever.
+ *
+ * That is the worst shape for an access control to have. A column that looks like it enforces
+ * something and does not is more dangerous than no column at all, because whoever set the expiry
+ * date reasonably believes access is bounded and stops thinking about it.
+ *
+ * This is also the one revocation path that the per-request authorization work did not already
+ * cover: that change made role *removal* take effect immediately, while expiry-based revocation
+ * still silently never fired.
+ */
+const ACTIVE_ROLE_GRANT = `
+  ur.is_active = TRUE
+  AND (ur.starts_at  IS NULL OR ur.starts_at  <= NOW())
+  AND (ur.expires_at IS NULL OR ur.expires_at >  NOW())
+`;
+
 class UserRepository {
   async findByEmail(email) {
     const queryText = `
@@ -7,7 +29,7 @@ class UserRepository {
              COALESCE(ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles,
              COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}') as permissions
       FROM users u
-      LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = TRUE
+      LEFT JOIN user_roles ur ON u.id = ur.user_id AND ${ACTIVE_ROLE_GRANT}
       LEFT JOIN roles r ON ur.role_id = r.id
       LEFT JOIN role_permissions rp ON r.id = rp.role_id
       LEFT JOIN permissions p ON rp.permission_id = p.id
@@ -25,7 +47,7 @@ class UserRepository {
              COALESCE(ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles,
              COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}') as permissions
       FROM users u
-      LEFT JOIN user_roles ur ON u.id = ur.user_id AND ur.is_active = TRUE
+      LEFT JOIN user_roles ur ON u.id = ur.user_id AND ${ACTIVE_ROLE_GRANT}
       LEFT JOIN roles r ON ur.role_id = r.id
       LEFT JOIN role_permissions rp ON r.id = rp.role_id
       LEFT JOIN permissions p ON rp.permission_id = p.id

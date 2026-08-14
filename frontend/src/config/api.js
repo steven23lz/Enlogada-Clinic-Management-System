@@ -1,7 +1,16 @@
 import axios from 'axios';
 
+// The API origin must come from the environment, not the bundle.
+//
+// This was hardcoded to http://localhost:5000/api, which works on the dev box and nowhere else:
+// a production build points every request at *the viewer's own machine*, so on any other device
+// the app loads, spins, and shows empty dashboards — a patient would read that as "no results
+// yet" rather than "cannot reach the server". CLAUDE.md has always said the frontend needs an API
+// base URL in its .env; the wiring was simply never done.
+//
+// The localhost fallback keeps `npm run dev` working with no .env at all.
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
   headers: {
     'Content-Type': 'application/json'
   }

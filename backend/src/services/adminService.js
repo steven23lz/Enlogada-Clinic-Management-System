@@ -1,11 +1,34 @@
 const bcrypt = require('bcryptjs');
 const userRepository = require('../repositories/userRepository');
+const db = require('../config/database');
 const auditService = require('./auditService');
 
 // Module 12 (Admin Dashboard) manages the 5 operational staff roles only. Creating or managing
 // Admin/SuperAdmin accounts is Module 13 (Super Admin Management)'s explicit responsibility —
 // excluding them here prevents privilege escalation via this endpoint.
 const MANAGEABLE_ROLES = ['Receptionist', 'Cashier', 'Laboratory Staff', 'Ultrasound Staff', 'Xray Staff'];
+
+/**
+ * Whether an Admin may manage this account.
+ *
+ * Asks whether EVERY role the target holds is operational — not whether *some* role is. The
+ * original test was `.some()`, which passes an account holding both Receptionist and SuperAdmin
+ * because it holds at least one manageable role. An Admin, who is explicitly barred from
+ * /api/superadmin/*, could then call PATCH /api/admin/staff/:id/password against that account,
+ * set a password they know, sign in as it, and inherit SuperAdmin — defeating the Module 12 /
+ * Module 13 separation this file exists to enforce.
+ *
+ * Scoping this honestly: neither account-creation endpoint assigns more than one role, so the API
+ * cannot produce such an account today and this is not currently exploitable. It becomes
+ * exploitable with the first hand-inserted user_roles row — which is exactly what TEST_ACCOUNTS.md
+ * tells operators to do to recreate the combined-role account.
+ *
+ * The empty-list check matters too: a roleless account must not be manageable by default.
+ */
+const isAdminManageable = (user) => {
+  const roles = user.roles || [];
+  return roles.length > 0 && roles.every((r) => MANAGEABLE_ROLES.includes(r));
+};
 
 class AdminService {
   async getStaffAccounts() {
@@ -26,17 +49,26 @@ class AdminService {
       throw error;
     }
 
+    // Hashing stays outside the transaction — ~100ms of CPU should not hold a pooled connection.
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
-    const user = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
 
-    const roleId = await userRepository.findRoleIdByName(role);
-    if (!roleId) {
-      const error = new Error(`Role "${role}" is not seeded in the database.`);
-      error.statusCode = 500;
-      throw error;
-    }
-    await userRepository.assignRoleToUser(user.id, roleId);
+    // Account and role are created together. Previously the unseeded-role check threw *after* the
+    // user row was already committed, so the very error meant to prevent a bad account was what
+    // created one: a staff member with working credentials and no role, who logs in to an empty
+    // console. Inside a transaction the same check now rolls the account back.
+    const user = await db.withTransaction(async () => {
+      const created = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
+
+      const roleId = await userRepository.findRoleIdByName(role);
+      if (!roleId) {
+        const error = new Error(`Role "${role}" is not seeded in the database.`);
+        error.statusCode = 500;
+        throw error;
+      }
+      await userRepository.assignRoleToUser(created.id, roleId);
+      return created;
+    });
 
     return { ...user, roles: [role] };
   }
@@ -49,7 +81,7 @@ class AdminService {
       throw error;
     }
 
-    const isManageableStaff = (user.roles || []).some((r) => MANAGEABLE_ROLES.includes(r));
+    const isManageableStaff = isAdminManageable(user);
     if (!isManageableStaff) {
       const error = new Error('This account is not a staff account managed by this endpoint.');
       error.statusCode = 403;
@@ -81,7 +113,7 @@ class AdminService {
       throw error;
     }
 
-    const isManageableStaff = (user.roles || []).some((r) => MANAGEABLE_ROLES.includes(r));
+    const isManageableStaff = isAdminManageable(user);
     if (!isManageableStaff) {
       const error = new Error('This account is not a staff account managed by this endpoint.');
       error.statusCode = 403;
@@ -118,7 +150,7 @@ class AdminService {
       throw error;
     }
 
-    const isManageableStaff = (user.roles || []).some((r) => MANAGEABLE_ROLES.includes(r));
+    const isManageableStaff = isAdminManageable(user);
     if (!isManageableStaff) {
       const error = new Error('This account is not a staff account managed by this endpoint.');
       error.statusCode = 403;

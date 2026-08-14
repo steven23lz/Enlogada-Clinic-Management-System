@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -85,6 +85,14 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [referenceNumber, setReferenceNumber] = useState('');
   const [amountTendered, setAmountTendered] = useState('');
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  // The receipt modal gets its own copy of the bill rather than sharing `billDetails` with the
+  // billing panel. Reprinting a past receipt used to overwrite `billDetails`, so returning to the
+  // Billing Queue afterwards rendered the *checkout panel* from a history row — see
+  // handleReprintReceipt below.
+  const [receiptBill, setReceiptBill] = useState(null);
+  // Monotonic id for bill fetches, so a slow response for a previously-selected patient cannot
+  // overwrite the bill for the one the cashier is looking at now.
+  const billRequestRef = useRef(0);
   const [paymentError, setPaymentError] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState(null);
   const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
@@ -150,13 +158,24 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // a reprinted receipt showed no itemized test breakdown even though the original one did —
   // fetches the same GET /payments/bill/:visitId the checkout panel already uses, keyed on the
   // transaction's own patient_visit_id, instead of hand-rolling a partial object.
+  // Writes to `receiptBill`, never `billDetails`.
+  //
+  // It used to write `setBillDetails({ patientName })` — an object with no `items` array — into
+  // the state that the *billing panel* also renders from. Two things went wrong with that. The
+  // panel does `billDetails.items.map(...)` unguarded, so selecting a visit, reprinting a past
+  // receipt, then returning to the Billing Queue threw a TypeError and (before the ErrorBoundary)
+  // whited out the terminal. And more quietly: the panel would show one patient's name and totals
+  // beside another patient's queue number, which is the state the wrong-amount charge came from.
   const handleReprintReceipt = async (transaction) => {
     setPaymentSuccess(transaction);
-    setBillDetails({ patientName: `${transaction.patient_first_name} ${transaction.patient_last_name}` });
+    setReceiptBill({
+      patientName: `${transaction.patient_first_name} ${transaction.patient_last_name}`,
+      items: [], // present from the start so the itemised block can never map over undefined
+    });
     setShowReceiptModal(true);
     try {
       const response = await api.get(`/payments/bill/${transaction.patient_visit_id}`);
-      setBillDetails(response.data.data.bill);
+      setReceiptBill(response.data.data.bill);
     } catch (err) {
       console.error('Failed to load itemized bill for reprint:', err);
       toastError('Could not load the itemized test list for this receipt.');
@@ -223,13 +242,30 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     setReferenceNumber('');
     setAmountTendered('');
 
+    // Clear the previous patient's bill before fetching the next one. Without this, a failed
+    // fetch left the *previous* patient's totals on screen next to the newly selected patient's
+    // queue number — and confirmProcessPayment posts `selectedVisit.id` with
+    // `billDetails.totalAmount`, so the cashier would charge one patient another's amount. The
+    // confirmation dialog quotes the stale name and figure too, so it reads as self-consistent
+    // and gets confirmed.
+    setBillDetails(null);
+
+    // Guards against out-of-order responses: clicking patient A then B quickly can let A's slower
+    // reply land last. Only the most recent selection is allowed to write state.
+    const requestId = ++billRequestRef.current;
+
     try {
       const response = await api.get(`/payments/bill/${visit.id}`);
+      if (requestId !== billRequestRef.current) return; // superseded by a later selection
       const bill = response.data.data.bill;
       setBillDetails(bill);
       setAmountTendered((bill?.totalAmount ?? 0).toString());
     } catch (err) {
+      if (requestId !== billRequestRef.current) return;
       console.error(err);
+      // Drop the selection as well as the bill. Leaving a selected visit with no bill is the
+      // half-state that invited the mismatch above.
+      setSelectedVisit(null);
       toastError('Failed to retrieve billing summary.');
     }
   };
@@ -288,6 +324,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       // front-desk check-in, and the backend handles that ordering either way.
       setShowPaymentConfirm(false);
       setPaymentSuccess(payment);
+      // Snapshot the bill for the receipt. The modal reads `receiptBill`, so it keeps showing
+      // what was actually charged even once the panel moves on to the next patient.
+      setReceiptBill(billDetails);
       setShowReceiptModal(true);
       fetchActiveVisits();
       fetchTransactions();
@@ -477,7 +516,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {billDetails.items.map((item, idx) => (
+                          {/* `billDetails` is now only ever a complete bill or null, so this
+                              cannot be partial the way it could when the reprint path wrote here.
+                              The optional chain stays as a cheap guard at what was the crash
+                              site, in case the endpoint's shape ever changes. */}
+                          {(billDetails.items ?? []).map((item, idx) => (
                             <TableRow key={idx}>
                               <TableCell className="py-2.5 text-xs font-bold text-slate-900">{item.name}</TableCell>
                               <TableCell className="py-2.5 text-xs text-gray-500">{item.category}</TableCell>
@@ -878,7 +921,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         {/* Printable Official Receipt Modal Generator */}
         <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>
           <DialogContent className="max-w-md rounded-2xl p-6">
-            {paymentSuccess && billDetails && (
+            {paymentSuccess && receiptBill && (
               <div className="space-y-4">
                 <div className="text-center border-b border-gray-200 pb-3">
                   <h2 className="text-base font-extrabold text-slate-900 uppercase m-0">ENLOGADA CLINIC</h2>
@@ -889,7 +932,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-gray-500 font-medium">Patient:</span>
-                    <span className="font-bold text-slate-900">{billDetails.patientName}</span>
+                    <span className="font-bold text-slate-900">{receiptBill.patientName}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500 font-medium">Payment Mode:</span>
@@ -897,10 +940,10 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   </div>
                 </div>
 
-                {billDetails.items && billDetails.items.length > 0 && (
+                {receiptBill.items && receiptBill.items.length > 0 && (
                   <div className="space-y-1.5 py-3 border-t border-b border-gray-100">
                     <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Items</span>
-                    {billDetails.items.map((item, idx) => (
+                    {receiptBill.items.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-xs">
                         <span className="text-gray-600">{item.name}</span>
                         <span className="font-semibold text-slate-800">{formatCurrency(item.price)}</span>

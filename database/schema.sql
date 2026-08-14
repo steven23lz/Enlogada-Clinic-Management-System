@@ -2,6 +2,7 @@
 -- Database: PostgreSQL (Local/Supabase hosted)
 
 -- Drop existing tables to allow clean recreation
+DROP TABLE IF EXISTS daily_counters CASCADE;
 DROP TABLE IF EXISTS audit_log CASCADE;
 DROP TABLE IF EXISTS notification_reads CASCADE;
 DROP TABLE IF EXISTS notification_events CASCADE;
@@ -236,7 +237,6 @@ CREATE TABLE test_results (
     authorised_at TIMESTAMP,                          -- when the release was authorised
     CONSTRAINT fk_results_visit_test FOREIGN KEY (visit_test_id) REFERENCES visit_tests(id),
     CONSTRAINT fk_results_released_by FOREIGN KEY (released_by) REFERENCES users(id),
-    CONSTRAINT fk_results_recorded_by FOREIGN KEY (recorded_by) REFERENCES users(id),
     CONSTRAINT fk_results_recorded_by FOREIGN KEY (recorded_by) REFERENCES users(id)
 );
 
@@ -418,3 +418,40 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled ON appointments(scheduled_
 CREATE INDEX IF NOT EXISTS idx_patient_visits_created ON patient_visits(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_test_results_released_by ON test_results(released_by);
 CREATE INDEX IF NOT EXISTS idx_notification_events_created ON notification_events(created_at DESC);
+
+-- =====================================================================================
+-- Daily counters — see migrations.md [1.13.0]
+--
+-- Queue tickets and receipt numbers were previously derived from SELECT COUNT(*) + 1 and then
+-- written by a separate INSERT. A read followed by an unrelated write is not a sequence: two
+-- receptionists registering in the same moment issued the same ticket, and two cashiers settling
+-- together issued the same official receipt number. Counting surviving rows rather than
+-- issuances also meant a cancellation or a refund rewound the sequence and reissued a number
+-- that had already been printed and handed to a patient.
+--
+-- One row per (day, counter), incremented by the database itself:
+--   INSERT INTO daily_counters (counter_date, counter_name, last_number)
+--   VALUES (CURRENT_DATE, 'queue', 1)
+--   ON CONFLICT (counter_date, counter_name)
+--   DO UPDATE SET last_number = daily_counters.last_number + 1
+--   RETURNING last_number;
+-- ON CONFLICT DO UPDATE takes a row lock, so concurrent callers serialise.
+-- =====================================================================================
+CREATE TABLE IF NOT EXISTS daily_counters (
+    counter_date DATE NOT NULL,
+    counter_name TEXT NOT NULL,          -- 'queue' | 'receipt'
+    last_number  INT  NOT NULL DEFAULT 0,
+    PRIMARY KEY (counter_date, counter_name),
+    CONSTRAINT chk_daily_counters_nonneg CHECK (last_number >= 0)
+);
+
+-- Uniqueness the counters above are meant to guarantee, enforced by the database so a future
+-- code path cannot quietly reintroduce a duplicate.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_patient_visits_daily_queue
+    ON patient_visits ((created_at::date), queue_number) WHERE queue_number IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_receipt_number
+    ON payments (receipt_number) WHERE receipt_number IS NOT NULL;
+-- Partial on 'Paid': a visit may accumulate Cancelled/Failed gateway attempts and a Refunded row
+-- alongside its one live payment, but never two settled charges.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_one_paid_per_visit
+    ON payments (patient_visit_id) WHERE payment_status = 'Paid';

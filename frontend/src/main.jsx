@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { Toaster } from 'sonner'
 import './index.css'
 import App from './App.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -17,6 +18,10 @@ createRoot(document.getElementById('root')).render(
         },
       }}
     />
-    <App />
+    {/* Outermost backstop. The Toaster sits outside it deliberately, so error toasts still
+        render if the app tree itself is the thing that failed. */}
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 )

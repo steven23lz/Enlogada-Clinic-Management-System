@@ -169,7 +169,22 @@ class ResultRepository {
     return result.rows[0];
   }
 
-  async findResultsByPatientId(patientId) {
+  /**
+   * @param {number|string} patientId
+   * @param {string[]|null} allowedCategories - restrict to these test categories; null = all.
+   *   Applied in SQL so results the caller may not see are never read, rather than fetched and
+   *   filtered afterwards.
+   */
+  async findResultsByPatientId(patientId, allowedCategories = null) {
+    const params = [patientId];
+    let categoryFilter = '';
+    if (allowedCategories) {
+      // An empty array is meaningful: a role mapped to no categories sees nothing, rather than
+      // falling through to everything. `= ANY('{}')` is false for every row, which is correct.
+      params.push(allowedCategories);
+      categoryFilter = `AND tc.name = ANY($${params.length}::text[])`;
+    }
+
     const queryText = `
       SELECT vt.id as visit_test_id, vt.price_at_time, vt.status as test_status,
              t.name as test_name, tc.name as category_name,
@@ -184,9 +199,10 @@ class ResultRepository {
       LEFT JOIN test_results tr ON tr.visit_test_id = vt.id
       LEFT JOIN users u ON tr.released_by = u.id
       WHERE pv.patient_id = $1
+      ${categoryFilter}
       ORDER BY pv.created_at DESC
     `;
-    const result = await db.query(queryText, [patientId]);
+    const result = await db.query(queryText, params);
     return result.rows;
   }
 

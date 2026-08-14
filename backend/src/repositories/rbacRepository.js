@@ -34,21 +34,29 @@ class RbacRepository {
   // Replaces a role's entire permission set atomically — the previous implementation deleted
   // then re-inserted one row at a time with no transaction, so a failure partway through could
   // silently leave a role with zero permissions.
+  /**
+   * Replaces a role's permission set wholesale.
+   *
+   * This used to check a connection out of the pool and drive BEGIN/COMMIT by hand. That was
+   * correct on its own, but it takes a *second* connection, so calling it from inside another
+   * transaction would open an independent one that cannot see the caller's uncommitted writes and
+   * can block on the same rows the caller already holds. Going through withTransaction means a
+   * nested call joins the transaction in progress instead.
+   *
+   * The per-permission INSERT loop is also gone: one statement with unnest does the same work in
+   * a single round trip and keeps the row lock held for less time.
+   */
   async setRolePermissions(roleId, permissionIds) {
-    const client = await db.pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query('DELETE FROM role_permissions WHERE role_id = $1', [roleId]);
-      for (const permId of permissionIds) {
-        await client.query('INSERT INTO role_permissions (role_id, permission_id) VALUES ($1, $2)', [roleId, permId]);
+    await db.withTransaction(async () => {
+      await db.query('DELETE FROM role_permissions WHERE role_id = $1', [roleId]);
+      if (permissionIds.length > 0) {
+        await db.query(
+          `INSERT INTO role_permissions (role_id, permission_id)
+           SELECT $1, unnest($2::int[])`,
+          [roleId, permissionIds]
+        );
       }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   }
 }
 

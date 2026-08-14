@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Logo from './Logo';
+import ErrorBoundary from './ErrorBoundary';
 import { Button } from './ui/button';
 import api from '../config/api';
 import {
@@ -352,7 +353,11 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
               </span>
             </div>
           )}
-          {children}
+          {/* Scoped to the console body only. A crash in a dashboard leaves the sidebar and top
+              bar mounted, so staff can navigate to another screen instead of reloading — which,
+              with no router, would drop them back at the default tab. Keyed on the active screen
+              so navigating away from a broken console clears the error rather than sticking. */}
+          <ErrorBoundary key={activeNav}>{children}</ErrorBoundary>
         </main>
 
       </div>

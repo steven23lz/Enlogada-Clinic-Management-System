@@ -1,25 +1,33 @@
 const hmoRepository = require('../repositories/hmoRepository');
+const db = require('../config/database');
 const auditService = require('./auditService');
 
 class HmoService {
   async createRequest({ hmoProviderId, approvalCode, visitTestIds }) {
-    // 1. Create the HMO request
-    const request = await hmoRepository.createRequest({ hmoProviderId, approvalCode });
+    // A request and the tests it covers are one submission to the HMO. Without a transaction, a
+    // failure partway through the loop left a request covering only the tests linked so far —
+    // and nothing anywhere says how many it was meant to cover, so the shortfall is invisible.
+    // The patient is then billed out-of-pocket for tests the HMO had in fact approved, which is
+    // a billing dispute discovered weeks later rather than an error caught at the desk.
+    return await db.withTransaction(async () => {
+      // 1. Create the HMO request
+      const request = await hmoRepository.createRequest({ hmoProviderId, approvalCode });
 
-    // 2. Link each visit_test to the HMO request
-    const linkedTests = [];
-    for (const visitTestId of visitTestIds) {
-      const linked = await hmoRepository.addTestToRequest({
-        hmoRequestId: request.id,
-        visitTestId
-      });
-      linkedTests.push(linked);
-    }
+      // 2. Link each visit_test to the HMO request
+      const linkedTests = [];
+      for (const visitTestId of visitTestIds) {
+        const linked = await hmoRepository.addTestToRequest({
+          hmoRequestId: request.id,
+          visitTestId
+        });
+        linkedTests.push(linked);
+      }
 
-    return {
-      ...request,
-      tests: linkedTests
-    };
+      return {
+        ...request,
+        tests: linkedTests
+      };
+    });
   }
 
   // UI/UX Modernization Phase 12: now Admin/SuperAdmin-only (see hmoRoutes.js) — audit-logged

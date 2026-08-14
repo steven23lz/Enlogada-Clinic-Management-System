@@ -3,6 +3,7 @@ const path = require('path');
 const resultRepository = require('../repositories/resultRepository');
 const testRepository = require('../repositories/testRepository');
 const visitRepository = require('../repositories/visitRepository');
+const db = require('../config/database');
 const { sendEmail } = require('../config/email');
 const notificationService = require('./notificationService');
 const { UPLOAD_ROOT } = require('../config/upload');
@@ -33,6 +34,27 @@ function assertStaffAllowedCategory(requestingUser, categoryName) {
     error.statusCode = 403;
     throw error;
   }
+}
+
+/**
+ * The test categories this caller may see results for, or `null` for "no restriction".
+ *
+ * Unrestricted means something different for each role that gets it, and both are deliberate:
+ * SuperAdmin/Admin oversee every department (the same bypass assertStaffAllowedCategory grants),
+ * and a Client is restricted by *patient ownership* rather than by category — they are entitled to
+ * all of their own results regardless of which department produced them, and that ownership check
+ * runs in resultController before this is ever consulted.
+ */
+function visibleCategoriesFor(requestingUser) {
+  const roles = requestingUser?.roles || [];
+  if (roles.includes('SuperAdmin') || roles.includes('Admin') || roles.includes('Client')) {
+    return null;
+  }
+  const allowed = new Set();
+  for (const role of roles) {
+    (STAFF_CATEGORY_MAP[role] || []).forEach((c) => allowed.add(c));
+  }
+  return [...allowed];
 }
 
 // Category ownership is only half the question. The other half — added with the ticket-release
@@ -231,21 +253,34 @@ class ResultService {
     // (rather than after) keeps the "was this the last test?" check below working even if the
     // row shape changes later.
     const releaseState = await resultRepository.findVisitReleaseStateByVisitTestId(visitTestId);
-    await testRepository.updateVisitTestStatus(visitTestId, 'Completed');
 
-    // Persist WHO authorised this. `releasedBy` was already being passed in from the controller
-    // and then dropped on the floor, so released_by kept whatever the findings-upload path wrote
-    // — i.e. the author, not the authoriser. Whenever those are two different people, which is
-    // the entire reason 'Waiting for Release' exists as a separate state, the record named the
-    // wrong one.
-    await resultRepository.markReleased(visitTestId, releasedBy);
+    // Releasing a result is three writes that describe one clinical event, so they commit or fail
+    // together. Two of the three failure modes are silent and permanent:
+    //
+    //   - ticket marked Completed but released_by never written: the audit trail cannot say who
+    //     authorised releasing a medical result, which is the one question it exists to answer.
+    //   - both written but the visit never closed: the visit sits in Processing forever, inflating
+    //     the front desk queue and the cashier's billing list with work that is actually finished.
+    //
+    // The transaction also serialises two staff releasing the same result at once — the second
+    // waits for the first's row lock rather than interleaving with it.
+    await db.withTransaction(async () => {
+      await testRepository.updateVisitTestStatus(visitTestId, 'Completed');
 
-    // Once nothing on the visit is outstanding, the visit itself is done — otherwise it would
-    // sit in 'Processing' forever, permanently inflating the front desk's active queue and the
-    // cashier's billing list.
-    if (releaseState && !(await visitRepository.hasOutstandingTests(releaseState.visit_id))) {
-      await visitRepository.updateVisitStatus(releaseState.visit_id, 'Completed');
-    }
+      // Persist WHO authorised this. `releasedBy` was already being passed in from the controller
+      // and then dropped on the floor, so released_by kept whatever the findings-upload path wrote
+      // — i.e. the author, not the authoriser. Whenever those are two different people, which is
+      // the entire reason 'Waiting for Release' exists as a separate state, the record named the
+      // wrong one.
+      await resultRepository.markReleased(visitTestId, releasedBy);
+
+      // Once nothing on the visit is outstanding, the visit itself is done — otherwise it would
+      // sit in 'Processing' forever, permanently inflating the front desk's active queue and the
+      // cashier's billing list.
+      if (releaseState && !(await visitRepository.hasOutstandingTests(releaseState.visit_id))) {
+        await visitRepository.updateVisitStatus(releaseState.visit_id, 'Completed');
+      }
+    });
 
     // Attempt to send email notification to patient. sendEmail() never throws (it swallows
     // SMTP failures and returns {error}/{skipped} instead, per backend/src/config/email.js) —
@@ -295,8 +330,24 @@ class ResultService {
     return await resultRepository.findResultByVisitTestId(visitTestId);
   }
 
-  async getPatientHistory(patientId) {
-    return await resultRepository.findResultsByPatientId(patientId);
+  /**
+   * A patient's full diagnostic history, scoped to what the caller is allowed to see.
+   *
+   * This method used to take only `patientId` and pass it straight through — the one method in
+   * this service with no authorization argument at all. The controller checks Client ownership,
+   * but that branch is skipped for every staff role, so a Laboratory Staff token calling
+   * GET /api/results/history/1,2,3… received every result for every patient across Xray,
+   * Ultrasound and 2D Echo, findings text included. That is exactly the department separation
+   * assertStaffAllowedCategory was written to enforce on the other routes; this one was missed.
+   *
+   * The filter is applied in SQL rather than after the fetch, so rows the caller may not see are
+   * never loaded and never cross the wire.
+   */
+  async getPatientHistory(patientId, requestingUser) {
+    return await resultRepository.findResultsByPatientId(
+      patientId,
+      visibleCategoriesFor(requestingUser)
+    );
   }
 }
 

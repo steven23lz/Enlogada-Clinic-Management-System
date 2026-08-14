@@ -182,13 +182,16 @@ class AppointmentService {
       throw error;
     }
 
-    // Update appointment status to Cancelled
-    const updated = await appointmentRepository.updateAppointmentStatus(id, 'Cancelled');
-
-    // Also cancel the linked visit
-    await visitRepository.updateVisitStatus(appointment.patient_visit_id, 'Cancelled');
-
-    return updated;
+    // Cancelling the appointment and cancelling its visit is one decision, so it is one write.
+    // Split, a failure on the second left the appointment Cancelled while its visit stayed active
+    // — a phantom booking that the patient believes is cancelled and that the front desk still
+    // sees in the queue, still counts toward the slot capacity check in bookAppointment, and
+    // still appears on the cashier's billing list.
+    return await db.withTransaction(async () => {
+      const updated = await appointmentRepository.updateAppointmentStatus(id, 'Cancelled');
+      await visitRepository.updateVisitStatus(appointment.patient_visit_id, 'Cancelled');
+      return updated;
+    });
   }
 
   async updateStatus(id, status) {

@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const userRepository = require('../repositories/userRepository');
+const db = require('../config/database');
 
 // Module 13 (Super Admin Management): "elevated account management beyond what Admin can do."
 // Mirrors adminService.js's staff-management pattern (Module 12), but for Admin/SuperAdmin
@@ -28,15 +29,22 @@ class SuperAdminService {
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
-    const user = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
 
-    const roleId = await userRepository.findRoleIdByName(role);
-    if (!roleId) {
-      const error = new Error(`Role "${role}" is not seeded in the database.`);
-      error.statusCode = 500;
-      throw error;
-    }
-    await userRepository.assignRoleToUser(user.id, roleId);
+    // Atomic for the same reason as adminService.createStaffAccount, and it matters more here:
+    // a half-created Admin or SuperAdmin is an elevated account whose privileges did not land.
+    // It looks like an administrator in the user list and behaves like a locked-out one.
+    const user = await db.withTransaction(async () => {
+      const created = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
+
+      const roleId = await userRepository.findRoleIdByName(role);
+      if (!roleId) {
+        const error = new Error(`Role "${role}" is not seeded in the database.`);
+        error.statusCode = 500;
+        throw error;
+      }
+      await userRepository.assignRoleToUser(created.id, roleId);
+      return created;
+    });
 
     return { ...user, roles: [role] };
   }

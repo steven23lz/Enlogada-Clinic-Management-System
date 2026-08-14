@@ -243,3 +243,136 @@ test.describe('Combined-role access', () => {
     await expect(page.getByText(/Cashier POS|Billing Terminal/i).first()).toBeVisible({ timeout: 10000 });
   });
 });
+
+// Cross-role PHI boundaries.
+//
+// Every test here failed to exist while the corresponding hole was open, which is why the hole
+// stayed open: the suite asserted plenty about RBAC and nothing about the two routes that leaked
+// the most. Both were reachable with the LOWEST-privilege clinical token in the system.
+//
+//   GET/PUT /api/patients/:id  carried verifyToken alone. The ownership check in the controller
+//   reads `if (req.user.roles.includes('Client') && ...)`, so it is a no-op for staff — any staff
+//   token could walk the integer id space to read the whole patient roster, and PUT to rewrite
+//   another patient's birthdate and sex (the fields diagnostic reference ranges key off).
+//
+//   GET /api/results/history/:patientId  applied no category filter, so Laboratory Staff read
+//   every Xray, Ultrasound and 2D Echo finding in the clinic.
+//
+// Laboratory Staff is used as the probe throughout precisely because it is the least privileged
+// clinical role — if it is refused, the narrower roles are too.
+test.describe('Cross-role PHI boundaries', () => {
+  let apiContext;
+  let labToken;
+  let receptionToken;
+  let superAdminToken;
+
+  const LAB_CATEGORIES = ['Laboratory'];
+
+  // Patient ids are not stable across databases — the demo seed, the purge and each run's own
+  // fixtures all move them — so anything id-specific is discovered rather than hardcoded.
+  async function discoverPatientIds(token) {
+    const ids = new Set();
+    // The endpoint requires at least 2 characters, so these are common bigrams rather than single
+    // letters — between them they match essentially any Filipino or English given/family name.
+    for (const q of ['an', 'ar', 'el', 'ma', 'na', 'ra', 'os', 'le']) {
+      const res = await apiContext.get(`${API}/patients/search?q=${q}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok()) continue;
+      for (const p of (await res.json()).data.patients) ids.add(p.id);
+    }
+    return [...ids];
+  }
+
+  test.beforeAll(async () => {
+    apiContext = await request.newContext();
+    const login = async (email) => {
+      const res = await apiContext.post(`${API}/auth/login`, { data: { email, password: 'Password123!' } });
+      expect(res.ok()).toBeTruthy();
+      return (await res.json()).data.token;
+    };
+    labToken = await login('lab@enlogada.com');
+    receptionToken = await login('receptionist@enlogada.com');
+    superAdminToken = await login(SUPERADMIN_EMAIL);
+  });
+
+  test.afterAll(async () => {
+    await apiContext.dispose();
+  });
+
+  test('diagnostic staff cannot read a patient record by id', async () => {
+    const res = await apiContext.get(`${API}/patients/1`, {
+      headers: { Authorization: `Bearer ${labToken}` },
+    });
+    // 403 specifically, not 404 — the record exists; the role is what is refused.
+    expect(res.status()).toBe(403);
+  });
+
+  test('diagnostic staff cannot rewrite a patient record', async () => {
+    const res = await apiContext.put(`${API}/patients/1`, {
+      headers: { Authorization: `Bearer ${labToken}` },
+      data: {
+        patientTypeId: 2,
+        firstName: 'Overwritten',
+        lastName: 'ByLab',
+        birthdate: '1970-01-01',
+        sex: 'Female',
+      },
+    });
+    expect(res.status()).toBe(403);
+  });
+
+  test('the front desk keeps the patient access it needs to do its job', async () => {
+    // The negative tests above are only meaningful alongside this one: a gate that refuses
+    // everyone is not a fix, it is an outage.
+    const patientIds = await discoverPatientIds(receptionToken);
+    test.skip(patientIds.length === 0, 'no patient records in this database to read');
+
+    const res = await apiContext.get(`${API}/patients/${patientIds[0]}`, {
+      headers: { Authorization: `Bearer ${receptionToken}` },
+    });
+    expect(res.status()).toBe(200);
+  });
+
+  test('diagnostic staff cannot cancel an appointment', async () => {
+    // PUT /:id/cancel carried verifyToken alone while its sibling /:id/status was role-gated, so
+    // any staff token could walk the id space and empty the appointment book — each cancellation
+    // cascading to the linked visit.
+    const res = await apiContext.put(`${API}/appointments/1/cancel`, {
+      headers: { Authorization: `Bearer ${labToken}` },
+    });
+    expect(res.status()).toBe(403);
+  });
+
+  test('patient result history is scoped to the caller\'s own department', async () => {
+    // Compare what SuperAdmin sees against what Laboratory sees, for every patient we can find.
+    let sawForeignCategory = false;
+    const patientIds = await discoverPatientIds(superAdminToken);
+
+    for (const patientId of patientIds) {
+      const [allRes, labRes] = await Promise.all([
+        apiContext.get(`${API}/results/history/${patientId}`, {
+          headers: { Authorization: `Bearer ${superAdminToken}` },
+        }),
+        apiContext.get(`${API}/results/history/${patientId}`, {
+          headers: { Authorization: `Bearer ${labToken}` },
+        }),
+      ]);
+      if (!allRes.ok() || !labRes.ok()) continue;
+
+      const all = (await allRes.json()).data.results;
+      const lab = (await labRes.json()).data.results;
+
+      // The hard assertion: nothing outside Laboratory may ever appear in the Laboratory view.
+      for (const row of lab) expect(LAB_CATEGORIES).toContain(row.category_name);
+      expect(lab.length).toBeLessThanOrEqual(all.length);
+
+      if (all.some((r) => !LAB_CATEGORIES.includes(r.category_name))) sawForeignCategory = true;
+    }
+
+    // Guards against the assertions above passing vacuously on a database with no cross-department
+    // data to hide — if there was nothing to filter, this proved nothing.
+    test.skip(!sawForeignCategory, 'no cross-department results in this database to filter');
+    expect(sawForeignCategory).toBeTruthy();
+  });
+});

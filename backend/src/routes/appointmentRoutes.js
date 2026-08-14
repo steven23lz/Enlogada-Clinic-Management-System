@@ -19,8 +19,14 @@ router.get('/availability', verifyToken, appointmentController.getAvailability);
 // Receptionist verifies appointment by reference (QR scan or manual entry)
 router.get('/verify/:reference', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), appointmentController.verifyReference);
 
-// Client cancels their appointment
-router.put('/:id/cancel', verifyToken, appointmentController.cancel);
+// Client cancels their own appointment; front office cancels on a patient's behalf.
+//
+// This carried verifyToken alone while its sibling /:id/status — a less destructive operation on
+// the same resource — was role-gated. The service's assertClientOwnsPatient returns immediately
+// for any non-Client role, so that asymmetry meant a Laboratory, Xray, Ultrasound or Cashier
+// token could walk PUT /api/appointments/1/cancel … /N/cancel and empty the appointment book,
+// cascading each cancellation to the linked visit.
+router.put('/:id/cancel', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), appointmentController.cancel);
 
 // Staff updates appointment status (Confirmed, Completed, No Show)
 router.put('/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), appointmentController.updateStatus);

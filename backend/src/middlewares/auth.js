@@ -36,7 +36,12 @@ const verifyToken = async (req, res, next) => {
   const token = authHeader.split(' ')[1];
   let decoded;
   try {
-    decoded = jwt.verify(token, env.JWT_SECRET);
+    // Pin the algorithm explicitly. jsonwebtoken@9 already refuses `alg: none` and, with a string
+    // secret, restricts itself to HMAC — so this is not exploitable today. But that protection is
+    // a library default rather than a property of this code, and it would disappear silently the
+    // day the secret became a PEM or key object for asymmetric signing, reopening the classic
+    // RS256→HS256 confusion. Stating the intent costs nothing.
+    decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] });
   } catch {
     return res.status(401).json({
       status: 'error',

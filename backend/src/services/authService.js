@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const userRepository = require('../repositories/userRepository');
 const passwordResetRepository = require('../repositories/passwordResetRepository');
+const db = require('../config/database');
 const env = require('../config/environment');
 const { sendEmail } = require('../config/email');
 const { AVATAR_UPLOAD_ROOT } = require('../config/upload');
@@ -23,18 +24,32 @@ class AuthService {
       throw error;
     }
 
-    // 2. Hash password
+    // 2. Hash password. Deliberately outside the transaction below: bcrypt is ~100ms of CPU, and
+    // holding a pooled database connection idle for that long under load starves other requests.
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // 3. Save user to database
-    const user = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
+    // 3. Create the account and grant its role as one unit.
+    //
+    // These were two independent writes. If the second failed — role table locked, connection
+    // dropped, process restarted mid-request — registration left behind a user with valid
+    // credentials and no role at all. That account can log in, and then every console check finds
+    // an empty role list, so it lands nowhere and shows nothing. It is not self-repairing and the
+    // patient cannot fix it; it needs an administrator to notice and assign the role by hand.
+    const user = await db.withTransaction(async () => {
+      const created = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
 
-    // 4. Assign default 'Client' role
-    const clientRoleId = await userRepository.findRoleIdByName('Client');
-    if (clientRoleId) {
-      await userRepository.assignRoleToUser(user.id, clientRoleId);
-    }
+      const clientRoleId = await userRepository.findRoleIdByName('Client');
+      if (!clientRoleId) {
+        // Previously this was `if (clientRoleId)` — a missing Client role silently produced the
+        // roleless account described above. Failing loudly rolls the user back instead, so a
+        // misconfigured RBAC seed surfaces as an error at registration rather than as a
+        // mysteriously broken account later.
+        throw new Error('The Client role is missing. Run `node src/scripts/setupRbac.js` to seed roles.');
+      }
+      await userRepository.assignRoleToUser(created.id, clientRoleId);
+      return created;
+    });
 
     return {
       ...user,
@@ -99,9 +114,13 @@ class AuthService {
       const tokenHash = hashToken(rawToken);
       const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
 
-      // Invalidate any previously requested, still-unused tokens for this user first.
-      await passwordResetRepository.deleteAllForUser(user.id);
-      await passwordResetRepository.createToken(user.id, tokenHash, expiresAt);
+      // Invalidate any previously requested, still-unused tokens for this user first. Atomic so a
+      // failure cannot revoke the user's outstanding link without issuing the replacement, which
+      // would leave them holding a dead link and no way to tell it had been superseded.
+      await db.withTransaction(async () => {
+        await passwordResetRepository.deleteAllForUser(user.id);
+        await passwordResetRepository.createToken(user.id, tokenHash, expiresAt);
+      });
 
       const frontendBaseUrl = env.FRONTEND_URL;
       const resetLink = `${frontendBaseUrl}/?reset_token=${rawToken}`;
@@ -139,8 +158,15 @@ class AuthService {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
 
-    await userRepository.updatePasswordHash(tokenRecord.user_id, passwordHash);
-    await passwordResetRepository.markUsed(tokenRecord.id);
+    // Changing the password and burning the token must be one unit. Split, as they were, a
+    // failure between them leaves the password changed and the reset link still valid — a
+    // single-use credential that was never consumed, sitting in an inbox, reusable by anyone who
+    // reads that mailbox later. The token is the weaker credential precisely because it is
+    // delivered over email, so it must not outlive its one use.
+    await db.withTransaction(async () => {
+      await userRepository.updatePasswordHash(tokenRecord.user_id, passwordHash);
+      await passwordResetRepository.markUsed(tokenRecord.id);
+    });
 
     return { message: 'Your password has been reset. You can now log in with your new password.' };
   }
@@ -239,18 +265,24 @@ class AuthService {
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(randomPassword, salt);
 
-      const newUser = await userRepository.createUser(
-        given_name || 'Google',
-        family_name || 'User',
-        email,
-        passwordHash,
-        ''
-      );
+      // Same atomicity requirement as registerClient: an account without its role is a broken
+      // account. More so here, because this path auto-provisions on first sign-in with no human
+      // in the loop to notice something went wrong.
+      await db.withTransaction(async () => {
+        const newUser = await userRepository.createUser(
+          given_name || 'Google',
+          family_name || 'User',
+          email,
+          passwordHash,
+          ''
+        );
 
-      const clientRoleId = await userRepository.findRoleIdByName('Client');
-      if (clientRoleId) {
+        const clientRoleId = await userRepository.findRoleIdByName('Client');
+        if (!clientRoleId) {
+          throw new Error('The Client role is missing. Run `node src/scripts/setupRbac.js` to seed roles.');
+        }
         await userRepository.assignRoleToUser(newUser.id, clientRoleId);
-      }
+      });
 
       user = await userRepository.findByEmail(email);
     }

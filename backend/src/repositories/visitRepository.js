@@ -290,15 +290,29 @@ class VisitRepository {
     return result.rows.length > 0;
   }
 
+  /**
+   * Issues the next queue number for today, atomically.
+   *
+   * This used to be `SELECT COUNT(*) … WHERE created_at::date = CURRENT_DATE` followed by a
+   * separate INSERT of count+1, which fails in two ways that only appear once the clinic is
+   * actually busy. Two receptionists registering at the same moment both read the same count and
+   * both issue the same ticket. And because it counted rows rather than issuances, cancelling a
+   * visit rewound the sequence and reissued a number already handed out.
+   *
+   * ON CONFLICT DO UPDATE takes a row lock on the day's counter, so concurrent callers serialise
+   * and get distinct numbers from a single round trip. See migrateDataIntegrity.js [1.13.0]; a
+   * unique index on (visit date, queue_number) backs the invariant at the schema level.
+   */
   async getNextQueueNumber(client = db) {
     const queryText = `
-      SELECT COUNT(*) as count
-      FROM patient_visits
-      WHERE created_at::date = CURRENT_DATE
+      INSERT INTO daily_counters (counter_date, counter_name, last_number)
+      VALUES (CURRENT_DATE, 'queue', 1)
+      ON CONFLICT (counter_date, counter_name)
+      DO UPDATE SET last_number = daily_counters.last_number + 1
+      RETURNING last_number
     `;
     const result = await client.query(queryText);
-    const count = parseInt(result.rows[0].count, 10);
-    return String(count + 1).padStart(4, '0');
+    return String(result.rows[0].last_number).padStart(4, '0');
   }
 }
 
