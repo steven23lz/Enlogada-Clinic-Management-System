@@ -21,7 +21,7 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
 
   const go = (tab) => {
     setMenuOpen(false);
-    onNavigate && onNavigate(tab);
+    onNavigate?.(tab);
   };
 
   const linkClass = (id) =>

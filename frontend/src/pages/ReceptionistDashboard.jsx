@@ -14,18 +14,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
 import { formatCurrency } from '../lib/currency';
-import { toastError, toastInfo } from '../lib/toast';
+import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
 import {
-  Check,
   ClipboardList,
   UserCheck,
   ShieldAlert,
-  FilePlus,
   UserPlus,
   QrCode,
-  PlusCircle,
   Clock,
   Volume2,
   Printer,

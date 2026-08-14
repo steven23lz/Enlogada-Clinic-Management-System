@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { Button } from '../components/ui/button';
-import { Card, CardContent } from '../components/ui/card';
+import { Card } from '../components/ui/card';
 import MetricCard from '../components/ui/metric-card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
@@ -23,7 +23,6 @@ import {
   CheckCircle,
   Printer,
   DollarSign,
-  CheckCircle2,
   AlertCircle,
   Clock,
   ArrowUpDown,
