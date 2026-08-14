@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { GOOGLE_CLIENT_ID, isGoogleAuthConfigured } from './config/googleAuth';
+import { CONSOLE, consoleForNav, defaultNavForRoles } from './config/navigation';
 import Home from './pages/Home';
 import AboutUs from './pages/AboutUs';
 import ServicesPage from './pages/ServicesPage';
@@ -32,7 +33,24 @@ const MainApp = () => {
   const { user, loading } = useAuth();
   const [resetToken] = useState(getInitialResetToken);
   const [currentTab, setCurrentTab] = useState(() => (getInitialResetToken() ? 'reset-password' : 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'reset-password', 'dashboard', 'account'
-  const [activeNav, setActiveNav] = useState('dashboard'); // Active nav in staff/admin sidebar
+  const [activeNav, setActiveNav] = useState(null); // Active nav in staff/admin sidebar
+
+  // Land each user on a destination they actually hold. This used to default to 'dashboard' —
+  // an Admin/SuperAdmin-only destination — so every other role signed in pointing at an id it
+  // did not own, and the sidebar highlighted nothing on arrival. Also re-homes anyone whose
+  // current destination stops being reachable (e.g. a role was revoked mid-session).
+  const roleKey = (user?.roles || []).join(',');
+  useEffect(() => {
+    if (!user || (user.roles || []).includes('Client')) return;
+    const roles = user.roles || [];
+    if (activeNav === 'account') return;
+    if (!activeNav || !consoleForNav(activeNav, roles)) {
+      setActiveNav(defaultNavForRoles(roles));
+    }
+    // activeNav is deliberately not a dependency: this corrects the destination on sign-in and
+    // on a role change, not on every navigation the user makes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, roleKey]);
 
   if (loading) {
     return (
@@ -80,37 +98,7 @@ const MainApp = () => {
   // If user IS logged in
   const roles = user.roles || [];
 
-  // Every SidebarLayout-based role (everyone except Client) can reach a shared, self-service
-  // account page via the sidebar's user-info block — see StaffAccountSettings.jsx. Checked
-  // before any role branch below since it applies uniformly across all of them.
-  if (!roles.includes('Client') && activeNav === 'account') {
-    return <StaffAccountSettings onSelectNav={setActiveNav} />;
-  }
-
-  // SuperAdmin and Admin
-  if (roles.includes('SuperAdmin') || roles.includes('Admin')) {
-    if (currentTab === 'services') {
-      return <ServicesPage onNavigate={handleNavigate} />;
-    }
-    if (currentTab === 'about') {
-      return <AboutUs onNavigate={handleNavigate} />;
-    }
-
-    if (activeNav === 'services-cat') return <ServicesCatalog activeNav={activeNav} onSelectNav={setActiveNav} />;
-    if (['reception-queue', 'reception-walkin', 'reception-checkin', 'reception-history'].includes(activeNav)) {
-      return <ReceptionistDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
-    }
-    if (['cashier-queue', 'cashier-history'].includes(activeNav)) {
-      return <CashierDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
-    }
-    if (['lab-ops', 'lab-history', 'ultrasound-ops', 'ultrasound-history', 'xray-ops', 'xray-history'].includes(activeNav)) {
-      return <DiagnosticDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
-    }
-
-    return <AdminDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
-  }
-
-  // Standard Role-based Routing
+  // Client has no sidebar console; it keeps its own public-style shell and tab model.
   if (roles.includes('Client')) {
     if (currentTab === 'services') return <ServicesPage onNavigate={handleNavigate} />;
     if (currentTab === 'about') return <AboutUs onNavigate={handleNavigate} />;
@@ -118,20 +106,43 @@ const MainApp = () => {
     return <ClientDashboard onNavigate={handleNavigate} />;
   }
 
-  if (roles.includes('Receptionist')) {
-    return <ReceptionistDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
+  // Every SidebarLayout-based role can reach a shared, self-service account page via the
+  // sidebar's user-info block — see StaffAccountSettings.jsx. Checked before the nav routing
+  // below since it applies uniformly and is not a role-gated destination.
+  if (activeNav === 'account') {
+    return <StaffAccountSettings onSelectNav={setActiveNav} />;
   }
 
-  if (roles.includes('Cashier')) {
-    return <CashierDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
+  if (roles.includes('SuperAdmin') || roles.includes('Admin')) {
+    if (currentTab === 'services') return <ServicesPage onNavigate={handleNavigate} />;
+    if (currentTab === 'about') return <AboutUs onNavigate={handleNavigate} />;
   }
 
-  if (
-    roles.includes('Laboratory Staff') ||
-    roles.includes('Xray Staff') ||
-    roles.includes('Ultrasound Staff')
-  ) {
-    return <DiagnosticDashboard activeNav={activeNav} onSelectNav={setActiveNav} />;
+  // Route by DESTINATION, not by a fixed role priority. A user holding several operational
+  // roles reaches every console their roles grant; previously the first matching role won and
+  // the rest of their sidebar was decorative (see config/navigation.js for the full history).
+  //
+  // Resolve to a destination this user genuinely holds before rendering. The effect above
+  // settles `activeNav` too, but only after the first paint — consoles derive their category
+  // and mode straight from this prop, so they must never receive the unset value. An
+  // unreachable destination falls back to the user's own default rather than rendering someone
+  // else's console, so a stale activeNav cannot leak a screen either.
+  const resolvedNav = consoleForNav(activeNav, roles) ? activeNav : defaultNavForRoles(roles);
+  const targetConsole = consoleForNav(resolvedNav, roles);
+
+  switch (targetConsole) {
+    case CONSOLE.RECEPTION:
+      return <ReceptionistDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+    case CONSOLE.CASHIER:
+      return <CashierDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+    case CONSOLE.DIAGNOSTIC:
+      return <DiagnosticDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+    case CONSOLE.SERVICES_CATALOG:
+      return <ServicesCatalog activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+    case CONSOLE.ADMIN:
+      return <AdminDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+    default:
+      break;
   }
 
   // Fallback for unauthorized roles

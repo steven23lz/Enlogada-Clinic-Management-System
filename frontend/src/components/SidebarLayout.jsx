@@ -4,32 +4,15 @@ import Logo from './Logo';
 import { Button } from './ui/button';
 import api from '../config/api';
 import {
-  LayoutDashboard,
-  Users,
-  ClipboardList,
-  FileText,
-  CreditCard,
-  Calendar,
-  FolderKanban,
-  BarChart3,
-  Receipt,
-  FlaskConical,
-  Stethoscope,
-  Scan,
+  Activity,
   Bell,
   LogOut,
-  ChevronDown,
-  Activity,
-  CheckCircle2,
   X,
   Menu,
-  ShieldCheck,
-  UserPlus,
-  QrCode,
-  History,
   UserCog,
   Info
 } from 'lucide-react';
+import { visibleMainNavItems, visibleOpsGroups, nativeRoleForNav } from '../config/navigation';
 
 const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectNav, children }) => {
   const { user, logout } = useAuth();
@@ -39,36 +22,18 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   const userRoles = user?.roles || [];
   const isSuperOrAdmin = userRoles.includes('SuperAdmin') || userRoles.includes('Admin');
 
-  // UI/UX Modernization Phase 7: opsNavGroups is deliberately shared — Admin/SuperAdmin see
+  // UI/UX Modernization Phase 7: ops destinations are deliberately shared — Admin/SuperAdmin see
   // every department's screens, not just their own (§3a intentional superset, not a bug). The
   // dense combined sidebar this produces was flagged as a clarity gap in the redesign audit: an
   // Admin viewing e.g. the Receptionist's Active Queue had no on-screen signal they were on a
   // screen "borrowed" from another role rather than an Admin-exclusive tool. Resolved below, not
   // by shrinking the sidebar (Admin genuinely needs full operational access), but by naming the
   // context once a borrowed screen is open.
-
-  // Navigation Items. Most admin-console items are gated by isSuperOrAdmin (Admin and
-  // SuperAdmin see the same thing); 'superadmin' is the first item restricted to SuperAdmin
-  // alone — Module 13's "elevated ... beyond what Admin can do" boundary. 'dashboard' is
-  // Admin/SuperAdmin-only too: the 5 operational roles now have real, focused destinations in
-  // opsNavItems below, so a generic "Dashboard" button that silently re-rendered whatever page
-  // they were already on (a dead click, confirmed in the UI/UX audit) would only add confusion.
-  const mainNavItems = [
-    ...(isSuperOrAdmin ? [
-      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { id: 'staff', label: 'Staff Accounts', icon: Users },
-      { id: 'service-requests', label: 'Service Requests', icon: ClipboardList },
-      { id: 'services-cat', label: 'Services Catalog', icon: FileText },
-      { id: 'cashier-monitoring', label: 'Cashier Monitoring', icon: CreditCard },
-      { id: 'appointments-list', label: 'Appointments', icon: Calendar },
-      { id: 'patient-records', label: 'Patient Records', icon: FolderKanban },
-      { id: 'reports', label: 'Reports', icon: BarChart3 },
-      { id: 'activity', label: 'Activity Log', icon: Activity },
-    ] : []),
-    ...(userRoles.includes('SuperAdmin') ? [
-      { id: 'superadmin', label: 'Super Admin', icon: ShieldCheck },
-    ] : []),
-  ];
+  //
+  // The items themselves now come from config/navigation.js, which App.jsx also routes from —
+  // one record per destination carrying both its role gating and the console it opens, so the
+  // sidebar can no longer advertise a screen the router will not open.
+  const mainNavItems = visibleMainNavItems(userRoles);
 
   // Module 18 UI/UX Phase 1: every operational role previously had exactly one nav
   // destination (some even shared a "Dashboard" item that silently routed to the same page).
@@ -79,43 +44,16 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // the plan's Section 07 "structure fix"): grouped by department instead of one flat list, so
   // Admin/SuperAdmin — who see all of these at once — get a scannable sidebar instead of 12
   // undifferentiated items. A single-department user still only ever sees their own group.
-  const opsNavGroups = [
-    {
-      label: 'Front Desk',
-      items: [
-        { id: 'reception-queue', label: 'Active Queue', icon: Calendar, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
-        { id: 'reception-walkin', label: 'Walk-In Registration', icon: UserPlus, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
-        { id: 'reception-checkin', label: 'Appointment Check-In', icon: QrCode, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
-        { id: 'reception-history', label: 'Visit History', icon: History, roleRequired: ['Receptionist', 'Admin', 'SuperAdmin'] },
-      ],
-    },
-    {
-      label: 'Billing',
-      items: [
-        { id: 'cashier-queue', label: 'Billing Queue', icon: Receipt, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
-        { id: 'cashier-history', label: 'Transaction History', icon: History, roleRequired: ['Cashier', 'Admin', 'SuperAdmin'] },
-      ],
-    },
-    {
-      label: 'Diagnostics',
-      items: [
-        { id: 'lab-ops', label: 'Laboratory Worklist', icon: FlaskConical, roleRequired: ['Laboratory Staff', 'Admin', 'SuperAdmin'] },
-        { id: 'lab-history', label: 'Laboratory History', icon: History, roleRequired: ['Laboratory Staff', 'Admin', 'SuperAdmin'] },
-        { id: 'ultrasound-ops', label: 'Ultrasound Worklist', icon: Stethoscope, roleRequired: ['Ultrasound Staff', 'Admin', 'SuperAdmin'] },
-        { id: 'ultrasound-history', label: 'Ultrasound History', icon: History, roleRequired: ['Ultrasound Staff', 'Admin', 'SuperAdmin'] },
-        { id: 'xray-ops', label: 'X-Ray Worklist', icon: Scan, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
-        { id: 'xray-history', label: 'X-Ray History', icon: History, roleRequired: ['Xray Staff', 'Admin', 'SuperAdmin'] },
-      ],
-    },
-  ];
+  const opsNavGroups = visibleOpsGroups(userRoles);
 
   // Resolve the currently-open ops screen (if any) and whether the viewer is genuinely acting
   // outside their own department on it — i.e. Admin/SuperAdmin without the item's own operational
-  // role. A native Receptionist on Active Queue is just doing their job and sees nothing extra.
+  // role. A native Receptionist on Active Queue is just doing their job and sees nothing extra,
+  // and so is a Receptionist/Cashier on either of their two departments.
   const activeOpsItem = opsNavGroups
     .flatMap(group => group.items.map(item => ({ ...item, groupLabel: group.label })))
     .find(item => item.id === activeNav);
-  const activeOpsNativeRole = activeOpsItem?.roleRequired.find(r => r !== 'Admin' && r !== 'SuperAdmin');
+  const activeOpsNativeRole = nativeRoleForNav(activeNav);
   const isActingOutsideOwnRole = Boolean(activeOpsItem) && isSuperOrAdmin && !userRoles.includes(activeOpsNativeRole);
 
   // Module 18 (Notification): real, per-user notifications from the backend, replacing the
@@ -199,7 +137,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
               <button
                 key={item.id}
                 onClick={() => {
-                  onSelectNav && onSelectNav(item.id);
+                  onSelectNav?.(item.id);
                   setMobileOpen(false);
                 }}
                 className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border-0 cursor-pointer ${
@@ -232,7 +170,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
                     <button
                       key={item.id}
                       onClick={() => {
-                        onSelectNav && onSelectNav(item.id);
+                        onSelectNav?.(item.id);
                         setMobileOpen(false);
                       }}
                       className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border-0 cursor-pointer ${
@@ -293,7 +231,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
             </button>
             {renderNavContent()}
             <button
-              onClick={() => { onSelectNav && onSelectNav('account'); setMobileOpen(false); }}
+              onClick={() => { onSelectNav?.('account'); setMobileOpen(false); }}
               aria-label="My Account"
               className={`w-full text-left rounded-xl p-3 flex items-center justify-between border shadow-inner mt-4 cursor-pointer transition-colors border-0 ${
                 activeNav === 'account' ? 'bg-[#769046]/20 border-[#769046]/40' : 'bg-slate-800/90 border-slate-700/60 hover:bg-slate-800'
