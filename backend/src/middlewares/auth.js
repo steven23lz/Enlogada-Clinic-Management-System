@@ -1,7 +1,30 @@
 const jwt = require('jsonwebtoken');
 const env = require('../config/environment');
+const userRepository = require('../repositories/userRepository');
 
-const verifyToken = (req, res, next) => {
+/**
+ * Establishes WHO is calling, then asks the database WHAT they may do.
+ *
+ * The token used to carry roles and permissions, and every authorizeRoles check downstream read
+ * them straight off it. That made a signed token an authorization snapshot frozen at sign-in,
+ * with two consequences that are really the same bug seen from either side:
+ *
+ *   - Granting a role did nothing until the user signed out and back in. An administrator would
+ *     hand someone access, watch them fail to get it, and have no idea why.
+ *   - Revoking a role changed nothing at all. The removed access kept working until the token
+ *     expired — up to a full day. Deactivating an account did not lock anyone out either.
+ *
+ * The second is the serious one. "Remove this person's access" has to mean it, immediately;
+ * anything else is a promise the system does not keep. So the token now proves identity only,
+ * and authority is read from user_roles on every request. Grants and revocations both take
+ * effect on the caller's next request, with no sign-out involved and nothing for the client to
+ * cooperate with — the browser cannot hold on to access by holding on to an old token.
+ *
+ * Cost is one indexed lookup per authenticated request (idx_user_roles_user, idx_user_roles_role,
+ * idx_role_permissions_role, added in [1.11.0]). That is the right trade for authorization: a
+ * cache here would reintroduce exactly the staleness window this removes, just shorter.
+ */
+const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
@@ -11,15 +34,47 @@ const verifyToken = (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
+  let decoded;
   try {
-    const decoded = jwt.verify(token, env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
+    decoded = jwt.verify(token, env.JWT_SECRET);
+  } catch {
     return res.status(401).json({
       status: 'error',
       message: 'Invalid or expired token.'
     });
+  }
+
+  try {
+    const user = await userRepository.findById(decoded.userId);
+
+    // Deleted since the token was issued.
+    if (!user) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Account no longer exists. Please sign in again.'
+      });
+    }
+
+    // Deactivated since the token was issued. Previously this was only checked at login, so a
+    // deactivated member of staff kept full access until their token ran out.
+    if (user.status === false) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'This account has been deactivated.'
+      });
+    }
+
+    // Identity from the token; authority from the database, every time.
+    req.user = {
+      ...decoded,
+      userId: user.id,
+      email: user.email,
+      roles: user.roles || [],
+      permissions: user.permissions || []
+    };
+    return next();
+  } catch (err) {
+    return next(err);
   }
 };
 
