@@ -1,5 +1,19 @@
 # Database Migration & Schema History
 
+## [1.12.0] - 2026-08-14 (Separate result recording from result release)
+
+### Added
+* `test_results.recorded_by` — the staff member who wrote the findings. Backfilled from `released_by`, which is accurate for every pre-existing row since only the upload path ever set it.
+* `test_results.authorised_at` — when release was authorised. The existing `released_at` is set on INSERT (i.e. when findings were recorded) and is deliberately left as-is rather than redefined underneath code that already reads it.
+* `idx_test_results_recorded_by`, for per-staff workload reporting.
+
+### Why
+* `releaseResult()` was handed the releasing user's id by its controller and then silently dropped it — only the findings-upload path ever wrote `released_by`. A column named "released by" was therefore recording whoever last *typed the findings*. This is invisible while one person performs both steps, and exactly wrong the moment they are two people — which is the case the workflow is built around, since recording findings and authorising their release are separate events and `'Waiting for Release'` exists as a state precisely to separate them.
+* Found while testing a temporarily-granted role: a Laboratory user borrowing Ultrasound access recorded findings, the Ultrasound staff released them, and the record credited the Laboratory user with the release.
+
+### Migration
+* `node src/scripts/migrateResultAttribution.js` — additive and idempotent.
+
 ## [1.11.0] - 2026-08-14 (Foreign-key and status indexes)
 
 ### Added

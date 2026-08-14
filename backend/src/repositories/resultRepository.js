@@ -99,8 +99,8 @@ class ResultRepository {
     // the request," and adding disk cleanup to it is a separate, riskier concern than this phase
     // set out to solve.
     const queryText = `
-      INSERT INTO test_results (visit_test_id, file_url, file_path, file_original_name, file_mime_type, file_size_bytes, findings, remarks, released_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO test_results (visit_test_id, file_url, file_path, file_original_name, file_mime_type, file_size_bytes, findings, remarks, released_by, recorded_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
       ON CONFLICT (visit_test_id) DO UPDATE
       SET file_url = EXCLUDED.file_url,
           file_path = EXCLUDED.file_path,
@@ -109,7 +109,10 @@ class ResultRepository {
           file_size_bytes = EXCLUDED.file_size_bytes,
           findings = EXCLUDED.findings,
           remarks = EXCLUDED.remarks,
-          released_by = EXCLUDED.released_by,
+          -- recorded_by tracks whoever last wrote these findings, including a correction to an
+          -- already-released result. released_by is deliberately NOT touched here: this path is
+          -- recording, not authorising, and overwriting it is what made the two indistinguishable.
+          recorded_by = EXCLUDED.recorded_by,
           released_at = CURRENT_TIMESTAMP
       RETURNING *
     `;
@@ -133,6 +136,25 @@ class ResultRepository {
       WHERE vt.id = $1
     `;
     const result = await db.query(queryText, [visitTestId]);
+    return result.rows[0];
+  }
+
+  /**
+   * Records WHO authorised the release, at the moment they authorise it.
+   *
+   * This step existed in the service and the controller — releaseResult() was handed the
+   * releasing user's id — but nothing ever persisted it. The ticket flipped to 'Completed' and
+   * the actor was dropped, leaving released_by holding whoever had typed the findings.
+   */
+  async markReleased(visitTestId, releasedBy) {
+    const queryText = `
+      UPDATE test_results
+      SET released_by = $2,
+          authorised_at = CURRENT_TIMESTAMP
+      WHERE visit_test_id = $1
+      RETURNING *
+    `;
+    const result = await db.query(queryText, [visitTestId, releasedBy]);
     return result.rows[0];
   }
 

@@ -226,10 +226,18 @@ CREATE TABLE test_results (
     file_size_bytes INT,
     findings TEXT,
     remarks TEXT,
-    released_by INT NOT NULL,
-    released_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Two distinct actors, because recording findings and authorising their release are two
+    -- distinct clinical events — that is exactly what the 'Waiting for Release' state exists
+    -- for. A single column could only ever name one of them, and named the wrong one whenever
+    -- they differed. See migrations.md [1.12.0].
+    recorded_by INT,                                  -- who wrote the findings
+    released_by INT NOT NULL,                         -- who authorised release to the patient
+    released_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- when the findings were recorded
+    authorised_at TIMESTAMP,                          -- when the release was authorised
     CONSTRAINT fk_results_visit_test FOREIGN KEY (visit_test_id) REFERENCES visit_tests(id),
-    CONSTRAINT fk_results_released_by FOREIGN KEY (released_by) REFERENCES users(id)
+    CONSTRAINT fk_results_released_by FOREIGN KEY (released_by) REFERENCES users(id),
+    CONSTRAINT fk_results_recorded_by FOREIGN KEY (recorded_by) REFERENCES users(id),
+    CONSTRAINT fk_results_recorded_by FOREIGN KEY (recorded_by) REFERENCES users(id)
 );
 
 -- 7. Billing and Payments

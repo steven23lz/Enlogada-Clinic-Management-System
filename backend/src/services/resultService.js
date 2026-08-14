@@ -233,6 +233,13 @@ class ResultService {
     const releaseState = await resultRepository.findVisitReleaseStateByVisitTestId(visitTestId);
     await testRepository.updateVisitTestStatus(visitTestId, 'Completed');
 
+    // Persist WHO authorised this. `releasedBy` was already being passed in from the controller
+    // and then dropped on the floor, so released_by kept whatever the findings-upload path wrote
+    // — i.e. the author, not the authoriser. Whenever those are two different people, which is
+    // the entire reason 'Waiting for Release' exists as a separate state, the record named the
+    // wrong one.
+    await resultRepository.markReleased(visitTestId, releasedBy);
+
     // Once nothing on the visit is outstanding, the visit itself is done — otherwise it would
     // sit in 'Processing' forever, permanently inflating the front desk's active queue and the
     // cashier's billing list.
