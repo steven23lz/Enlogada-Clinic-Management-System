@@ -620,9 +620,71 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                 </div>
               ) : (
-                <div className="p-12 text-center space-y-3">
-                  <Receipt className="w-12 h-12 text-gray-300 mx-auto" />
-                  <p className="text-sm font-bold text-gray-400">Select a patient ticket from the left queue to open the billing terminal.</p>
+                /* Idle state. This panel is the largest area on the busiest screen in the clinic
+                   and it previously held one grey sentence, so for most of a shift the cashier's
+                   main view was mostly empty. The prompt still leads, because it is the answer to
+                   "what do I do", but the space beneath it now carries the shift summary a cashier
+                   would otherwise go to Transaction History to find. */
+                <div className="p-8 space-y-6">
+                  <div className="text-center space-y-2">
+                    <Receipt className="w-10 h-10 text-gray-300 mx-auto" />
+                    <p className="text-sm font-bold text-gray-500 m-0">
+                      Select a patient ticket from the queue to open the billing terminal.
+                    </p>
+                    {filteredVisits.length > 0 && (
+                      <p className="text-xs text-gray-400 m-0">
+                        {filteredVisits.length} patient{filteredVisits.length === 1 ? '' : 's'} waiting to be billed.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="border-t border-gray-100 pt-5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-3">
+                      This shift so far
+                    </span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block">Receipts issued</span>
+                        <span className="text-lg font-extrabold text-slate-900 tabular-nums">{transactions.length}</span>
+                      </div>
+                      <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block">Average per receipt</span>
+                        <span className="text-lg font-extrabold text-slate-900 tabular-nums">
+                          {transactions.length > 0
+                            ? formatCurrency(
+                                transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0) / transactions.length
+                              )
+                            : formatCurrency(0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {transactions.length > 0 && (
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500 block mb-2">
+                        Recent receipts
+                      </span>
+                      <div className="space-y-1.5">
+                        {transactions.slice(0, 4).map((t) => (
+                          <div
+                            key={t.id}
+                            className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <span className="block text-xs font-bold text-slate-900 truncate">
+                                {t.patient_first_name} {t.patient_last_name}
+                              </span>
+                              <span className="block text-[10px] text-gray-400 font-mono">#{t.receipt_number}</span>
+                            </div>
+                            <span className="text-xs font-extrabold text-slate-900 tabular-nums flex-shrink-0">
+                              {formatCurrency(parseFloat(t.amount || 0))}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </Card>
