@@ -30,7 +30,7 @@ const getInitialResetToken = () => {
 };
 
 const MainApp = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, rolesChanged, logout } = useAuth();
   const [resetToken] = useState(getInitialResetToken);
   const [currentTab, setCurrentTab] = useState(() => (getInitialResetToken() ? 'reset-password' : 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'reset-password', 'dashboard', 'account'
   const [activeNav, setActiveNav] = useState(null); // Active nav in staff/admin sidebar
@@ -98,12 +98,46 @@ const MainApp = () => {
   // If user IS logged in
   const roles = user.roles || [];
 
+  // An administrator changed this account's roles while it was signed in. The session keeps
+  // running on the roles the token carries, because those are the only ones the API will honour
+  // — but saying nothing would leave someone waiting for access that was granted minutes ago, or
+  // still using access that was revoked. Both are worth one line on screen.
+  const roleChangeNotice = rolesChanged ? (
+    <div
+      role="status"
+      className="flex items-center justify-between gap-3 bg-amber-50 border-b border-amber-200 px-4 py-2 text-fine text-amber-900"
+    >
+      <span>
+        <strong className="font-bold">Your access has been updated.</strong> Sign out and back in
+        to apply the change — this session is still running on your previous permissions.
+      </span>
+      <button
+        onClick={logout}
+        className="flex-shrink-0 font-bold underline underline-offset-2 hover:text-amber-950 bg-transparent border-0 cursor-pointer text-fine"
+      >
+        Sign out
+      </button>
+    </div>
+  ) : null;
+
+  // Wraps whatever console the routing below resolves to, so the notice appears once for every
+  // role rather than being pasted into each dashboard.
+  const withNotice = (screen) =>
+    roleChangeNotice ? (
+      <>
+        {roleChangeNotice}
+        {screen}
+      </>
+    ) : (
+      screen
+    );
+
   // Client has no sidebar console; it keeps its own public-style shell and tab model.
   if (roles.includes('Client')) {
     if (currentTab === 'services') return <ServicesPage onNavigate={handleNavigate} />;
     if (currentTab === 'about') return <AboutUs onNavigate={handleNavigate} />;
     if (currentTab === 'account') return <ClientProfile onNavigate={handleNavigate} />;
-    return <ClientDashboard onNavigate={handleNavigate} />;
+    return withNotice(<ClientDashboard onNavigate={handleNavigate} />);
   }
 
   // Every SidebarLayout-based role can reach a shared, self-service account page via the
@@ -132,15 +166,15 @@ const MainApp = () => {
 
   switch (targetConsole) {
     case CONSOLE.RECEPTION:
-      return <ReceptionistDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+      return withNotice(<ReceptionistDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />);
     case CONSOLE.CASHIER:
-      return <CashierDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+      return withNotice(<CashierDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />);
     case CONSOLE.DIAGNOSTIC:
-      return <DiagnosticDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+      return withNotice(<DiagnosticDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />);
     case CONSOLE.SERVICES_CATALOG:
-      return <ServicesCatalog activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+      return withNotice(<ServicesCatalog activeNav={resolvedNav} onSelectNav={setActiveNav} />);
     case CONSOLE.ADMIN:
-      return <AdminDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+      return withNotice(<AdminDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />);
     default:
       break;
   }
