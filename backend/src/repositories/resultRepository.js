@@ -233,7 +233,9 @@ class ResultRepository {
   // matching the two branches assertStaffOwnsVisitTest/getPatientHistory already use elsewhere.
   async findOwnershipInfoByVisitTestId(visitTestId) {
     const queryText = `
-      SELECT tc.name as category_name, p.user_id as patient_user_id
+      -- patient id as well as user_id: the PHI read audit keys on the patient, since
+      -- "who accessed this patient's data?" is the question an incident asks.
+      SELECT tc.name as category_name, p.user_id as patient_user_id, p.id as patient_id
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id

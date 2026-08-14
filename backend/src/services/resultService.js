@@ -286,7 +286,10 @@ class ResultService {
     return {
       absolutePath,
       originalName: result.file_original_name || 'result',
-      mimeType: result.file_mime_type || 'application/octet-stream'
+      mimeType: result.file_mime_type || 'application/octet-stream',
+      // Returned so the controller can audit the access against the patient rather than only
+      // against the visit_test row.
+      patientId: ownership.patient_id
     };
   }
 

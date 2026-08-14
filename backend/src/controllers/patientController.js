@@ -1,4 +1,5 @@
 const patientService = require('../services/patientService');
+const auditService = require('../services/auditService');
 
 class PatientController {
   async addProfile(req, res, next) {
@@ -60,6 +61,18 @@ class PatientController {
         return res.status(403).json({
           status: 'error',
           message: 'Access forbidden. This profile does not belong to your account.'
+        });
+      }
+
+      // Logged only for staff. A Client opening their own profile is not an access anyone will
+      // ever investigate, and recording it would bury the entries that matter under routine
+      // self-service traffic.
+      if (!req.user.roles.includes('Client')) {
+        await auditService.logPhiRead({
+          actorId: req.user.userId,
+          patientId: patient.id,
+          resource: 'patient_record',
+          description: `Viewed the record of ${patient.first_name} ${patient.last_name} (PT-${patient.id})`,
         });
       }
 

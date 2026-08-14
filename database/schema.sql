@@ -45,6 +45,13 @@ CREATE TABLE users (
     -- what makes "reset the password" actually end a stolen session — there is no server-side
     -- logout and the token lives in localStorage. See migrations.md [1.16.0].
     password_changed_at TIMESTAMP,
+    -- Consecutive failed sign-ins, and when the resulting lock expires. The policy is
+    -- deliberately forgiving (10 failures, 15 minutes, self-expiring) because a tight lockout is
+    -- itself a denial of service against the clinic: anyone who can guess a staff address could
+    -- take the front desk offline during the morning rush. See migrations.md [1.19.0].
+    failed_login_count INT NOT NULL DEFAULT 0,
+    last_failed_login_at TIMESTAMP,
+    locked_until TIMESTAMP,
     avatar_path VARCHAR(255),
     avatar_mime_type VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -382,7 +389,11 @@ CREATE INDEX idx_notification_reads_user ON notification_reads(user_id, is_read)
 -- corrections) rather than instrumenting every write in the app.
 CREATE TABLE audit_log (
     id SERIAL PRIMARY KEY,
-    actor_id INT REFERENCES users(id),
+    -- ON DELETE SET NULL so the log genuinely outlives the actor, which is what the note above
+    -- claims. Previously NO ACTION, which made deleting such a user impossible and contradicted
+    -- the very reason actor_name is denormalized. Never CASCADE: removing a user must not erase
+    -- the record of what they did.
+    actor_id INT REFERENCES users(id) ON DELETE SET NULL,
     actor_name VARCHAR(200) NOT NULL,
     action VARCHAR(100) NOT NULL,
     entity_type VARCHAR(50) NOT NULL,
@@ -481,6 +492,11 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled ON appointments(scheduled_
 CREATE INDEX IF NOT EXISTS idx_patient_visits_created ON patient_visits(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_test_results_released_by ON test_results(released_by);
 CREATE INDEX IF NOT EXISTS idx_notification_events_created ON notification_events(created_at DESC);
+-- "Who accessed this patient's data?" is the only question audit_log is asked during an incident,
+-- so that is what this serves. The second supports the retention sweep (pruneAuditLog.js), which
+-- matters now that PHI reads are logged and the table finally has a growth profile.
+CREATE INDEX IF NOT EXISTS idx_audit_log_entity_created ON audit_log (entity_type, entity_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log (created_at);
 
 -- =====================================================================================
 -- Daily counters — see migrations.md [1.13.0]

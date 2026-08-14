@@ -89,6 +89,49 @@ class UserRepository {
     return result.rows[0];
   }
 
+  /**
+   * Records a failed sign-in and locks the account once the threshold is reached.
+   *
+   * One statement rather than read-then-write: two attempts landing together would otherwise both
+   * read the same count and both write count+1, so the counter under-counts exactly when it is
+   * being attacked. The CASE decides the lock inside the same UPDATE that increments.
+   *
+   * Returns the resulting state so the caller can log a lockout without a second query.
+   */
+  async registerFailedLogin(userId, { threshold, lockMinutes }) {
+    const queryText = `
+      UPDATE users
+      SET failed_login_count = failed_login_count + 1,
+          last_failed_login_at = CURRENT_TIMESTAMP,
+          locked_until = CASE
+            WHEN failed_login_count + 1 >= $2
+              THEN CURRENT_TIMESTAMP + ($3 || ' minutes')::interval
+            ELSE locked_until
+          END
+      WHERE id = $1
+      RETURNING failed_login_count, locked_until
+    `;
+    const result = await db.query(queryText, [userId, threshold, String(lockMinutes)]);
+    return result.rows[0];
+  }
+
+  /**
+   * Clears the failure counter and any lock. Called on a successful sign-in, and when an
+   * administrator resets a password — a staff member locked out at the front desk should not have
+   * to wait out the window once someone has verified who they are.
+   *
+   * The WHERE guard keeps this from writing on every single successful login, which would
+   * otherwise make each sign-in a write to the users table for no reason.
+   */
+  async clearLoginFailures(userId) {
+    const queryText = `
+      UPDATE users
+      SET failed_login_count = 0, locked_until = NULL
+      WHERE id = $1 AND (failed_login_count > 0 OR locked_until IS NOT NULL)
+    `;
+    await db.query(queryText, [userId]);
+  }
+
   async updateContactInfo(userId, firstName, lastName, contactNumber) {
     const queryText = `
       UPDATE users

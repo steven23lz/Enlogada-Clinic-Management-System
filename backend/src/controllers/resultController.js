@@ -1,6 +1,7 @@
 const fs = require('fs');
 const resultService = require('../services/resultService');
 const patientService = require('../services/patientService');
+const auditService = require('../services/auditService');
 const logger = require('../config/logger');
 
 class ResultController {
@@ -133,7 +134,20 @@ class ResultController {
   async downloadResultFile(req, res, next) {
     try {
       const { visitTestId } = req.params;
-      const { absolutePath, originalName, mimeType } = await resultService.getResultFile(visitTestId, req.user);
+      const { absolutePath, originalName, mimeType, patientId } = await resultService.getResultFile(visitTestId, req.user);
+
+      // Downloading the report itself is the most concrete PHI access there is — the file leaves
+      // the building. Logged before the stream starts, so a failed send still leaves a record of
+      // the attempt. Client self-access is not logged (see patientController).
+      if (!req.user.roles.includes('Client')) {
+        await auditService.logPhiRead({
+          actorId: req.user.userId,
+          patientId,
+          resource: 'result_file',
+          description: `Downloaded the report file for visit test #${visitTestId}`,
+        });
+      }
+
       res.setHeader('Content-Type', mimeType);
       res.setHeader('Content-Disposition', `inline; filename="${originalName.replace(/"/g, '')}"`);
       return res.sendFile(absolutePath);
@@ -195,6 +209,18 @@ class ResultController {
       // requestingUser drives the department scoping in the service — a diagnostic role sees only
       // its own categories here, matching every other result route.
       const results = await resultService.getPatientHistory(patientId, req.user);
+
+      // Clinical findings are the most sensitive thing this system holds, so a staff member
+      // pulling one patient's whole diagnostic history is exactly the access a breach
+      // investigation asks about. Client self-access is not logged — see patientController.
+      if (!req.user.roles.includes('Client')) {
+        await auditService.logPhiRead({
+          actorId: req.user.userId,
+          patientId,
+          resource: 'result_history',
+          description: `Viewed the diagnostic history of patient PT-${patientId} (${results.length} result(s))`,
+        });
+      }
       return res.status(200).json({
         status: 'success',
         data: { results }

@@ -1,5 +1,40 @@
 # Database Migration & Schema History
 
+## [1.19.0] - 2026-08-15 (Account lockout, PHI read auditing, audit retention)
+
+Run: `node src/scripts/migrateLoginProtection.js` (additive, safe to re-run)
+
+### Added — per-account lockout
+[1.16.0]'s credential rate limiter is keyed by IP, so an attacker spreading attempts across addresses still had unlimited guesses at any one account. There was no per-account counter anywhere in the schema.
+
+**The policy is deliberately forgiving, and that is the design decision worth recording.** A tight lockout is itself a denial of service *against the clinic*: anyone who can guess `receptionist@enlogada.com` — and the address format is guessable — could fail five logins at 08:00 and take the front desk offline during the morning rush. That is a worse outcome than the attack it prevents. So:
+
+* **10** consecutive failures, not 3 or 5;
+* **15 minutes**, and it **expires on its own** — nobody has to be phoned;
+* a single successful login resets the counter, so ordinary mistyping never accumulates;
+* an administrator resetting the password clears it immediately, since they have usually just verified the person in front of them.
+
+The increment is a single `UPDATE` with the threshold check inside it — a read-then-write would under-count exactly when the account is being attacked. A lockout is audit-logged and raises a `warning` notification to Admin/SuperAdmin, because it is either an attack in progress or a staff member about to be blocked from working, and both want someone to know.
+
+The refusal names the lockout rather than returning the generic "invalid email or password". That does confirm the account exists — a deliberate trade, since the rate limiter already bounds enumeration and the alternative is a staff member whose password is correct being told it is wrong, retrying, extending their own lock, and escalating.
+
+### Added — PHI read auditing
+All nine existing audit call sites were on *writes*. Nothing recorded who **read** a patient record, so after the mass-read hole closed in the first pass there would have been no way to scope a breach notification — the only trace was a morgan line on stdout, which is not retained. The Data Privacy Act expects an establishment to be able to say who accessed what.
+
+Logged: viewing an identified patient's demographics, their diagnostic history, and downloading a report file. Keyed on the **patient**, since "who accessed this person's data?" is the only question this table is asked during an incident — with `idx_audit_log_entity_created` to serve exactly that.
+
+**Deliberately not logged:** searches, worklists and queues. Staff refresh those constantly, and recording them would bury the entries that matter under traffic that is just people doing their job — the same fan-out mistake that took `notification_reads` to 255,540 rows. Client self-access is also excluded; nobody investigates a patient reading their own results. A spec pins both halves.
+
+### Added — audit retention
+`audit_log` has never had retention, and PHI reads change its growth profile completely. `pruneAuditLog.js` uses two windows because the entries answer different questions: **2 years** for PHI reads (high volume, value drops once the period is reviewed) and **7 years** for everything else (refunds, discounts, amendments, account changes — low volume, and matching how long the financial records they describe must be kept). Both overridable; dry-run by default.
+
+### Fixed — `audit_log.actor_id` blocked deleting any user who had ever acted
+The table's own comment says `actor_name` is denormalized "since the log must remain legible even if the actor's account is later deleted" — but the foreign key beside it was `NO ACTION`, which made that deletion impossible. The stated intent and the constraint contradicted each other.
+
+This surfaced the moment lockouts and PHI reads started writing entries: **the E2E purge began failing** with `violates foreign key constraint "audit_log_actor_id_fkey"` and left test data behind, quietly undoing the guarantee that a run leaves the demo dataset exactly as it found it. Now `ON DELETE SET NULL` — never `CASCADE`, because deleting a user must not erase the record of what they did.
+
+---
+
 ## [1.18.0] - 2026-08-15 (Date predicates that can actually use an index)
 
 Run: `node src/scripts/migrateQueryPerformance.js` (additive, safe to re-run)

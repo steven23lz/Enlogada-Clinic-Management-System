@@ -92,6 +92,12 @@ class AdminService {
     const passwordHash = await bcrypt.hash(newPassword, salt);
     await userRepository.updatePasswordHash(userId, passwordHash);
 
+    // Clear any failed-login lock at the same time. A staff member locked out at the front desk
+    // has usually just had their identity verified in person by the administrator doing this —
+    // making them additionally wait out the 15-minute window would be pointless, and the reason
+    // they called for help in the first place.
+    await userRepository.clearLoginFailures(userId);
+
     await auditService.log({
       actorId: requestingUser?.userId,
       action: 'staff.password_reset',

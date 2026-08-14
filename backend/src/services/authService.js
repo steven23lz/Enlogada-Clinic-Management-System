@@ -9,8 +9,21 @@ const db = require('../config/database');
 const env = require('../config/environment');
 const { sendEmail } = require('../config/email');
 const { AVATAR_UPLOAD_ROOT } = require('../config/upload');
+const auditService = require('./auditService');
+const notificationService = require('./notificationService');
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+// Lockout policy — deliberately forgiving, because the obvious design is dangerous here.
+//
+// A tight threshold turns the lockout into a denial of service against the clinic itself: anyone
+// who can guess receptionist@enlogada.com could fail five logins at 08:00 and take the front desk
+// offline during the morning rush, which is worse than the attack being prevented. Ten attempts
+// per fifteen minutes per account still makes online password guessing impractical, while the
+// worst case for a real staff member is a quarter of an hour rather than a phone call — and it
+// expires on its own, with no one needed to clear it.
+const FAILED_LOGIN_THRESHOLD = 10;
+const LOCK_DURATION_MINUTES = 15;
 
 const hashToken = (rawToken) => crypto.createHash('sha256').update(rawToken).digest('hex');
 
@@ -66,13 +79,61 @@ class AuthService {
       throw error;
     }
 
-    // 2. Check password match
+    // 2. Refuse while locked, before spending a bcrypt comparison on it.
+    //
+    // This message names the lockout rather than returning the generic "invalid email or
+    // password", which does confirm the account exists. That is a deliberate trade: the
+    // credential rate limiter already bounds enumeration, and the alternative is a staff member
+    // whose password is correct being told it is wrong, retrying, extending their own lock, and
+    // escalating to whoever maintains this system. Operational clarity wins for a clinic that
+    // cannot pause the morning queue over a login message.
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      const minutesLeft = Math.max(
+        1,
+        Math.ceil((new Date(user.locked_until) - Date.now()) / 60000)
+      );
+      const error = new Error(
+        `Too many failed sign-in attempts. This account is locked for another ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`
+      );
+      error.statusCode = 423; // Locked
+      throw error;
+    }
+
+    // 3. Check password match
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
+      // Counted per account, which is what the IP-keyed rate limiter cannot do: an attacker
+      // spreading attempts across addresses still runs into this.
+      const state = await userRepository.registerFailedLogin(user.id, {
+        threshold: FAILED_LOGIN_THRESHOLD,
+        lockMinutes: LOCK_DURATION_MINUTES,
+      });
+
+      if (state?.locked_until && new Date(state.locked_until) > new Date()) {
+        // Worth an audit entry and an alert: a genuine lockout is either an attack in progress or
+        // a staff member about to be blocked from working, and both want someone to know.
+        await auditService.log({
+          actorId: user.id,
+          action: 'auth.account_locked',
+          entityType: 'user',
+          entityId: user.id,
+          description: `Locked after ${state.failed_login_count} consecutive failed sign-in attempts`,
+        });
+        await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
+          title: 'Account locked after failed sign-ins',
+          message: `${user.email} — ${state.failed_login_count} consecutive failures. Unlocks automatically in ${LOCK_DURATION_MINUTES} minutes.`,
+          type: 'warning',
+        });
+      }
+
       const error = new Error('Invalid email or password');
       error.statusCode = 401;
       throw error;
     }
+
+    // A correct password clears the slate, so ordinary mistyping across a week never accumulates
+    // into a lockout.
+    await userRepository.clearLoginFailures(user.id);
 
     // Filter out null values in array_agg if user has no role or is newly created
     const cleanRoles = (user.roles || []).filter(role => role !== null);

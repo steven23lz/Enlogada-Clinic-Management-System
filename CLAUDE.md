@@ -39,6 +39,7 @@ node src/scripts/migrateResultVersioning.js  # [1.15.0] result amendment history
 node src/scripts/migrateSessionRevocation.js # [1.16.0] password change ends older sessions
 node src/scripts/migrateVatExemption.js      # [1.17.0] VAT-exempt senior/PWD discounts
 node src/scripts/migrateQueryPerformance.js  # [1.18.0] indexes for date-ranged screens
+node src/scripts/migrateLoginProtection.js   # [1.19.0] account lockout + PHI read auditing
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -48,9 +49,13 @@ node src/scripts/resetDemoData.js --confirm   # apply
 # Seed 5 patients, one at each workflow stage (needs both servers running).
 node src/scripts/seedDemoScenario.js
 
-# Retention pass for notification history. Schedule this daily in any long-lived environment.
+# Retention passes. Schedule both in any long-lived environment — notifications daily, audit
+# monthly. audit_log now records PHI reads, so it grows with staff activity rather than with
+# sensitive writes only.
 node src/scripts/pruneNotifications.js --dry-run
 node src/scripts/pruneNotifications.js
+node src/scripts/pruneAuditLog.js --dry-run
+node src/scripts/pruneAuditLog.js            # PHI reads 2y, everything else 7y
 ```
 
 **Before a demo:** `resetDemoData.js --confirm` then `seedDemoScenario.js`.
@@ -111,6 +116,8 @@ Public (unauthenticated) pages: `Home`, `ServicesPage` (dynamically fetches acti
 Schema lives in `database/schema.sql` (source of truth, applied wholesale by `migrateDb.js`); human-readable change log in `database/migrations.md`.
 
 **Transactions:** `db.withTransaction(fn)` in `src/config/database.js` makes every query issued underneath it — at any call depth, through any repository — run on one connection and commit as a unit. It uses `AsyncLocalStorage`, so repositories need no `client` argument and cannot accidentally write outside the transaction. Nested calls join the transaction already in progress. **Never call `db.pool.connect()` directly**: a self-managed client inside a `withTransaction` opens a second, independent transaction that commits on its own, and with a bounded pool it deadlocks once every connection is held by a transaction waiting for another connection. Any service method performing 2+ writes that must succeed together belongs in `withTransaction`; keep bcrypt hashing and outbound email/HTTP *outside* it so a pooled connection is not held during slow work.
+
+**PHI reads are audited; keep the scope narrow.** `auditService.logPhiRead` records reads of an *identified patient's* records (demographics, result history, report file). Do not add it to searches, worklists or queues — staff refresh those constantly, and the entries that matter would drown in traffic that is just people doing their job. That is the fan-out mistake that took `notification_reads` to 255,540 rows.
 
 **`test_results` is versioned — always filter on `is_current`.** A test carries one row per version of its report (an amendment supersedes rather than overwrites; see [1.15.0]). A `LEFT JOIN test_results` without `AND tr.is_current` repeats the parent row once per amendment and shows superseded findings beside live ones, and an `UPDATE … WHERE visit_test_id = $1` without it rewrites the history. `findVersionHistoryByVisitTestId` is the only intentional reader of superseded rows.
 
