@@ -76,7 +76,10 @@ class ReportRepository {
       JOIN visit_tests vt ON tr.visit_test_id = vt.id
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
-      WHERE tr.released_at::date BETWEEN $1 AND $2
+      -- is_current: an amended result would otherwise count once per version, inflating a
+      -- clinician's throughput every time somebody corrected a report.
+      WHERE tr.is_current
+        AND tr.released_at::date BETWEEN $1 AND $2
       GROUP BY u.id, u.first_name, u.last_name, tc.name
       ORDER BY result_count DESC
     `;

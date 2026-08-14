@@ -129,7 +129,10 @@ class ResultService {
     return await testRepository.updateVisitTestStatus(visitTestId, status);
   }
 
-  async uploadResult({ visitTestId, fileUrl, file, findings, remarks, releasedBy }, requestingUser) {
+  async uploadResult(
+    { visitTestId, fileUrl, file, findings, remarks, releasedBy, amendmentReason, isCritical },
+    requestingUser
+  ) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
 
     // Fetched once, up front: doubles as (a) the file-preservation source when neither a new
@@ -184,7 +187,9 @@ class ResultService {
         fileSizeBytes,
         findings,
         remarks,
-        releasedBy
+        releasedBy,
+        amendmentReason,
+        isCritical
       });
 
       // Phase D: only a correction is audit-worthy here — the first-time release of every result
@@ -195,12 +200,31 @@ class ResultService {
       // rolled back is worse than no entry, because the log is the artifact whose whole value is
       // being trustworthy.
       if (isCorrection) {
+        // Names the versions involved and the stated reason. The old entry said only "Corrected
+        // findings for visit test #N" — true, and useless: it could not tell you what changed,
+        // and the previous text no longer existed anywhere to compare against. Now the superseded
+        // version is still on the table, so the log points at both ends of the change.
         await auditService.log({
           actorId: requestingUser?.userId,
-          action: 'result.corrected',
+          action: 'result.amended',
           entityType: 'test_result',
           entityId: created.id,
-          description: `Corrected findings for visit test #${visitTestId}`
+          description:
+            `Amended visit test #${visitTestId}: version ${existing.version} superseded by ` +
+            `version ${created.version}` +
+            (amendmentReason ? ` — ${amendmentReason}` : ' — no reason given')
+        });
+      }
+
+      // A critical result is an event in its own right, whoever recorded it. Logged here rather
+      // than only on release so the flag is traceable even if the ticket is never authorised.
+      if (isCritical) {
+        await auditService.log({
+          actorId: requestingUser?.userId,
+          action: 'result.flagged_critical',
+          entityType: 'test_result',
+          entityId: created.id,
+          description: `Flagged CRITICAL findings for visit test #${visitTestId} (version ${created.version})`
         });
       }
 
@@ -302,16 +326,43 @@ class ResultService {
     // UI/UX Modernization Phase 11: previously that return value was discarded here, so the
     // controller always reported "patient notified via email" even when nothing was sent.
     const patientInfo = await resultRepository.findPatientEmailByVisitTestId(visitTestId);
+
+    // A critical result must not leave the building looking like a routine one. `result` was read
+    // before the release, so this is the version being authorised.
+    const isCritical = Boolean(result.is_critical);
+    const isAmendment = (result.version || 1) > 1;
+
     let emailStatus = 'no_email';
     if (patientInfo && patientInfo.email) {
+      // A panic value used to go out with exactly the same cheerful "your results are ready"
+      // email as a normal CBC. The clinic still telephones — that is what the acknowledgement
+      // below records — but the email must not read as routine in the meantime, and it must not
+      // put a clinical value in front of a patient with no clinician attached to it.
+      const subject = isCritical
+        ? `IMPORTANT: Please contact Enlogada Clinic about your ${patientInfo.test_name} result`
+        : isAmendment
+          ? `Updated ${patientInfo.test_name} result - Enlogada Clinic`
+          : `Your ${patientInfo.test_name} Results Are Ready - Enlogada Clinic`;
+
+      const body = isCritical
+        ? `<p>Your <strong>${patientInfo.test_name}</strong> result requires prompt discussion with a clinician.</p>
+           <p><strong>Please contact the clinic as soon as you can</strong>, or proceed to the nearest
+              emergency department if you feel unwell. A member of our staff will also be trying to
+              reach you by phone.</p>`
+        : isAmendment
+          ? `<p>Your <strong>${patientInfo.test_name}</strong> report has been <strong>updated</strong>, and the
+                revised version replaces the one issued earlier.</p>
+             <p>Please use the updated report, and discard or disregard any earlier copy.</p>`
+          : `<p>Your <strong>${patientInfo.test_name}</strong> results are now available.</p>
+             <p>You can view your results by logging in to your account or by visiting the clinic.</p>`;
+
       const emailResult = await sendEmail({
         to: patientInfo.email,
-        subject: `Your ${patientInfo.test_name} Results Are Ready - Enlogada Clinic`,
+        subject,
         html: `
           <div style="font-family: Arial, sans-serif; padding: 20px;">
             <h2>Hello ${patientInfo.first_name} ${patientInfo.last_name},</h2>
-            <p>Your <strong>${patientInfo.test_name}</strong> results are now available.</p>
-            <p>You can view your results by logging in to your account or by visiting the clinic.</p>
+            ${body}
             <br/>
             <p>Thank you,</p>
             <p><strong>Enlogada Ultrasound and Diagnostic Clinic</strong></p>
@@ -328,14 +379,30 @@ class ResultService {
     // desk owns the queue board, and a ticket finishing at a modality is exactly the kind of
     // modality-side change that has to reflect back to reception.
     if (patientInfo) {
-      await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
-        title: 'Result Released',
-        message: `${patientInfo.test_name} for ${patientInfo.first_name} ${patientInfo.last_name}`,
-        type: 'success'
-      });
+      const patientName = `${patientInfo.first_name} ${patientInfo.last_name}`;
+
+      if (isCritical) {
+        // The escalation. An email to the patient is not a callback, and a critical value that
+        // nobody is told about is the most dangerous state this system can produce. This puts it
+        // in front of the front desk and administrators as an urgent item so somebody picks up a
+        // phone — and acknowledgeCritical below records that they did.
+        await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
+          title: 'CRITICAL RESULT — patient callback required',
+          message: `${patientInfo.test_name} for ${patientName}${
+            patientInfo.contact_number ? ` — ${patientInfo.contact_number}` : ''
+          }`,
+          type: 'critical'
+        });
+      } else {
+        await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
+          title: isAmendment ? 'Result Amended and Re-released' : 'Result Released',
+          message: `${patientInfo.test_name} for ${patientName}`,
+          type: isAmendment ? 'info' : 'success'
+        });
+      }
     }
 
-    return { ...result, emailStatus };
+    return { ...result, emailStatus, isCritical, isAmendment };
   }
 
   // Lets the modality re-open a ticket that is already 'Waiting for Release' and edit the
@@ -343,6 +410,62 @@ class ResultService {
   async getResultByVisitTestId(visitTestId, requestingUser) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
     return await resultRepository.findResultByVisitTestId(visitTestId);
+  }
+
+  /**
+   * The amendment history for a test — every version, newest first.
+   *
+   * Keeping superseded versions is only half the fix; they have to be readable, or the table is
+   * just accumulating rows nobody can see. Ownership is checked the same way as every other
+   * result read, since a superseded version is every bit as much PHI as the current one.
+   */
+  async getVersionHistory(visitTestId, requestingUser) {
+    await assertStaffOwnsVisitTest(requestingUser, visitTestId);
+    return await resultRepository.findVersionHistoryByVisitTestId(visitTestId);
+  }
+
+  /**
+   * Records that a critical result was actually communicated to the patient or their physician.
+   *
+   * Deliberately open to the front desk as well as the department: reception is usually who makes
+   * the call, and a callback that cannot be recorded by the person who made it does not get
+   * recorded at all. The note is where "spoke to Dr Reyes at 14:20" goes — that sentence is the
+   * part with medico-legal weight, not the flag.
+   */
+  async acknowledgeCritical(visitTestId, { note }, requestingUser) {
+    const result = await resultRepository.findResultByVisitTestId(visitTestId);
+    if (!result) {
+      const error = new Error('No result found for this visit test.');
+      error.statusCode = 404;
+      throw error;
+    }
+    if (!result.is_critical) {
+      const error = new Error('This result is not flagged as critical, so there is nothing to acknowledge.');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (result.critical_acknowledged_at) {
+      const error = new Error('This critical result has already been acknowledged.');
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const acknowledged = await resultRepository.acknowledgeCritical(visitTestId, {
+      acknowledgedBy: requestingUser?.userId,
+      note,
+    });
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: 'result.critical_acknowledged',
+      entityType: 'test_result',
+      entityId: acknowledged.id,
+      description:
+        `Acknowledged critical result for visit test #${visitTestId}` +
+        (note ? ` — ${note}` : ' — no note recorded'),
+    });
+
+    return acknowledged;
   }
 
   /**

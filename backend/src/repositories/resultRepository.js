@@ -74,7 +74,9 @@ class ResultRepository {
       JOIN test_categories tc ON t.category_id = tc.id
       JOIN patient_visits pv ON vt.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
-      LEFT JOIN test_results tr ON tr.visit_test_id = vt.id
+      -- is_current: a test can now carry several versions, and joining them all would repeat
+      -- the row once per amendment and show superseded findings alongside the live ones.
+      LEFT JOIN test_results tr ON tr.visit_test_id = vt.id AND tr.is_current
       LEFT JOIN users u ON tr.released_by = u.id
       WHERE tc.name = $1
         AND vt.status = 'Completed'
@@ -84,41 +86,116 @@ class ResultRepository {
     return result.rows;
   }
 
-  async createResult({ visitTestId, fileUrl, filePath, fileOriginalName, fileMimeType, fileSizeBytes, findings, remarks, releasedBy }) {
-    // Upsert, not a plain insert: the caller always follows this with a separate release call
-    // (see resultService.releaseResult) for the same clinically-significant action. If that
-    // second call fails (e.g. a network blip) after this one already succeeded, the only way
-    // to recover is to retry the whole sequence from the top — which would otherwise violate
-    // visit_test_id's UNIQUE constraint and leave the result permanently stuck un-released.
+  async createResult({ visitTestId, fileUrl, filePath, fileOriginalName, fileMimeType, fileSizeBytes, findings, remarks, releasedBy, amendmentReason, isCritical }) {
+    // Writes a NEW VERSION rather than overwriting the previous one.
+    //
+    // This used to be `ON CONFLICT (visit_test_id) DO UPDATE`, which overwrote findings, remarks
+    // and file metadata in place. A radiology report already issued to a patient could therefore
+    // be silently rewritten, with nothing anywhere recording what it originally said — and the
+    // audit entry noted only *that* a correction happened, never what changed. For a diagnostic
+    // report that is indefensible: the patient may have acted on the first version, and a
+    // referring physician certainly may have.
+    //
+    // Each save supersedes the current row and inserts the next version, so the chain is walkable
+    // in both directions (superseded_by forwards, version backwards). The partial unique index
+    // uq_test_results_current_per_test keeps "exactly one current result per test" true, which is
+    // the invariant the old UNIQUE was really protecting — so every reader that expects a single
+    // row still gets one, as long as it filters on is_current. They all do.
+    //
+    // Runs inside a transaction because superseding and inserting must not come apart: a failure
+    // between them would leave a test with NO current result, which reads as "findings never
+    // recorded" and is worse than either version winning.
     //
     // Phase B: file_path/file_original_name/file_mime_type/file_size_bytes back a real uploaded
-    // file; file_url remains as a nullable legacy fallback. Re-uploading a corrected file (a new
-    // POST for the same visit_test_id) overwrites the previous file's metadata row here, but the
-    // old physical file on disk is intentionally left in place rather than deleted — this upsert
-    // is the one existing code path that already handles "the caller made a mistake and re-sent
-    // the request," and adding disk cleanup to it is a separate, riskier concern than this phase
-    // set out to solve.
+    // file; file_url remains as a nullable legacy fallback.
+    return await db.withTransaction(async () => {
+      const previous = (
+        await db.query(
+          `SELECT id, version FROM test_results
+           WHERE visit_test_id = $1 AND is_current
+           FOR UPDATE`,
+          [visitTestId]
+        )
+      ).rows[0];
+
+      if (previous) {
+        await db.query(
+          `UPDATE test_results SET is_current = FALSE WHERE id = $1`,
+          [previous.id]
+        );
+      }
+
+      const inserted = await db.query(
+        `INSERT INTO test_results (
+           visit_test_id, file_url, file_path, file_original_name, file_mime_type, file_size_bytes,
+           findings, remarks, released_by, recorded_by,
+           version, is_current, amendment_reason, is_critical
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $10, TRUE, $11, $12)
+         RETURNING *`,
+        [
+          visitTestId, fileUrl || null, filePath || null, fileOriginalName || null,
+          fileMimeType || null, fileSizeBytes || null, findings, remarks, releasedBy,
+          previous ? previous.version + 1 : 1,
+          // Only meaningful on an amendment; the first version has nothing to explain.
+          previous ? (amendmentReason || null) : null,
+          Boolean(isCritical),
+        ]
+      );
+      const current = inserted.rows[0];
+
+      // Point the old version at its replacement, so the history reads forwards as well as
+      // backwards. Done after the insert because it needs the new row's id.
+      if (previous) {
+        await db.query(`UPDATE test_results SET superseded_by = $2 WHERE id = $1`, [
+          previous.id,
+          current.id,
+        ]);
+      }
+
+      return current;
+    });
+  }
+
+  /**
+   * Every version of a test's result, newest first — the amendment history.
+   *
+   * Exists so a corrected report can be read alongside what it replaced. Without it the version
+   * rows would be written and never surfaced, which is the same as not keeping them.
+   */
+  async findVersionHistoryByVisitTestId(visitTestId) {
     const queryText = `
-      INSERT INTO test_results (visit_test_id, file_url, file_path, file_original_name, file_mime_type, file_size_bytes, findings, remarks, released_by, recorded_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
-      ON CONFLICT (visit_test_id) DO UPDATE
-      SET file_url = EXCLUDED.file_url,
-          file_path = EXCLUDED.file_path,
-          file_original_name = EXCLUDED.file_original_name,
-          file_mime_type = EXCLUDED.file_mime_type,
-          file_size_bytes = EXCLUDED.file_size_bytes,
-          findings = EXCLUDED.findings,
-          remarks = EXCLUDED.remarks,
-          -- recorded_by tracks whoever last wrote these findings, including a correction to an
-          -- already-released result. released_by is deliberately NOT touched here: this path is
-          -- recording, not authorising, and overwriting it is what made the two indistinguishable.
-          recorded_by = EXCLUDED.recorded_by,
-          released_at = CURRENT_TIMESTAMP
+      SELECT tr.id, tr.version, tr.is_current, tr.findings, tr.remarks,
+             tr.amendment_reason, tr.is_critical,
+             tr.released_at, tr.authorised_at, tr.superseded_by,
+             rec.first_name AS recorded_by_first_name, rec.last_name AS recorded_by_last_name,
+             rel.first_name AS released_by_first_name,  rel.last_name AS released_by_last_name
+      FROM test_results tr
+      LEFT JOIN users rec ON tr.recorded_by = rec.id
+      LEFT JOIN users rel ON tr.released_by = rel.id
+      WHERE tr.visit_test_id = $1
+      ORDER BY tr.version DESC
+    `;
+    const result = await db.query(queryText, [visitTestId]);
+    return result.rows;
+  }
+
+  /**
+   * Records that a critical result was actually communicated to someone.
+   *
+   * The flag is the cheap half. What matters medico-legally is the evidence that a human picked
+   * up a phone and told a named person at a recorded time, which is what this stores.
+   */
+  async acknowledgeCritical(visitTestId, { acknowledgedBy, note }) {
+    const queryText = `
+      UPDATE test_results
+      SET critical_acknowledged_at = CURRENT_TIMESTAMP,
+          critical_acknowledged_by = $2,
+          critical_acknowledgement_note = $3
+      WHERE visit_test_id = $1 AND is_current AND is_critical
       RETURNING *
     `;
-    const result = await db.query(queryText, [
-      visitTestId, fileUrl || null, filePath || null, fileOriginalName || null, fileMimeType || null, fileSizeBytes || null, findings, remarks, releasedBy
-    ]);
+    const result = await db.query(queryText, [visitTestId, acknowledgedBy, note || null]);
     return result.rows[0];
   }
 
@@ -151,7 +228,10 @@ class ResultRepository {
       UPDATE test_results
       SET released_by = $2,
           authorised_at = CURRENT_TIMESTAMP
-      WHERE visit_test_id = $1
+      -- is_current: without it this would stamp the releasing user onto every superseded
+      -- version too, rewriting the attribution of reports that were authorised by someone else
+      -- at an earlier time — destroying the very history versioning was added to keep.
+      WHERE visit_test_id = $1 AND is_current
       RETURNING *
     `;
     const result = await db.query(queryText, [visitTestId, releasedBy]);
@@ -163,7 +243,9 @@ class ResultRepository {
       SELECT tr.*, u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM test_results tr
       LEFT JOIN users u ON tr.released_by = u.id
-      WHERE tr.visit_test_id = $1
+      -- The live version. Callers here mean "the result", not "some past draft of it";
+      -- findVersionHistoryByVisitTestId is the way to reach superseded versions.
+      WHERE tr.visit_test_id = $1 AND tr.is_current
     `;
     const result = await db.query(queryText, [visitTestId]);
     return result.rows[0];
@@ -196,7 +278,9 @@ class ResultRepository {
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
       JOIN patient_visits pv ON vt.patient_visit_id = pv.id
-      LEFT JOIN test_results tr ON tr.visit_test_id = vt.id
+      -- is_current: a test can now carry several versions, and joining them all would repeat
+      -- the row once per amendment and show superseded findings alongside the live ones.
+      LEFT JOIN test_results tr ON tr.visit_test_id = vt.id AND tr.is_current
       LEFT JOIN users u ON tr.released_by = u.id
       WHERE pv.patient_id = $1
       ${categoryFilter}
@@ -208,7 +292,11 @@ class ResultRepository {
 
   async findPatientEmailByVisitTestId(visitTestId) {
     const queryText = `
-      SELECT u.email, p.first_name, p.last_name, t.name as test_name
+      -- contact_number is here for the critical-result callback: the staff member who has to
+      -- telephone the patient should not have to go and look it up while a panic value is
+      -- sitting unactioned. Recipients of that notification (Receptionist/Admin/SuperAdmin) are
+      -- already entitled to patient contact details.
+      SELECT u.email, p.first_name, p.last_name, p.contact_number, t.name as test_name
       FROM visit_tests vt
       JOIN patient_visits pv ON vt.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id

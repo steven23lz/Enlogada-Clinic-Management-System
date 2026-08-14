@@ -2,7 +2,9 @@ const notificationRepository = require('../repositories/notificationRepository')
 const userRepository = require('../repositories/userRepository');
 const logger = require('../config/logger');
 
-const VALID_TYPES = ['info', 'success', 'warning'];
+// Must stay in step with chk_notification_events_type in the schema. 'critical' exists for the
+// one message that is genuinely urgent — a panic result awaiting a patient callback.
+const VALID_TYPES = ['info', 'success', 'warning', 'critical'];
 
 class NotificationService {
   // Fire-and-forget by design, matching config/email.js's sendEmail: a notification is a
@@ -13,6 +15,13 @@ class NotificationService {
       const recipients = await userRepository.findStaffUsers(roleNames);
       if (recipients.length === 0) return;
       const userIds = recipients.map((u) => u.id);
+      // An unknown type is downgraded rather than rejected, so a bad value can never stop a real
+      // notification being delivered. It is logged because the downgrade is otherwise invisible:
+      // a 'critical' escalation silently arriving as 'info' looks like any other bell item, and
+      // that is exactly how an urgent message stops being urgent.
+      if (!VALID_TYPES.includes(type)) {
+        logger.warn(`Unknown notification type "${type}" downgraded to 'info' (title: ${title})`);
+      }
       await notificationRepository.createForUsers(userIds, {
         title,
         message,

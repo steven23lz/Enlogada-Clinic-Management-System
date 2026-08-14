@@ -12,7 +12,8 @@ import {
   X,
   Menu,
   UserCog,
-  Info
+  Info,
+  AlertTriangle
 } from 'lucide-react';
 import { visibleMainNavItems, visibleOpsGroups, nativeRoleForNav } from '../config/navigation';
 
@@ -313,24 +314,39 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
                     ) : notifications.length === 0 ? (
                       <p className="text-fine text-gray-400 italic text-center py-4">No notifications yet.</p>
                     ) : (
-                      notifications.map(n => (
+                      notifications.map(n => {
+                        // Severity was ignored here entirely — every notification rendered the
+                        // same, so a critical result awaiting a patient callback looked exactly
+                        // like "New Appointment Booked". A panic value has to be findable in a
+                        // list at a glance, and stay visibly urgent even after it is read.
+                        const isCritical = n.type === 'critical';
+                        return (
                         <button
                           key={n.id}
                           onClick={() => !n.is_read && handleMarkAsRead(n.id)}
                           className={`w-full text-left p-2.5 rounded-xl space-y-1 border text-xs cursor-pointer transition-colors ${
-                            n.is_read ? 'bg-gray-50/70 hover:bg-gray-50 border-gray-100' : 'bg-[#769046]/5 hover:bg-[#769046]/10 border-[#769046]/20'
+                            isCritical
+                              ? 'bg-rose-50 hover:bg-rose-100/70 border-rose-300'
+                              : n.is_read
+                                ? 'bg-gray-50/70 hover:bg-gray-50 border-gray-100'
+                                : 'bg-[#769046]/5 hover:bg-[#769046]/10 border-[#769046]/20'
                           }`}
                         >
-                          <div className="flex justify-between items-center font-bold text-gray-800">
+                          <div className={`flex justify-between items-center font-bold ${isCritical ? 'text-rose-700' : 'text-gray-800'}`}>
                             <span className="flex items-center space-x-1.5">
-                              {!n.is_read && <span className="w-1.5 h-1.5 rounded-full bg-[#769046] flex-shrink-0" />}
+                              {/* Icon as well as colour: this must survive a colour-vision
+                                  deficiency and a sunlit reception monitor. */}
+                              {isCritical
+                                ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" aria-hidden="true" />
+                                : !n.is_read && <span className="w-1.5 h-1.5 rounded-full bg-[#769046] flex-shrink-0" />}
                               <span>{n.title}</span>
                             </span>
                             <span className="text-meta text-gray-400 font-normal whitespace-nowrap">{timeAgo(n.created_at)}</span>
                           </div>
-                          <p className="text-fine text-gray-600 leading-snug">{n.message}</p>
+                          <p className={`text-fine leading-snug ${isCritical ? 'text-rose-800 font-semibold' : 'text-gray-600'}`}>{n.message}</p>
                         </button>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

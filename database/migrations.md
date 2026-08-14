@@ -1,5 +1,36 @@
 # Database Migration & Schema History
 
+## [1.15.0] - 2026-08-15 (Result versioning and critical-value flagging)
+
+Run: `node src/scripts/migrateResultVersioning.js` (additive, safe to re-run)
+
+### Fixed — a correction destroyed the original
+`test_results` carried `UNIQUE(visit_test_id)` and `createResult` was an `ON CONFLICT DO UPDATE`, so editing an already-released result overwrote findings, remarks and file metadata **in place**. A radiology report issued to a patient could be silently rewritten with nothing anywhere recording what it originally said, and the audit entry noted only *that* a correction happened — never what changed, and the previous text no longer existed to compare against.
+
+That is indefensible for a diagnostic report. The patient may have acted on the first version, and a referring physician certainly may have.
+
+Each save now writes a **new row with an incremented version**. The previous row is marked `is_current = FALSE` and points at its replacement through `superseded_by`, so the chain is walkable in both directions. `amendment_reason` is required by the UI on an amendment, and the audit entry now names both versions and the reason.
+
+### Fixed — a panic value released like a routine result
+A critical result went out with the same silent "your results are ready" email as a normal CBC. `is_critical` is set by whoever records the findings and, on release, routes an urgent notification (with the patient's phone number) to Receptionist/Admin/SuperAdmin, and replaces the patient email with one asking them to contact the clinic. `critical_acknowledged_at` / `_by` / `_note` record the callback actually being made — the flag is the cheap half; the evidence that a human made contact is the part with medico-legal weight.
+
+### Added
+* `test_results.version` / `is_current` / `superseded_by` / `amendment_reason`.
+* `test_results.is_critical` / `critical_acknowledged_at` / `critical_acknowledged_by` / `critical_acknowledgement_note`.
+* Partial unique index `uq_test_results_current_per_test ON test_results(visit_test_id) WHERE is_current` — replaces the old `UNIQUE(visit_test_id)`, keeping "exactly one current result per test" (the invariant that UNIQUE was really protecting) while allowing history.
+* `GET /api/results/:visitTestId/versions` (amendment history, department-scoped like every other result read) and `POST /api/results/:visitTestId/acknowledge-critical` (callback log — deliberately open to Receptionist, since the front desk usually makes the call and a callback that cannot be recorded by whoever made it does not get recorded).
+* `'critical'` added to `chk_notification_events_type`.
+
+### Watch out for
+**Every reader of `test_results` must filter on `is_current`.** A `LEFT JOIN test_results` without it repeats the parent row once per amendment and shows superseded findings beside live ones. All five existing readers were updated (`findReleasedByCategory`, `findResultsByPatientId`, `findResultByVisitTestId`, `markReleased`, and `reportRepository.getDiagnosticWorkload` — the last would otherwise have inflated a clinician's throughput every time somebody corrected a report). A spec asserts lists never repeat a row per version.
+
+`markReleased` in particular needed it: without the filter it stamped the releasing user onto *every* superseded version, rewriting the attribution of reports authorised by someone else at an earlier time — destroying exactly the history versioning was added to keep.
+
+### Also found while building this
+`notification_events.type` was CHECKed to `('info','success','warning')` and `notificationService` **silently coerces** anything else to `'info'`. The critical escalation was therefore arriving in the notification bell looking exactly like "New Appointment Booked". Nothing errored and nothing was lost, which is precisely why it would never have been noticed. `'critical'` is now a real severity, the notification list renders it distinctly (red, with an icon, not colour alone), and an unknown type is logged rather than downgraded in silence.
+
+---
+
 ## [1.14.0] - 2026-08-15 (Statutory Senior Citizen / PWD discounts)
 
 Run: `node src/scripts/migrateDiscounts.js` (additive, safe to re-run)

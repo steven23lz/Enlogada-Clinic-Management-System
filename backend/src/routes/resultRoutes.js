@@ -36,6 +36,19 @@ router.post('/:visitTestId/release', verifyToken, authorizeRoles('SuperAdmin', '
 // View patient result history (staff or client viewing own patient)
 router.get('/history/:patientId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff', 'Client'), resultController.getPatientHistory);
 
+// The amendment history for a test — every version, newest first. Read-only, and gated like the
+// other result reads: a superseded version is every bit as much PHI as the current one. Admin is
+// included because reviewing what a report used to say is oversight, not clinical authorship.
+router.get('/:visitTestId/versions', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), resultController.getVersionHistory);
+
+// Record that a critical result was actually communicated — the callback log.
+//
+// Deliberately wider than the other write routes here: Receptionist is included because the front
+// desk is usually who makes the call, and a callback that cannot be recorded by the person who
+// made it does not get recorded at all. Admin is included for the same reason — this records a
+// communication, not a clinical finding, so it does not put a manager's name on a diagnosis.
+router.post('/:visitTestId/acknowledge-critical', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), resultController.acknowledgeCritical);
+
 // Fetch the recorded result for one visit_test, so staff can edit findings already saved
 // against a 'Waiting for Release' ticket. Registered last: a bare '/:visitTestId' would
 // otherwise shadow nothing here (every route above has two segments), but keeping catch-all

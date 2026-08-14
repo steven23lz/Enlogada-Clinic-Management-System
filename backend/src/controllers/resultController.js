@@ -56,7 +56,7 @@ class ResultController {
   async uploadResult(req, res, next) {
     try {
       const { visitTestId } = req.params;
-      const { fileUrl, findings, remarks } = req.body;
+      const { fileUrl, findings, remarks, amendmentReason, isCritical } = req.body;
       const releasedBy = req.user.userId;
 
       const result = await resultService.uploadResult({
@@ -65,7 +65,11 @@ class ResultController {
         file: req.file,
         findings,
         remarks,
-        releasedBy
+        releasedBy,
+        amendmentReason,
+        // Arrives as a string over multipart/form-data, where every field is text — a bare
+        // truthiness check would make the string "false" mean true.
+        isCritical: isCritical === true || isCritical === 'true'
       }, req.user);
 
       return res.status(201).json({
@@ -89,6 +93,31 @@ class ResultController {
           }
         });
       }
+      next(err);
+    }
+  }
+
+  async getVersionHistory(req, res, next) {
+    try {
+      const { visitTestId } = req.params;
+      const versions = await resultService.getVersionHistory(visitTestId, req.user);
+      return res.status(200).json({ status: 'success', data: { versions } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async acknowledgeCritical(req, res, next) {
+    try {
+      const { visitTestId } = req.params;
+      const { note } = req.body;
+      const result = await resultService.acknowledgeCritical(visitTestId, { note }, req.user);
+      return res.status(200).json({
+        status: 'success',
+        message: 'Critical result acknowledged. The callback has been recorded.',
+        data: { result },
+      });
+    } catch (err) {
       next(err);
     }
   }

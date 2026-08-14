@@ -242,7 +242,10 @@ CREATE TABLE hmo_request_tests (
 -- 6. Results and Releasing
 CREATE TABLE test_results (
     id SERIAL PRIMARY KEY,
-    visit_test_id INT NOT NULL UNIQUE,
+    -- NOT unique: a test carries one row per VERSION. Exactly one of them is current, enforced by
+    -- the partial unique index uq_test_results_current_per_test below. The old UNIQUE here is
+    -- what made a correction overwrite the original — see migrations.md [1.15.0].
+    visit_test_id INT NOT NULL,
     file_url TEXT,
     file_path TEXT,
     file_original_name TEXT,
@@ -258,6 +261,25 @@ CREATE TABLE test_results (
     released_by INT NOT NULL,                         -- who authorised release to the patient
     released_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- when the findings were recorded
     authorised_at TIMESTAMP,                          -- when the release was authorised
+
+    -- Amendment chain. A released report may be corrected, and the version it replaces must stay
+    -- readable: the patient may already have acted on it, and a referring physician certainly
+    -- may have. superseded_by points forward, version counts backward.
+    version INT NOT NULL DEFAULT 1,
+    is_current BOOLEAN NOT NULL DEFAULT TRUE,
+    superseded_by INT,
+    amendment_reason TEXT,
+
+    -- Critical (panic) values. The flag routes an urgent callback notification on release; the
+    -- acknowledgement is the record that a human actually made contact, which is the part with
+    -- medico-legal weight.
+    is_critical BOOLEAN NOT NULL DEFAULT FALSE,
+    critical_acknowledged_at TIMESTAMP,
+    critical_acknowledged_by INT,
+    critical_acknowledgement_note TEXT,
+
+    CONSTRAINT fk_results_superseded_by FOREIGN KEY (superseded_by) REFERENCES test_results(id),
+    CONSTRAINT fk_results_critical_ack_by FOREIGN KEY (critical_acknowledged_by) REFERENCES users(id),
     CONSTRAINT fk_results_visit_test FOREIGN KEY (visit_test_id) REFERENCES visit_tests(id),
     CONSTRAINT fk_results_released_by FOREIGN KEY (released_by) REFERENCES users(id),
     CONSTRAINT fk_results_recorded_by FOREIGN KEY (recorded_by) REFERENCES users(id)
@@ -328,7 +350,7 @@ CREATE TABLE notification_events (
     message TEXT NOT NULL,
     type VARCHAR(20) NOT NULL DEFAULT 'info',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_notification_events_type CHECK (type IN ('info', 'success', 'warning'))
+    CONSTRAINT chk_notification_events_type CHECK (type IN ('info', 'success', 'warning', 'critical'))
 );
 
 CREATE TABLE notification_reads (
@@ -487,6 +509,14 @@ ON CONFLICT (name) DO NOTHING;
 -- The statutory discount register BIR expects for mandated discounts.
 CREATE INDEX IF NOT EXISTS idx_payments_discount_type
     ON payments (discount_type_name, paid_at) WHERE discount_type_name IS NOT NULL;
+
+-- Exactly one CURRENT result per test. This replaces the old UNIQUE(visit_test_id), which
+-- prevented any second version existing at all and so forced a correction to overwrite the
+-- original in place.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_test_results_current_per_test
+    ON test_results (visit_test_id) WHERE is_current;
+CREATE INDEX IF NOT EXISTS idx_test_results_visit_test_version
+    ON test_results (visit_test_id, version DESC);
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_patient_visits_daily_queue
     ON patient_visits ((created_at::date), queue_number) WHERE queue_number IS NOT NULL;

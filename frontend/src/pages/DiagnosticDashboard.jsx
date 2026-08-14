@@ -101,6 +101,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   // Phase C finding 03: correcting an already-released result — reuses the same modal/upsert
   // path, just pre-filled and opened from the History table instead of the worklist.
   const [isEditingResult, setIsEditingResult] = useState(false);
+  // A panic value used to release with the same silent email as a routine result. Flagging it
+  // here routes an urgent callback notification to the front desk on release.
+  const [isCritical, setIsCritical] = useState(false);
+  // Why a released report is being changed. Kept with the superseded version, so the amendment
+  // history says what changed and not merely that something did.
+  const [amendmentReason, setAmendmentReason] = useState('');
   // Phase C finding 02: past results for this same patient, for context while writing new
   // findings — GET /results/history/:patientId already existed but nothing on this screen
   // called it.
@@ -241,6 +247,10 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     setFindings('');
     setRemarks('');
     setResultFile(null);
+    // Never carry a critical flag or an amendment reason over from the previous ticket — a stale
+    // flag would raise a false callback, and a stale one cleared would suppress a real one.
+    setIsCritical(false);
+    setAmendmentReason('');
     setUploadError('');
     setJustReleased(null);
     setShowUploadModal(true);
@@ -273,6 +283,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
     setFindings(test.findings || '');
     setRemarks(test.result_remarks || '');
     setResultFile(null);
+    // Carry the existing critical flag into the amendment: correcting a typo in a panic result
+    // must not quietly downgrade it to routine. The reason field starts empty on purpose — it
+    // describes THIS change, not the previous one.
+    setIsCritical(Boolean(test.is_critical));
+    setAmendmentReason('');
     setUploadError('');
     setJustReleased(null);
     setShowUploadModal(true);
@@ -339,17 +354,27 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   // JSON otherwise — the backend accepts both on the same endpoint (uploadResultFileMiddleware
   // only engages for multipart bodies).
   const submitFindings = async () => {
+    // amendmentReason is only meaningful when correcting an already-recorded result; the backend
+    // ignores it on a first version. isCritical travels as a string over multipart, which the
+    // controller parses explicitly rather than by truthiness.
     if (resultFile) {
       const formData = new FormData();
       formData.append('file', resultFile);
       formData.append('findings', findings);
       formData.append('remarks', remarks);
+      formData.append('isCritical', String(isCritical));
+      if (isEditingResult) formData.append('amendmentReason', amendmentReason);
       await api.post(`/results/${activeTest.visit_test_id}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       return;
     }
-    await api.post(`/results/${activeTest.visit_test_id}`, { findings, remarks });
+    await api.post(`/results/${activeTest.visit_test_id}`, {
+      findings,
+      remarks,
+      isCritical,
+      ...(isEditingResult ? { amendmentReason } : {}),
+    });
   };
 
   // Recording findings and releasing them are now two distinct events, matching the two
@@ -913,11 +938,58 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 )}
               </div>
 
+              {/* Why a released report is being changed. Required on an amendment because the
+                  audit entry is otherwise "something changed" and nothing more — the superseded
+                  version is kept, but without a reason nobody can tell why it was replaced. */}
+              {isEditingResult && (
+                <div className="space-y-1.5">
+                  <label htmlFor="amendment-reason" className="text-xs font-bold text-gray-600 uppercase">
+                    Reason for Amendment <span className="text-rose-600">*</span>
+                  </label>
+                  <Input
+                    id="amendment-reason"
+                    placeholder="e.g. Transcription error in the original report"
+                    value={amendmentReason}
+                    onChange={e => setAmendmentReason(e.target.value)}
+                    className="text-xs rounded-xl"
+                  />
+                  <p className="text-fine text-gray-400 m-0">
+                    The previous version is kept and stays readable in this test&apos;s history — it is
+                    superseded, not overwritten. The patient is told their report was updated.
+                  </p>
+                </div>
+              )}
+
+              {/* Critical value. Deliberately styled as a warning rather than a quiet checkbox:
+                  flagging it is what triggers the callback, and missing it is the most dangerous
+                  thing that can happen on this screen. */}
+              <label
+                className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
+                  isCritical ? 'bg-rose-50 border-rose-300' : 'bg-gray-50/70 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isCritical}
+                  onChange={e => setIsCritical(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-rose-600 cursor-pointer flex-shrink-0"
+                />
+                <span className="space-y-0.5">
+                  <span className={`block text-xs font-bold ${isCritical ? 'text-rose-700' : 'text-gray-700'}`}>
+                    Flag as a CRITICAL result requiring patient callback
+                  </span>
+                  <span className="block text-fine text-gray-500">
+                    Alerts the front desk and administrators to telephone the patient, and replaces
+                    the routine &quot;results are ready&quot; email with one asking them to contact the clinic.
+                  </span>
+                </span>
+              </label>
+
               <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
                 <Button type="button" variant="outline" onClick={() => setShowUploadModal(false)}>Cancel</Button>
                 <Button
                   type="submit"
-                  disabled={savingFindings}
+                  disabled={savingFindings || (isEditingResult && !amendmentReason.trim())}
                   variant="outline"
                   className="font-bold text-xs px-5 py-2 rounded-xl border-gray-200 flex items-center space-x-1.5"
                 >
