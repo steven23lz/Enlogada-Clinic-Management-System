@@ -1,5 +1,29 @@
 # Database Migration & Schema History
 
+## [1.15.1] - 2026-08-15 (Online payments that were taken but never recorded)
+
+No schema change — service and repository only.
+
+### Fixed — an online payment could be taken and recorded nowhere
+`createCheckoutSession` cancelled the visit's in-flight gateway session **before** calling PayMongo, and only inserted the replacement row **after** the provider responded. Two ways that lost money:
+
+1. **The ordinary double-click.** A patient opens the checkout tab, goes back, and clicks Pay again. The second call marked session S1 `Cancelled` and created S2 — but S1's tab was still open and still payable. If the patient completed *that* one, PayMongo charged them and fired the webhook for S1. `markGatewayPaymentPaid` is `WHERE gateway_session_id = $1 AND payment_status = 'Pending'`, S1 was `Cancelled`, so zero rows updated, and the handler reported `{ handled: true, alreadySettled: true }` with a 200. **The patient was charged, no `Paid` row existed, the visit was never released to any department, and nobody was told.**
+2. **A provider failure.** If the PayMongo call threw or was rejected, the previous session had already been cancelled and no new row was written — same orphaned-tab exposure.
+
+The cancel and the insert now happen together, in one transaction, *after* PayMongo returns a session id. That narrows the window to the moments between the provider minting a session and the commit, where the worst case is a second live session rather than a live session with no row behind it.
+
+### Fixed — the webhook could not tell a redelivery from a lost payment
+`if (!settled) return { handled: true, alreadySettled: true }` conflated "PayMongo retried an event we already processed" (normal, must not double-release) with "we cancelled this session out from under the payer" (money taken, nothing recorded). The handler now re-reads the row:
+
+* already `Paid` → genuine redelivery, still idempotent;
+* `Cancelled`/`Failed` → **the money moved anyway**. Logged at error level, settled through `forceSettleGatewayPayment`, and staff are notified to verify against the provider dashboard. Refusing to record it does not give the money back; it just means the clinic holds an unrecorded payment and the patient waits for an exam nobody can see.
+* the settle hits `uq_payments_one_paid_per_visit` → the visit was **also** paid at the counter. That is a genuine double charge needing a refund, so it is *not* recorded as a second payment: it raises a `critical` notification and returns `requiresRefund`. Verified: exactly one `Paid` row survives.
+
+### Also fixed
+`getNextReceiptNumber()` was called before knowing whether the update would succeed, so every webhook redelivery burned a receipt number. Now that receipt numbers come from a counter that never rewinds ([1.13.0]), that punched permanent gaps in the official sequence. The handler checks for an already-`Paid` row first and mints a number only when it is going to use one. Verified: a redelivery leaves the counter unchanged.
+
+---
+
 ## [1.15.0] - 2026-08-15 (Result versioning and critical-value flagging)
 
 Run: `node src/scripts/migrateResultVersioning.js` (additive, safe to re-run)

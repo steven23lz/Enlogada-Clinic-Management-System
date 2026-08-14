@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const env = require('../config/environment');
 const logger = require('../config/logger');
 const paymentRepository = require('../repositories/paymentRepository');
+const db = require('../config/database');
 const paymentService = require('./paymentService');
 const patientService = require('./patientService');
 const visitRepository = require('../repositories/visitRepository');
@@ -120,9 +121,6 @@ class PaymentGatewayService {
       throw error;
     }
 
-    // Supersede any in-flight session rather than stacking up abandoned ones.
-    await paymentRepository.cancelPendingGatewayPayments(patientVisitId);
-
     const lineItems = bill.items.map((item) => ({
       name: item.name,
       amount: toCentavos(item.price),
@@ -200,13 +198,31 @@ class PaymentGatewayService {
       throw error;
     }
 
-    await paymentRepository.createPendingGatewayPayment({
-      patientVisitId,
-      processedBy: requestingUser.userId,
-      paymentMethod,
-      amount: totalAmount,
-      gatewayProvider: PROVIDER,
-      gatewaySessionId: sessionId
+    // Supersede the previous session and record the new one together, and only now that PayMongo
+    // has actually returned one.
+    //
+    // This used to cancel the in-flight session *before* the provider call, which lost money two
+    // ways. If the PayMongo request then failed, the patient was left holding a checkout tab
+    // whose row we had already marked Cancelled. And on the ordinary double-click path — patient
+    // opens checkout, goes back, clicks Pay again — the first tab stayed open and payable: if
+    // they completed *that* one, the webhook arrived for a session our own records called
+    // Cancelled, markGatewayPaymentPaid matched zero rows, and the handler reported success. The
+    // patient was charged, no Paid row existed, the visit was never released, and nobody was
+    // told. handlePaidWebhook now also refuses to treat that case as a duplicate delivery.
+    //
+    // Ordering it this way narrows the window to the moments between PayMongo minting a session
+    // and this commit, during which the worst case is a second live session rather than a live
+    // session with no row behind it.
+    await db.withTransaction(async () => {
+      await paymentRepository.cancelPendingGatewayPayments(patientVisitId);
+      await paymentRepository.createPendingGatewayPayment({
+        patientVisitId,
+        processedBy: requestingUser.userId,
+        paymentMethod,
+        amount: totalAmount,
+        gatewayProvider: PROVIDER,
+        gatewaySessionId: sessionId
+      });
     });
 
     return { checkoutUrl, sessionId, amount: totalAmount, paymentMethod };
@@ -274,14 +290,72 @@ class PaymentGatewayService {
       return { handled: false, reason: 'Unknown checkout session' };
     }
 
+    // Cheap check before minting anything. PayMongo retries deliveries, and receipt numbers now
+    // come from a per-day counter that never rewinds, so calling getNextReceiptNumber on every
+    // redelivery would burn a number each time and punch gaps in the official receipt sequence.
+    if (pending.payment_status === 'Paid') {
+      return { handled: true, alreadySettled: true };
+    }
+
     const receiptNumber = await paymentRepository.getNextReceiptNumber();
-    const settled = await paymentRepository.markGatewayPaymentPaid(sessionId, {
+    let settled = await paymentRepository.markGatewayPaymentPaid(sessionId, {
       gatewayPaymentId,
       receiptNumber
     });
 
-    // Already settled by an earlier delivery of the same event — PayMongo retries deliveries.
-    // Not an error, and must not double-release or double-notify.
+    // Zero rows updated means the row was not 'Pending'. That used to be reported as
+    // `alreadySettled` and a 200, which conflated two very different situations — and one of them
+    // was the clinic keeping money it had not recorded.
+    if (!settled) {
+      const current = await paymentRepository.findByGatewaySessionId(sessionId);
+
+      // (a) A concurrent delivery settled it between our check and our update. Genuinely
+      //     idempotent; nothing more to do.
+      if (current && current.payment_status === 'Paid') {
+        return { handled: true, alreadySettled: true };
+      }
+
+      // (b) The row is Cancelled or Failed, but PayMongo says this session was paid. This is the
+      //     patient who opened a second checkout and then went back and completed the first tab.
+      //     The money has moved. Refusing to record it does not give it back — it just means the
+      //     clinic holds an unrecorded payment and the patient waits for an exam nobody can see.
+      logger.error(
+        `PayMongo reports session ${sessionId} PAID while our record says ` +
+          `${current ? current.payment_status : 'missing'} — settling anyway and alerting staff.`
+      );
+      try {
+        settled = await paymentRepository.forceSettleGatewayPayment(sessionId, {
+          gatewayPaymentId,
+          receiptNumber
+        });
+      } catch (err) {
+        // uq_payments_one_paid_per_visit: this visit already has a settled payment, so the
+        // patient has been charged twice — once online and once at the counter. Recording a
+        // second Paid row would hide that; it needs a refund and a human. Fails loudly instead.
+        if (err.code === '23505') {
+          logger.error(
+            `DOUBLE PAYMENT: visit for session ${sessionId} is already paid by another method. ` +
+              'The online payment must be refunded — this was NOT recorded as a second payment.'
+          );
+          await notificationService.notifyRoles(['Cashier', 'Admin', 'SuperAdmin'], {
+            title: 'Double payment — refund required',
+            message: `An online payment settled for a visit already paid at the counter (session ${sessionId}). Refund the online payment.`,
+            type: 'critical'
+          });
+          return { handled: true, doublePayment: true, requiresRefund: true };
+        }
+        throw err;
+      }
+
+      if (settled) {
+        await notificationService.notifyRoles(['Cashier', 'Admin', 'SuperAdmin'], {
+          title: 'Online payment recovered',
+          message: `A superseded checkout session was completed and has been recorded (receipt #${receiptNumber}). Verify against the provider dashboard.`,
+          type: 'warning'
+        });
+      }
+    }
+
     if (!settled) {
       return { handled: true, alreadySettled: true };
     }

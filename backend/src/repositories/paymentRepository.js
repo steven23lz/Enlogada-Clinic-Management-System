@@ -212,6 +212,33 @@ class PaymentRepository {
     return result.rows[0];
   }
 
+  /**
+   * Settles a gateway payment whose row is NOT 'Pending' — the money moved anyway.
+   *
+   * The normal path is markGatewayPaymentPaid, whose `payment_status = 'Pending'` predicate makes
+   * webhook redelivery idempotent. This is the recovery path for the case that predicate cannot
+   * distinguish: a session we marked 'Cancelled' (because the patient opened a second checkout)
+   * that the patient then went back and completed. PayMongo took the money; refusing to record it
+   * does not give it back.
+   *
+   * Excludes 'Paid' so it can never overwrite a settled row, and the caller must handle a 23505
+   * from uq_payments_one_paid_per_visit — that means the visit was *also* paid another way, which
+   * is a genuine double charge needing a refund, not a row this method should quietly create.
+   */
+  async forceSettleGatewayPayment(gatewaySessionId, { gatewayPaymentId, receiptNumber }) {
+    const queryText = `
+      UPDATE payments
+      SET payment_status = 'Paid',
+          gateway_payment_id = $2,
+          receipt_number = $3,
+          paid_at = CURRENT_TIMESTAMP
+      WHERE gateway_session_id = $1 AND payment_status <> 'Paid'
+      RETURNING *
+    `;
+    const result = await db.query(queryText, [gatewaySessionId, gatewayPaymentId, receiptNumber]);
+    return result.rows[0];
+  }
+
   async cancelPendingGatewayPayments(patientVisitId) {
     const queryText = `
       UPDATE payments
