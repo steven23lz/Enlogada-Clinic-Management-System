@@ -99,14 +99,27 @@ class ResultService {
     return await resultRepository.findPendingByCategory(categoryName);
   }
 
-  async getReleasedByCategory(categoryName, requestingUser) {
+  /**
+   * @param {{days?: string|number, limit?: string|number, offset?: string|number}} options
+   *   Query-string values, so everything is parsed and clamped here rather than trusted.
+   */
+  async getReleasedByCategory(categoryName, requestingUser, options = {}) {
     if (!DIAGNOSTIC_CATEGORIES.includes(categoryName)) {
       const error = new Error(`Invalid category. Must be one of: ${DIAGNOSTIC_CATEGORIES.join(', ')}`);
       error.statusCode = 400;
       throw error;
     }
     assertStaffAllowedCategory(requestingUser, categoryName);
-    return await resultRepository.findReleasedByCategory(categoryName);
+
+    // Clamped, not merely defaulted: `limit` reaches this straight from the query string, and the
+    // rows it controls carry full clinical narrative in unbounded TEXT columns. An unclamped
+    // limit would let any authenticated staff member pull the department's entire result history
+    // in one request — the exact unbounded response this window exists to prevent.
+    const days = Math.min(Math.max(parseInt(options.days, 10) || 90, 0), 3650);
+    const limit = Math.min(Math.max(parseInt(options.limit, 10) || 200, 1), 500);
+    const offset = Math.max(parseInt(options.offset, 10) || 0, 0);
+
+    return await resultRepository.findReleasedByCategory(categoryName, { days, limit, offset });
   }
 
   // A modality may move its own ticket to 'Waiting for Release' (exam done, findings pending

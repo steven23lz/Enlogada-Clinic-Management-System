@@ -1,5 +1,37 @@
 # Database Migration & Schema History
 
+## [1.18.0] - 2026-08-15 (Date predicates that can actually use an index)
+
+Run: `node src/scripts/migrateQueryPerformance.js` (additive, safe to re-run)
+
+### Fixed — every date-ranged screen was doing a sequential scan
+Eleven queries filtered on `column::date BETWEEN …` or `column::date = CURRENT_DATE`. **A B-tree index cannot serve a predicate on an expression**, so `idx_patient_visits_created` — added in [1.11.0] specifically for this — was never once used. The active queue sequentially scanned every visit ever recorded, on every load, for both the front desk and the cashier.
+
+All eleven are rewritten as half-open ranges on the raw column (`col >= $1::date AND col < ($2::date + 1)`), which is exactly equivalent and lets a plain B-tree apply.
+
+### Added
+`payments.paid_at`, `visit_tests.created_at` and `test_results.released_at` had **no index at all**, and between them they carry the entire reporting suite, the cashier's transaction log and the diagnostic history. Added, plus composites for the predicates those screens actually use (`payments(payment_status, paid_at)`, `patient_visits(status, created_at)`), and an `ANALYZE` so the planner uses them immediately rather than after autovacuum next runs.
+
+The index and the rewrite are useless apart, which is why they ship together.
+
+### Measured, not assumed
+On a throwaway database seeded with **219,000 payments** (three years at ~200/day), fetching one month of transactions:
+
+| | plan | time | blocks read |
+|---|---|---|---|
+| `::date` cast | Seq Scan | 50.7 ms | 1,611 |
+| half-open range | Index Scan | **0.84 ms** | 249 |
+
+**60× faster, 6× fewer blocks**, with the date now inside the `Index Cond` rather than a post-filter. On the current demo dataset both forms are a seq scan and always will be — five rows fit in one page, and Postgres is right to prefer that — which is exactly why this had to be measured at volume instead of eyeballed locally.
+
+### Fixed — the released-results list was unbounded
+`findReleasedByCategory` had no `LIMIT` and no date bound, and selects `findings`/`remarks`, which are unbounded `TEXT`. It backs the "Released" tab, hit on every visit to that screen. At 30 laboratory tests a day that is 7,500 rows of full clinical narrative in one response after a year, 22,500 after three — for a screen that shows ten at a time. Now defaults to the last 90 days with a hard `LIMIT`, both overridable via query string and **clamped server-side** (an unclamped `limit` would let any staff member pull the department's whole history in one request).
+
+### Also
+The receptionist's **"Print Queue Ticket" produced a blank page** — a bare `window.print()` on a view with no `.print-area`, so the CSS hid everything. It now renders a real slip: the queue number at 64px for reading across a waiting room, the patient's name, visit type and time, and which departments to proceed to. Both icon-only buttons on that row also gained `aria-label`s; `title` alone is not a reliable accessible name and is invisible on touch.
+
+---
+
 ## [1.17.0] - 2026-08-15 (VAT-exempt treatment for statutory discounts)
 
 Run: `node src/scripts/migrateVatExemption.js` (additive, safe to re-run)

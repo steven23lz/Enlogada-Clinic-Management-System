@@ -5,7 +5,7 @@ class ReportRepository {
     const queryText = `
       SELECT paid_at::date as day, SUM(amount) as total
       FROM payments
-      WHERE payment_status = 'Paid' AND paid_at::date BETWEEN $1 AND $2
+      WHERE payment_status = 'Paid' AND paid_at >= $1::date AND paid_at < ($2::date + 1)
       GROUP BY paid_at::date
       ORDER BY paid_at::date
     `;
@@ -19,7 +19,7 @@ class ReportRepository {
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
-      WHERE vt.created_at::date BETWEEN $1 AND $2
+      WHERE vt.created_at >= $1::date AND vt.created_at < ($2::date + 1)
       GROUP BY tc.name
       ORDER BY test_count DESC
     `;
@@ -31,7 +31,7 @@ class ReportRepository {
     const queryText = `
       SELECT status, COUNT(*) as visit_count
       FROM patient_visits
-      WHERE created_at::date BETWEEN $1 AND $2
+      WHERE created_at >= $1::date AND created_at < ($2::date + 1)
       GROUP BY status
       ORDER BY status
     `;
@@ -43,7 +43,7 @@ class ReportRepository {
     const queryText = `
       SELECT payment_method, SUM(amount) as total, COUNT(*) as payment_count
       FROM payments
-      WHERE payment_status = 'Paid' AND paid_at::date BETWEEN $1 AND $2
+      WHERE payment_status = 'Paid' AND paid_at >= $1::date AND paid_at < ($2::date + 1)
       GROUP BY payment_method
       ORDER BY total DESC
     `;
@@ -60,7 +60,7 @@ class ReportRepository {
       SELECT u.id as staff_id, u.first_name, u.last_name, COUNT(*) as visit_count
       FROM patient_visits pv
       JOIN users u ON pv.created_by = u.id
-      WHERE pv.created_at::date BETWEEN $1 AND $2
+      WHERE pv.created_at >= $1::date AND pv.created_at < ($2::date + 1)
       GROUP BY u.id, u.first_name, u.last_name
       ORDER BY visit_count DESC
     `;
@@ -79,7 +79,7 @@ class ReportRepository {
       -- is_current: an amended result would otherwise count once per version, inflating a
       -- clinician's throughput every time somebody corrected a report.
       WHERE tr.is_current
-        AND tr.released_at::date BETWEEN $1 AND $2
+        AND tr.released_at >= $1::date AND tr.released_at < ($2::date + 1)
       GROUP BY u.id, u.first_name, u.last_name, tc.name
       ORDER BY result_count DESC
     `;

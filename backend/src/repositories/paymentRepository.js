@@ -58,10 +58,13 @@ class PaymentRepository {
     // transaction log or daily collections total — it isn't revenue until the signed webhook
     // confirms it. Every pre-gateway row is 'Paid', so this narrows nothing that existed before.
     if (startDate && endDate) {
-      queryText += " WHERE pay.payment_status = 'Paid' AND pay.paid_at::date BETWEEN $1 AND $2";
+      // Half-open range rather than a ::date cast: a B-tree index cannot serve a predicate on
+      // an expression, so the cast turned every transaction lookup into a sequential scan of
+      // payments — the table that grows fastest and is read on every cashier dashboard load.
+      queryText += " WHERE pay.payment_status = 'Paid' AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)";
       params.push(startDate, endDate);
     } else {
-      queryText += " WHERE pay.payment_status = 'Paid' AND pay.paid_at::date = CURRENT_DATE";
+      queryText += " WHERE pay.payment_status = 'Paid' AND pay.paid_at >= CURRENT_DATE AND pay.paid_at < (CURRENT_DATE + 1)";
     }
 
     queryText += ' ORDER BY pay.paid_at DESC';

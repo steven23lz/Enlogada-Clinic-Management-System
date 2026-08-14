@@ -17,7 +17,9 @@ class VisitRepository {
   // (Receptionist's queue table) get total/pendingCount/processingCount/walkinCount back too,
   // computed server-side, so pagination doesn't break their KPI header cards.
   async findActiveVisits({ search, status, limit, offset } = {}) {
-    const filters = [`pv.created_at::date = CURRENT_DATE`, `pv.status IN ('Pending', 'Processing')`];
+    // Half-open range, not a ::date cast — the cast prevented idx_patient_visits_created from
+    // ever being used, so the active queue sequentially scanned every visit ever recorded.
+    const filters = [`pv.created_at >= CURRENT_DATE`, `pv.created_at < (CURRENT_DATE + 1)`, `pv.status IN ('Pending', 'Processing')`];
     const params = [];
 
     if (status && status !== 'All') {
@@ -103,7 +105,7 @@ class VisitRepository {
   // findActiveVisits (today-only, Pending/Processing only). Defaults are applied by the service
   // layer, not here, matching paymentRepository.findTransactions' convention.
   async findVisitsByDateRange({ startDate, endDate, search }) {
-    const filters = [`pv.created_at::date BETWEEN $1 AND $2`];
+    const filters = [`pv.created_at >= $1::date`, `pv.created_at < ($2::date + 1)`];
     const params = [startDate, endDate];
 
     if (search) {

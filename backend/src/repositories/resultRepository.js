@@ -61,13 +61,40 @@ class ResultRepository {
   // released from this app at all — the pending-worklist endpoint above only ever returns
   // Pending/Approved/Processing tests. Mirrors findPendingByCategory's shape/filtering exactly,
   // just against 'Completed' status and joined to the actual result content.
-  async findReleasedByCategory(categoryName) {
+  /**
+   * Released results for a department, newest first — bounded.
+   *
+   * This had no LIMIT and no date bound, and it selects `tr.findings` and `tr.remarks`, which are
+   * unbounded TEXT. It backs the "Released" tab, which is hit on every visit to that screen. At a
+   * modest 30 laboratory tests a day over 250 working days that is 7,500 rows of full clinical
+   * narrative in one JSON response after a year, and 22,500 after three — for a screen that shows
+   * ten at a time. The sort had no supporting index either, so it was a full scan plus an
+   * external sort, every load, degrading continuously and silently.
+   *
+   * The window is a *default*, not a cap the caller cannot lift: a technician looking for a
+   * result from four months ago passes a wider range, and the hard `LIMIT` is what keeps any
+   * single response bounded regardless. Both halves matter — a date window alone still returns
+   * everything inside a wide range.
+   *
+   * @param {string} categoryName
+   * @param {{days?: number, limit?: number, offset?: number}} options
+   */
+  async findReleasedByCategory(categoryName, { days = 90, limit = 200, offset = 0 } = {}) {
+    // Half-open range on the raw column so idx_test_results_released_at applies — a ::date cast
+    // here would put the planner straight back on a sequential scan. See [1.18.0].
+    const windowClause =
+      days > 0 ? `AND tr.released_at >= (CURRENT_DATE - $2::int * INTERVAL '1 day')` : '';
+    const params = [categoryName];
+    if (days > 0) params.push(days);
+    params.push(limit, offset);
+
     const queryText = `
       SELECT vt.id as visit_test_id, vt.status as test_status,
              t.name as test_name, tc.name as category_name,
              pv.id as visit_id, pv.queue_number,
              p.id as patient_id, p.first_name, p.last_name,
              tr.findings, tr.remarks as result_remarks, tr.file_url, tr.file_path, tr.released_at,
+             tr.version, tr.is_critical, tr.critical_acknowledged_at,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
@@ -80,9 +107,11 @@ class ResultRepository {
       LEFT JOIN users u ON tr.released_by = u.id
       WHERE tc.name = $1
         AND vt.status = 'Completed'
+        ${windowClause}
       ORDER BY tr.released_at DESC NULLS LAST, pv.created_at DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}
     `;
-    const result = await db.query(queryText, [categoryName]);
+    const result = await db.query(queryText, params);
     return result.rows;
   }
 
