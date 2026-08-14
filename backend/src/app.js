@@ -1,14 +1,47 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const env = require('./config/environment');
 const logger = require('./config/logger');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
 
-// 1. Enable Cross-Origin Resource Sharing (CORS)
-app.use(cors());
+// 0. Baseline security response headers.
+//
+// This API serves patient-identifying records, so the defaults matter: nosniff, frameguard
+// (an attacker's page cannot iframe an authenticated response), HSTS, and a referrer policy
+// that stops URLs leaking to third parties. contentSecurityPolicy is off because this process
+// only ever returns JSON and file downloads — the CSP that matters belongs to the Vite app,
+// and a policy declared here would be both inert and misleading.
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// 1. Cross-Origin Resource Sharing (CORS)
+//
+// Restricted to the configured frontend origin instead of the previous bare cors(), which
+// reflected ANY origin. Because the browser sends the bearer token from JS rather than a
+// cookie, a wide-open policy let any page a signed-in staff member visited call this API with
+// their token and read the response. Extra origins can be listed in CORS_ORIGINS (comma
+// separated) for staging or LAN testing.
+const allowedOrigins = new Set(
+  [env.FRONTEND_URL, ...(process.env.CORS_ORIGINS || '').split(',')]
+    .map((o) => o.trim())
+    .filter(Boolean)
+);
+app.use(cors({
+  origin: (origin, cb) => {
+    // No Origin header: same-origin, curl, health checks, and the PayMongo webhook. These are
+    // not browser cross-origin requests, so CORS is not the control that applies to them.
+    if (!origin || allowedOrigins.has(origin)) return cb(null, true);
+    // Withhold the header rather than raising: an error here surfaces as a 500, which reads as
+    // a server fault and tells the caller more than it should. Omitting the header is what
+    // actually stops the browser handing the response to the calling page.
+    return cb(null, false);
+  },
+  credentials: true
+}));
 
 // 2. Parse Incoming JSON and URL-encoded requests
 //

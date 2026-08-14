@@ -1,4 +1,5 @@
 const authService = require('../services/authService');
+const { validatePassword } = require('../validations/passwordPolicy');
 
 class AuthController {
   async register(req, res, next) {
@@ -11,6 +12,11 @@ class AuthController {
           status: 'error',
           message: 'First name, last name, email, and password are required fields.'
         });
+      }
+
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        return res.status(400).json({ status: 'error', message: passwordError });
       }
 
       const user = await authService.registerClient({
@@ -105,11 +111,9 @@ class AuthController {
         });
       }
 
-      if (newPassword.length < 8) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'New password must be at least 8 characters.'
-        });
+      const changeError = validatePassword(newPassword);
+      if (changeError) {
+        return res.status(400).json({ status: 'error', message: changeError });
       }
 
       const result = await authService.changePassword(userId, currentPassword, newPassword);
@@ -156,11 +160,9 @@ class AuthController {
         });
       }
 
-      if (newPassword.length < 8) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'New password must be at least 8 characters.'
-        });
+      const resetError = validatePassword(newPassword);
+      if (resetError) {
+        return res.status(400).json({ status: 'error', message: resetError });
       }
 
       const result = await authService.resetPassword(token, newPassword);

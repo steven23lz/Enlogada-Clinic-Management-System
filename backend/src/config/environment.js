@@ -14,7 +14,12 @@ module.exports = {
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   DATABASE_URL: process.env.DATABASE_URL,
   JWT_SECRET: process.env.JWT_SECRET,
-  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
+  // Shortened from 7d. Roles and permissions are baked into the token at login, so a long-lived
+  // token also means a long-lived stale authorization snapshot: revoke a role or deactivate an
+  // account and the old token keeps working until it expires, because there is no revocation
+  // list. A week of that on a system holding patient records is too generous — 1d covers a
+  // working shift without forcing repeated sign-ins. Override with JWT_EXPIRES_IN if needed.
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '1d',
   SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
   SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
   SMTP_USER: process.env.SMTP_USER || '',
