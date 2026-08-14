@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import Pagination from '../components/ui/pagination';
 import BookingConfirmation from '../components/BookingConfirmation';
 import api from '../config/api';
-import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../lib/currency';
 import { toastError } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
@@ -97,7 +96,6 @@ const downloadResultFile = async (visitTestId, originalName) => {
 };
 
 const ClientDashboard = ({ onNavigate }) => {
-  const { user } = useAuth();
   const [profiles, setProfiles] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState(null);
   const [selectedProfile, setSelectedProfile] = useState(null);
@@ -566,9 +564,22 @@ const ClientDashboard = ({ onNavigate }) => {
     );
   }
 
-  const appointmentsTotalPages = Math.max(1, Math.ceil(appointments.length / LIST_PAGE_SIZE));
+  // The API returns bookings newest-scheduled-date first, which buries the one booking the
+  // patient can actually act on: a far-future cancelled booking outranks tomorrow's paid visit,
+  // so a QR booking pass could sit pages deep behind rows that do nothing. Order by what the
+  // patient needs — still-open bookings first (soonest first, since the next visit is the one
+  // that matters), then closed ones (most recent first, as history).
+  const isOpenBooking = (a) => a.status !== 'Cancelled' && a.status !== 'Completed';
+  const sortedAppointments = [...appointments].sort((a, b) => {
+    if (isOpenBooking(a) !== isOpenBooking(b)) return isOpenBooking(a) ? -1 : 1;
+    const da = new Date(a.scheduled_date).getTime();
+    const db = new Date(b.scheduled_date).getTime();
+    return isOpenBooking(a) ? da - db : db - da;
+  });
+
+  const appointmentsTotalPages = Math.max(1, Math.ceil(sortedAppointments.length / LIST_PAGE_SIZE));
   const safeAppointmentsPage = Math.min(appointmentsPage, appointmentsTotalPages);
-  const pagedAppointments = appointments.slice(
+  const pagedAppointments = sortedAppointments.slice(
     (safeAppointmentsPage - 1) * LIST_PAGE_SIZE,
     safeAppointmentsPage * LIST_PAGE_SIZE
   );

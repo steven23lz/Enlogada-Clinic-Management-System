@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
 import { isGoogleAuthConfigured } from '../../config/googleAuth';
@@ -16,6 +16,35 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // A configured client ID is not the same as a *working* one. If the serving origin is missing
+  // from the OAuth client's "Authorized JavaScript origins", Google answers GET /gsi/button with
+  // 403 and the button's iframe stays 0x0 — but GSI still paints its own non-interactive markup,
+  // so a Google-looking pill sits there and clicking it does nothing at all. onError never fires
+  // (the flow never starts), so nothing tells the user why. Detect the collapsed iframe and show
+  // the same explanatory notice as the not-configured case instead of a dead control.
+  const googleSlotRef = useRef(null);
+  const [googleButtonBroken, setGoogleButtonBroken] = useState(false);
+
+  useEffect(() => {
+    if (!isGoogleAuthConfigured) return undefined;
+    let cancelled = false;
+    // Poll rather than check once: on a cold load the iframe legitimately measures 0x0 for a
+    // moment before Google's script sizes it.
+    const deadline = Date.now() + 5000;
+    const timer = setInterval(() => {
+      if (cancelled) return;
+      const iframe = googleSlotRef.current?.querySelector('iframe');
+      const rendered = iframe && iframe.getBoundingClientRect().height > 0;
+      if (rendered) {
+        clearInterval(timer);
+      } else if (Date.now() > deadline) {
+        clearInterval(timer);
+        setGoogleButtonBroken(true);
+      }
+    }, 400);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -121,8 +150,13 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
           <div className="flex-grow border-t border-gray-100"></div>
         </div>
 
-        {isGoogleAuthConfigured ? (
-          <div className="flex justify-center w-full">
+        {isGoogleAuthConfigured && (
+          // Kept mounted even once known-broken: the detector measures this slot's iframe, and
+          // unmounting it would destroy the evidence. Hidden instead, so no dead control shows.
+          <div
+            ref={googleSlotRef}
+            className={googleButtonBroken ? 'hidden' : 'flex justify-center w-full'}
+          >
             {/* Google's Identity Services button takes a pixel width only — it rejects
                 percentages, which is why this is a number and not the "100%" that matched
                 the form's full-width Sign In button above. 360 is the widest value that
@@ -138,7 +172,9 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
               width={360}
             />
           </div>
-        ) : (
+        )}
+
+        {!isGoogleAuthConfigured && (
           <div className="flex items-start space-x-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-800">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-px" />
             <span>
@@ -148,6 +184,19 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
               <code className="font-mono">GOOGLE_CLIENT_ID</code> in{' '}
               <code className="font-mono">backend/.env</code>), then restart both servers.
               Signing in with an email and password works as usual.
+            </span>
+          </div>
+        )}
+
+        {isGoogleAuthConfigured && googleButtonBroken && (
+          <div className="flex items-start space-x-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-800">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-px" />
+            <span>
+              Google Sign-In is unavailable on this address. The configured client ID does not
+              list <code className="font-mono">{window.location.origin}</code> under
+              &quot;Authorized JavaScript origins&quot; — add it at{' '}
+              <code className="font-mono">console.cloud.google.com/apis/credentials</code> and
+              reload. Signing in with an email and password works as usual.
             </span>
           </div>
         )}
