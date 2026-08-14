@@ -3,13 +3,30 @@ import { Card, CardContent } from './card';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
 const ICON_TONE = {
-  green: 'bg-[#769046]/10 text-[#769046]',
-  emerald: 'bg-emerald-50 text-emerald-600',
-  amber: 'bg-amber-50 text-amber-600',
-  indigo: 'bg-indigo-50 text-indigo-600',
-  rose: 'bg-rose-50 text-rose-600',
-  purple: 'bg-purple-50 text-purple-600',
+  green: 'bg-[#769046]/12 text-[#769046]',
+  emerald: 'bg-emerald-100 text-emerald-700',
+  amber: 'bg-amber-100 text-amber-700',
+  indigo: 'bg-indigo-100 text-indigo-700',
+  rose: 'bg-rose-100 text-rose-700',
+  purple: 'bg-purple-100 text-purple-700',
   slate: 'bg-slate-100 text-slate-700',
+};
+
+// A saturated rule down the leading edge of each card. It does the job the pale icon chip was
+// being asked to do alone: at the distance someone actually reads a KPI strip — across a
+// reception desk, glancing up between patients — a small tinted square is not enough to group
+// or distinguish cards, and the row reads as one undifferentiated band of white. A full-height
+// bar registers peripherally, so "how many are waiting on me" resolves before you focus on any
+// individual number. It also ties each card to the status badges below it, which use the same
+// hues for the same meanings.
+const ACCENT_TONE = {
+  green: 'bg-[#769046]',
+  emerald: 'bg-emerald-500',
+  amber: 'bg-amber-500',
+  indigo: 'bg-indigo-500',
+  rose: 'bg-rose-500',
+  purple: 'bg-purple-500',
+  slate: 'bg-slate-400',
 };
 
 const CAPTION_TONE = {
@@ -52,8 +69,12 @@ const MetricCard = ({ label, value, icon: Icon, tone = 'green', captionTone, cap
   const body = (
     <div className="flex items-center justify-between">
       <div className="space-y-1 min-w-0">
-        <span className="text-[10px] font-bold uppercase tracking-wider block text-gray-400">{label}</span>
-        <div className={`text-2xl font-extrabold break-words ${isDark ? (DARK_VALUE_TONE[tone] || 'text-white') : 'text-slate-900'}`}>
+        {/* gray-500 rather than gray-400: at 10px uppercase this is the smallest text on the
+            screen, and gray-400 on white falls below the WCAG AA contrast floor. */}
+        <span className={`text-[10px] font-bold uppercase tracking-wider block ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label}</span>
+        {/* tabular-nums keeps digits on a fixed advance width, so figures line up across a row
+            of cards and a counter ticking 9 -> 10 does not shift the layout under the reader. */}
+        <div className={`text-[28px] leading-none font-extrabold tracking-tight tabular-nums break-words ${isDark ? (DARK_VALUE_TONE[tone] || 'text-white') : 'text-slate-900'}`}>
           {value}
         </div>
         {trend && (
@@ -90,9 +111,10 @@ const MetricCard = ({ label, value, icon: Icon, tone = 'green', captionTone, cap
   return (
     <Card
       onClick={onClick}
-      className={`border-gray-100 shadow-xs rounded-2xl bg-white ${clickable ? 'cursor-pointer hover:shadow-md transition-shadow' : ''} ${className}`}
+      className={`relative overflow-hidden border-gray-200/80 shadow-sm rounded-2xl bg-white ${clickable ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200' : ''} ${className}`}
     >
-      <CardContent className="p-5">{body}</CardContent>
+      <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1 ${ACCENT_TONE[tone] || ACCENT_TONE.slate}`} />
+      <CardContent className="p-5 pl-6">{body}</CardContent>
     </Card>
   );
 };
