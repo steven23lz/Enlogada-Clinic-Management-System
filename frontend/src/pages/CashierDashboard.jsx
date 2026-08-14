@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { StatusBadge } from '../components/ui/status-badge';
 import WaitBadge from '../components/ui/wait-badge';
+import { SkeletonList, SkeletonRows } from '../components/ui/skeleton';
 import { Textarea } from '../components/ui/textarea';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
@@ -394,9 +395,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
               <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                 {loading ? (
-                  <div className="p-8 text-center text-xs text-gray-400 font-semibold">
-                    Loading billing queue…
-                  </div>
+                  <SkeletonList rows={4} />
                 ) : filteredVisits.length > 0 ? (
                   filteredVisits.map(visit => {
                     const isSelected = selectedVisit?.id === visit.id;
@@ -698,9 +697,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       </TableCell>
                     </TableRow>
                   ) : historyLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-6 text-xs text-gray-400 font-semibold">Loading transaction history…</TableCell>
-                    </TableRow>
+                    <SkeletonRows rows={6} columns={8} />
                   ) : pagedHistoryTransactions.length > 0 ? (
                     pagedHistoryTransactions.map(t => (
                       <TableRow key={t.id}>

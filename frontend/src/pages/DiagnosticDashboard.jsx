@@ -13,6 +13,7 @@ import Pagination from '../components/ui/pagination';
 import api from '../config/api';
 import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import WaitBadge from '../components/ui/wait-badge';
+import { SkeletonRows } from '../components/ui/skeleton';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Stethoscope,
@@ -509,9 +510,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                     </TableCell>
                   </TableRow>
                 ) : loading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading worklist…</TableCell>
-                  </TableRow>
+                  <SkeletonRows rows={5} columns={5} />
                 ) : pagedTests.length > 0 ? (
                   pagedTests.map(test => (
                     <TableRow key={test.visit_test_id} className="hover:bg-gray-50/50 transition-colors">
@@ -641,9 +640,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                     </TableCell>
                   </TableRow>
                 ) : loading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading result history…</TableCell>
-                  </TableRow>
+                  <SkeletonRows rows={5} columns={5} />
                 ) : pagedReleased.length > 0 ? (
                   pagedReleased.map(test => (
                     <TableRow key={test.visit_test_id} className="hover:bg-gray-50/50 transition-colors">
