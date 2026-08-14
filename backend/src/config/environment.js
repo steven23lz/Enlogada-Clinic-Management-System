@@ -52,6 +52,25 @@ module.exports = {
   // list. A week of that on a system holding patient records is too generous — 1d covers a
   // working shift without forcing repeated sign-ins. Override with JWT_EXPIRES_IN if needed.
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '1d',
+  // --- Tax treatment -------------------------------------------------------------------
+  // Whether the clinic is VAT-registered with the BIR. This is not cosmetic: it changes what a
+  // senior citizen or PWD actually pays.
+  //
+  // Under RA 9994 and RA 10754 a VAT-registered establishment must treat the sale as VAT-EXEMPT
+  // before discounting — strip the 12% VAT from the VAT-inclusive price, then apply the 20% to
+  // that VAT-exempt base. A non-VAT establishment simply applies 20% to the price. The two give
+  // materially different answers: on a PHP 1,000 service the patient pays 714.29 the correct way
+  // and 800.00 the flat way, so getting this wrong overcharges the patient by 85.71 and
+  // understates the deduction the clinic can claim.
+  //
+  // Prices in `tests` are stored VAT-INCLUSIVE (that is the shelf price a patient is quoted), so
+  // the VAT is extracted from them rather than added on top.
+  //
+  // Defaults to true because that is Enlogada's registration. Set CLINIC_VAT_REGISTERED=false
+  // only for a non-VAT establishment — and confirm with your accountant before changing it.
+  CLINIC_VAT_REGISTERED: process.env.CLINIC_VAT_REGISTERED !== 'false',
+  VAT_RATE: parseFloat(process.env.VAT_RATE || '0.12'),
+
   SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
   SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
   SMTP_USER: process.env.SMTP_USER || '',

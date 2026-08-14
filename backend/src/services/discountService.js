@@ -1,4 +1,5 @@
 const discountRepository = require('../repositories/discountRepository');
+const env = require('../config/environment');
 const visitRepository = require('../repositories/visitRepository');
 const paymentRepository = require('../repositories/paymentRepository');
 const auditService = require('./auditService');
@@ -20,26 +21,54 @@ class DiscountService {
   }
 
   /**
-   * Computes the peso value of a visit's discount.
+   * Breaks a visit's payable amount into VAT, discount and the balance due.
    *
-   * The base is the patient's own out-of-pocket amount — subtotal minus whatever the HMO has
-   * actually approved — not the gross subtotal. A statutory discount is a reduction of what the
-   * *patient* pays; applying it to amounts an insurer is settling would hand the patient a
-   * discount on somebody else's money and understate the receivable from the HMO.
+   * The starting figure is the patient's own out-of-pocket amount — subtotal minus whatever the
+   * HMO has actually approved — not the gross subtotal. A discount reduces what the *patient*
+   * pays; applying it to amounts an insurer is settling would discount somebody else's money and
+   * understate the receivable from the HMO.
    *
-   * On VAT, deliberately left explicit rather than guessed: RA 9994 and RA 10754 require a
-   * VAT-registered establishment to strip the 12% VAT first and apply the 20% to the VAT-exempt
-   * base, while a non-VAT establishment simply applies 20%. This system has no VAT decomposition
-   * anywhere — prices in `tests` are single figures with no tax component recorded — so the flat
-   * percentage below is correct for a non-VAT establishment and understates the discount for a
-   * VAT-registered one. Adding VAT handling is a schema question that needs the clinic's BIR
-   * registration status as its input, so it is flagged here rather than silently assumed.
+   * VAT, for a STATUTORY discount at a VAT-registered establishment:
+   *
+   *     VAT-inclusive price          1,000.00
+   *     less 12% VAT                  -107.14    (price - price/1.12)
+   *     ------------------------------------
+   *     VAT-exempt sale                892.86
+   *     less 20% discount             -178.57    (20% of the VAT-EXEMPT base, not of the price)
+   *     ------------------------------------
+   *     Amount due                     714.29
+   *
+   * The order is fixed by RA 9994 / RA 10754 and is not the intuitive one. A flat 20% off the
+   * price gives 800.00, which overcharges the patient by 85.71 per 1,000 and understates the
+   * deduction the clinic can claim; discounting first would also charge a VAT-exempt patient VAT
+   * on part of the sale. `tests.price` is stored VAT-INCLUSIVE — it is the shelf price a patient
+   * is quoted — so the VAT is extracted from it rather than added on top.
+   *
+   * Only statutory discounts are VAT-exempt. A promo or corporate rate is an ordinary discount on
+   * a VAT-inclusive price, which is why `isStatutory` drives the branch and not the percentage.
+   *
+   * Each figure is rounded to centavos and the balance is derived from the rounded parts, so
+   * `netDue + discountAmount + vatDeducted` always equals `gross` exactly. That matters because
+   * processPayment rejects a submitted amount differing by more than a centavo — an arithmetic
+   * disagreement here surfaces as a payment the cashier cannot complete.
    */
-  computeDiscount({ subtotal, hmoCoverage, percentage }) {
+  computeBreakdown({ subtotal, hmoCoverage, percentage, isStatutory }) {
+    const gross = toCentavos(Math.max(0, Number(subtotal) - Number(hmoCoverage)));
     const pct = Number(percentage) || 0;
-    if (pct <= 0) return 0;
-    const base = Math.max(0, Number(subtotal) - Number(hmoCoverage));
-    return toCentavos((base * pct) / 100);
+
+    if (pct <= 0) {
+      return { gross, vatDeducted: 0, discountBase: gross, discountAmount: 0, netDue: gross };
+    }
+
+    const vatDeducted =
+      isStatutory && env.CLINIC_VAT_REGISTERED
+        ? toCentavos(gross - gross / (1 + env.VAT_RATE))
+        : 0;
+    const discountBase = toCentavos(gross - vatDeducted);
+    const discountAmount = toCentavos((discountBase * pct) / 100);
+    const netDue = toCentavos(discountBase - discountAmount);
+
+    return { gross, vatDeducted, discountBase, discountAmount, netDue };
   }
 
   async applyToVisit(visitId, { discountTypeId, idNumber }, requestingUser) {
@@ -170,6 +199,10 @@ class DiscountService {
         transactionCount: settled.length,
         reversedCount: rows.length - settled.length,
         grossTotal: toCentavos(sum(settled, 'gross_amount')).toFixed(2),
+        // The two figures BIR actually asks for on a senior/PWD register: what the sale was
+        // after VAT was removed, and how much VAT was therefore not collected.
+        vatExemptSalesTotal: toCentavos(sum(settled, 'vat_exempt_sale')).toFixed(2),
+        vatTotal: toCentavos(sum(settled, 'vat_amount')).toFixed(2),
         discountTotal: toCentavos(sum(settled, 'discount_amount')).toFixed(2),
         netTotal: toCentavos(sum(settled, 'amount_paid')).toFixed(2),
         byType: Object.values(byType).map((t) => ({

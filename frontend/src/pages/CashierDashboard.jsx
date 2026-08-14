@@ -635,6 +635,22 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       <span>HMO Coverage:</span>
                       <span className="font-bold text-emerald-600">- {formatCurrency(billDetails.hmoCoverage || 0)}</span>
                     </div>
+                    {/* A statutory sale is VAT-EXEMPT, so the 12% comes off before the 20% does.
+                        Shown as its own line because the patient is comparing what they pay to
+                        the shelf price, and because BIR requires a VAT-exempt sale to be
+                        presented this way rather than folded into one "discount" figure. */}
+                    {parseFloat(billDetails.vatDeducted || 0) > 0 && (
+                      <>
+                        <div className="flex justify-between items-center text-gray-600">
+                          <span>Less VAT (12%) — VAT-exempt sale:</span>
+                          <span className="font-bold text-emerald-600">- {formatCurrency(billDetails.vatDeducted)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-gray-500 pt-1 border-t border-dashed border-gray-200">
+                          <span className="text-fine uppercase tracking-wide font-bold">VAT-exempt sale</span>
+                          <span className="text-fine font-bold text-slate-700">{formatCurrency(billDetails.vatExemptSale)}</span>
+                        </div>
+                      </>
+                    )}
                     {/* Statutory deductions must be itemised on the receipt by name and rate, not
                         folded into the total — RA 9994 / RA 10754. */}
                     {billDetails.discount && (
@@ -1131,15 +1147,39 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     actually granted. */}
                 {parseFloat(paymentSuccess.discount_amount || 0) > 0 && (
                   <div className="space-y-1 pb-2 border-b border-gray-100">
+                    {/* Reconciles from the payment row alone:
+                        amount + discount_amount + vat_amount = the VAT-inclusive price. */}
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500 font-medium">Gross Amount:</span>
                       <span className="font-semibold text-slate-800">
-                        {formatCurrency(parseFloat(paymentSuccess.amount) + parseFloat(paymentSuccess.discount_amount))}
+                        {formatCurrency(
+                          parseFloat(paymentSuccess.amount) +
+                            parseFloat(paymentSuccess.discount_amount) +
+                            parseFloat(paymentSuccess.vat_amount || 0)
+                        )}
                       </span>
                     </div>
+                    {parseFloat(paymentSuccess.vat_amount || 0) > 0 && (
+                      <>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500 font-medium">Less VAT (12%):</span>
+                          <span className="font-semibold text-emerald-600">
+                            - {formatCurrency(paymentSuccess.vat_amount)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500 font-medium">VAT-Exempt Sale:</span>
+                          <span className="font-semibold text-slate-800">
+                            {formatCurrency(
+                              parseFloat(paymentSuccess.amount) + parseFloat(paymentSuccess.discount_amount)
+                            )}
+                          </span>
+                        </div>
+                      </>
+                    )}
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500 font-medium">
-                        {paymentSuccess.discount_type_name} Discount:
+                        {paymentSuccess.discount_type_name} Discount (20%):
                       </span>
                       <span className="font-semibold text-emerald-600">
                         - {formatCurrency(paymentSuccess.discount_amount)}

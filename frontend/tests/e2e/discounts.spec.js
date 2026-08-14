@@ -106,7 +106,7 @@ test.describe('Statutory discounts (Senior Citizen / PWD)', () => {
     expect((await res.json()).message).toMatch(/ID number/i);
   });
 
-  test('applying it deducts exactly 20% and itemises the entitlement', async () => {
+  test('VAT comes off before the discount does, and the sale reconciles', async () => {
     const applied = await apiContext.post(`${API}/discounts/visit/${visitId}`, {
       headers: auth(cashier),
       data: { discountTypeId: senior.id, idNumber: 'OSCA-E2E-001' },
@@ -115,10 +115,32 @@ test.describe('Statutory discounts (Senior Citizen / PWD)', () => {
 
     const bill = (await (await apiContext.get(`${API}/payments/bill/${visitId}`, { headers: auth(cashier) })).json())
       .data.bill;
-    const expected = (Math.round(testPrice * 20) / 100).toFixed(2);
 
-    expect(bill.discountAmount).toBe(expected);
-    expect(bill.totalAmount).toBe((testPrice - parseFloat(expected)).toFixed(2));
+    // The order is fixed by RA 9994 / RA 10754 and is not the intuitive one: a sale to a senior
+    // or PWD is VAT-EXEMPT, so a VAT-registered clinic strips the 12% first and applies the 20%
+    // to what remains. Taking a flat 20% off the shelf price overcharges the patient — on a
+    // PHP 1,000 service, 800.00 instead of 714.29.
+    const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+    const expectedVat = round2(testPrice - testPrice / 1.12);
+    const expectedBase = round2(testPrice - expectedVat);
+    const expectedDiscount = round2(expectedBase * 0.2);
+    const expectedDue = round2(expectedBase - expectedDiscount);
+
+    expect(bill.vatDeducted).toBe(expectedVat.toFixed(2));
+    expect(bill.vatExemptSale).toBe(expectedBase.toFixed(2));
+    expect(bill.discountAmount).toBe(expectedDiscount.toFixed(2));
+    expect(bill.totalAmount).toBe(expectedDue.toFixed(2));
+
+    // Every centavo has to be accounted for, or the receipt cannot be reconciled to the price the
+    // patient was quoted — and processPayment rejects an amount off by more than a centavo.
+    const reconciled = round2(
+      parseFloat(bill.totalAmount) + parseFloat(bill.discountAmount) + parseFloat(bill.vatDeducted)
+    );
+    expect(reconciled).toBe(round2(testPrice));
+
+    // The flat calculation must NOT be what we charge.
+    expect(bill.totalAmount).not.toBe(round2(testPrice * 0.8).toFixed(2));
+
     expect(bill.discount.name).toBe('Senior Citizen');
     expect(bill.discount.idNumber).toBe('OSCA-E2E-001');
     expect(bill.discount.isStatutory).toBe(true);
@@ -159,6 +181,7 @@ test.describe('Statutory discounts (Senior Citizen / PWD)', () => {
 
     // Snapshotted onto the payment rather than referenced, so a reprint survives catalogue edits.
     expect(parseFloat(payment.discount_amount)).toBe(parseFloat(bill.discountAmount));
+    expect(parseFloat(payment.vat_amount)).toBe(parseFloat(bill.vatDeducted));
     expect(payment.discount_type_name).toBe('Senior Citizen');
     expect(payment.discount_id_number).toBe('OSCA-E2E-001');
     // The receipt number carries the server's local date, not a UTC one.
@@ -186,9 +209,18 @@ test.describe('Statutory discounts (Senior Citizen / PWD)', () => {
 
     const entry = register.entries.find((e) => e.discount_id_number === 'OSCA-E2E-001');
     expect(entry, 'the payment must appear in the statutory register').toBeTruthy();
-    expect((parseFloat(entry.gross_amount) - parseFloat(entry.discount_amount)).toFixed(2)).toBe(
-      parseFloat(entry.amount_paid).toFixed(2)
-    );
+
+    // The register reports the VAT-EXEMPT sale, which is what the 20% was taken off — not the
+    // shelf price. Gross adds the VAT back so the row ties to what the patient was quoted.
+    expect(
+      (parseFloat(entry.vat_exempt_sale) - parseFloat(entry.discount_amount)).toFixed(2)
+    ).toBe(parseFloat(entry.amount_paid).toFixed(2));
+    expect(
+      (parseFloat(entry.vat_exempt_sale) + parseFloat(entry.vat_amount)).toFixed(2)
+    ).toBe(parseFloat(entry.gross_amount).toFixed(2));
+
     expect(parseFloat(register.summary.discountTotal)).toBeGreaterThan(0);
+    expect(parseFloat(register.summary.vatTotal)).toBeGreaterThan(0);
+    expect(parseFloat(register.summary.vatExemptSalesTotal)).toBeGreaterThan(0);
   });
 });

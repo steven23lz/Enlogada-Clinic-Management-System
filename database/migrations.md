@@ -1,5 +1,45 @@
 # Database Migration & Schema History
 
+## [1.17.0] - 2026-08-15 (VAT-exempt treatment for statutory discounts)
+
+Run: `node src/scripts/migrateVatExemption.js` (additive, safe to re-run)
+
+### Completes the open question from [1.14.0]
+That release shipped the statutory discount as a flat 20% and said so explicitly: correct for a non-VAT establishment, an understatement for a VAT-registered one, pending confirmation of the clinic's BIR registration. **Enlogada is VAT-registered**, so the flat calculation was wrong.
+
+RA 9994 and RA 10754 make a sale to a senior citizen or PWD **VAT-exempt**, and the order of operations is fixed by statute — it is not the intuitive one:
+
+```
+VAT-inclusive price          1,000.00
+less 12% VAT                  -107.14     (1000 - 1000/1.12)
+----------------------------------------
+VAT-exempt sale                892.86
+less 20% discount             -178.57     (20% of the VAT-EXEMPT base, not of the price)
+----------------------------------------
+Amount due                     714.29
+```
+
+A flat 20% off the price gives **800.00**, so seniors and PWDs were being **overcharged by ₱85.71 per ₱1,000**, and the clinic was understating the deduction it could claim. Discounting before removing VAT would also mean charging a VAT-exempt patient VAT on part of the sale.
+
+Only **statutory** discounts get this treatment — a promo or corporate rate is an ordinary discount on a VAT-inclusive price and carries no exemption, so `discount_types.is_statutory` drives the branch rather than the percentage.
+
+### Added
+* `payments.vat_amount` — the VAT removed, snapshotted like the discount. With it the sale reconciles from the payment row alone: `amount + discount_amount + vat_amount = the VAT-inclusive price the patient was quoted`.
+* `CLINIC_VAT_REGISTERED` (default `true`) and `VAT_RATE` (default `0.12`) in `backend/.env`, documented in `.env.example`.
+* The bill and the receipt now show **Less VAT (12%)** and **VAT-Exempt Sale** as their own lines. BIR requires a VAT-exempt sale to be presented that way rather than folded into a single discount figure, and a patient comparing the shelf price to what they paid needs the difference explained.
+* The statutory register reports `vatExemptSalesTotal` and `vatTotal` alongside gross, discount and net — the figures a senior/PWD register is actually filed with. Its `gross_amount` now adds the VAT back, so a row ties to the quoted price.
+
+### Not backfilled, deliberately
+Existing payments keep `vat_amount = 0`. Every one of them either carried no statutory discount or was computed the flat way, and restating historical rows to claim a VAT treatment they were not issued under would be worse than leaving them alone — those receipts are already in patients' hands.
+
+### Rounding
+Each figure is rounded to centavos and the balance is derived from the rounded parts, so the three components always sum exactly to the gross. `processPayment` rejects a submitted amount differing by more than a centavo, so an arithmetic disagreement here would surface as a payment the cashier cannot complete rather than as a rounding footnote.
+
+### Test note
+`discounts.spec.js` asserted the flat calculation and legitimately went red on this change. It now pins the statutory order, checks every centavo reconciles, and asserts explicitly that the flat figure is *not* what gets charged.
+
+---
+
 ## [1.16.0] - 2026-08-15 (Session revocation, credential rate limiting, JWT secret guard)
 
 Run: `node src/scripts/migrateSessionRevocation.js` (additive, safe to re-run)

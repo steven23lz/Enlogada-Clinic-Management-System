@@ -11,19 +11,19 @@ class PaymentRepository {
    */
   async createPayment({
     patientVisitId, processedBy, paymentMethod, referenceNumber, receiptNumber, amount,
-    discountAmount = 0, discountTypeName = null, discountIdNumber = null
+    discountAmount = 0, discountTypeName = null, discountIdNumber = null, vatAmount = 0
   }) {
     const queryText = `
       INSERT INTO payments (
         patient_visit_id, processed_by, payment_method, reference_number, receipt_number, amount,
-        discount_amount, discount_type_name, discount_id_number
+        discount_amount, discount_type_name, discount_id_number, vat_amount
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
     const result = await db.query(queryText, [
       patientVisitId, processedBy, paymentMethod, referenceNumber, receiptNumber, amount,
-      discountAmount, discountTypeName, discountIdNumber
+      discountAmount, discountTypeName, discountIdNumber, vatAmount
     ]);
     return result.rows[0];
   }

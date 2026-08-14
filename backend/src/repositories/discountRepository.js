@@ -82,8 +82,13 @@ class DiscountRepository {
              pay.discount_type_name,
              pay.discount_id_number,
              pay.discount_amount,
+             pay.vat_amount,
              pay.amount AS amount_paid,
-             (pay.amount + pay.discount_amount) AS gross_amount,
+             -- The VAT-exempt sale is what the 20% was actually taken off, and it is the figure
+             -- BIR wants in the register — not the shelf price. Gross adds the VAT back so the
+             -- row reconciles to the original VAT-inclusive amount the patient was quoted.
+             (pay.amount + pay.discount_amount) AS vat_exempt_sale,
+             (pay.amount + pay.discount_amount + pay.vat_amount) AS gross_amount,
              p.first_name, p.last_name
       FROM payments pay
       JOIN patient_visits pv ON pay.patient_visit_id = pv.id

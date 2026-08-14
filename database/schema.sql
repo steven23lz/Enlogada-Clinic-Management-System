@@ -314,9 +314,15 @@ CREATE TABLE payments (
     -- the catalogue is renamed or re-rated. Same reasoning as visit_tests.price_at_time. This is
     -- also what the BIR statutory register reads.
     discount_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+    -- VAT removed because the sale was VAT-EXEMPT (Senior Citizen / PWD at a VAT-registered
+    -- clinic). With it the sale reconciles from this row alone:
+    --   amount + discount_amount + vat_amount = the VAT-inclusive price the patient was quoted.
+    -- See migrations.md [1.17.0].
+    vat_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
     discount_type_name VARCHAR(50),
     discount_id_number VARCHAR(50),
     CONSTRAINT chk_payments_discount_nonneg CHECK (discount_amount >= 0),
+    CONSTRAINT chk_payments_vat_nonneg CHECK (vat_amount >= 0),
     CONSTRAINT fk_payments_visit FOREIGN KEY (patient_visit_id) REFERENCES patient_visits(id),
     CONSTRAINT fk_payments_processed_by FOREIGN KEY (processed_by) REFERENCES users(id),
     CONSTRAINT chk_payment_method CHECK (payment_method IN ('Cash', 'GCash', 'PayMaya', 'Bank')),

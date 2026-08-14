@@ -29,14 +29,16 @@ class PaymentService {
       .reduce((sum, item) => sum + parseFloat(item.price_at_time), 0);
 
     // Statutory (Senior Citizen / PWD) and commercial discounts, applied to the patient's own
-    // out-of-pocket amount rather than the gross subtotal — see discountService.computeDiscount,
-    // which also documents why VAT is left explicit rather than assumed.
-    const discountAmount = discountService.computeDiscount({
+    // out-of-pocket amount rather than the gross subtotal. For a statutory discount at a
+    // VAT-registered clinic the 12% VAT comes off before the 20% does — see
+    // discountService.computeBreakdown for why that order is not optional.
+    const breakdown = discountService.computeBreakdown({
       subtotal,
       hmoCoverage,
       percentage: visitInfo.discount_percentage,
+      isStatutory: visitInfo.discount_is_statutory,
     });
-    const totalAmount = subtotal - hmoCoverage - discountAmount;
+    const { vatDeducted, discountAmount, netDue: totalAmount } = breakdown;
 
     const formattedItems = items.map(item => ({
       id: item.visit_test_id,
@@ -55,6 +57,11 @@ class PaymentService {
       subtotal: subtotal.toFixed(2),
       hmoCoverage: hmoCoverage.toFixed(2),
       discountAmount: discountAmount.toFixed(2),
+      // Zero unless a statutory discount applies at a VAT-registered clinic. The receipt has to
+      // show it as its own line — BIR requires a VAT-exempt sale to be presented that way, and a
+      // patient comparing the shelf price to what they paid needs the difference explained.
+      vatDeducted: vatDeducted.toFixed(2),
+      vatExemptSale: breakdown.discountBase.toFixed(2),
       // Null when no discount is claimed. The cashier's screen and the receipt both need the
       // name, rate and ID number, not just the peso figure — a statutory deduction has to be
       // itemised and attributable, not folded silently into the total.
@@ -124,7 +131,10 @@ class PaymentService {
         // that may since have changed.
         discountAmount: parseFloat(bill.discountAmount || 0),
         discountTypeName: bill.discount?.name || null,
-        discountIdNumber: bill.discount?.idNumber || null
+        discountIdNumber: bill.discount?.idNumber || null,
+        // With this stored, the whole sale reconciles from the payment row alone:
+        //   amount + discount_amount + vat_amount = the original VAT-inclusive price.
+        vatAmount: parseFloat(bill.vatDeducted || 0)
       });
 
       // A counter payment supersedes any online checkout the patient started but never finished
