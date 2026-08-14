@@ -29,6 +29,12 @@ node src/scripts/setupRbac.js     # seeds permissions/roles for RBAC
 node src/scripts/seedUsers.js     # seeds one test user per role (password: Password123!)
 node src/scripts/testRbacEndpoints.js  # manual RBAC endpoint smoke test
 
+# Additive migrations for an EXISTING database (migrateDb.js is destructive and cannot be used on
+# a live one). Each is safe to re-run; run them in order on any database created before [1.13.0].
+node src/scripts/migrateIndexes.js           # [1.11.0] foreign-key and lookup indexes
+node src/scripts/migrateResultAttribution.js # [1.12.0] recorded_by vs released_by
+node src/scripts/migrateDataIntegrity.js     # [1.13.0] daily_counters + queue/receipt/payment uniqueness
+
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
 node src/scripts/resetDemoData.js             # report only
@@ -97,7 +103,11 @@ Public (unauthenticated) pages: `Home`, `ServicesPage` (dynamically fetches acti
 
 ### Database
 
-Schema lives in `database/schema.sql` (source of truth, applied wholesale by `migrateDb.js`); human-readable change log in `database/migrations.md`. Core flow through the tables:
+Schema lives in `database/schema.sql` (source of truth, applied wholesale by `migrateDb.js`); human-readable change log in `database/migrations.md`.
+
+**Transactions:** `db.withTransaction(fn)` in `src/config/database.js` makes every query issued underneath it — at any call depth, through any repository — run on one connection and commit as a unit. It uses `AsyncLocalStorage`, so repositories need no `client` argument and cannot accidentally write outside the transaction. Nested calls join the transaction already in progress. **Never call `db.pool.connect()` directly**: a self-managed client inside a `withTransaction` opens a second, independent transaction that commits on its own, and with a bounded pool it deadlocks once every connection is held by a transaction waiting for another connection. Any service method performing 2+ writes that must succeed together belongs in `withTransaction`; keep bcrypt hashing and outbound email/HTTP *outside* it so a pooled connection is not held during slow work.
+
+**Numbers that must be unique** (queue tickets, receipt numbers) come from `daily_counters` via `INSERT … ON CONFLICT DO UPDATE … RETURNING`, never from `SELECT COUNT(*) + 1`. Counting rows is not a sequence: it races under concurrency, and it rewinds when a row is cancelled or refunded, reissuing a number already handed to a patient. Unique indexes back all three invariants. Core flow through the tables:
 
 `users` → `patients` (1:1 via `user_id`) → `patient_visits` (a clinic visit/queue entry) → `visit_tests` (tests attached to a visit, priced via `price_at_time`) → `test_results` (findings/file per visit_test, released by staff) and `payments` (billed against a visit). `appointments` link to a `patient_visit`. `hmo_requests` link a visit to an `hmo_providers` approval flow. `tests` belong to a `test_categories` row (Laboratory/Xray/Ultrasound/2D Echo/ECG) and have an `is_active` flag that controls public visibility.
 
