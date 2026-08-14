@@ -28,11 +28,35 @@ node src/scripts/migrateDb.js     # (re)creates all tables from database/schema.
 node src/scripts/setupRbac.js     # seeds permissions/roles for RBAC
 node src/scripts/seedUsers.js     # seeds one test user per role (password: Password123!)
 node src/scripts/testRbacEndpoints.js  # manual RBAC endpoint smoke test
+
+# Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
+# Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
+node src/scripts/resetDemoData.js             # report only
+node src/scripts/resetDemoData.js --confirm   # apply
+
+# Seed 5 patients, one at each workflow stage (needs both servers running).
+node src/scripts/seedDemoScenario.js
+
+# Retention pass for notification history. Schedule this daily in any long-lived environment.
+node src/scripts/pruneNotifications.js --dry-run
+node src/scripts/pruneNotifications.js
 ```
 
-There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds ~24 Playwright specs (~190 tests) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
+**Before a demo:** `resetDemoData.js --confirm` then `seedDemoScenario.js`.
 
-Run it before and after any non-trivial change and compare the pass/fail counts — several specs assert exact UI copy, sidebar nav labels, and RBAC boundaries, so intentional changes to those will legitimately turn specs red and the spec must be updated alongside the code. A run takes ~1–2 minutes.
+The suite now cleans up after itself — `playwright.config.js` wires a global setup/teardown that stamps the run start and then deletes everything the run created (throwaway `@enlogada-e2e.test` accounts, plus any visit, payment, notification or audit row created inside the window). Row counts are identical before and after a run, so a seeded demo dataset survives testing. Set `E2E_SKIP_PURGE=1` to keep the data when debugging a failure. Cleanup never fails the run; if it errors it says so and leaves the data behind.
+
+The E2E suite creates a throwaway client, patient, visit and payment on every run and never cleans up, so the dev database drifts a long way from anything a clinic would recognise — left alone it reaches thousands of visits and a billing queue hundreds deep. That skews demos, makes paginated/aggregate screens behave unlike production, and slowly breaks tests that walk a list to find their own record.
+
+The worst of it is `notification_reads`, which is a **fan-out** table: `notifyRoles` writes one row per recipient per event, so its size is events × staff, not events. Because the suite also created staff and elevated accounts that were never cleaned up (137 Cashiers, 89 Admins, 45 SuperAdmins had accumulated), both factors grew at once and the table reached 255,540 rows across 4,309 events in five days — average fan-out 60, peak 181, with 99.4% never read by anyone. After a reset the same fan-out is 3. Production will not see the runaway staff count, but it has no retention either: 20 staff × 200 events/day is ~1.5M rows a year, growing forever. Schedule `pruneNotifications.js` (default: read 30d, unread 90d) in any environment that runs longer than a demo.
+
+There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 5 Playwright specs (45 tests, ~9s) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
+
+The suite is a deliberately small demo-and-regression net, not exhaustive coverage: smoke, security boundaries (`api-authorization.spec.js`, which also covers Admin-vs-SuperAdmin separation of duties and combined-role access), ticket-release gating, payments, and laboratory results. It was cut down from ~200 tests once the module-by-module build-out finished; the rest asserted UI copy that legitimately keeps changing. Prefer adding a focused spec over reviving deleted ones from git history.
+
+Run it before and after any non-trivial change and compare the pass/fail counts — the specs assert RBAC boundaries and some UI copy, so intentional changes to those will legitimately turn specs red and the spec must be updated alongside the code. A run takes ~10 seconds.
+
+Two notes learned the hard way. The dev rate limiter allows 20,000 requests per 15 minutes; running the suite many times back to back trips it, and the resulting 429s surface as scattered, unrelated-looking failures — restart the backend to reset the counter. And navigation/role changes need `multirole@enlogada.com` (see `TEST_ACCOUNTS.md`) to exercise properly: a single-role account cannot reveal the class of bug where the sidebar offers a screen the router refuses to open.
 
 Env files: `backend/.env` and `frontend/.env`, based on the respective `.env.example`. Backend needs `DATABASE_URL`, `JWT_SECRET`, SMTP settings (for result-release emails), and Google OAuth credentials. Frontend needs `VITE_GOOGLE_CLIENT_ID` and the API base URL.
 
