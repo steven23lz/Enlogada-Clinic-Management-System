@@ -120,7 +120,10 @@ class AuthController {
 
       return res.status(200).json({
         status: 'success',
-        message: result.message
+        message: result.message,
+        // The caller's existing token was just revoked along with every other one issued before
+        // the change. The client must swap to this or its very next request gets a 401.
+        data: { token: result.token }
       });
     } catch (err) {
       next(err);

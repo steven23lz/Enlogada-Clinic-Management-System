@@ -41,6 +41,10 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     contact_number VARCHAR(20),
     status BOOLEAN DEFAULT TRUE,
+    -- When the password last changed. verifyToken rejects any token issued before this, which is
+    -- what makes "reset the password" actually end a stolen session — there is no server-side
+    -- logout and the token lives in localStorage. See migrations.md [1.16.0].
+    password_changed_at TIMESTAMP,
     avatar_path VARCHAR(255),
     avatar_mime_type VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

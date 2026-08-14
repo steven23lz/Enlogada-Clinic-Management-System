@@ -106,6 +106,14 @@ export const AuthProvider = ({ children }) => {
   const changePassword = async (currentPassword, newPassword) => {
     try {
       const response = await api.put('/auth/change-password', { currentPassword, newPassword });
+
+      // Changing a password now revokes every token issued before it, including the one this
+      // request was made with — that is what signs a stolen session out on another device. The
+      // server returns a replacement; storing it is what keeps the user who just changed their
+      // own password from being logged out one request later.
+      const refreshedToken = response.data.data?.token;
+      if (refreshedToken) localStorage.setItem('token', refreshedToken);
+
       return response.data.message;
     } catch (err) {
       throw err.response?.data?.message || 'Failed to change password';

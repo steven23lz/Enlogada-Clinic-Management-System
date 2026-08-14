@@ -36,6 +36,7 @@ node src/scripts/migrateResultAttribution.js # [1.12.0] recorded_by vs released_
 node src/scripts/migrateDataIntegrity.js     # [1.13.0] daily_counters + queue/receipt/payment uniqueness
 node src/scripts/migrateDiscounts.js         # [1.14.0] Senior Citizen / PWD statutory discounts
 node src/scripts/migrateResultVersioning.js  # [1.15.0] result amendment history + critical values
+node src/scripts/migrateSessionRevocation.js # [1.16.0] password change ends older sessions
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.

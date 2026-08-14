@@ -1,5 +1,34 @@
 # Database Migration & Schema History
 
+## [1.16.0] - 2026-08-15 (Session revocation, credential rate limiting, JWT secret guard)
+
+Run: `node src/scripts/migrateSessionRevocation.js` (additive, safe to re-run)
+
+### Fixed — resetting a password did nothing to a stolen session
+"Reset the password" is the standard response to a stolen token, and it had no effect on the attacker. The token lives in `localStorage`, so XSS, a shared reception workstation, or a token captured from a log is enough to lift one. `updatePasswordHash` wrote only the hash, `verifyToken` checked only the signature, the account's existence and its `status`, and there is no server-side logout route. **The lifted token kept full access to patient records until it expired on its own** — which the deployed `.env` set to seven days.
+
+`users.password_changed_at` closes it: `verifyToken` rejects any token issued before it. This costs nothing extra, because `verifyToken` already loads the user row on every request ([1.11.0]) — no denylist, no shared state between instances.
+
+Every password path goes through `updatePasswordHash` (self-service change, emailed reset, and an administrator resetting a staff password), so revocation cannot be skipped by one of them.
+
+Two details worth knowing:
+* **`changePassword` now returns a replacement token**, and `AuthContext` stores it. Without that, changing your own password would sign you out one request later — the revocation is aimed at the *other* device, not the person doing the changing.
+* **The check allows one second of slack.** A JWT's `iat` is whole seconds while `password_changed_at` carries milliseconds, so a token minted in the same second as the change can look up to 999ms older than it is; with no slack the replacement token would reject itself. One second is far below any realistic attack window. It also means a test has to age its tokens past a second for the assertion to mean anything — the spec says so explicitly.
+
+Backfilled from `updated_at` rather than `NOW()`: stamping "now" would claim every password had just changed and sign the whole clinic out, and leaving it NULL would make the check inert.
+
+### Added — a tighter bucket for credential endpoints
+The rate limiter was one shared allowance across all 84 routes: 100 per 15 minutes in production (so an attacker's guessing also consumed the clinic's own budget) and 20,000 everywhere else, which is no limit at all for password guessing. There is no failed-login counter or account lockout in the schema, so nothing else slowed credential stuffing.
+
+`/api/auth/login`, `/forgot-password` and `/reset-password` now carry a second limiter with `skipSuccessfulRequests: true` — staff signing in all morning never touch it, while wrong guesses accumulate immediately. It is keyed by IP, so a distributed attack still evades it: this raises the cost, it does not replace account lockout, which needs its own schema change and is still open.
+
+### Added — the server refuses to start with a guessable JWT secret
+`.env.example` shipped `JWT_SECRET=supersecretkeyreplaceinproduction`, and the setup instructions say to base `.env` on it. Any deployment that copied the file without editing that line was signing tokens with a string published in this repository — and since authority is read from the database for whatever `userId` a token names ([1.11.0]), an attacker signing `{ userId: 1 }` receives the seeded SuperAdmin's full role set. Presence was the only check.
+
+Startup now rejects a blank secret, a known example value, or anything shorter than 32 characters, and `.env.example` ships the key **blank** with `openssl rand -hex 32` in the comment. `JWT_EXPIRES_IN` there is now `1d` rather than `7d`, matching the code default it was silently overriding.
+
+---
+
 ## [1.15.1] - 2026-08-15 (Online payments that were taken but never recorded)
 
 No schema change — service and repository only.

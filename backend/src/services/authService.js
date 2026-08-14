@@ -195,7 +195,25 @@ class AuthService {
     const newHash = await bcrypt.hash(newPassword, salt);
     await userRepository.updatePasswordHash(userId, newHash);
 
-    return { message: 'Password changed successfully.' };
+    // Changing a password now revokes every token issued before it (see verifyToken), which
+    // includes the one this very request arrived with. Handing back a replacement is what keeps
+    // that from logging people out of their own password change — the revocation is aimed at a
+    // stolen token on some other device, not at the person doing the changing.
+    const user = await userRepository.findById(userId);
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        roles: (user.roles || []).filter((r) => r !== null),
+        permissions: (user.permissions || []).filter((p) => p !== null)
+      },
+      env.JWT_SECRET,
+      { expiresIn: env.JWT_EXPIRES_IN }
+    );
+
+    return {
+      message: 'Password changed successfully. Other devices have been signed out.',
+      token
+    };
   }
 
   async getUserProfile(userId) {

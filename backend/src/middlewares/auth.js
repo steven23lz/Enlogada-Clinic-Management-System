@@ -69,6 +69,29 @@ const verifyToken = async (req, res, next) => {
       });
     }
 
+    // Issued before the password last changed, so this session predates a credential change and
+    // must not survive it.
+    //
+    // "Reset the password" is the standard response to a stolen token, and until this check it
+    // did nothing to the attacker: the token is held in localStorage, there is no server-side
+    // logout, and verifyToken looked only at the signature, the account's existence and its
+    // status. A lifted token kept full access to patient records until it expired on its own.
+    //
+    // The one-second slack is for units, not leniency: `iat` is whole seconds while
+    // password_changed_at has milliseconds, so a token minted in the same second as the change
+    // can appear up to 999ms older than it is — without slack, changing your own password would
+    // reject the replacement token issued moments later.
+    if (user.password_changed_at) {
+      const issuedAtMs = (decoded.iat || 0) * 1000;
+      const changedAtMs = new Date(user.password_changed_at).getTime();
+      if (issuedAtMs < changedAtMs - 1000) {
+        return res.status(401).json({
+          status: 'error',
+          message: 'Your password was changed. Please sign in again.'
+        });
+      }
+    }
+
     // Identity from the token; authority from the database, every time.
     req.user = {
       ...decoded,

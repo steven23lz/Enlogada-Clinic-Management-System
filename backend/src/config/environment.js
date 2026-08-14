@@ -8,6 +8,38 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
+// The JWT secret is the only thing standing between a stranger and every account in the system.
+// Presence alone was the entire check, which is not enough for two reasons.
+//
+// `.env.example` shipped a working placeholder, and the setup instructions say to base `.env` on
+// it — so a deployment that copies the file without editing this line signs tokens with a string
+// published in this repository. An attacker signs `{ userId: 1 }` themselves, and because
+// authority is now read from the database for whatever userId the token names ([1.11.0]), they
+// receive the full role set of user 1: the seeded SuperAdmin.
+//
+// Short secrets are brute-forceable offline against any captured token, so a length floor matters
+// independently of whether the value is a known one.
+const WEAK_SECRETS = new Set([
+  'supersecretkeyreplaceinproduction',
+  'secret',
+  'changeme',
+  'your_jwt_secret_here'
+]);
+
+if (WEAK_SECRETS.has(process.env.JWT_SECRET.trim().toLowerCase())) {
+  throw new Error(
+    'CRITICAL CONFIG ERROR: JWT_SECRET is still the example value. Anyone with this repository ' +
+      'can mint valid tokens for any account. Generate one with: openssl rand -hex 32'
+  );
+}
+
+if (process.env.JWT_SECRET.length < 32) {
+  throw new Error(
+    `CRITICAL CONFIG ERROR: JWT_SECRET is ${process.env.JWT_SECRET.length} characters; at least 32 ` +
+      'are required. Generate one with: openssl rand -hex 32'
+  );
+}
+
 module.exports = {
   PORT: parseInt(process.env.PORT || '5000', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',

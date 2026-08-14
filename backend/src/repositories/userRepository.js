@@ -43,7 +43,7 @@ class UserRepository {
   async findById(id) {
     const queryText = `
       SELECT u.id, u.first_name, u.last_name, u.email, u.contact_number, u.status, u.created_at,
-             u.avatar_path,
+             u.avatar_path, u.password_changed_at,
              COALESCE(ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles,
              COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}') as permissions
       FROM users u
@@ -68,10 +68,20 @@ class UserRepository {
     return result.rows[0];
   }
 
+  /**
+   * Sets a new password and stamps when it changed.
+   *
+   * password_changed_at is what makes a password change actually end existing sessions —
+   * verifyToken rejects any token issued before it. Every path that changes a password goes
+   * through here (self-service change, emailed reset, and an administrator resetting a staff
+   * member's password), so revocation cannot be forgotten by one of them.
+   */
   async updatePasswordHash(userId, passwordHash) {
     const queryText = `
       UPDATE users
-      SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+      SET password_hash = $1,
+          password_changed_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = $2
       RETURNING id, email
     `;

@@ -83,6 +83,37 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// A second, much tighter bucket for the credential endpoints.
+//
+// The limiter above is one shared allowance across all 84 routes, so in production a single
+// attacker gets 100 login attempts per window *and* consumes the clinic's own budget doing it —
+// and in every other environment 20,000, which is no limit at all for password guessing. There is
+// also no failed-login counter or account lockout anywhere in the schema, so nothing else slows
+// credential stuffing down.
+//
+// skipSuccessfulRequests is the important flag: it means normal staff signing in all morning
+// never touch this, while an attacker guessing wrong accumulates against it immediately. Keyed by
+// IP, which a distributed attack still evades — this raises the cost, it does not remove the need
+// for lockout, which needs a schema change and is tracked separately.
+//
+// Left generous outside production for the same reason as the limiter above: the Playwright suite
+// signs in repeatedly, and tripping this mid-run produces scattered failures that look like
+// anything but a rate limit.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 10 : 2000,
+  skipSuccessfulRequests: true,
+  message: {
+    status: 'error',
+    message: 'Too many failed attempts. Please wait 15 minutes before trying again.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/reset-password', authLimiter);
+
 // 5. Health Check Endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
