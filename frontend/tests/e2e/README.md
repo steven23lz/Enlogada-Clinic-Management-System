@@ -4,11 +4,47 @@ Initial automated QA baseline for the Enlogada Clinic Management System, using t
 
 ## What's covered
 
-- `smoke.spec.js` — the app loads, the login page is reachable, client-side required-field validation works.
-- `auth.spec.js` — an unauthenticated visitor never sees the authenticated dashboard shell; a seeded Client account can log in and reach `ClientDashboard`; logout returns to the public view.
-- `api-authorization.spec.js` — hits the backend API directly (no browser): unauthenticated requests are rejected, a client can read their own patient data, a client **cannot** read another client's patient/visit data (regression test for the ownership/IDOR fixes made in this remediation pass), a client cannot reach an admin-only endpoint, and a SuperAdmin can. Test data (two throwaway client accounts + patient profiles) is created fresh on every run — no manual DB setup beyond the standard seed sequence below.
+The suite was deliberately cut back to five specs (45 tests, ~9s) kept for demonstrations and
+manual regression checking. It is a **demo and safety net, not exhaustive coverage** — the
+~200-test suite that preceded it mirrored a module-by-module build-out that is now finished, and
+most of it re-asserted UI copy that changes for good reasons. What survived is one spec per thing
+that would be expensive to get wrong:
 
-This intentionally does **not** attempt to cover all 18 modules — it's the minimum baseline the audit asked for, meant to catch regressions in auth/RBAC while real module work proceeds.
+- `smoke.spec.js` — the app loads, the login page is reachable, required-field validation works.
+  The cheapest possible "is anything alive".
+- `api-authorization.spec.js` — the security boundaries, and the widest-reaching spec here.
+  Ownership/IDOR (a client cannot read another client's records), role boundaries, the
+  Admin-vs-SuperAdmin separation of duties (Admin reads department data but cannot capture a
+  payment or author a clinical result), and combined-role access (a Receptionist+Cashier reaches
+  both consoles). Mostly direct API calls, so it is fast and stable.
+- `ticket-release-gating.spec.js` — the core business rule end to end: a ticket reaches a
+  department only once payment is confirmed, plus check-in for online appointments. This is the
+  flow to demo.
+- `payment.spec.js` — the money path, including the gateway configuration surface.
+- `laboratory.spec.js` — diagnostic result authoring and release, including the upload guard.
+
+Between them these walk the whole clinical journey — register, book, pay, release, examine,
+report — which is what makes them useful to demo as well as to run.
+
+If you need coverage of something else, add a spec rather than reviving the old ones; they assert
+UI copy that has since moved on. Deleted specs remain in git history if you want a starting point.
+
+## Cleanup
+
+The suite deletes what it creates. `globalSetup.js` stamps the run's start time; `globalTeardown.js`
+then shells out to `backend/src/scripts/purgeE2eData.js`, which removes throwaway
+`@enlogada-e2e.test` accounts along with every visit, payment, notification and audit row created
+inside the window. Verified by row count: identical before and after a run.
+
+This matters more than it sounds. Before it existed, each run left a client, patient, visit and
+payment behind, and each staff-account spec left an account — the database reached 2,276 users and
+3,034 visits, and `notification_reads` (one row per recipient per event, so events × staff) hit
+255,540 rows. Demos became unusable and tests that page through a list to find their own record got
+slower every run until they hit the 30s timeout.
+
+- `E2E_SKIP_PURGE=1 npm test` keeps the data when you need to inspect a failure.
+- Cleanup never fails the run. If it errors it logs the reason and leaves the data in place.
+- Seed a demo dataset *before* running the suite and it survives — it falls outside the window.
 
 ## Prerequisites
 

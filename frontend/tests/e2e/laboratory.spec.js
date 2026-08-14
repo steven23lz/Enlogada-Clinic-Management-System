@@ -136,7 +136,7 @@ test.describe('Laboratory — browser flow', () => {
   test('an unsafe attachment URL is rejected client-side before submission', async ({ page }) => {
     const apiContext = await request.newContext();
     const recToken = await loginAs(apiContext, RECEPTIONIST);
-    const { patient, visitTestId } = await createLabVisitTest(apiContext, recToken);
+    const { patient } = await createLabVisitTest(apiContext, recToken);
     // The fixture's payment already released this ticket, which is what sets it to
     // 'Processing'. The explicit status PUT that used to sit here is now both redundant and
     // forbidden — diagnostic staff may no longer set 'Processing' themselves.
@@ -171,7 +171,7 @@ test.describe('Laboratory — browser flow', () => {
   test('recording findings and releasing removes the test from the worklist', async ({ page }) => {
     const apiContext = await request.newContext();
     const recToken = await loginAs(apiContext, RECEPTIONIST);
-    const { patient, visitTestId } = await createLabVisitTest(apiContext, recToken);
+    const { patient } = await createLabVisitTest(apiContext, recToken);
     // The fixture's payment already released this ticket, which is what sets it to
     // 'Processing'. The explicit status PUT that used to sit here is now both redundant and
     // forbidden — diagnostic staff may no longer set 'Processing' themselves.

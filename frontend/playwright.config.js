@@ -6,6 +6,10 @@ const BACKEND_URL = process.env.E2E_API_URL || 'http://localhost:5000';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // The suite used to leave every client, patient, visit and payment it created behind. Setup
+  // stamps the run's start time; teardown deletes what the run made. See globalTeardown.js.
+  globalSetup: './tests/e2e/globalSetup.js',
+  globalTeardown: './tests/e2e/globalTeardown.js',
   fullyParallel: false,
   retries: 0,
   reporter: [['list']],

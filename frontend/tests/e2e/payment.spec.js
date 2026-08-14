@@ -24,6 +24,7 @@ const API = `${BACKEND_URL}/api`;
 
 const RECEPTIONIST = { email: 'receptionist@enlogada.com', password: 'Password123!' };
 const CASHIER = { email: 'cashier@enlogada.com', password: 'Password123!' };
+const ADMIN = { email: 'admin@enlogada.com', password: 'Password123!' };
 
 function uniqueName(prefix) {
   return `${prefix}${Date.now()}${Math.floor(Math.random() * 10000)}`;
@@ -112,8 +113,12 @@ test.describe('HMO coverage requires real per-test approval (API)', () => {
 
     // hmo_requests.status (request-level) is separate from hmo_request_tests.approval_status
     // (per-test) — the latter must be explicitly approved for coverage to apply.
+    // Phase 12: per-test HMO approval is Admin/SuperAdmin only — the front desk requests
+    // coverage, it no longer self-certifies it (matches the flowchart's separate "Request
+    // Approval for the Admin" step). Approving with recToken here now 403s.
+    const adminToken = await loginAs(apiContext, ADMIN);
     await apiContext.put(`${API}/hmo/request-test/${hmoRequestTestId}`, {
-      headers: { Authorization: `Bearer ${recToken}` },
+      headers: { Authorization: `Bearer ${adminToken}` },
       data: { approvalStatus: 'Approved' },
     });
 
