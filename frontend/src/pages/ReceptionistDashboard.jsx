@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
+import { todayStr } from '../lib/date';
 import { formatCurrency } from '../lib/currency';
 import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
@@ -46,7 +47,6 @@ const PAGE_TITLES = {
   'reception-history': 'Visit History',
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
-const todayStr = () => new Date().toISOString().slice(0, 10);
 const QUEUE_PAGE_SIZE = 25;
 
 const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) => {

@@ -106,9 +106,11 @@ const adminRoutes = require('./routes/adminRoutes');
 const superAdminRoutes = require('./routes/superAdminRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const discountRoutes = require('./routes/discountRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
+app.use('/api/discounts', discountRoutes);
 app.use('/api/visits', visitRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/tests', testRoutes);

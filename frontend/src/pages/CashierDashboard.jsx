@@ -17,6 +17,7 @@ import { SkeletonList, SkeletonRows } from '../components/ui/skeleton';
 import { Textarea } from '../components/ui/textarea';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
+import { todayStr } from '../lib/date';
 import { formatCurrency } from '../lib/currency';
 import { toastError } from '../lib/toast';
 import {
@@ -29,7 +30,8 @@ import {
   AlertCircle,
   ArrowUpDown,
   RefreshCw,
-  Undo2
+  Undo2,
+  BadgeCheck
 } from 'lucide-react';
 
 const PAGE_TITLES = {
@@ -37,7 +39,6 @@ const PAGE_TITLES = {
   'cashier-history': 'Transaction History',
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
-const todayStr = () => new Date().toISOString().slice(0, 10);
 
 // UI/UX Modernization Phase 4: Transaction History has no server-side pagination endpoint, so a
 // client-side page size over the already-fetched, date-range-filtered array is proportionate —
@@ -94,6 +95,15 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // Monotonic id for bill fetches, so a slow response for a previously-selected patient cannot
   // overwrite the bill for the one the cashier is looking at now.
   const billRequestRef = useRef(0);
+  // Statutory (Senior Citizen / PWD) and commercial discounts. The entitlement is stored against
+  // the visit rather than held in the page, so the recalculated total comes back from the server
+  // — the cashier must never be able to charge a figure the backend did not compute.
+  const [discountCatalogue, setDiscountCatalogue] = useState([]);
+  const [discountTypeId, setDiscountTypeId] = useState('');
+  const [discountIdNumber, setDiscountIdNumber] = useState('');
+  const [applyingDiscount, setApplyingDiscount] = useState(false);
+  const [discountError, setDiscountError] = useState('');
+
   const [paymentError, setPaymentError] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState(null);
   const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
@@ -130,6 +140,65 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       console.error('Failed to fetch patient types:', err);
     }
   }, []);
+
+  const fetchDiscountCatalogue = useCallback(async () => {
+    try {
+      const res = await api.get('/discounts');
+      setDiscountCatalogue(res.data.data.discounts || []);
+    } catch (err) {
+      console.error('Failed to fetch discount catalogue:', err);
+    }
+  }, []);
+
+  /**
+   * Re-reads the bill for the selected visit.
+   *
+   * Applying a discount changes the amount due, and that amount is recomputed server-side — the
+   * cashier's screen must reflect what the backend will actually accept, since processPayment
+   * rejects a submitted amount that disagrees by more than a centavo.
+   */
+  const refreshBill = useCallback(async (visitId) => {
+    const response = await api.get(`/payments/bill/${visitId}`);
+    const bill = response.data.data.bill;
+    setBillDetails(bill);
+    setAmountTendered((bill?.totalAmount ?? 0).toString());
+    return bill;
+  }, []);
+
+  const handleApplyDiscount = async () => {
+    if (!selectedVisit || !discountTypeId) return;
+    setApplyingDiscount(true);
+    setDiscountError('');
+    try {
+      await api.post(`/discounts/visit/${selectedVisit.id}`, {
+        discountTypeId: parseInt(discountTypeId, 10),
+        idNumber: discountIdNumber.trim(),
+      });
+      await refreshBill(selectedVisit.id);
+      setDiscountTypeId('');
+      setDiscountIdNumber('');
+    } catch (err) {
+      // Shown inline rather than as a toast: the commonest failure is a missing OSCA/PWD ID, and
+      // the message needs to sit next to the field it is about.
+      setDiscountError(err.response?.data?.message || 'Could not apply the discount.');
+    } finally {
+      setApplyingDiscount(false);
+    }
+  };
+
+  const handleRemoveDiscount = async () => {
+    if (!selectedVisit) return;
+    setApplyingDiscount(true);
+    setDiscountError('');
+    try {
+      await api.delete(`/discounts/visit/${selectedVisit.id}`);
+      await refreshBill(selectedVisit.id);
+    } catch (err) {
+      setDiscountError(err.response?.data?.message || 'Could not remove the discount.');
+    } finally {
+      setApplyingDiscount(false);
+    }
+  };
 
   const retryQueueData = () => {
     fetchActiveVisits();
@@ -214,7 +283,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     fetchActiveVisits();
     fetchTransactions();
     fetchPatientTypes();
-  }, [fetchActiveVisits, fetchTransactions, fetchPatientTypes]);
+    fetchDiscountCatalogue();
+  }, [fetchActiveVisits, fetchTransactions, fetchPatientTypes, fetchDiscountCatalogue]);
 
   // Keep the billing queue current: visits released by the front desk, and payments taken at a
   // second terminal, both used to be invisible here until the cashier changed a filter. Suspended
@@ -264,6 +334,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     // confirmation dialog quotes the stale name and figure too, so it reads as self-consistent
     // and gets confirmed.
     setBillDetails(null);
+    // Clear the discount entry too: an OSCA number typed for one patient must never linger into
+    // the next patient's bill.
+    setDiscountTypeId('');
+    setDiscountIdNumber('');
+    setDiscountError('');
 
     // Guards against out-of-order responses: clicking patient A then B quickly can let A's slower
     // reply land last. Only the most recent selection is allowed to write state.
@@ -554,13 +629,91 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       <span className="font-bold text-slate-900">{formatCurrency(billDetails.subtotal)}</span>
                     </div>
                     <div className="flex justify-between items-center text-gray-600">
-                      <span>HMO Coverage / Discount:</span>
+                      {/* Renamed: this line is HMO coverage only. It used to read "HMO Coverage /
+                          Discount", which was the single occurrence of the word "discount" in the
+                          entire app and described something that did not exist. */}
+                      <span>HMO Coverage:</span>
                       <span className="font-bold text-emerald-600">- {formatCurrency(billDetails.hmoCoverage || 0)}</span>
                     </div>
+                    {/* Statutory deductions must be itemised on the receipt by name and rate, not
+                        folded into the total — RA 9994 / RA 10754. */}
+                    {billDetails.discount && (
+                      <div className="flex justify-between items-center text-gray-600">
+                        <span>
+                          {billDetails.discount.name} ({parseFloat(billDetails.discount.percentage)}%)
+                          {billDetails.discount.idNumber && (
+                            <span className="text-meta text-gray-400 font-normal"> · ID {billDetails.discount.idNumber}</span>
+                          )}
+                        </span>
+                        <span className="font-bold text-emerald-600">- {formatCurrency(billDetails.discountAmount || 0)}</span>
+                      </div>
+                    )}
                     <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-sm font-extrabold text-slate-900">
                       <span>NET AMOUNT DUE:</span>
                       <span className="text-base text-[#769046]">{formatCurrency(billDetails.totalAmount)}</span>
                     </div>
+                  </div>
+
+                  {/* Statutory discount control (Senior Citizen / PWD).
+                      Deliberately sits between the bill and the payment form: the cashier checks
+                      the ID against the person in front of them, and the total has to update
+                      before any money is taken. */}
+                  <div className="bg-white p-4 rounded-xl border border-gray-200/80 space-y-2.5">
+                    <span className="text-meta font-extrabold text-slate-400 uppercase tracking-widest">
+                      Statutory / Other Discount
+                    </span>
+                    {billDetails.discount ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-xs">
+                          <BadgeCheck className="w-4 h-4 text-[#769046] flex-shrink-0" aria-hidden="true" />
+                          <span className="font-bold text-slate-900">{billDetails.discount.name}</span>
+                          <span className="text-gray-500">
+                            {parseFloat(billDetails.discount.percentage)}%
+                            {billDetails.discount.idNumber ? ` · ID ${billDetails.discount.idNumber}` : ''}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={applyingDiscount}
+                          onClick={handleRemoveDiscount}
+                        >
+                          {applyingDiscount ? 'Removing…' : 'Remove'}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Select value={discountTypeId} onValueChange={setDiscountTypeId}>
+                          <SelectTrigger className="text-xs sm:w-44"><SelectValue placeholder="No discount" /></SelectTrigger>
+                          <SelectContent>
+                            {discountCatalogue.map(d => (
+                              <SelectItem key={d.id} value={String(d.id)}>
+                                {d.name} ({parseFloat(d.percentage)}%)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          value={discountIdNumber}
+                          onChange={(e) => setDiscountIdNumber(e.target.value)}
+                          placeholder="OSCA / PWD ID number"
+                          className="text-xs flex-1"
+                          aria-label="Senior Citizen or PWD ID number"
+                        />
+                        <Button
+                          type="button"
+                          disabled={!discountTypeId || applyingDiscount}
+                          onClick={handleApplyDiscount}
+                          className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold"
+                        >
+                          {applyingDiscount ? 'Applying…' : 'Apply'}
+                        </Button>
+                      </div>
+                    )}
+                    {discountError && (
+                      <p role="alert" className="text-fine text-rose-600 font-semibold m-0">{discountError}</p>
+                    )}
                   </div>
 
                   {/* Payment Processor Form */}
@@ -937,7 +1090,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>
           <DialogContent className="max-w-md rounded-2xl p-6">
             {paymentSuccess && receiptBill && (
-              <div className="space-y-4">
+              /* print-area is what makes "Print Receipt" below produce anything at all. The rule
+                 in index.css hides `body *` and reveals only .print-area, and this modal never
+                 carried the class — so the button printed a completely blank sheet, on the one
+                 document the patient actually leaves with. */
+              <div className="space-y-4 print-area">
                 <div className="text-center border-b border-gray-200 pb-3">
                   <h2 className="text-base font-extrabold text-slate-900 uppercase m-0">ENLOGADA CLINIC</h2>
                   <p className="text-meta text-gray-500 uppercase font-bold m-0">Official Payment Receipt</p>
@@ -964,6 +1121,36 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         <span className="font-semibold text-slate-800">{formatCurrency(item.price)}</span>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {/* A statutory discount must appear on the receipt by name, rate and ID — the
+                    receipt is the patient's evidence that the mandated deduction was given, and
+                    the clinic's evidence for claiming it. Read from the payment's own snapshot
+                    rather than the live catalogue, so a reprint years later shows what was
+                    actually granted. */}
+                {parseFloat(paymentSuccess.discount_amount || 0) > 0 && (
+                  <div className="space-y-1 pb-2 border-b border-gray-100">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500 font-medium">Gross Amount:</span>
+                      <span className="font-semibold text-slate-800">
+                        {formatCurrency(parseFloat(paymentSuccess.amount) + parseFloat(paymentSuccess.discount_amount))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500 font-medium">
+                        {paymentSuccess.discount_type_name} Discount:
+                      </span>
+                      <span className="font-semibold text-emerald-600">
+                        - {formatCurrency(paymentSuccess.discount_amount)}
+                      </span>
+                    </div>
+                    {paymentSuccess.discount_id_number && (
+                      <div className="flex justify-between text-fine">
+                        <span className="text-gray-400">ID Presented:</span>
+                        <span className="text-gray-500 font-semibold">{paymentSuccess.discount_id_number}</span>
+                      </div>
+                    )}
                   </div>
                 )}
 

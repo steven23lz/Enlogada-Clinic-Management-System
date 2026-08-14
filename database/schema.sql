@@ -3,6 +3,7 @@
 
 -- Drop existing tables to allow clean recreation
 DROP TABLE IF EXISTS daily_counters CASCADE;
+DROP TABLE IF EXISTS discount_types CASCADE;
 DROP TABLE IF EXISTS audit_log CASCADE;
 DROP TABLE IF EXISTS notification_reads CASCADE;
 DROP TABLE IF EXISTS notification_events CASCADE;
@@ -115,6 +116,20 @@ CREATE TABLE patients (
     CONSTRAINT chk_patients_sex CHECK (sex IN ('Male', 'Female'))
 );
 
+-- Discount catalogue. Senior Citizen and PWD are mandated by RA 9994 / RA 10754 (20% off
+-- medical and diagnostic services); the same shape covers commercial discounts at no extra cost.
+-- See migrations.md [1.14.0].
+CREATE TABLE discount_types (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    percentage NUMERIC(5,2) NOT NULL,
+    is_statutory BOOLEAN NOT NULL DEFAULT FALSE,  -- mandated by law; cannot be deactivated
+    requires_id  BOOLEAN NOT NULL DEFAULT FALSE,  -- OSCA/PWD ID must be recorded on the visit
+    is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_discount_percentage CHECK (percentage >= 0 AND percentage <= 100)
+);
+
 -- 3. Visits and Appointments
 CREATE TABLE patient_visits (
     id SERIAL PRIMARY KEY,
@@ -123,11 +138,19 @@ CREATE TABLE patient_visits (
     status VARCHAR(50) DEFAULT 'Pending',
     notes TEXT,
     queue_number VARCHAR(50), -- Tracks the physical queue number generated for receptionist/cashier flow
+    -- The discount ENTITLEMENT claimed for this visit. The amount actually deducted is
+    -- snapshotted onto payments, so a receipt survives later catalogue edits.
+    discount_type_id INT,
+    discount_id_number VARCHAR(50),   -- OSCA / PWD ID presented
+    discount_granted_by INT,
+    discount_granted_at TIMESTAMP,
     created_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_visits_patient FOREIGN KEY (patient_id) REFERENCES patients(id),
     CONSTRAINT fk_visits_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT fk_visits_discount_type FOREIGN KEY (discount_type_id) REFERENCES discount_types(id),
+    CONSTRAINT fk_visits_discount_granted_by FOREIGN KEY (discount_granted_by) REFERENCES users(id),
     CONSTRAINT chk_visits_type CHECK (visit_type IN ('Walk in', 'Appointment')),
     CONSTRAINT chk_visits_status CHECK (status IN ('Pending', 'Processing', 'Completed', 'Cancelled'))
 );
@@ -260,6 +283,14 @@ CREATE TABLE payments (
     gateway_provider VARCHAR(30),
     gateway_session_id VARCHAR(120),
     gateway_payment_id VARCHAR(120),
+    -- Snapshot of the discount actually deducted. Deliberately NOT a reference to
+    -- discount_types: a receipt is a historical record and must keep saying what it said even if
+    -- the catalogue is renamed or re-rated. Same reasoning as visit_tests.price_at_time. This is
+    -- also what the BIR statutory register reads.
+    discount_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+    discount_type_name VARCHAR(50),
+    discount_id_number VARCHAR(50),
+    CONSTRAINT chk_payments_discount_nonneg CHECK (discount_amount >= 0),
     CONSTRAINT fk_payments_visit FOREIGN KEY (patient_visit_id) REFERENCES patient_visits(id),
     CONSTRAINT fk_payments_processed_by FOREIGN KEY (processed_by) REFERENCES users(id),
     CONSTRAINT chk_payment_method CHECK (payment_method IN ('Cash', 'GCash', 'PayMaya', 'Bank')),
@@ -447,6 +478,16 @@ CREATE TABLE IF NOT EXISTS daily_counters (
 
 -- Uniqueness the counters above are meant to guarantee, enforced by the database so a future
 -- code path cannot quietly reintroduce a duplicate.
+-- Statutory discounts mandated by RA 9994 (Senior Citizen) and RA 10754 (PWD).
+INSERT INTO discount_types (name, percentage, is_statutory, requires_id)
+VALUES ('Senior Citizen', 20.00, TRUE, TRUE),
+       ('PWD',            20.00, TRUE, TRUE)
+ON CONFLICT (name) DO NOTHING;
+
+-- The statutory discount register BIR expects for mandated discounts.
+CREATE INDEX IF NOT EXISTS idx_payments_discount_type
+    ON payments (discount_type_name, paid_at) WHERE discount_type_name IS NOT NULL;
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_patient_visits_daily_queue
     ON patient_visits ((created_at::date), queue_number) WHERE queue_number IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_payments_receipt_number

@@ -1,4 +1,5 @@
 const paymentRepository = require('../repositories/paymentRepository');
+const discountService = require('./discountService');
 const db = require('../config/database');
 const notificationService = require('./notificationService');
 const visitService = require('./visitService');
@@ -26,7 +27,16 @@ class PaymentService {
     const hmoCoverage = items
       .filter((item) => item.hmo_approval_status === 'Approved')
       .reduce((sum, item) => sum + parseFloat(item.price_at_time), 0);
-    const totalAmount = subtotal - hmoCoverage;
+
+    // Statutory (Senior Citizen / PWD) and commercial discounts, applied to the patient's own
+    // out-of-pocket amount rather than the gross subtotal — see discountService.computeDiscount,
+    // which also documents why VAT is left explicit rather than assumed.
+    const discountAmount = discountService.computeDiscount({
+      subtotal,
+      hmoCoverage,
+      percentage: visitInfo.discount_percentage,
+    });
+    const totalAmount = subtotal - hmoCoverage - discountAmount;
 
     const formattedItems = items.map(item => ({
       id: item.visit_test_id,
@@ -44,6 +54,19 @@ class PaymentService {
       items: formattedItems,
       subtotal: subtotal.toFixed(2),
       hmoCoverage: hmoCoverage.toFixed(2),
+      discountAmount: discountAmount.toFixed(2),
+      // Null when no discount is claimed. The cashier's screen and the receipt both need the
+      // name, rate and ID number, not just the peso figure — a statutory deduction has to be
+      // itemised and attributable, not folded silently into the total.
+      discount: visitInfo.discount_type_id
+        ? {
+            id: visitInfo.discount_type_id,
+            name: visitInfo.discount_name,
+            percentage: parseFloat(visitInfo.discount_percentage).toFixed(2),
+            isStatutory: visitInfo.discount_is_statutory,
+            idNumber: visitInfo.discount_id_number,
+          }
+        : null,
       totalAmount: totalAmount.toFixed(2)
     };
   }
@@ -95,7 +118,13 @@ class PaymentService {
         paymentMethod,
         referenceNumber,
         receiptNumber,
-        amount: authoritativeTotal
+        amount: authoritativeTotal,
+        // Snapshotted from the bill just computed, so the receipt and the statutory register
+        // record what was actually deducted rather than re-deriving it later from a catalogue
+        // that may since have changed.
+        discountAmount: parseFloat(bill.discountAmount || 0),
+        discountTypeName: bill.discount?.name || null,
+        discountIdNumber: bill.discount?.idNumber || null
       });
 
       // A counter payment supersedes any online checkout the patient started but never finished

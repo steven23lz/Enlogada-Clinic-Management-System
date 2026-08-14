@@ -6,10 +6,10 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
+import { todayStr } from '../../lib/date';
 import { formatCurrency } from '../../lib/currency';
 import { Receipt, RefreshCw } from 'lucide-react';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
 // Visual Design Improvement Plan Phase V1 — see VISUAL_IDENTITY.md §3a #11.
 const PAGE_SIZE = 20;
 

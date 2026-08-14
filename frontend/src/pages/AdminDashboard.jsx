@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../config/api';
+import { todayStr, daysAgoStr } from '../lib/date';
 import { formatCurrency } from '../lib/currency';
 import StaffAccounts from './admin/StaffAccounts';
 import ServiceRequests from './admin/ServiceRequests';
@@ -31,8 +32,6 @@ const NAV_TITLES = {
   superadmin: 'Super Admin Management',
 };
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
-const daysAgoStr = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 
 // Visual Design Improvement Plan Phase V2: the overview previously ended at the stat row,
 // leaving the rest of the page blank (see the plan's Section 08, finding 01). Revenue Trend and

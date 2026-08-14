@@ -1,5 +1,30 @@
 # Database Migration & Schema History
 
+## [1.14.0] - 2026-08-15 (Statutory Senior Citizen / PWD discounts)
+
+Run: `node src/scripts/migrateDiscounts.js` (additive, safe to re-run)
+
+### Added
+* `discount_types` catalogue, seeded with the two discounts mandated by **RA 9994** (Senior Citizen) and **RA 10754** (PWD) at 20%. Modelled generally rather than as two hardcoded cases, because the same shape covers the commercial discounts a clinic also needs (corporate, employee, promo) at no extra cost. `is_statutory` marks the two that exist by law: they require the holder's ID to be recorded, and are not meant to be deactivated.
+* `patient_visits.discount_type_id` / `discount_id_number` / `discount_granted_by` / `discount_granted_at` — the **entitlement** claimed for a visit. It lives on the visit because the bill is computed per visit and the cashier must see the discounted total *before* taking any money.
+* `payments.discount_amount` / `discount_type_name` / `discount_id_number` — an immutable **snapshot** of what was actually deducted. Deliberately not a foreign key: a receipt is a historical record and must keep saying what it said even if the catalogue is later renamed or re-rated, exactly as `visit_tests.price_at_time` does for prices. The statutory register reads from here, so it reflects money that actually changed hands.
+* `GET /api/discounts` (catalogue), `POST|DELETE /api/discounts/visit/:visitId` (grant/remove, audit-logged), and `GET /api/discounts/register` (Admin/SuperAdmin only) — the separate register BIR expects for mandated discounts, with per-type totals. Refunded rows are listed but excluded from the totals: a reversed sale is not a discount the clinic granted.
+
+### Why this mattered more than a missing feature
+The clinic could not lawfully bill a senior citizen or PWD — the only occurrence of the word "discount" anywhere in the app was a mislabel on the HMO coverage line. The practical consequence is not that seniors paid full price; it is that cashiers work around it, by editing the catalogue price or taking the difference in cash and out of the system. Either one destroys the receipt trail that every other control in this codebase depends on.
+
+### Decisions worth knowing
+* **The discount base is the patient's out-of-pocket amount** (subtotal − approved HMO coverage), not the gross subtotal. A statutory discount reduces what the *patient* pays; applying it to amounts an insurer is settling would discount somebody else's money and understate the HMO receivable.
+* **VAT is deliberately not modelled.** For a VAT-registered establishment the statute requires the 12% VAT to be stripped first and the 20% applied to the VAT-exempt base; for a non-VAT establishment it is a flat 20%. This system has no VAT decomposition anywhere — `tests.price` is a single figure with no tax component — so the flat percentage is correct for a non-VAT clinic and understates the discount for a VAT-registered one. Which applies depends on the clinic's BIR registration, so it is flagged in `discountService.computeDiscount` rather than silently assumed.
+* **A discount cannot be changed once the visit is paid** (409). Changing it afterwards would disagree with the receipt already issued and with the register, and there is no re-bill path; a correction goes through the existing refund flow.
+
+### Fixed
+* **Receipt numbers carried the wrong date for eight hours of every day.** The date portion was formatted in JavaScript with `new Date().toISOString()` — which is UTC — while the sequence came from Postgres `CURRENT_DATE`, which is the server's local date. In Philippine time (UTC+8) a payment taken at 01:00 on the 15th was stamped `RCT-20260814-…` from the 15th's counter. Both halves now come from the same row in one statement, so they cannot disagree. With `uq_payments_receipt_number` in place from [1.13.0] this had also become a *failed payment* rather than a silent mis-dating, since the stamp reappeared the next morning.
+* The same UTC-vs-local bug in four frontend screens (`todayStr` defined separately in each), which made "Today's Revenue" and the default History ranges show *yesterday* between midnight and 08:00. Now one shared `frontend/src/lib/date.js` built from local getters.
+* The cashier's **"Print Receipt" produced a blank page** — `index.css` hides `body *` and reveals only `.print-area`, and the receipt modal never carried the class. On the one document a patient actually leaves with.
+
+---
+
 ## [1.13.0] - 2026-08-14 (Concurrency-safe numbering, billing uniqueness, real transactions)
 
 Run: `node src/scripts/migrateDataIntegrity.js` (additive, safe to re-run)

@@ -1,14 +1,29 @@
 const db = require('../config/database');
 
 class PaymentRepository {
-  async createPayment({ patientVisitId, processedBy, paymentMethod, referenceNumber, receiptNumber, amount }) {
+  /**
+   * The discount fields are a snapshot, not a reference.
+   *
+   * A receipt is a historical record: it must keep saying what it said even if the discount
+   * catalogue is renamed, re-rated or deactivated afterwards. Same reasoning as
+   * visit_tests.price_at_time. It is also what the statutory register reads, so the register
+   * reflects what was actually deducted from money that actually changed hands.
+   */
+  async createPayment({
+    patientVisitId, processedBy, paymentMethod, referenceNumber, receiptNumber, amount,
+    discountAmount = 0, discountTypeName = null, discountIdNumber = null
+  }) {
     const queryText = `
-      INSERT INTO payments (patient_visit_id, processed_by, payment_method, reference_number, receipt_number, amount)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO payments (
+        patient_visit_id, processed_by, payment_method, reference_number, receipt_number, amount,
+        discount_amount, discount_type_name, discount_id_number
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `;
     const result = await db.query(queryText, [
-      patientVisitId, processedBy, paymentMethod, referenceNumber, receiptNumber, amount
+      patientVisitId, processedBy, paymentMethod, referenceNumber, receiptNumber, amount,
+      discountAmount, discountTypeName, discountIdNumber
     ]);
     return result.rows[0];
   }
@@ -56,10 +71,16 @@ class PaymentRepository {
 
   async getBillingSummary(patientVisitId) {
     const visitQuery = `
-      SELECT pv.id, p.first_name, p.last_name, pt.name as patient_type_name
+      SELECT pv.id, p.first_name, p.last_name, pt.name as patient_type_name,
+             pv.discount_id_number,
+             dt.id   as discount_type_id,
+             dt.name as discount_name,
+             dt.percentage as discount_percentage,
+             dt.is_statutory as discount_is_statutory
       FROM patient_visits pv
       JOIN patients p ON pv.patient_id = p.id
       JOIN patient_types pt ON p.patient_type_id = pt.id
+      LEFT JOIN discount_types dt ON pv.discount_type_id = dt.id
       WHERE pv.id = $1
     `;
     const visitResult = await db.query(visitQuery, [patientVisitId]);
@@ -236,16 +257,28 @@ class PaymentRepository {
    * unique index on receipt_number backs it at the schema level — see migrateDataIntegrity.js.
    */
   async getNextReceiptNumber() {
+    // Both halves of the receipt number come from the same row, in one statement.
+    //
+    // The date used to be formatted in JavaScript as `new Date().toISOString()`, which is UTC,
+    // while the counter came from Postgres CURRENT_DATE, which is the server's local date. In
+    // Philippine time (UTC+8) those disagree for the first eight hours of every day: a payment
+    // taken at 01:00 on the 15th was stamped RCT-20260814-…, dated to the previous day, while its
+    // sequence number came from the 15th's counter. Receipts issued in that window sort and
+    // reconcile against the wrong day, and the same stamp reappears the following morning —
+    // exactly the collision the unique index now rejects, turning a silent mis-dating into a
+    // failed payment.
+    //
+    // Deriving both from counter_date makes disagreement impossible by construction.
     const queryText = `
       INSERT INTO daily_counters (counter_date, counter_name, last_number)
       VALUES (CURRENT_DATE, 'receipt', 1)
       ON CONFLICT (counter_date, counter_name)
       DO UPDATE SET last_number = daily_counters.last_number + 1
-      RETURNING last_number
+      RETURNING last_number, to_char(counter_date, 'YYYYMMDD') AS date_key
     `;
     const result = await db.query(queryText);
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    return `RCT-${today}-${String(result.rows[0].last_number).padStart(4, '0')}`;
+    const { last_number, date_key } = result.rows[0];
+    return `RCT-${date_key}-${String(last_number).padStart(4, '0')}`;
   }
 }
 

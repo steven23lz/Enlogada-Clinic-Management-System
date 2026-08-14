@@ -120,7 +120,11 @@ body {
 /* Print-one-element trick: mark the printable content with .print-area and everything else on
    the page (dashboard sidebar/nav, dialog overlay chrome) is hidden for that print job instead
    of printing the whole dark-themed app shell. Used by DiagnosticDashboard.jsx's and
-   ClientDashboard.jsx's report print buttons. */
+   ClientDashboard.jsx's report print buttons, and by CashierDashboard.jsx's receipt modal.
+
+   If you add a print button, the element it is meant to print MUST carry .print-area — without
+   it the job prints a blank page rather than falling back to printing everything, which is a
+   silent failure. The cashier's receipt shipped that way for a while. */
 @media print {
   body * {
     visibility: hidden;
