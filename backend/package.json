@@ -7,7 +7,8 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "clean:e2e": "node src/scripts/cleanE2eData.js",
-    "clean:e2e:apply": "node src/scripts/cleanE2eData.js --apply --unlimited-slots"
+    "clean:e2e:apply": "node src/scripts/cleanE2eData.js --apply --unlimited-slots",
+    "lint": "oxlint src"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -25,7 +26,8 @@
     "winston": "^3.11.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.0",
+    "oxlint": "^1.78.0"
   },
   "engines": {
     "node": ">=20.0.0"

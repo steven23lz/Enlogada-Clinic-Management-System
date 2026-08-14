@@ -211,7 +211,7 @@ class AuthService {
         idToken,
         audience: env.GOOGLE_CLIENT_ID,
       });
-    } catch (err) {
+    } catch {
       const error = new Error('Invalid Google authentication token');
       error.statusCode = 401;
       throw error;

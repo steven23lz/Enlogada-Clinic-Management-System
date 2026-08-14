@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "env": { "node": true, "es2024": true },
+  "rules": {
+    "no-unused-vars": ["warn", {
+      "args": "all",
+      "argsIgnorePattern": "^_|^(req|res|next|file)$",
+      "caughtErrors": "all",
+      "caughtErrorsIgnorePattern": "^_",
+      "destructuredArrayIgnorePattern": "^_"
+    }],
+    "no-undef": "error"
+  }
+}
