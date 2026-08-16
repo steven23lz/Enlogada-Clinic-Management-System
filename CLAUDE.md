@@ -31,7 +31,7 @@ node src/scripts/testRbacEndpoints.js  # manual RBAC endpoint smoke test
 node src/scripts/verifyRbacWiring.js  # asserts every permission-gated route matches the seeded matrix
 
 # Additive migrations for an EXISTING database (migrateDb.js is destructive and cannot be used on
-# a live one). Each is safe to re-run; run them in order on any database created before [1.13.0].
+# a live one). Each is safe to re-run; run them in order on any database created before [1.20.0].
 node src/scripts/migrateIndexes.js           # [1.11.0] foreign-key and lookup indexes
 node src/scripts/migrateResultAttribution.js # [1.12.0] recorded_by vs released_by
 node src/scripts/migrateDataIntegrity.js     # [1.13.0] daily_counters + queue/receipt/payment uniqueness
@@ -41,6 +41,7 @@ node src/scripts/migrateSessionRevocation.js # [1.16.0] password change ends old
 node src/scripts/migrateVatExemption.js      # [1.17.0] VAT-exempt senior/PWD discounts
 node src/scripts/migrateQueryPerformance.js  # [1.18.0] indexes for date-ranged screens
 node src/scripts/migrateLoginProtection.js   # [1.19.0] account lockout + PHI read auditing
+node src/scripts/migrateAccountScopedRbac.js # [1.20.0] per-account permissions + department assignment
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -71,7 +72,7 @@ The E2E suite creates a throwaway client, patient, visit and payment on every ru
 
 The worst of it is `notification_reads`, which is a **fan-out** table: `notifyRoles` writes one row per recipient per event, so its size is events × staff, not events. Because the suite also created staff and elevated accounts that were never cleaned up (137 Cashiers, 89 Admins, 45 SuperAdmins had accumulated), both factors grew at once and the table reached 255,540 rows across 4,309 events in five days — average fan-out 60, peak 181, with 99.4% never read by anyone. After a reset the same fan-out is 3. Production will not see the runaway staff count, but it has no retention either: 20 staff × 200 events/day is ~1.5M rows a year, growing forever. Schedule `pruneNotifications.js` (default: read 30d, unread 90d) in any environment that runs longer than a demo.
 
-There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 10 Playwright specs (74 tests, ~25s) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
+There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 10 Playwright specs (76 tests, ~30s) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
 
 The suite is a deliberately small demo-and-regression net, not exhaustive coverage: smoke, security boundaries (`api-authorization.spec.js` — Admin-vs-SuperAdmin separation of duties, combined-role access, and the cross-role PHI boundaries), ticket-release gating, payments, laboratory results, statutory discounts (`discounts.spec.js`), result amendment history and critical values (`result-versioning.spec.js`), password-change session revocation (`session-revocation.spec.js`), account lockout and PHI read auditing (`login-protection.spec.js`), and permission-matrix enforcement (`rbac-enforcement.spec.js`). It was cut down from ~200 tests once the module-by-module build-out finished; the rest asserted UI copy that legitimately keeps changing. Prefer adding a focused spec over reviving deleted ones from git history.
 
@@ -98,11 +99,16 @@ This layering is enforced convention in this codebase (checked by the "Project A
 
 - JWT-based auth (`backend/src/middlewares/auth.js`): `verifyToken` decodes the bearer token into `req.user` (contains `roles` and `permissions` arrays baked in at login).
 - `authorizeRoles(...roles)` middleware gates routes by role name (e.g. `'Admin'`, `'Receptionist'`).
-- `authorizePermissions(...perms)` gates by fine-grained permission strings (e.g. `billing:process`) and is **enforced on 46 routes**. **SuperAdmin bypasses; Admin does not** — that single difference is what separates the two roles, and what makes the Role-Permission Matrix screen real rather than advisory.
-- The two gates are independent and both must pass. `authorizeRoles` is the structural boundary and is **not** editable from any screen (no permission tick can put a Client on a worklist); `authorizePermissions` is the delegable layer on top.
-- **Adding a permission to a route?** Run `node src/scripts/verifyRbacWiring.js`. It cross-checks every gated route against the seeded matrix and fails if a role the route allows lacks the permission it requires — a mismatch otherwise surfaces as a 403 for a role the route was written to permit, in a flow nobody exercises until a real user hits it. It caught 8 such gaps when enforcement was first wired.
-- Navigation reads the same permissions (`canSee` in `frontend/src/config/navigation.js`), so the sidebar cannot advertise a screen the API will refuse. `AuthContext` re-reads `/auth/me` every 60s and on tab focus, so a matrix change reaches a signed-in user without a re-login.
-- Roles/permissions are DB-driven (`roles`, `permissions`, `user_roles` tables), seeded via `setupRbac.js`.
+- `authorizePermissions(...perms)` gates by fine-grained permission strings (e.g. `billing:process`) and is **enforced on 53 routes**. **SuperAdmin bypasses; Admin does not** — that single difference is what separates the two roles.
+- **`authorizeStaff` replaced the hardcoded role lists on 45 routes [1.20.0].** It asks only "is this a member of staff"; the permission decides the rest. Before this, `POST /payments` named `('SuperAdmin', 'Cashier')` and every result route named the three modality roles, so granting a cashier permission to Laboratory Staff saved, reported success and changed nothing — the matrix could not actually delegate, which is worse than having no matrix. Routes whose role list includes `Client` keep it: that is the one boundary a tick must never cross.
+- **Three axes, resolved server-side in `userRepository` so no caller can disagree with another:**
+  - `roles` — staff or patient. Structural, not editable from any screen.
+  - `permissions` — the role template **plus** that account's own grants, **minus** its revokes (`user_permissions`). Revoke is applied last as a set difference, so a conflict resolves to *less* access.
+  - `departments` — the modalities implied by the account's roles **plus** `user_departments`. `null` means unrestricted (Admin/SuperAdmin) and is deliberately distinct from `[]`, "none"; collapsing the two is how an access check ends up inverted. Enforced in the service layer — see `resultService.assertStaffAllowedCategory`.
+- Per-account exceptions are edited on **Access Control** (SuperAdmin → By Person) and are **audited**. Role edits are not: a role change is visible in the matrix everyone reads, while an exception applies to one person and is easy to forget.
+- **Adding a permission to a route, or a nav item?** Run `node src/scripts/verifyRbacWiring.js`. Four checks: the permission exists; at least one staff role holds it (otherwise only SuperAdmin can reach the route); for routes that keep an explicit role list, every named role holds it; and every `permission:` in `frontend/src/config/navigation.js` is one the API actually enforces. That last check is what now guarantees the sidebar and the API agree — they used to agree by sharing a hardcoded role list, and no longer do.
+- Navigation gates on the same three axes (`canSee` in `frontend/src/config/navigation.js`: `staffOnly`, `permission`, `department`), so the sidebar cannot advertise a screen the API will refuse. `AuthContext` re-reads `/auth/me` every 60s and on tab focus, so a change reaches a signed-in user without a re-login.
+- Roles/permissions are DB-driven (`roles`, `permissions`, `user_roles`, `user_permissions`, `user_departments`), seeded via `setupRbac.js`.
 - Google OAuth: `POST /api/auth/google` verifies an ID token via `google-auth-library`, then logs in or auto-creates a Client user.
 - Frontend session handling: `frontend/src/config/api.js` (Axios) fires a global `auth:unauthorized` window event on HTTP 401; `AuthContext.jsx` listens for it to clear user state without breaking SPA navigation — follow this pattern rather than throwing/catching 401s locally in components.
 

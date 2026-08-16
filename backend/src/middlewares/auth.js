@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const env = require('../config/environment');
 const userRepository = require('../repositories/userRepository');
+const { departmentsForUser } = require('../constants/modality');
 
 /**
  * Establishes WHO is calling, then asks the database WHAT they may do.
@@ -93,12 +94,18 @@ const verifyToken = async (req, res, next) => {
     }
 
     // Identity from the token; authority from the database, every time.
+    //
+    // `permissions` is already the effective set — role template plus this account's own grants,
+    // minus its revokes — resolved in userRepository so every caller gets the same answer.
+    // `departments` is the modality axis: which rooms' data this account may touch. `null` means
+    // unrestricted (Admin/SuperAdmin), which is deliberately distinct from `[]`, "none".
     req.user = {
       ...decoded,
       userId: user.id,
       email: user.email,
       roles: user.roles || [],
-      permissions: user.permissions || []
+      permissions: user.permissions || [],
+      departments: departmentsForUser(user)
     };
     return next();
   } catch (err) {
@@ -125,6 +132,43 @@ const authorizeRoles = (...allowedRoles) => {
 
     next();
   };
+};
+
+/**
+ * "Is this a member of staff, of any kind?" — the structural boundary, and now the only one on a
+ * departmental route. [1.20.0]
+ *
+ * Those routes used to name their roles: authorizeRoles('SuperAdmin', 'Cashier') on POST
+ * /payments, and the three modality roles on every result route. That made the Role-Permission
+ * Matrix a liar. A SuperAdmin could tick `billing:process` for Laboratory Staff, watch it save,
+ * and get nothing: the nav item stayed hidden and this gate refused the request, because the lab
+ * role was not in the hardcoded list. Somebody had granted access, believed it, and stopped
+ * thinking about it — which is the worst failure mode an access control can have.
+ *
+ * The list is therefore gone and `authorizePermissions` alone decides, which is what the matrix
+ * was always supposed to mean. What stays is the line a tick must never cross: a patient account
+ * is a different kind of thing from a staff account, and no permission puts one on a worklist or
+ * a billing queue.
+ *
+ * Deliberately "holds any non-Client role" rather than an allow-list of staff role names, so
+ * adding an ECG Staff role later needs no edit here. A user holding Client *and* a staff role
+ * (the multirole test account) is staff.
+ *
+ * Note this does NOT decide *whose* data they may touch. That is the department axis, enforced in
+ * the service layer against req.user.departments — see resultService.assertStaffAllowedCategory.
+ */
+const authorizeStaff = (req, res, next) => {
+  const roles = req.user?.roles || [];
+  const isStaff = roles.some((role) => role !== 'Client');
+
+  if (!isStaff) {
+    return res.status(403).json({
+      status: 'error',
+      message: 'Access forbidden. Staff access is required for this action.'
+    });
+  }
+
+  return next();
 };
 
 /**
@@ -181,5 +225,6 @@ const authorizePermissions = (...requiredPermissions) => {
 module.exports = {
   verifyToken,
   authorizeRoles,
+  authorizeStaff,
   authorizePermissions
 };

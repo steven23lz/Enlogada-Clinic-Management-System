@@ -8,6 +8,7 @@ const passwordResetRepository = require('../repositories/passwordResetRepository
 const db = require('../config/database');
 const env = require('../config/environment');
 const { sendEmail } = require('../config/email');
+const { departmentsForUser } = require("../constants/modality");
 const { AVATAR_UPLOAD_ROOT } = require('../config/upload');
 const auditService = require('./auditService');
 const notificationService = require('./notificationService');
@@ -160,6 +161,7 @@ class AuthService {
         contactNumber: user.contact_number,
         roles: cleanRoles,
         permissions: cleanPermissions,
+        departments: departmentsForUser(user),
         hasAvatar: Boolean(user.avatar_path)
       }
     };
@@ -296,6 +298,7 @@ class AuthService {
       contactNumber: user.contact_number,
       roles: cleanRoles,
       permissions: cleanPermissions,
+      departments: departmentsForUser(user),
       hasAvatar: Boolean(user.avatar_path)
     };
   }
@@ -395,6 +398,7 @@ class AuthService {
         contactNumber: user.contact_number,
         roles: cleanRoles,
         permissions: cleanPermissions,
+        departments: departmentsForUser(user),
         hasAvatar: Boolean(user.avatar_path)
       }
     };

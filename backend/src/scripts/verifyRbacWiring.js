@@ -65,8 +65,14 @@ async function main() {
     (matrix[row.role] = matrix[row.role] || new Set()).add(row.permission);
   }
 
+  const knownPermissions = new Set(
+    (await db.query('SELECT name FROM permissions')).rows.map((r) => r.name)
+  );
+
   const problems = [];
   let gated = 0;
+  let staffGated = 0;
+  const routePermissions = new Set();
 
   for (const file of fs.readdirSync(ROUTES_DIR).filter((f) => f.endsWith('.js'))) {
     const source = fs.readFileSync(path.join(ROUTES_DIR, file), 'utf8');
@@ -74,9 +80,38 @@ async function main() {
 
     for (const route of extractRouteGuards(source)) {
       gated += 1;
-      const roles = [...route.roles, ...route.spread.flatMap((name) => consts[name] || [])];
-      if (roles.length === 0) continue; // permission-only route; nothing to cross-check
+      route.perms.forEach((p) => routePermissions.add(p));
 
+      // CHECK 1 — a permission that does not exist can never be held, so the route is unreachable
+      // by anyone but SuperAdmin. This is the failure mode that produced `tests:read_assigned`
+      // being invented at a call site and gating a route nobody could pass.
+      for (const perm of route.perms) {
+        if (!knownPermissions.has(perm)) {
+          problems.push(`${file} ${route.path} — requires "${perm}", which is not in the permissions catalogue`);
+        }
+      }
+
+      // CHECK 2 — nobody holds it. Since [1.20.0] most routes are gated on permission alone, so a
+      // permission no role grants is a route only SuperAdmin can reach. Sometimes deliberate;
+      // usually a seeding omission, and either way worth saying out loud.
+      for (const perm of route.perms) {
+        if (!knownPermissions.has(perm)) continue;
+        const holders = Object.entries(matrix).filter(([role, set]) => role !== 'Client' && set.has(perm));
+        if (holders.length === 0) {
+          problems.push(`${file} ${route.path} — no staff role holds "${perm}"; only SuperAdmin can reach this`);
+        }
+      }
+
+      const roles = [...route.roles, ...route.spread.flatMap((name) => consts[name] || [])];
+      if (roles.length === 0) {
+        staffGated += 1;
+        continue; // permission-only route; checks 1 and 2 above are the whole check
+      }
+
+      // CHECK 3 — the original one, still valid for the routes that keep an explicit role list
+      // (the patient-facing ones, and RBAC administration). Wiring a permission onto a route that
+      // one of its own allowed roles lacks produces a 403 for a role the route was written to
+      // permit, in a flow nobody exercises until a real user hits it.
       for (const role of roles) {
         if (BYPASS.has(role)) continue;
         for (const perm of route.perms) {
@@ -88,15 +123,34 @@ async function main() {
     }
   }
 
-  logger.info(`Checked ${gated} permission-gated route(s) against the seeded matrix.`);
+  // CHECK 4 — nav/API parity. The sidebar gates each destination on a permission string; if that
+  // string is not one the API actually enforces, the two have drifted and the nav is either
+  // hiding a reachable screen or offering an unreachable one. This is the guarantee that used to
+  // be provided by both sides sharing a hardcoded role list, and it needs stating now that they
+  // do not.
+  const navPath = path.join(__dirname, '..', '..', '..', 'frontend', 'src', 'config', 'navigation.js');
+  if (fs.existsSync(navPath)) {
+    const nav = fs.readFileSync(navPath, 'utf8');
+    const navPerms = new Set([...nav.matchAll(/permission:\s*'([^']+)'/g)].map((m) => m[1]));
+    for (const perm of navPerms) {
+      if (!knownPermissions.has(perm)) {
+        problems.push(`navigation.js — gates a nav item on "${perm}", which is not a real permission`);
+      } else if (!routePermissions.has(perm)) {
+        problems.push(`navigation.js — gates a nav item on "${perm}", which no API route enforces`);
+      }
+    }
+    logger.info(`Cross-checked ${navPerms.size} sidebar permission(s) against the API.`);
+  }
+
+  logger.info(`Checked ${gated} permission-gated route(s) — ${staffGated} decided by permission alone.`);
   if (problems.length === 0) {
-    logger.info('All good — every role a route allows also holds the permission it requires.');
+    logger.info('All good — every gated route is reachable by the roles that should reach it.');
     process.exit(0);
   }
 
-  logger.error(`${problems.length} mismatch(es) — these roles would get a 403 on a route written to allow them:`);
+  logger.error(`${problems.length} problem(s):`);
   for (const p of problems) logger.error(`   ${p}`);
-  logger.error('Fix by granting the permission in setupRbac.js, or by narrowing the route\'s role list.');
+  logger.error('Fix by granting the permission in setupRbac.js, or by correcting the route/nav.');
   process.exit(1);
 }
 

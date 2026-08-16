@@ -18,7 +18,7 @@ import {
   BellOff,
   Eye,
 } from 'lucide-react';
-import { visibleMainNavItems, visibleOpsGroups, nativeRoleForNav } from '../config/navigation';
+import { visibleMainNavItems, visibleOpsGroups, nativeRoleForNav, isBorrowedScreen } from '../config/navigation';
 
 // The shared shell for every staff and admin console.
 //
@@ -63,8 +63,11 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   const userRoles = user?.roles || [];
   // Drives the permission half of nav visibility — see canSee in config/navigation.js. Refreshed
   // from the server by AuthContext, so a matrix change reaches the sidebar without a re-login.
+  // Already the *effective* set: the role template plus this account's own grants, minus its
+  // revokes, resolved server-side so the sidebar cannot disagree with the API.
   const userPermissions = user?.permissions || [];
-  const isSuperOrAdmin = userRoles.includes('SuperAdmin') || userRoles.includes('Admin');
+  // The modality axis. `null` is unrestricted, `[]` is none — see departmentsForUser.
+  const userDepartments = user?.departments ?? null;
 
   // UI/UX Modernization Phase 7: ops destinations are deliberately shared — Admin/SuperAdmin see
   // every department's screens, not just their own (§3a intentional superset, not a bug). The
@@ -77,27 +80,31 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // The items themselves now come from config/navigation.js, which App.jsx also routes from —
   // one record per destination carrying both its role gating and the console it opens, so the
   // sidebar can no longer advertise a screen the router will not open.
-  const mainNavItems = visibleMainNavItems(userRoles, userPermissions);
+  const mainNavItems = visibleMainNavItems(userRoles, userPermissions, userDepartments);
 
   // Module 18 UI/UX Phase 1: every operational role previously had exactly one nav destination
   // (some even shared a "Dashboard" item that silently routed to the same page). Split into real,
   // focused destinations per role, grouped by department so Admin/SuperAdmin — who see all of
   // these at once — get a scannable sidebar instead of twelve undifferentiated items.
   //
-  // visibleOpsGroups already applies BOTH gates (role and permission). The old code re-filtered
-  // the result by role alone, which was redundant and, had the two ever disagreed, would have
-  // been the looser of the two checks winning.
-  const opsNavGroups = visibleOpsGroups(userRoles, userPermissions);
+  // visibleOpsGroups applies all three gates (structure, permission, department). The old code
+  // re-filtered the result by role alone, which was redundant and, had the two ever disagreed,
+  // would have been the looser of the two checks winning.
+  const opsNavGroups = visibleOpsGroups(userRoles, userPermissions, userDepartments);
 
-  // Resolve the currently-open ops screen (if any) and whether the viewer is genuinely acting
-  // outside their own department on it — i.e. Admin/SuperAdmin without the item's own operational
-  // role. A native Receptionist on Active Queue is just doing their job and sees nothing extra,
-  // and so is a Receptionist/Cashier on either of their two departments.
+  // Resolve the currently-open ops screen and whether this person is working one that is not
+  // natively theirs.
+  //
+  // Previously this only fired for Admin/SuperAdmin, on the assumption that they were the only
+  // ones who could ever be on a borrowed screen. Since [1.20.0] a permission can put anyone on
+  // any staff screen, so the check is now simply "do you hold the role this screen belongs to" —
+  // which matters more, not less: whatever you do here is recorded under your name, and the
+  // person most likely to forget that is the one who does not normally sit here.
   const activeOpsItem = opsNavGroups
     .flatMap((group) => group.items.map((item) => ({ ...item, groupLabel: group.label })))
     .find((item) => item.id === activeNav);
   const activeOpsNativeRole = nativeRoleForNav(activeNav);
-  const isActingOutsideOwnRole = Boolean(activeOpsItem) && isSuperOrAdmin && !userRoles.includes(activeOpsNativeRole);
+  const isActingOutsideOwnRole = Boolean(activeOpsItem) && isBorrowedScreen(activeNav, userRoles);
 
   const toggleGroup = (label) => {
     setCollapsedGroups((prev) => {
@@ -320,18 +327,25 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
         {initials}
       </span>
       <span className="flex min-w-0 flex-col leading-tight">
+        {/* The person, then what they are here as. Both, in that order: the name is who is
+            accountable for what happens under this session, and on a shared reception machine
+            "am I still logged in as the right person" is the question this block answers. */}
         <span className="truncate text-fine font-semibold text-white">
           {user?.firstName} {user?.lastName}
         </span>
-        <span className="truncate text-micro text-slate-500">{userRoles.join(' · ')}</span>
+        <span className="truncate text-micro text-slate-500">{userRoles.join(' · ') || 'No role assigned'}</span>
       </span>
     </button>
   );
 
   return (
-    <div className="flex min-h-screen bg-canvas font-sans text-slate-800">
+    // `h-screen overflow-hidden` on the shell, and the content pane is the only thing that
+    // scrolls. It was `min-h-screen`, which lets the whole document scroll — so the rail scrolled
+    // away with the page and a member of staff halfway down a long worklist had no navigation
+    // until they scrolled back to the top. The rail is the one element that must never leave.
+    <div className="flex h-screen overflow-hidden bg-canvas font-sans text-slate-800">
       {/* Desktop rail */}
-      <aside className="z-20 hidden w-[248px] flex-shrink-0 flex-col border-r border-white/[0.06] bg-rail p-3 lg:flex">
+      <aside className="z-20 hidden h-full w-[248px] flex-shrink-0 flex-col border-r border-white/[0.06] bg-rail p-3 lg:flex">
         {renderNavContent()}
         {accountButton}
       </aside>
@@ -354,8 +368,10 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
         </div>
       )}
 
-      {/* Main content area */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* Main content area. `min-h-0` is what lets <main> below actually scroll: without it a
+          flex child refuses to shrink past its content, the column grows taller than the shell,
+          and the overflow lands on the body instead — which is the rail scrolling away again. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-[#e6ebf1] bg-white/85 px-4 py-2.5 backdrop-blur-md lg:px-7">
           <div className="flex min-w-0 items-center gap-3">
             <button

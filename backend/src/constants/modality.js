@@ -50,10 +50,47 @@ function staffRolesForCategories(categoryNames = []) {
   return [...roles];
 }
 
+/**
+ * Which modalities an account may act on. [1.20.0]
+ *
+ * Two sources, unioned: the departments implied by the account's roles (a Laboratory Staff always
+ * has Laboratory), and any granted directly to the account in user_departments — which is how a
+ * lab tech covers the X-Ray room for a week without being given a second role.
+ *
+ * Admin and SuperAdmin get every category. They are the oversight roles; a department-scoped
+ * Admin could not answer "which room is behind today?", which is most of the job. If the clinic
+ * later wants a department-scoped Admin, that is a permission (`patients:read_all_departments`),
+ * not a change here.
+ *
+ * Returns `null` — not an empty array — for the unrestricted case, so a caller can tell "may see
+ * everything" apart from "may see nothing". Those two collapsing into `[]` is the classic way an
+ * access check ends up inverted.
+ */
+function departmentsForUser(user) {
+  const roles = user?.roles || [];
+  if (roles.includes('SuperAdmin') || roles.includes('Admin')) return null;
+
+  const departments = new Set(user?.granted_departments || user?.grantedDepartments || []);
+  for (const role of roles) {
+    for (const category of STAFF_ROLE_TO_CATEGORIES[role] || []) {
+      departments.add(category);
+    }
+  }
+  return [...departments].sort();
+}
+
+/** Whether this user may act on `categoryName`. `null` departments means unrestricted. */
+function userCoversCategory(departments, categoryName) {
+  if (departments === null) return true;
+  return (departments || []).includes(categoryName);
+}
+
 module.exports = {
   STAFF_ROLE_TO_CATEGORIES,
   CATEGORY_TO_STAFF_ROLE,
   DIAGNOSTIC_CATEGORIES,
   MODALITY_SETTABLE_TEST_STATUSES,
-  staffRolesForCategories
+  staffRolesForCategories,
+  departmentsForUser,
+  userCoversCategory
 };

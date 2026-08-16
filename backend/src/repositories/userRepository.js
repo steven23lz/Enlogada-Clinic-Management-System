@@ -22,17 +22,80 @@ const ACTIVE_ROLE_GRANT = `
   AND (ur.expires_at IS NULL OR ur.expires_at >  NOW())
 `;
 
+/**
+ * What an account may actually do, and whose data it may touch. [1.20.0]
+ *
+ * Three sources, resolved here rather than in the service layer, so that every path that loads a
+ * user — login, /auth/me, the per-request authority lookup in middlewares/auth.js — gets the same
+ * answer. A second resolution written somewhere else is a second answer waiting to disagree.
+ *
+ *   permissions = (union of the account's active role permissions)
+ *                 + rows in user_permissions with effect='grant'
+ *                 - rows in user_permissions with effect='revoke'
+ *
+ * Revoke wins over grant by construction: it is applied last, as a set difference. That is the
+ * safe precedence — if the two ever disagree about the same permission (they cannot, the table is
+ * unique on (user_id, permission_id), but if the constraint were ever dropped) the outcome is
+ * less access rather than more.
+ *
+ *   departments  = the modalities implied by the account's roles
+ *                 + rows in user_departments
+ *
+ * `roles` deliberately stays a plain list of role names. It is the structural boundary — staff
+ * versus patient — and nothing here can widen it.
+ */
+const EFFECTIVE_PERMISSIONS = `
+  COALESCE((
+    SELECT ARRAY_AGG(DISTINCT name) FROM (
+      SELECT p.name
+        FROM user_roles ur2
+        JOIN roles r2             ON r2.id = ur2.role_id
+        JOIN role_permissions rp2 ON rp2.role_id = r2.id
+        JOIN permissions p        ON p.id = rp2.permission_id
+       WHERE ur2.user_id = u.id
+         AND ur2.is_active = TRUE
+         AND (ur2.starts_at  IS NULL OR ur2.starts_at  <= NOW())
+         AND (ur2.expires_at IS NULL OR ur2.expires_at >  NOW())
+      UNION
+      SELECT p.name
+        FROM user_permissions up
+        JOIN permissions p ON p.id = up.permission_id
+       WHERE up.user_id = u.id AND up.effect = 'grant'
+      EXCEPT
+      SELECT p.name
+        FROM user_permissions up
+        JOIN permissions p ON p.id = up.permission_id
+       WHERE up.user_id = u.id AND up.effect = 'revoke'
+    ) AS effective(name)
+  ), '{}') AS permissions
+`;
+
+// Extra modalities granted directly to this account. The role-derived ones are added in the
+// service layer from constants/modality.js, which is where that mapping already lives — keeping
+// it out of SQL means the two cannot drift.
+const GRANTED_DEPARTMENTS = `
+  COALESCE((
+    SELECT ARRAY_AGG(tc.name ORDER BY tc.name)
+      FROM user_departments ud
+      JOIN test_categories tc ON tc.id = ud.category_id
+     WHERE ud.user_id = u.id
+  ), '{}') AS granted_departments
+`;
+
+const ACTIVE_ROLE_NAMES = `
+  COALESCE(ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles
+`;
+
 class UserRepository {
   async findByEmail(email) {
     const queryText = `
-      SELECT u.*, 
-             COALESCE(ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles,
-             COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}') as permissions
+      SELECT u.*,
+             ${ACTIVE_ROLE_NAMES},
+             ${EFFECTIVE_PERMISSIONS},
+             ${GRANTED_DEPARTMENTS}
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id AND ${ACTIVE_ROLE_GRANT}
       LEFT JOIN roles r ON ur.role_id = r.id
-      LEFT JOIN role_permissions rp ON r.id = rp.role_id
-      LEFT JOIN permissions p ON rp.permission_id = p.id
       WHERE u.email = $1
       GROUP BY u.id
     `;
@@ -44,13 +107,12 @@ class UserRepository {
     const queryText = `
       SELECT u.id, u.first_name, u.last_name, u.email, u.contact_number, u.status, u.created_at,
              u.avatar_path, u.password_changed_at,
-             COALESCE(ARRAY_AGG(DISTINCT r.name) FILTER (WHERE r.name IS NOT NULL), '{}') as roles,
-             COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}') as permissions
+             ${ACTIVE_ROLE_NAMES},
+             ${EFFECTIVE_PERMISSIONS},
+             ${GRANTED_DEPARTMENTS}
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id AND ${ACTIVE_ROLE_GRANT}
       LEFT JOIN roles r ON ur.role_id = r.id
-      LEFT JOIN role_permissions rp ON r.id = rp.role_id
-      LEFT JOIN permissions p ON rp.permission_id = p.id
       WHERE u.id = $1
       GROUP BY u.id
     `;

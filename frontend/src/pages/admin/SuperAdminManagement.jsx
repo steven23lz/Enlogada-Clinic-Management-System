@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
+import { Panel, PanelHeader, PanelBody, PanelFooter } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
-import { SkeletonRows } from '../../components/ui/skeleton';
+import EmptyState from '../../components/ui/empty-state';
+import { SearchInput } from '../../components/ui/search-input';
+import { SkeletonRows, SkeletonList } from '../../components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -13,7 +15,7 @@ import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import Pagination from '../../components/ui/pagination';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../config/api';
-import { UserPlus, ShieldCheck, Edit, AlertCircle } from 'lucide-react';
+import { UserPlus, ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 const ELEVATED_ROLES = ['Admin', 'SuperAdmin'];
 
@@ -21,27 +23,68 @@ const ELEVATED_ROLES = ['Admin', 'SuperAdmin'];
 // pagination endpoint, so a client-side page size is proportionate (VISUAL_IDENTITY.md §3a #11).
 const PAGE_SIZE = 15;
 
-// --- Role-Permission Matrix -------------------------------------------------------------
-const RoleMatrix = () => {
-  const [roles, setRoles] = useState([]);
-  const [permissions, setPermissions] = useState([]);
-  const [rolePermissions, setRolePermissions] = useState({});
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
+// --- Access Control: by role, or by the individual person ---------------------------------
+//
+// The old screen was a table of roles with an Edit button per row. It answered exactly one
+// question — "what does the Cashier role get?" — and every other question the clinic actually
+// asks had no home:
+//
+//   "Can Doc Lab cover the till on Saturday?"        -> only by editing every cashier's access
+//   "Why can this person issue refunds?"             -> unanswerable from the screen
+//   "Who can open X-Ray records?"                    -> unanswerable from the screen
+//
+// Two modes now. **Role** edits the template, as before. **Person** edits one named account: the
+// same permission list, but each row shows where its current state came from — inherited from a
+// role, or an exception someone made for this person — and toggling one writes the smallest
+// override that produces the state you asked for, rather than copying the whole template onto
+// the account. That distinction is what keeps a later change to the Cashier role still reaching
+// everyone who was never given an exception.
+const OVERRIDE_TONE = {
+  grant: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+  revoke: 'bg-rose-50 text-rose-800 ring-rose-200',
+};
 
-  const [editingRole, setEditingRole] = useState(null);
-  const [checkedIds, setCheckedIds] = useState(new Set());
-  const [saveError, setSaveError] = useState('');
+const RoleMatrix = () => {
+  const [permissions, setPermissions] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [rolePermissions, setRolePermissions] = useState({});
+  const [accounts, setAccounts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  // 'role' | 'person', and which one. Kept as ids in state so a refetch after saving re-selects
+  // the same subject rather than dumping the reader back to the top of the list.
+  const [mode, setMode] = useState('role');
+  const [selectedRoleId, setSelectedRoleId] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
+
+  // The working copy. `roleDraft` is a plain set of permission ids; `personDraft` is a map of
+  // permissionId -> 'grant' | 'revoke', holding only the exceptions.
+  const [roleDraft, setRoleDraft] = useState(new Set());
+  const [personDraft, setPersonDraft] = useState({});
+  const [departmentDraft, setDepartmentDraft] = useState(new Set());
+
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [savedAt, setSavedAt] = useState(null);
+  const [search, setSearch] = useState('');
 
   const fetchMatrix = useCallback(async () => {
+    setLoadError('');
     try {
       const res = await api.get('/rbac/matrix');
-      setRoles(res.data.data.roles || []);
-      setPermissions(res.data.data.permissions || []);
-      setRolePermissions(res.data.data.rolePermissions || {});
+      const d = res.data.data;
+      setPermissions(d.permissions || []);
+      setRoles(d.roles || []);
+      setRolePermissions(d.rolePermissions || {});
+      setAccounts(d.accounts || []);
+      setCategories(d.categories || []);
+      return d;
     } catch (err) {
       console.error('Failed to fetch RBAC matrix:', err);
+      setLoadError('Could not load the access control matrix.');
+      return null;
     } finally {
       setLoading(false);
     }
@@ -51,44 +94,125 @@ const RoleMatrix = () => {
     fetchMatrix();
   }, [fetchMatrix]);
 
+  const selectedRole = roles.find((r) => String(r.id) === String(selectedRoleId)) || null;
+  const selectedUser = accounts.find((a) => String(a.id) === String(selectedUserId)) || null;
+
+  // Loading a subject resets the draft to whatever that subject currently has. Done in an effect
+  // keyed on the selection rather than in the change handler, so a refetch after saving also
+  // re-syncs the draft — otherwise the screen keeps showing your unsaved edits as if they landed.
+  useEffect(() => {
+    if (mode !== 'role' || !selectedRole) return;
+    const current = rolePermissions[selectedRole.name] || [];
+    setRoleDraft(new Set(permissions.filter((p) => current.includes(p.name)).map((p) => p.id)));
+  }, [mode, selectedRole, rolePermissions, permissions]);
+
+  useEffect(() => {
+    if (mode !== 'person' || !selectedUser) return;
+    const draft = {};
+    (selectedUser.overrides || []).forEach((o) => {
+      draft[o.permissionId] = o.effect;
+    });
+    setPersonDraft(draft);
+    setDepartmentDraft(
+      new Set(categories.filter((c) => (selectedUser.grantedDepartments || []).includes(c.name)).map((c) => c.id))
+    );
+  }, [mode, selectedUser, categories]);
+
   const permissionsByModule = permissions.reduce((acc, p) => {
     if (!acc[p.module]) acc[p.module] = [];
     acc[p.module].push(p);
     return acc;
   }, {});
 
-  const totalPages = Math.max(1, Math.ceil(roles.length / PAGE_SIZE));
-  const pagedRoles = roles.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const matchesSearch = (p) =>
+    !search.trim() ||
+    p.name.toLowerCase().includes(search.trim().toLowerCase()) ||
+    (p.description || '').toLowerCase().includes(search.trim().toLowerCase());
 
-  const handleOpenEdit = (role) => {
-    setSaveError('');
-    const current = rolePermissions[role.name] || [];
-    const ids = new Set(permissions.filter(p => current.includes(p.name)).map(p => p.id));
-    setCheckedIds(ids);
-    setEditingRole(role);
+  // For a person: what their roles alone would give them.
+  const roleGrantedNames = new Set(selectedUser?.rolePermissions || []);
+
+  /** Whether the person currently ends up with this permission, draft applied. */
+  const personHas = (permission) => {
+    const override = personDraft[permission.id];
+    if (override === 'grant') return true;
+    if (override === 'revoke') return false;
+    return roleGrantedNames.has(permission.name);
   };
 
-  const togglePermission = (permId) => {
-    setCheckedIds(prev => {
+  /**
+   * Toggling writes the *smallest* override that produces the state asked for.
+   *
+   * If the new state matches what the roles already give, the override is deleted rather than
+   * written as a redundant grant. That is what keeps a later edit to the Cashier role still
+   * reaching this person: an account pinned with an explicit grant for every permission would
+   * silently stop tracking its own role.
+   */
+  const togglePerson = (permission) => {
+    const next = !personHas(permission);
+    setPersonDraft((prev) => {
+      const draft = { ...prev };
+      if (next === roleGrantedNames.has(permission.name)) {
+        delete draft[permission.id];
+      } else {
+        draft[permission.id] = next ? 'grant' : 'revoke';
+      }
+      return draft;
+    });
+  };
+
+  const toggleRole = (permission) => {
+    setRoleDraft((prev) => {
       const next = new Set(prev);
-      if (next.has(permId)) next.delete(permId); else next.add(permId);
+      if (next.has(permission.id)) next.delete(permission.id);
+      else next.add(permission.id);
       return next;
     });
   };
 
+  const toggleDepartment = (categoryId) => {
+    setDepartmentDraft((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
+      return next;
+    });
+  };
+
+  const overrideCount = Object.keys(personDraft).length;
+  const subjectChosen = mode === 'role' ? Boolean(selectedRole) : Boolean(selectedUser);
+
   const handleSave = async () => {
-    if (!editingRole) return;
     setSaving(true);
     setSaveError('');
     try {
-      await api.put(`/rbac/roles/${editingRole.id}/permissions`, { permissionIds: Array.from(checkedIds) });
-      setEditingRole(null);
-      fetchMatrix();
+      if (mode === 'role') {
+        await api.put(`/rbac/roles/${selectedRole.id}/permissions`, {
+          permissionIds: Array.from(roleDraft),
+        });
+      } else {
+        await api.put(`/rbac/users/${selectedUser.id}/overrides`, {
+          overrides: Object.entries(personDraft).map(([permissionId, effect]) => ({
+            permissionId: Number(permissionId),
+            effect,
+          })),
+        });
+        await api.put(`/rbac/users/${selectedUser.id}/departments`, {
+          categoryIds: Array.from(departmentDraft),
+        });
+      }
+      await fetchMatrix();
+      setSavedAt(Date.now());
     } catch (err) {
-      setSaveError(err.response?.data?.message || 'Failed to update role permissions.');
+      setSaveError(err.response?.data?.message || 'Could not save. Nothing was changed.');
     } finally {
       setSaving(false);
     }
+  };
+
+  const resetToRoles = () => {
+    setPersonDraft({});
+    setDepartmentDraft(new Set());
   };
 
   return (
@@ -96,116 +220,283 @@ const RoleMatrix = () => {
       {/* This banner used to read "Advisory only — not yet enforced", and the note here explained
           that authorizePermissions was wired to zero routes so revoking a permission changed
           nothing. Both were honest at the time and are now the opposite of true: permissions gate
-          46 API routes and the sidebar, and Admin no longer bypasses them. */}
+          48 API routes and the sidebar, and Admin no longer bypasses them. */}
       <div
         role="status"
         className="flex items-start gap-2 rounded-lg bg-brand-50 p-3 text-fine leading-relaxed text-brand-800 ring-1 ring-inset ring-brand-200"
       >
         <ShieldCheck className="mt-px h-4 w-4 flex-shrink-0 text-brand-600" />
         <span>
-          <strong className="font-bold">Live — these permissions are enforced.</strong> Unticking
-          one immediately stops that role calling the endpoints behind it, and removes the matching
-          screen from their sidebar (within a minute, without them signing out). Two things are
-          deliberately <em>not</em> governed here: a role&apos;s structural boundary — no permission
-          can put a Client on a diagnostic worklist — and <strong>SuperAdmin</strong>, which
-          bypasses these checks so a misconfigured matrix can always be repaired.
+          <strong className="font-bold">Live — these permissions are enforced.</strong> A change
+          reaches the person&apos;s API access immediately and their sidebar within a minute, with
+          no need for them to sign out. The one thing not governed here is the staff/patient
+          boundary: no tick can put a patient on a worklist. <strong>SuperAdmin</strong> bypasses
+          every check, so a matrix misconfigured into locking everyone out can always be repaired.
         </span>
       </div>
 
       <Panel className="overflow-hidden">
         <PanelHeader
-          title="Roles & Their Assigned Permissions"
-          description="Ticking a permission grants it to that role's API access and sidebar immediately"
+          title="Access Control"
+          description="Edit the template a role gives everyone, or the exceptions for one person"
           icon={ShieldCheck}
+          actions={
+            <div className="inline-flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
+              {[
+                { value: 'role', label: 'By Role' },
+                { value: 'person', label: 'By Person' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => { setMode(option.value); setSaveError(''); setSavedAt(null); }}
+                  className={`cursor-pointer rounded-[7px] border-0 px-3 py-1.5 text-fine font-semibold transition-colors ${
+                    mode === option.value
+                      ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                      : 'bg-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          }
         />
-        <PanelBody flush>
-          <Table>
-            <TableHeader sticky>
-              <TableRow>
-                <TableHead>Role</TableHead>
-                <TableHead>Permissions</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <SkeletonRows rows={5} columns={3} />
-              ) : (
-                pagedRoles.map(role => (
-                  <TableRow key={role.id} className="align-top">
-                    <TableCell className="whitespace-nowrap font-semibold text-slate-900">{role.name}</TableCell>
-                    <TableCell>
-                      <div className="flex max-w-2xl flex-wrap gap-1">
-                        {(rolePermissions[role.name] || []).length > 0 ? (
-                          (rolePermissions[role.name] || []).map(permName => (
-                            <Badge key={permName} variant="outline" className="font-mono text-micro text-slate-600">{permName}</Badge>
-                          ))
-                        ) : (
-                          <span className="text-fine text-slate-400">No permissions assigned</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button onClick={() => handleOpenEdit(role)} variant="outline" size="xs">
-                        <Edit className="h-3 w-3" />
-                        Edit
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </PanelBody>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${roles.length} total`} />
-      </Panel>
 
-      <Dialog open={!!editingRole} onOpenChange={(open) => { if (!open) setEditingRole(null); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Edit Permissions — {editingRole?.name}</DialogTitle>
-            <DialogDescription>Changes take effect immediately.</DialogDescription>
-          </DialogHeader>
-
-          {saveError && (
-            <div role="alert" className="alert alert-error">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>{saveError}</span>
+        {/* Subject picker + permission search. Both dropdowns, because the alternative — the old
+            table of every role with an Edit button — does not scale to a staff list and gave no
+            way to jump straight to the person you are being asked about. */}
+        <div className="flex flex-wrap items-end gap-3 border-b border-[#e6ebf1] bg-slate-50/70 p-4">
+          {mode === 'role' ? (
+            <div className="flex min-w-0 flex-col gap-1">
+              <label htmlFor="rbac-role" className="field-label m-0">Role</label>
+              <Select value={String(selectedRoleId)} onValueChange={setSelectedRoleId}>
+                <SelectTrigger id="rbac-role" className="w-[240px]">
+                  <SelectValue placeholder="Choose a role…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.map((role) => (
+                    <SelectItem key={role.id} value={String(role.id)}>
+                      {role.name} · {(rolePermissions[role.name] || []).length} permissions
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="flex min-w-0 flex-col gap-1">
+              <label htmlFor="rbac-person" className="field-label m-0">Staff member</label>
+              <Select value={String(selectedUserId)} onValueChange={setSelectedUserId}>
+                <SelectTrigger id="rbac-person" className="w-[300px]">
+                  <SelectValue placeholder="Choose a staff member…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={String(account.id)}>
+                      {account.firstName} {account.lastName} · {account.roles.join(', ')}
+                      {account.overrides?.length ? ` · ${account.overrides.length} exception${account.overrides.length === 1 ? '' : 's'}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
-          <div className="max-h-80 overflow-y-auto space-y-4 pr-1">
-            {Object.entries(permissionsByModule).map(([module, perms]) => (
-              <div key={module} className="space-y-1.5">
-                <span className="field-label">{module}</span>
-                <div className="space-y-1">
-                  {perms.map(p => (
-                    <label key={p.id} className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-[#e6ebf1] p-2 transition-colors hover:border-brand-300 hover:bg-brand-50/50">
-                      <input
-                        type="checkbox"
-                        checked={checkedIds.has(p.id)}
-                        onChange={() => togglePermission(p.id)}
-                        className="h-4 w-4 rounded accent-[#769046]"
-                      />
-                      <span>
-                        <span className="block font-mono text-fine font-semibold text-slate-900">{p.name}</span>
-                        {p.description && <span className="block text-fine text-slate-500">{p.description}</span>}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+          {subjectChosen && (
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <label htmlFor="rbac-search" className="field-label m-0">Find a permission</label>
+              <SearchInput
+                id="rbac-search"
+                placeholder="e.g. billing, results, refund…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                containerClassName="max-w-xs"
+              />
+            </div>
+          )}
+        </div>
 
-          <div className="flex justify-end gap-2 border-t border-[#e6ebf1] pt-3">
-            <Button type="button" variant="outline" onClick={() => setEditingRole(null)} disabled={saving}>Cancel</Button>
-            <Button type="button" onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving…' : 'Save Changes'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        <PanelBody>
+          {loading ? (
+            <SkeletonList rows={5} />
+          ) : loadError ? (
+            <EmptyState
+              tone="error"
+              title="Could not load access control"
+              description={loadError}
+              action={<Button variant="outline" size="sm" onClick={fetchMatrix}>Try again</Button>}
+            />
+          ) : !subjectChosen ? (
+            <EmptyState
+              icon={ShieldCheck}
+              title={mode === 'role' ? 'Choose a role to edit' : 'Choose a staff member'}
+              description={
+                mode === 'role'
+                  ? 'A role is the template everyone holding it inherits. Changing it affects every one of them.'
+                  : 'An exception applies to this person only, and survives later changes to their role.'
+              }
+            />
+          ) : (
+            <div className="space-y-5">
+              {mode === 'person' && (
+                <>
+                  {/* What this person ends up with, stated before the checkboxes. Someone opening
+                      this screen is usually answering a question about a person, not editing —
+                      and the answer should not require reading 27 checkboxes. */}
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-lg border border-[#e6ebf1] p-3">
+                      <span className="field-label">Roles held</span>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedUser.roles.map((r) => (
+                          <Badge key={r} variant="outline" className="text-slate-600">{r}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-[#e6ebf1] p-3">
+                      <span className="field-label">Effective permissions</span>
+                      <span className="text-[15px] font-bold tabular-nums text-slate-900">
+                        {selectedUser.effectivePermissions.length}
+                        <span className="ml-1 text-fine font-normal text-slate-500">of {permissions.length}</span>
+                      </span>
+                    </div>
+                    <div className={`rounded-lg border p-3 ${overrideCount ? 'border-amber-200 bg-amber-50/60' : 'border-[#e6ebf1]'}`}>
+                      <span className="field-label">Exceptions</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-[15px] font-bold tabular-nums text-slate-900">{overrideCount}</span>
+                        {overrideCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={resetToRoles}
+                            className="cursor-pointer border-0 bg-transparent p-0 text-fine font-semibold text-brand-700 underline underline-offset-2"
+                          >
+                            Reset to role defaults
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Departments. A separate axis from permissions: `results:write` says they may
+                      write a result, this says whose. Roles imply their own and are shown ticked
+                      and disabled — removing one means removing the role. */}
+                  <div className="rounded-lg border border-[#e6ebf1] p-3">
+                    <span className="field-label">Department access</span>
+                    <p className="m-0 mb-2 text-fine leading-relaxed text-slate-500">
+                      Which modalities&apos; patients and results this person may open. Ticks from their
+                      role are fixed; add one to cover another room without giving them a second role.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {categories.map((category) => {
+                        const fromRole = (selectedUser.roleDepartments || []).includes(category.name);
+                        const checked = fromRole || departmentDraft.has(category.id);
+                        return (
+                          <label
+                            key={category.id}
+                            title={fromRole ? `Comes with the ${selectedUser.roles.join('/')} role` : undefined}
+                            className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-fine font-medium ${
+                              fromRole
+                                ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500'
+                                : 'cursor-pointer border-[#e6ebf1] hover:border-brand-300 hover:bg-brand-50/50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded accent-[#769046]"
+                              checked={checked}
+                              disabled={fromRole}
+                              onChange={() => toggleDepartment(category.id)}
+                            />
+                            {category.name}
+                            {fromRole && <span className="text-micro text-slate-400">via role</span>}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {Object.entries(permissionsByModule).map(([module, modulePermissions]) => {
+                const visible = modulePermissions.filter(matchesSearch);
+                if (visible.length === 0) return null;
+                return (
+                  <div key={module}>
+                    <span className="field-label">{module}</span>
+                    <div className="space-y-1">
+                      {visible.map((permission) => {
+                        const checked = mode === 'role' ? roleDraft.has(permission.id) : personHas(permission);
+                        const override = mode === 'person' ? personDraft[permission.id] : null;
+                        const fromRole = mode === 'person' && roleGrantedNames.has(permission.name);
+                        return (
+                          <label
+                            key={permission.id}
+                            className={`flex cursor-pointer items-center gap-2.5 rounded-lg border p-2 transition-colors ${
+                              override
+                                ? 'border-amber-200 bg-amber-50/50'
+                                : 'border-[#e6ebf1] hover:border-brand-300 hover:bg-brand-50/50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded accent-[#769046]"
+                              checked={checked}
+                              onChange={() =>
+                                mode === 'role' ? toggleRole(permission) : togglePerson(permission)
+                              }
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-mono text-fine font-semibold text-slate-900">{permission.name}</span>
+                              {permission.description && (
+                                <span className="block text-fine text-slate-500">{permission.description}</span>
+                              )}
+                            </span>
+                            {/* Where this state came from. Without it, a ticked box is ambiguous
+                                between "the role gives this" and "someone decided this for them",
+                                and only one of those is a thing you should feel free to change. */}
+                            {mode === 'person' && (
+                              override ? (
+                                <span className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase leading-5 ring-1 ring-inset ${OVERRIDE_TONE[override]}`}>
+                                  {override === 'grant' ? 'Granted' : 'Revoked'}
+                                </span>
+                              ) : fromRole ? (
+                                <span className="flex-shrink-0 text-micro font-medium text-slate-400">via role</span>
+                              ) : null
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </PanelBody>
+
+        {subjectChosen && !loading && (
+          <PanelFooter>
+            <span className="text-fine text-slate-500">
+              {mode === 'role'
+                ? `Applies to everyone holding ${selectedRole?.name}.`
+                : `Applies to ${selectedUser?.firstName} ${selectedUser?.lastName} only.`}
+            </span>
+            <span className="flex items-center gap-3">
+              {saveError && (
+                <span role="alert" className="text-fine font-semibold text-rose-700">{saveError}</span>
+              )}
+              {savedAt && !saveError && (
+                <span role="status" className="inline-flex items-center gap-1 text-fine font-semibold text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Saved
+                </span>
+              )}
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving…' : 'Save Changes'}
+              </Button>
+            </span>
+          </PanelFooter>
+        )}
+      </Panel>
     </div>
   );
 };

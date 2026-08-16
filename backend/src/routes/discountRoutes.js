@@ -1,6 +1,6 @@
 const express = require('express');
 const discountController = require('../controllers/discountController');
-const { verifyToken, authorizeRoles } = require('../middlewares/auth');
+const { verifyToken, authorizeStaff, authorizeRoles, authorizePermissions } = require("../middlewares/auth");
 
 const router = express.Router();
 
@@ -22,7 +22,8 @@ router.get('/', verifyToken, discountController.getCatalogue);
 router.get(
   '/register',
   verifyToken,
-  authorizeRoles('SuperAdmin', 'Admin'),
+  authorizeStaff,
+  authorizePermissions('reports:view'),
   discountController.getStatutoryRegister
 );
 

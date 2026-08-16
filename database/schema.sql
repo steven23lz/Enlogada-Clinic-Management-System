@@ -91,6 +91,41 @@ CREATE TABLE role_permissions (
     CONSTRAINT uq_role_permission UNIQUE (role_id, permission_id)
 );
 
+-- Per-account exceptions to what the account's ROLES grant. [1.20.0]
+--
+-- role_permissions is a template: "a Cashier may do these things." That is the right default and
+-- the wrong only option. A real clinic has one receptionist who also covers the till on Saturdays
+-- and one lab tech who must not — and expressing that by editing the Cashier role changes it for
+-- every cashier, while expressing it by inventing a "Receptionist (Weekend)" role multiplies the
+-- roles until the matrix is unreadable.
+--
+-- So: effective permissions = (union of the account's role permissions) + grants - revokes.
+--
+-- `effect` carries both directions on purpose. A grant-only table cannot express "everything a
+-- Cashier gets, except refunds," which is the more common request of the two and the one with
+-- money attached.
+CREATE TABLE user_permissions (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    permission_id INT NOT NULL,
+    effect VARCHAR(10) NOT NULL,
+    -- Who made the exception and why, because an override is an unusual thing that someone will
+    -- later need explained. Nullable reason: the UI asks but does not insist.
+    granted_by INT,
+    reason TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_permissions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_permissions_permission FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_permissions_granted_by FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT chk_user_permissions_effect CHECK (effect IN ('grant', 'revoke')),
+    CONSTRAINT uq_user_permission UNIQUE (user_id, permission_id)
+);
+
+CREATE INDEX idx_user_permissions_user ON user_permissions(user_id);
+
+-- (user_departments lives further down, immediately after test_categories — it references that
+-- table, and this file is applied top to bottom by migrateDb.js.)
+
 -- Password reset tokens (Module 1: Authentication). Only the SHA-256 hash of the emailed
 -- token is stored — never the raw token itself.
 CREATE TABLE password_reset_tokens (
@@ -185,6 +220,31 @@ CREATE TABLE test_categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE
 );
+
+-- Which modality's data an account may touch. [1.20.0]
+--
+-- Distinct from permissions, and the distinction is the point. A permission answers "may you
+-- write a result?"; a department answers "whose results?" Collapsing the two means either one
+-- permission per modality (results:write:laboratory, results:write:xray, …), which multiplies the
+-- matrix, or no departmental containment at all — which is what the clinic had: any diagnostic
+-- account could search any patient's records regardless of which room they work in.
+--
+-- An account's departments are derived from its roles by default (Laboratory Staff -> Laboratory;
+-- see backend/src/constants/modality.js). Rows here ADD to that set, so covering the X-Ray room
+-- for a week is one tick rather than a second role.
+CREATE TABLE user_departments (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    category_id INT NOT NULL,
+    granted_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_departments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_departments_category FOREIGN KEY (category_id) REFERENCES test_categories(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_departments_granted_by FOREIGN KEY (granted_by) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT uq_user_department UNIQUE (user_id, category_id)
+);
+
+CREATE INDEX idx_user_departments_user ON user_departments(user_id);
 
 CREATE TABLE tests (
     id SERIAL PRIMARY KEY,

@@ -9,9 +9,10 @@ const notificationService = require('./notificationService');
 const { UPLOAD_ROOT } = require('../config/upload');
 const auditService = require('./auditService');
 const {
-  STAFF_ROLE_TO_CATEGORIES: STAFF_CATEGORY_MAP,
   DIAGNOSTIC_CATEGORIES,
-  MODALITY_SETTABLE_TEST_STATUSES
+  MODALITY_SETTABLE_TEST_STATUSES,
+  departmentsForUser,
+  userCoversCategory
 } = require('../constants/modality');
 
 // resultController's routes authorize "is this caller some kind of diagnostic staff," not
@@ -21,19 +22,19 @@ const {
 // Client ownership is enforced elsewhere in the app: a private guard inside the service layer,
 // not just client-side UI routing. SuperAdmin/Admin bypass, matching the RBAC convention used
 // everywhere else (they oversee all departments).
+// [1.20.0] Reads the caller's *departments* rather than deriving them from role names here.
+//
+// Same answer for everyone who has not been given an exception — departmentsForUser starts from
+// exactly this role mapping. The difference is that a SuperAdmin can now add a modality to one
+// account (cover the X-Ray room for a week) without inventing a second role, and this guard
+// honours it instead of contradicting it.
 function assertStaffAllowedCategory(requestingUser, categoryName) {
-  if (requestingUser.roles.includes('SuperAdmin') || requestingUser.roles.includes('Admin')) {
-    return;
-  }
-  const allowed = new Set();
-  for (const role of requestingUser.roles) {
-    (STAFF_CATEGORY_MAP[role] || []).forEach((c) => allowed.add(c));
-  }
-  if (!allowed.has(categoryName)) {
-    const error = new Error('You are not authorized to act on this test category.');
-    error.statusCode = 403;
-    throw error;
-  }
+  const departments = requestingUser.departments ?? departmentsForUser(requestingUser);
+  if (userCoversCategory(departments, categoryName)) return;
+
+  const error = new Error('You are not authorized to act on this test category.');
+  error.statusCode = 403;
+  throw error;
 }
 
 /**
@@ -47,14 +48,10 @@ function assertStaffAllowedCategory(requestingUser, categoryName) {
  */
 function visibleCategoriesFor(requestingUser) {
   const roles = requestingUser?.roles || [];
-  if (roles.includes('SuperAdmin') || roles.includes('Admin') || roles.includes('Client')) {
-    return null;
-  }
-  const allowed = new Set();
-  for (const role of roles) {
-    (STAFF_CATEGORY_MAP[role] || []).forEach((c) => allowed.add(c));
-  }
-  return [...allowed];
+  if (roles.includes('Client')) return null;
+  // departmentsForUser already returns null for SuperAdmin/Admin, and otherwise the union of the
+  // account's role-implied and directly-granted modalities.
+  return requestingUser?.departments ?? departmentsForUser(requestingUser);
 }
 
 // Category ownership is only half the question. The other half — added with the ticket-release

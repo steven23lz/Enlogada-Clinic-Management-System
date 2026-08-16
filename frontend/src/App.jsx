@@ -44,9 +44,11 @@ const MainApp = () => {
     if (!user || (user.roles || []).includes('Client')) return;
     const roles = user.roles || [];
     const permissions = user.permissions || [];
+    // null = unrestricted (Admin/SuperAdmin); an array = only these modalities. Distinct on purpose.
+    const departments = user.departments ?? null;
     if (activeNav === 'account') return;
-    if (!activeNav || !consoleForNav(activeNav, roles, permissions)) {
-      setActiveNav(defaultNavForRoles(roles, permissions));
+    if (!activeNav || !consoleForNav(activeNav, roles, permissions, departments)) {
+      setActiveNav(defaultNavForRoles(roles, permissions, departments));
     }
     // activeNav is deliberately not a dependency: this corrects the destination on sign-in and
     // on a role change, not on every navigation the user makes.
@@ -100,6 +102,7 @@ const MainApp = () => {
   const roles = user.roles || [];
   // Permissions gate navigation alongside roles — see canSee in config/navigation.js.
   const permissions = user.permissions || [];
+  const departments = user.departments ?? null;
 
   // Client has no sidebar console; it keeps its own public-style shell and tab model.
   if (roles.includes('Client')) {
@@ -132,8 +135,8 @@ const MainApp = () => {
   // else's console, so a stale activeNav cannot leak a screen either.
   // Permissions as well as roles: the router must refuse exactly what the sidebar hides, or a
   // revoked permission would leave a screen reachable by a stale nav id.
-  const resolvedNav = consoleForNav(activeNav, roles, permissions) ? activeNav : defaultNavForRoles(roles, permissions);
-  const targetConsole = consoleForNav(resolvedNav, roles, permissions);
+  const resolvedNav = consoleForNav(activeNav, roles, permissions, departments) ? activeNav : defaultNavForRoles(roles, permissions, departments);
+  const targetConsole = consoleForNav(resolvedNav, roles, permissions, departments);
 
   switch (targetConsole) {
     case CONSOLE.RECEPTION:

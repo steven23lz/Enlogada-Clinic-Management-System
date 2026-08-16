@@ -1,6 +1,6 @@
 const express = require('express');
 const patientController = require('../controllers/patientController');
-const { verifyToken, authorizeRoles, authorizePermissions } = require('../middlewares/auth');
+const { verifyToken, authorizeStaff, authorizeRoles, authorizePermissions } = require('../middlewares/auth');
 
 const router = express.Router();
 
@@ -29,7 +29,7 @@ router.get('/my-profiles', verifyToken, patientController.getMyProfiles);
 router.get('/types', verifyToken, patientController.getTypes);
 // Staff lookup of existing patient records by name — must be registered before /:id so
 // Express doesn't match "search" itself as an :id param.
-router.get('/search', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), authorizePermissions('patients:read'), patientController.search);
+router.get('/search', verifyToken, authorizeStaff, authorizePermissions('patients:read'), patientController.search);
 router.get('/:id', verifyToken, authorizeRoles(...PATIENT_READ_ROLES), authorizePermissions('patients:read'), patientController.getProfileById);
 router.put('/:id', verifyToken, authorizeRoles(...PATIENT_WRITE_ROLES), authorizePermissions('patients:update'), patientController.updateProfile);
 

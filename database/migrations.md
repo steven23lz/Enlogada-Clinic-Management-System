@@ -1,5 +1,50 @@
 # Database Migration & Schema History
 
+## [1.20.0] - 2026-08-17 (Per-account permissions and department assignment)
+
+`node src/scripts/migrateAccountScopedRbac.js` — additive, safe to re-run.
+
+**Why.** The role-permission matrix was the only way to say who may do what, and it was not the
+thing actually being enforced. Every departmental route also carried a hardcoded role list
+(`authorizeRoles('SuperAdmin', 'Cashier')` on `POST /payments`, the three modality roles on every
+result route), and so did every sidebar item. Ticking `billing:process` for Laboratory Staff
+therefore saved, reported success, and changed nothing: the nav item stayed hidden and the route
+refused, because the lab role was not in either list. Somebody had granted access, believed it,
+and stopped thinking about it — the worst failure mode an access control has.
+
+**Tables.**
+
+- `user_permissions (user_id, permission_id, effect, granted_by, reason)` — exceptions for one
+  named account, in both directions. `effect` is `grant` or `revoke`; a grant-only table cannot
+  express "everything a Cashier gets, except refunds", which is the more common request and the
+  one with money attached. Unique on `(user_id, permission_id)`.
+- `user_departments (user_id, category_id, granted_by)` — which modality's data an account may
+  touch, beyond what its roles already imply. A separate axis from permissions on purpose:
+  `results:write` says they may write a result, this says *whose*.
+
+**Resolution**, in `userRepository`'s `EFFECTIVE_PERMISSIONS`, so login, `/auth/me` and the
+per-request authority lookup cannot disagree:
+
+```
+permissions = (union of active role permissions) + grants − revokes
+departments = modalities implied by roles + rows in user_departments   (null = unrestricted)
+```
+
+Revoke is applied last, as a set difference, so if a grant and a revoke ever coexisted for the
+same pair the outcome would be *less* access rather than more.
+
+**Route changes.** 45 routes now decide on permission alone, behind a new `authorizeStaff`
+middleware that only asks "is this a member of staff at all". Routes whose role list includes
+`Client` are untouched — those are the patient's own-data endpoints, and the staff/patient line is
+the boundary being kept. `rbacRoutes` and `superAdminRoutes` keep their explicit `SuperAdmin` gate.
+
+Six routes were gated on a role list with **no** permission at all (`GET /admin/activity`, four
+appointment routes, the statutory register). Converting those blindly would have opened them to
+every member of staff, so each was given the permission it should always have had first.
+
+**No behaviour change on upgrade.** Both tables start empty, and `departmentsForUser` derives the
+same departments the role mapping always implied. Every account keeps exactly the access it had.
+
 ## [1.19.0] - 2026-08-15 (Account lockout, PHI read auditing, audit retention)
 
 Run: `node src/scripts/migrateLoginProtection.js` (additive, safe to re-run)

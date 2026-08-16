@@ -1,6 +1,6 @@
 const express = require('express');
 const appointmentController = require('../controllers/appointmentController');
-const { verifyToken, authorizeRoles } = require('../middlewares/auth');
+const { verifyToken, authorizeStaff, authorizeRoles, authorizePermissions } = require("../middlewares/auth");
 
 const router = express.Router();
 
@@ -11,13 +11,13 @@ router.post('/', verifyToken, appointmentController.create);
 router.get('/my-bookings', verifyToken, appointmentController.getMyBookings);
 
 // Admin/SuperAdmin oversight — list all appointments, optionally filtered
-router.get('/', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), appointmentController.getAll);
+router.get('/', verifyToken, authorizeStaff, authorizePermissions('appointments:read'), appointmentController.getAll);
 
 // Client or Receptionist retrieves bookable time slots for a given date
 router.get('/availability', verifyToken, appointmentController.getAvailability);
 
 // Receptionist verifies appointment by reference (QR scan or manual entry)
-router.get('/verify/:reference', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), appointmentController.verifyReference);
+router.get('/verify/:reference', verifyToken, authorizeStaff, authorizePermissions('appointments:read'), appointmentController.verifyReference);
 
 // Client cancels their own appointment; front office cancels on a patient's behalf.
 //
@@ -29,7 +29,7 @@ router.get('/verify/:reference', verifyToken, authorizeRoles('SuperAdmin', 'Admi
 router.put('/:id/cancel', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), appointmentController.cancel);
 
 // Staff updates appointment status (Confirmed, Completed, No Show)
-router.put('/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), appointmentController.updateStatus);
-router.patch('/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), appointmentController.updateStatus);
+router.put('/:id/status', verifyToken, authorizeStaff, authorizePermissions('appointments:update'), appointmentController.updateStatus);
+router.patch('/:id/status', verifyToken, authorizeStaff, authorizePermissions('appointments:update'), appointmentController.updateStatus);
 
 module.exports = router;

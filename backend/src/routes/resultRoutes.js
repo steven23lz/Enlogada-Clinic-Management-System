@@ -1,6 +1,6 @@
 const express = require('express');
 const resultController = require('../controllers/resultController');
-const { verifyToken, authorizeRoles, authorizePermissions } = require('../middlewares/auth');
+const { verifyToken, authorizeStaff, authorizeRoles, authorizePermissions } = require('../middlewares/auth');
 const { uploadResultFileMiddleware } = require('../config/upload');
 
 const router = express.Router();
@@ -13,25 +13,25 @@ const router = express.Router();
 // The sidebar reflects the same boundary; see frontend/src/config/navigation.js.
 
 // Department staff views pending tests by category (Laboratory, Xray, Ultrasound)
-router.get('/pending/:category', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), authorizePermissions('results:read'), resultController.getPending);
+router.get('/pending/:category', verifyToken, authorizeStaff, authorizePermissions('results:read'), resultController.getPending);
 
 // UI/UX Phase 1: department staff review results they've already released, by category
-router.get('/released/:category', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), authorizePermissions('results:read'), resultController.getReleased);
+router.get('/released/:category', verifyToken, authorizeStaff, authorizePermissions('results:read'), resultController.getReleased);
 
 // Department staff updates a visit_test status (Processing, Completed, etc.)
-router.put('/test-status/:visitTestId', verifyToken, authorizeRoles('SuperAdmin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), authorizePermissions('results:write'), resultController.updateTestStatus);
-router.patch('/test-status/:visitTestId', verifyToken, authorizeRoles('SuperAdmin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), authorizePermissions('results:write'), resultController.updateTestStatus);
+router.put('/test-status/:visitTestId', verifyToken, authorizeStaff, authorizePermissions('results:write'), resultController.updateTestStatus);
+router.patch('/test-status/:visitTestId', verifyToken, authorizeStaff, authorizePermissions('results:write'), resultController.updateTestStatus);
 
 // Department staff uploads findings for a visit_test — multipart/form-data with an optional
 // 'file' field (Feature Gap Plan Phase B); findings/remarks still arrive as regular text fields.
-router.post('/:visitTestId', verifyToken, authorizeRoles('SuperAdmin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), authorizePermissions('results:write'), uploadResultFileMiddleware, resultController.uploadResult);
+router.post('/:visitTestId', verifyToken, authorizeStaff, authorizePermissions('results:write'), uploadResultFileMiddleware, resultController.uploadResult);
 
 // Download the uploaded result file — authenticated, ownership-checked inside the service (staff
 // department match or Client-owns-this-patient), never a public static path (PHI).
 router.get('/:visitTestId/file', verifyToken, resultController.downloadResultFile);
 
 // Department staff releases result and triggers email notification
-router.post('/:visitTestId/release', verifyToken, authorizeRoles('SuperAdmin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), authorizePermissions('results:release'), resultController.releaseResult);
+router.post('/:visitTestId/release', verifyToken, authorizeStaff, authorizePermissions('results:release'), resultController.releaseResult);
 
 // View patient result history (staff or client viewing own patient)
 router.get('/history/:patientId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff', 'Client'), authorizePermissions('results:read'), resultController.getPatientHistory);
@@ -39,7 +39,7 @@ router.get('/history/:patientId', verifyToken, authorizeRoles('SuperAdmin', 'Adm
 // The amendment history for a test — every version, newest first. Read-only, and gated like the
 // other result reads: a superseded version is every bit as much PHI as the current one. Admin is
 // included because reviewing what a report used to say is oversight, not clinical authorship.
-router.get('/:visitTestId/versions', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), authorizePermissions('results:read'), resultController.getVersionHistory);
+router.get('/:visitTestId/versions', verifyToken, authorizeStaff, authorizePermissions('results:read'), resultController.getVersionHistory);
 
 // Record that a critical result was actually communicated — the callback log.
 //
@@ -47,12 +47,12 @@ router.get('/:visitTestId/versions', verifyToken, authorizeRoles('SuperAdmin', '
 // desk is usually who makes the call, and a callback that cannot be recorded by the person who
 // made it does not get recorded at all. Admin is included for the same reason — this records a
 // communication, not a clinical finding, so it does not put a manager's name on a diagnosis.
-router.post('/:visitTestId/acknowledge-critical', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), authorizePermissions('results:acknowledge_critical'), resultController.acknowledgeCritical);
+router.post('/:visitTestId/acknowledge-critical', verifyToken, authorizeStaff, authorizePermissions('results:acknowledge_critical'), resultController.acknowledgeCritical);
 
 // Fetch the recorded result for one visit_test, so staff can edit findings already saved
 // against a 'Waiting for Release' ticket. Registered last: a bare '/:visitTestId' would
 // otherwise shadow nothing here (every route above has two segments), but keeping catch-all
 // shapes at the bottom is the convention this codebase already follows in visitRoutes.
-router.get('/:visitTestId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Laboratory Staff', 'Xray Staff', 'Ultrasound Staff'), authorizePermissions('results:read'), resultController.getResult);
+router.get('/:visitTestId', verifyToken, authorizeStaff, authorizePermissions('results:read'), resultController.getResult);
 
 module.exports = router;

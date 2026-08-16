@@ -32,19 +32,26 @@ export const CONSOLE = {
 
 const ADMINS = ['Admin', 'SuperAdmin'];
 
-// Who may open a DEPARTMENT console (Front Desk / Billing / Diagnostics) without holding that
-// department's own role.
+// The one boundary a permission can never cross. [1.20.0]
 //
-// Separation of duties: Admin is the clinic manager, and every action inside these consoles is
-// recorded under the actor's name — a released result carries its releasing clinician, a receipt
-// carries the cashier who took the money. An Admin authoring clinical findings or capturing
-// payment makes those records say something untrue about who did the work, and it puts the person
-// who manages the staff and the audit log on both sides of it.
+// Everything else about access is now delegable from the Role-Permission Matrix — including
+// crossing between departments, which is the whole point of the change. This is the exception:
+// a patient account is a different kind of thing from a staff account, and no tick in any
+// matrix should be able to put one on a diagnostic worklist or a billing queue. A user holding
+// Client *and* a staff role (the multirole test account) is staff for this purpose.
+const CLIENT_ROLE = 'Client';
+const isStaff = (roles = []) => roles.some((r) => r !== CLIENT_ROLE);
+
+// Separation of duties note, retained because the reasoning still holds and is easy to lose:
+// Admin is the clinic manager, and every action inside a department console is recorded under
+// the actor's name — a released result carries its releasing clinician, a receipt carries the
+// cashier who took the money. An Admin authoring clinical findings or capturing payment makes
+// those records say something untrue about who did the work.
 //
-// Admin does not lose visibility: oversight lives in MAIN_NAV_ITEMS (Cashier Monitoring, Patient
-// Records, Appointments, Reports, Activity Log), which is read-oriented and role-appropriate.
-// SuperAdmin keeps these as break-glass access for when a department is unstaffed.
-const OPS_BREAK_GLASS = ['SuperAdmin'];
+// That is now enforced by NOT granting Admin `results:write` / `billing:process` in the seeded
+// matrix, rather than by a hardcoded role list here. The difference matters: a clinic that
+// decides otherwise can tick the box, and one that does not, keeps the separation. The default
+// is unchanged; only the ability to override it is new.
 
 // Oversight/management destinations. Admin and SuperAdmin both reach these; the SuperAdmin-only
 // console is separated out below rather than mixed in here.
@@ -63,67 +70,91 @@ export const MAIN_NAV_ITEMS = [
 
 // Department-facing destinations, grouped so a viewer who can see several departments at once
 // gets a scannable sidebar rather than one flat list.
+//
+// ── What changed in [1.20.0], and why ──────────────────────────────────────────────────────────
+// Every item here used to carry `roleRequired: ['Cashier', 'SuperAdmin']` and friends: a hardcoded
+// list that a permission could not widen. That made the Role-Permission Matrix a liar. Ticking
+// `billing:process` for Laboratory Staff saved, reported success, and did nothing — the nav item
+// stayed hidden because the lab role was not in the list, and the API refused for the same reason.
+// A matrix that cannot actually delegate is worse than no matrix, because someone reasonably
+// believes they granted access and stops thinking about it.
+//
+// So the role list is gone. `staffOnly` is the only structural gate left, and `department` is the
+// modality axis: a worklist needs both the permission AND cover for that room. A lab tech granted
+// `billing:process` now really does get the Billing Queue — Billing names no department, so
+// there is nothing else to satisfy — while a cashier granted `results:write` gets a worklist only
+// for departments they have actually been assigned.
 export const OPS_NAV_GROUPS = [
   {
     label: 'Front Desk',
     items: [
-      { id: 'reception-queue', label: 'Active Queue', icon: Calendar, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], permission: 'visits:read', console: CONSOLE.RECEPTION },
-      { id: 'reception-walkin', label: 'Walk-In Registration', icon: UserPlus, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], permission: 'visits:create', console: CONSOLE.RECEPTION },
-      { id: 'reception-checkin', label: 'Appointment Check-In', icon: QrCode, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], permission: 'appointments:update', console: CONSOLE.RECEPTION },
-      { id: 'reception-history', label: 'Visit History', icon: History, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], permission: 'visits:read', console: CONSOLE.RECEPTION },
+      { id: 'reception-queue', label: 'Active Queue', icon: Calendar, staffOnly: true, permission: 'visits:read', console: CONSOLE.RECEPTION },
+      { id: 'reception-walkin', label: 'Walk-In Registration', icon: UserPlus, staffOnly: true, permission: 'visits:create', console: CONSOLE.RECEPTION },
+      { id: 'reception-checkin', label: 'Appointment Check-In', icon: QrCode, staffOnly: true, permission: 'appointments:update', console: CONSOLE.RECEPTION },
+      { id: 'reception-history', label: 'Visit History', icon: History, staffOnly: true, permission: 'visits:read', console: CONSOLE.RECEPTION },
     ],
   },
   {
     label: 'Billing',
     items: [
-      { id: 'cashier-queue', label: 'Billing Queue', icon: Receipt, roleRequired: ['Cashier', ...OPS_BREAK_GLASS], permission: 'billing:process', console: CONSOLE.CASHIER },
-      { id: 'cashier-history', label: 'Transaction History', icon: History, roleRequired: ['Cashier', ...OPS_BREAK_GLASS], permission: 'billing:read', console: CONSOLE.CASHIER },
+      { id: 'cashier-queue', label: 'Billing Queue', icon: Receipt, staffOnly: true, permission: 'billing:process', console: CONSOLE.CASHIER },
+      { id: 'cashier-history', label: 'Transaction History', icon: History, staffOnly: true, permission: 'billing:read', console: CONSOLE.CASHIER },
     ],
   },
   {
     label: 'Diagnostics',
     items: [
-      { id: 'lab-ops', label: 'Laboratory Worklist', icon: FlaskConical, roleRequired: ['Laboratory Staff', ...OPS_BREAK_GLASS], permission: 'results:write', console: CONSOLE.DIAGNOSTIC },
-      { id: 'lab-history', label: 'Laboratory History', icon: History, roleRequired: ['Laboratory Staff', ...OPS_BREAK_GLASS], permission: 'results:read', console: CONSOLE.DIAGNOSTIC },
-      { id: 'ultrasound-ops', label: 'Ultrasound Worklist', icon: Stethoscope, roleRequired: ['Ultrasound Staff', ...OPS_BREAK_GLASS], permission: 'results:write', console: CONSOLE.DIAGNOSTIC },
-      { id: 'ultrasound-history', label: 'Ultrasound History', icon: History, roleRequired: ['Ultrasound Staff', ...OPS_BREAK_GLASS], permission: 'results:read', console: CONSOLE.DIAGNOSTIC },
-      { id: 'xray-ops', label: 'X-Ray Worklist', icon: Scan, roleRequired: ['Xray Staff', ...OPS_BREAK_GLASS], permission: 'results:write', console: CONSOLE.DIAGNOSTIC },
-      { id: 'xray-history', label: 'X-Ray History', icon: History, roleRequired: ['Xray Staff', ...OPS_BREAK_GLASS], permission: 'results:read', console: CONSOLE.DIAGNOSTIC },
+      { id: 'lab-ops', label: 'Laboratory Worklist', icon: FlaskConical, staffOnly: true, permission: 'results:write', department: 'Laboratory', console: CONSOLE.DIAGNOSTIC },
+      { id: 'lab-history', label: 'Laboratory History', icon: History, staffOnly: true, permission: 'results:read', department: 'Laboratory', console: CONSOLE.DIAGNOSTIC },
+      { id: 'ultrasound-ops', label: 'Ultrasound Worklist', icon: Stethoscope, staffOnly: true, permission: 'results:write', department: 'Ultrasound', console: CONSOLE.DIAGNOSTIC },
+      { id: 'ultrasound-history', label: 'Ultrasound History', icon: History, staffOnly: true, permission: 'results:read', department: 'Ultrasound', console: CONSOLE.DIAGNOSTIC },
+      { id: 'xray-ops', label: 'X-Ray Worklist', icon: Scan, staffOnly: true, permission: 'results:write', department: 'Xray', console: CONSOLE.DIAGNOSTIC },
+      { id: 'xray-history', label: 'X-Ray History', icon: History, staffOnly: true, permission: 'results:read', department: 'Xray', console: CONSOLE.DIAGNOSTIC },
     ],
   },
 ];
 
 /**
- * Whether this user may see a destination.
+ * Whether this user may see a destination. Three gates; all must pass.
  *
- * TWO independent gates, and both must pass.
+ * 1. STRUCTURE — `roleRequired` on the management items, `staffOnly` on the departmental ones.
+ *    Not editable from any screen. This is the line a permission cannot cross: no tick in any
+ *    matrix puts a patient on a worklist.
  *
- * `roleRequired` is the structural boundary — coarse, and deliberately NOT editable from any
- * screen. No permission tick should ever be able to put a Client on a diagnostic worklist.
+ * 2. PERMISSION — the delegable layer, driven by the Role-Permission Matrix plus this account's
+ *    own overrides. Both are already resolved into one list by the server before it reaches here
+ *    (see userRepository's EFFECTIVE_PERMISSIONS), so the sidebar does not need to know whether a
+ *    permission came from the role template or from an exception made for this one person.
  *
- * `permission` is the delegable layer on top, driven by the role-permission matrix a SuperAdmin
- * edits. This is what makes that screen real: untick `billing:process` for Cashier and the
- * Billing Queue disappears from their sidebar, because the same permission gates the API route
- * behind it (see backend/src/routes/paymentRoutes.js). The nav and the API read the same source,
- * so the sidebar cannot advertise a screen the server will refuse.
+ * 3. DEPARTMENT — for a modality worklist only. `departments === null` means unrestricted, which
+ *    is how Admin and SuperAdmin arrive here; `[]` means none, and the two must not be conflated.
  *
- * SuperAdmin bypasses the permission half, matching authorizePermissions on the backend —
- * somebody has to be able to repair a matrix that has been misconfigured into locking everyone
- * out, and that role is the one that edits it.
+ * The same three facts gate the API routes behind these screens, so the sidebar cannot advertise
+ * something the server will refuse — that equivalence is the whole reason the nav reads the
+ * server's answer rather than deriving its own.
+ *
+ * SuperAdmin bypasses gates 2 and 3, matching authorizePermissions on the backend: somebody has
+ * to be able to repair a matrix misconfigured into locking everyone out, and it is the role that
+ * edits it.
  */
-export const canSee = (item, roles = [], permissions = []) => {
+export const canSee = (item, roles = [], permissions = [], departments = null) => {
   if (item.roleRequired && !item.roleRequired.some((r) => roles.includes(r))) return false;
-  if (!item.permission) return true;
+  if (item.staffOnly && !isStaff(roles)) return false;
+
   if (roles.includes('SuperAdmin')) return true;
-  return permissions.includes(item.permission);
+
+  if (item.permission && !permissions.includes(item.permission)) return false;
+  // `null` is unrestricted, so only an actual array can exclude anything.
+  if (item.department && departments !== null && !(departments || []).includes(item.department)) return false;
+  return true;
 };
 
-export const visibleMainNavItems = (roles, permissions) =>
-  MAIN_NAV_ITEMS.filter((i) => canSee(i, roles, permissions));
+export const visibleMainNavItems = (roles, permissions, departments) =>
+  MAIN_NAV_ITEMS.filter((i) => canSee(i, roles, permissions, departments));
 
-export const visibleOpsGroups = (roles, permissions) =>
+export const visibleOpsGroups = (roles, permissions, departments) =>
   OPS_NAV_GROUPS
-    .map((group) => ({ ...group, items: group.items.filter((i) => canSee(i, roles, permissions)) }))
+    .map((group) => ({ ...group, items: group.items.filter((i) => canSee(i, roles, permissions, departments)) }))
     .filter((group) => group.items.length > 0);
 
 const allItems = () => [
@@ -136,27 +167,55 @@ export const findNavItem = (navId) => allItems().find((i) => i.id === navId);
 // The console a destination should open for this user, or null when their roles do not grant it.
 // Returning null rather than a fallback keeps the check honest: the caller decides what to do
 // with an unreachable destination instead of silently landing somewhere unrelated.
-export const consoleForNav = (navId, roles, permissions) => {
+export const consoleForNav = (navId, roles, permissions, departments) => {
   const item = findNavItem(navId);
-  if (!item || !canSee(item, roles, permissions)) return null;
+  if (!item || !canSee(item, roles, permissions, departments)) return null;
   return item.console;
 };
 
 // Where a user lands on sign-in: their first genuinely reachable destination. Previously this
 // was hardcoded to 'dashboard', a destination only Admin/SuperAdmin can open — every other role
 // landed on an id they did not own and reached their console only via App.jsx's role fallback.
-export const defaultNavForRoles = (roles, permissions) => {
+export const defaultNavForRoles = (roles, permissions, departments) => {
   const [first] = [
-    ...visibleMainNavItems(roles, permissions),
-    ...visibleOpsGroups(roles, permissions).flatMap((g) => g.items),
+    ...visibleMainNavItems(roles, permissions, departments),
+    ...visibleOpsGroups(roles, permissions, departments).flatMap((g) => g.items),
   ];
   return first ? first.id : null;
 };
 
-// A department screen opened by someone who does not hold that department's own role — i.e. an
-// Admin/SuperAdmin borrowing it. Drives the "Acting as" banner.
+// The role a departmental screen belongs to — who would normally be sitting at it.
+//
+// This used to be read off `roleRequired`, which no longer exists on these items: access is
+// permission-driven now, so the item itself no longer names a role. The association is still real
+// though — the Billing Queue is the cashier's screen whoever happens to be standing at it — so it
+// is stated here instead of inferred.
+const NAV_HOME_ROLE = {
+  'Front Desk': 'Receptionist',
+  Billing: 'Cashier',
+  Laboratory: 'Laboratory Staff',
+  Xray: 'Xray Staff',
+  Ultrasound: 'Ultrasound Staff',
+};
+
 export const nativeRoleForNav = (navId) => {
   const item = findNavItem(navId);
   if (!item) return null;
-  return item.roleRequired?.find((r) => !ADMINS.includes(r)) ?? null;
+  // A Diagnostics item belongs to its modality's role; a Front Desk / Billing item to its group's.
+  return NAV_HOME_ROLE[item.department] ?? NAV_HOME_ROLE[item.groupLabel] ?? null;
+};
+
+/**
+ * Whether this person is working a screen that is not natively theirs — an Admin covering the
+ * front desk, or a lab tech who has been granted the billing queue. Drives the "Acting as" chip.
+ *
+ * Widened in [1.20.0] from "is an Admin borrowing this" to "does this person hold the role this
+ * screen belongs to". Now that a permission can put anyone on any staff screen, the chip matters
+ * more, not less: whatever you do here is recorded under your name, and the person most likely to
+ * forget that is the one who does not normally sit at this screen.
+ */
+export const isBorrowedScreen = (navId, roles = []) => {
+  const homeRole = nativeRoleForNav(navId);
+  if (!homeRole) return false;
+  return !roles.includes(homeRole);
 };
