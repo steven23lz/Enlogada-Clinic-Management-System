@@ -31,12 +31,14 @@ router.post(
   '/visit/:visitId',
   verifyToken,
   authorizeRoles(...DISCOUNT_GRANT_ROLES),
+  authorizePermissions('billing:discount'),
   discountController.applyToVisit
 );
 router.delete(
   '/visit/:visitId',
   verifyToken,
   authorizeRoles(...DISCOUNT_GRANT_ROLES),
+  authorizePermissions('billing:discount'),
   discountController.clearFromVisit
 );
 

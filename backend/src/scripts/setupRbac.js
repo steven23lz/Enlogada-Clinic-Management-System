@@ -76,6 +76,12 @@ const RECEPTION = [
   'appointments:read', 'appointments:update', 'appointments:cancel',
   'tests:assign', 'tests:read_assigned', 'hmo:read', 'hmo:request',
   'results:acknowledge_critical',
+  // Reception applies the statutory (Senior Citizen / PWD) discount at the desk, when the ID is
+  // presented. POST /discounts/visit/:visitId has always allowed the Receptionist role, but the
+  // matrix never granted the permission — and nothing caught the disagreement because that route
+  // carried no permission gate at all, so the role list alone decided. Now that it is gated,
+  // stating the grant keeps behaviour byte-identical and makes it visible and revocable.
+  'billing:discount',
 ];
 
 const CASHIER = [

@@ -26,7 +26,7 @@ router.get('/verify/:reference', verifyToken, authorizeStaff, authorizePermissio
 // for any non-Client role, so that asymmetry meant a Laboratory, Xray, Ultrasound or Cashier
 // token could walk PUT /api/appointments/1/cancel … /N/cancel and empty the appointment book,
 // cascading each cancellation to the linked visit.
-router.put('/:id/cancel', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), appointmentController.cancel);
+router.put('/:id/cancel', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), authorizePermissions('appointments:cancel'), appointmentController.cancel);
 
 // Staff updates appointment status (Confirmed, Completed, No Show)
 router.put('/:id/status', verifyToken, authorizeStaff, authorizePermissions('appointments:update'), appointmentController.updateStatus);

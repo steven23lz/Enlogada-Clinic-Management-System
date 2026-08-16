@@ -6,7 +6,7 @@ const { verifyToken, authorizeRoles, authorizePermissions } = require('../middle
 // Viewing the matrix stays available to both — Module 12's dashboard already reads this for a
 // stat card. Editing it is Module 13's "RBAC administration," explicitly elevated beyond Admin.
 router.get('/matrix', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), rbacController.getRolesAndPermissions);
-router.put('/roles/:roleId/permissions', verifyToken, authorizeRoles('SuperAdmin'), rbacController.updateRolePermissions);
+router.put('/roles/:roleId/permissions', verifyToken, authorizeRoles('SuperAdmin'), authorizePermissions('rbac:manage'), rbacController.updateRolePermissions);
 
 // Per-account exceptions and department assignment. [1.20.0]
 //
