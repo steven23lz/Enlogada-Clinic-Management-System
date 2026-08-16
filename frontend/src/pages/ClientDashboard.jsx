@@ -95,6 +95,64 @@ const downloadResultFile = async (visitTestId, originalName) => {
   }
 };
 
+// A phone photo of an HMO card is 3-8MB and slow to send on clinic-grade mobile data, and the
+// booking is refused without it — so a failed upload is a failed booking. Downscaling in the
+// browser turns it into a few hundred KB.
+//
+// It also sidesteps iPhone HEIC: the canvas re-encodes to JPEG, so whatever Safari can decode
+// arrives in a format the clinic's staff browsers can open. Where a browser CANNOT decode the
+// source (Chrome and Firefox have no HEIC decoder), this rejects with a message that says so
+// rather than uploading something nobody can read.
+const CARD_MAX_EDGE = 1600;   // a member number stays legible even when the card is a third of the frame
+const CARD_JPEG_QUALITY = 0.82; // below ~0.7 the digit shapes start to mush, which is the failure that matters
+const CARD_MAX_INPUT_BYTES = 25 * 1024 * 1024; // guards the decode step on low-end phones
+
+async function prepareCardImage(file) {
+  if (file.size > CARD_MAX_INPUT_BYTES) {
+    throw new Error('That photo is too large for this device to process. Take a new photo with your camera instead.');
+  }
+
+  // PDFs are accepted by the server but cannot be drawn to a canvas, so they bypass the
+  // downscale entirely — check them against the server's own ceiling here rather than letting
+  // the whole upload complete before it is refused.
+  if (file.type === 'application/pdf') {
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Error('That PDF is larger than 8MB. Attach a photo of the card instead, or a smaller scan.');
+    }
+    return file;
+  }
+
+  let bitmap;
+  try {
+    // from-image so a portrait phone photo is not uploaded sideways on engines that still
+    // default to ignoring EXIF orientation.
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  } catch {
+    throw new Error(
+      "This browser can't open that image format. If it came from an iPhone, take a new photo here instead, or save it as a JPG first."
+    );
+  }
+
+  const scale = Math.min(1, CARD_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+
+  const ctx = canvas.getContext('2d');
+  // White first: a transparent PNG would otherwise become a black rectangle once encoded as JPEG.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', CARD_JPEG_QUALITY));
+  // toBlob is specified to be able to hand back null under memory pressure. Silently ignoring
+  // that would upload nothing and fail the booking with no explanation.
+  if (!blob) throw new Error('We could not prepare that photo. Please take a new one.');
+
+  return new File([blob], 'hmo-card.jpg', { type: 'image/jpeg' });
+}
+
 const ClientDashboard = ({ onNavigate }) => {
   const [profiles, setProfiles] = useState([]);
   const [selectedProfileId, setSelectedProfileId] = useState(null);
@@ -141,6 +199,10 @@ const ClientDashboard = ({ onNavigate }) => {
   const [showBooking, setShowBooking] = useState(false);
   const [bookingStep, setBookingStep] = useState(1);
   const [isBooking, setIsBooking] = useState(false);
+  const [hmoCardFile, setHmoCardFile] = useState(null);
+  const [hmoCardPreview, setHmoCardPreview] = useState('');
+  const [hmoCardError, setHmoCardError] = useState('');
+  const [preparingCard, setPreparingCard] = useState(false);
   const [bookingData, setBookingData] = useState({
     scheduledDate: '',
     scheduledTime: '',
@@ -431,6 +493,53 @@ const ClientDashboard = ({ onNavigate }) => {
     }
   };
 
+  // The card is identity evidence, so it must never outlive the context it was attached in.
+  // Left in state it would follow the patient selector: attach your own card, close the dialog,
+  // switch to your child's profile, and their claim is filed against your member number.
+  const clearHmoCard = useCallback(() => {
+    setHmoCardFile(null);
+    setHmoCardError('');
+    setHmoCardPreview((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return '';
+    });
+  }, []);
+
+  // Switching patient invalidates any card already chosen, for the same reason.
+  useEffect(() => {
+    clearHmoCard();
+  }, [selectedProfileId, clearHmoCard]);
+
+  // Nothing renders the object URL after unmount, so release it rather than leaking one per
+  // abandoned booking.
+  useEffect(() => () => {
+    if (hmoCardPreview) URL.revokeObjectURL(hmoCardPreview);
+  }, [hmoCardPreview]);
+
+  const handleCardSelected = async (e) => {
+    const picked = e.target.files?.[0];
+    // Clearing the input lets the same file be re-picked after a rejection; the accepted file is
+    // deliberately NOT cleared, so cancelling a re-pick keeps the photo already chosen.
+    e.target.value = '';
+    if (!picked) return;
+
+    setHmoCardError('');
+    setPreparingCard(true);
+    try {
+      const prepared = await prepareCardImage(picked);
+      setHmoCardFile(prepared);
+      setHmoCardPreview((previous) => {
+        if (previous) URL.revokeObjectURL(previous);
+        return URL.createObjectURL(prepared);
+      });
+    } catch (err) {
+      setHmoCardError(err.message);
+      setHmoCardFile(null);
+    } finally {
+      setPreparingCard(false);
+    }
+  };
+
   const handleBookAppointment = async (e) => {
     e.preventDefault();
     if (isBooking) return; // a second submit while the first is still in flight books twice
@@ -450,20 +559,51 @@ const ClientDashboard = ({ onNavigate }) => {
       ? { providerId: parseInt(hmoProviderId, 10), approvalCode: hmoApprovalCode || null }
       : null;
 
+    if (hmo && !hmoCardFile) {
+      setBookingError('Please attach a photo of your HMO card to claim HMO coverage.');
+      return;
+    }
+
     setIsBooking(true);
     try {
       // One call. The appointment, its tests and any HMO claim are written in a single
       // transaction server-side — previously these were three sequential requests, and a failure
       // after the first left a booking the patient had been told did not happen, holding a slot
       // their own retry was then refused.
-      const response = await api.post('/appointments', {
-        patientId: parseInt(selectedProfileId, 10),
-        scheduledDate,
-        scheduledTime,
-        notes,
-        testIds: testIds.map((id) => parseInt(id, 10)),
-        hmo
-      });
+      //
+      // Self-pay stays JSON, byte-identical to what it has always sent. Only an HMO booking —
+      // which has a file to carry — switches to multipart, so the common path is code that did
+      // not change.
+      let response;
+      if (hmo) {
+        const fd = new FormData();
+        fd.append('patientId', String(parseInt(selectedProfileId, 10)));
+        fd.append('scheduledDate', scheduledDate);
+        fd.append('scheduledTime', scheduledTime);
+        fd.append('notes', notes || '');
+        // The [] suffix matters: it makes a single test arrive as a one-element array rather
+        // than a bare string, which a plain repeated field would not.
+        testIds.forEach((id) => fd.append('testIds[]', String(parseInt(id, 10))));
+        fd.append('hmo[providerId]', String(hmo.providerId));
+        if (hmo.approvalCode) fd.append('hmo[approvalCode]', hmo.approvalCode);
+        fd.append('hmoCard', hmoCardFile, hmoCardFile.name);
+
+        // The header override is load-bearing, not decoration: the axios instance defaults to
+        // application/json, and posting FormData under that header serialises the form to JSON
+        // and silently drops the file. AvatarUpload.jsx does the same for the same reason.
+        response = await api.post('/appointments', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } else {
+        response = await api.post('/appointments', {
+          patientId: parseInt(selectedProfileId, 10),
+          scheduledDate,
+          scheduledTime,
+          notes,
+          testIds: testIds.map((id) => parseInt(id, 10)),
+          hmo: null
+        });
+      }
 
       const appt = response.data.data.appointment;
 
@@ -482,6 +622,7 @@ const ClientDashboard = ({ onNavigate }) => {
         hmoProviderId: '',
         hmoApprovalCode: ''
       });
+      clearHmoCard();
       fetchHistory(selectedProfileId);
       fetchAppointments();
     } catch (err) {
@@ -914,6 +1055,7 @@ const ClientDashboard = ({ onNavigate }) => {
                   setBookingStep(1);
                   setBookingError('');
                   setBookingConfirmation(null);
+                  clearHmoCard();
                 }
               }}>
                 <DialogTrigger asChild>
@@ -1063,6 +1205,9 @@ const ClientDashboard = ({ onNavigate }) => {
                       <div className="space-y-4">
                         <div className="space-y-1.5">
                           <label className="text-xs font-bold text-gray-600 uppercase">HMO Provider (Optional)</label>
+                          <p className="text-[11px] text-gray-500 m-0">
+                            Claiming HMO coverage requires a photo of your card. Choose Self-Pay to pay for this visit yourself.
+                          </p>
                           <Select
                             value={bookingData.hmoProviderId}
                             onValueChange={val => setBookingData({...bookingData, hmoProviderId: val})}
@@ -1082,14 +1227,66 @@ const ClientDashboard = ({ onNavigate }) => {
                         </div>
 
                         {bookingData.hmoProviderId && bookingData.hmoProviderId !== 'none' && (
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-600 uppercase">HMO Authorization / LOA Code</label>
-                            <Input
-                              placeholder="Enter approval or card LOA number"
-                              value={bookingData.hmoApprovalCode}
-                              onChange={e => setBookingData({...bookingData, hmoApprovalCode: e.target.value})}
-                            />
-                          </div>
+                          <>
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-gray-600 uppercase">HMO Authorization / LOA Code</label>
+                              <Input
+                                placeholder="Enter approval or card LOA number"
+                                value={bookingData.hmoApprovalCode}
+                                onChange={e => setBookingData({...bookingData, hmoApprovalCode: e.target.value})}
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-gray-600 uppercase">
+                                Photo of your HMO card <span className="text-rose-600">*</span>
+                              </label>
+                              <p className="text-[11px] text-gray-500 m-0">
+                                Take a photo of the front of your card, or choose one you already have.
+                                Make sure the member number is readable.
+                              </p>
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,application/pdf"
+                                onChange={handleCardSelected}
+                                disabled={preparingCard || isBooking}
+                                className="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#769046] file:text-white hover:file:bg-[#657c3a] file:cursor-pointer"
+                              />
+
+                              {preparingCard && (
+                                <p className="text-[11px] text-gray-500 m-0" aria-live="polite">Preparing your photo…</p>
+                              )}
+
+                              {hmoCardError && (
+                                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs rounded-xl">
+                                  {hmoCardError}
+                                </div>
+                              )}
+
+                              {hmoCardFile && !hmoCardError && hmoCardFile.type === 'application/pdf' && (
+                                <p className="text-[11px] text-gray-600 m-0">
+                                  Attached: {hmoCardFile.name}. Check it shows the front of your card
+                                  with the member number readable.
+                                </p>
+                              )}
+
+                              {hmoCardPreview && !hmoCardError && hmoCardFile?.type !== 'application/pdf' && (
+                                <div className="space-y-1.5">
+                                  {/* Shown large enough to actually read. No API detects blur, glare, a
+                                      thumb over the number or the wrong side of the card — asking the
+                                      patient to confirm they can read it is the only check that does. */}
+                                  <img
+                                    src={hmoCardPreview}
+                                    alt="The HMO card photo you attached"
+                                    className="w-full max-h-64 object-contain rounded-xl border border-gray-200 bg-gray-50"
+                                  />
+                                  <p className="text-[11px] text-gray-600 m-0">
+                                    Can you read your member number in this photo? If not, take another.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </>
                         )}
 
                         <div className="space-y-1.5">

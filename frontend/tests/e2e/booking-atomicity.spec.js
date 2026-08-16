@@ -114,23 +114,87 @@ test.describe('Booking atomicity (API)', () => {
     expect(body.data.appointment.appointment_reference).toBe(firstRef);
   });
 
-  test('an HMO claim filed during booking starts Pending, never self-approved', async () => {
+  // A 1x1 PNG, so the server's MIME filter sees a genuine image rather than bytes we made up.
+  const CARD_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64');
+
+  function bookWithCard({ scheduledTime, testIds: ids, providerId, withCard }) {
+    // FormData rather than the plain multipart object: testIds[] is a repeated field, and only
+    // FormData can carry the same name more than once.
+    const form = new FormData();
+    form.append('patientId', String(patientId));
+    form.append('scheduledDate', BOOKING_DATE);
+    form.append('scheduledTime', scheduledTime);
+    form.append('notes', 'card-spec');
+    // The [] suffix is required: it makes a single test arrive as a one-element array.
+    ids.forEach((id) => form.append('testIds[]', String(id)));
+    form.append('hmo[providerId]', String(providerId));
+    form.append('hmo[approvalCode]', 'LOA-E2E');
+    if (withCard) {
+      form.append('hmoCard', new Blob([CARD_PNG], { type: 'image/png' }), 'card.png');
+    }
+    return apiContext.post(`${API}/appointments`, {
+      headers: { Authorization: `Bearer ${clientToken}` },
+      multipart: form
+    });
+  }
+
+  test('an HMO claim filed with a card starts Pending, never self-approved', async () => {
     const slots = await freeSlot(BOOKING_DATE);
     const providersRes = await apiContext.get(`${API}/hmo/providers`, {
       headers: { Authorization: `Bearer ${clientToken}` }
     });
     const providerId = (await providersRes.json()).data.providers[0].id;
 
-    const res = await book({
-      scheduledTime: slots[0].time,
-      testIds,
-      hmo: { providerId, approvalCode: 'LOA-E2E' }
+    const res = await bookWithCard({
+      scheduledTime: slots[0].time, testIds, providerId, withCard: true
     });
 
     expect(res.status()).toBe(201);
     const body = await res.json();
     expect(body.data.hmoRequest).toBeTruthy();
     expect(body.data.hmoRequest.status).toBe('Pending');
+  });
+
+  // The card is mandatory, so this is the case that decides whether the guard actually holds.
+  // Asserting the slot too is the point: the card is written to disk before the transaction
+  // opens, so a rejection has to roll back the booking AND drop the file.
+  test('an HMO claim with no card is refused and consumes no slot', async () => {
+    const slots = await freeSlot(BOOKING_DATE);
+    const target = slots[0].time;
+    const providersRes = await apiContext.get(`${API}/hmo/providers`, {
+      headers: { Authorization: `Bearer ${clientToken}` }
+    });
+    const providerId = (await providersRes.json()).data.providers[0].id;
+
+    const res = await bookWithCard({
+      scheduledTime: target, testIds, providerId, withCard: false
+    });
+    expect(res.status()).toBe(400);
+
+    const after = await freeSlot(BOOKING_DATE);
+    expect(after.some((s) => s.time === target)).toBe(true);
+  });
+
+  // The rule lives in hmoService, not just the booking controller, so the standalone route is
+  // not a way around it.
+  test('a client cannot file a card-less claim on the standalone HMO route', async () => {
+    const slots = await freeSlot(BOOKING_DATE);
+    const providersRes = await apiContext.get(`${API}/hmo/providers`, {
+      headers: { Authorization: `Bearer ${clientToken}` }
+    });
+    const providerId = (await providersRes.json()).data.providers[0].id;
+
+    const booked = await book({ scheduledTime: slots[0].time, testIds });
+    expect(booked.status()).toBe(201);
+    const visitTestIds = (await booked.json()).data.visitTests.map((vt) => vt.id);
+
+    const res = await apiContext.post(`${API}/hmo/request`, {
+      headers: { Authorization: `Bearer ${clientToken}` },
+      data: { hmoProviderId: providerId, visitTestIds }
+    });
+    expect(res.status()).toBe(400);
   });
 
   test('the Self-Pay sentinel is rejected rather than stored as a null provider', async () => {

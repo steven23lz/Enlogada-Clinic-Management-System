@@ -16,7 +16,7 @@ class HmoRepository {
   // the Service Requests screen as a claim covering fewer tests than the patient actually asked
   // for, which is a billing error rather than a cosmetic one. Same transaction idiom as
   // notificationRepository.createEventForUsers.
-  async createRequestWithTests({ hmoProviderId, approvalCode = null, visitTestIds }, client = null) {
+  async createRequestWithTests({ hmoProviderId, approvalCode = null, visitTestIds, card = null }, client = null) {
     // When the caller supplies a transaction we join it and let the caller own BEGIN/COMMIT;
     // standalone callers still get their own transaction, so POST /hmo/request is unchanged.
     const ownsTransaction = client === null;
@@ -24,11 +24,27 @@ class HmoRepository {
     try {
       if (ownsTransaction) await cx.query('BEGIN');
 
+      // card is either an uploaded image or a staff attestation; chk_hmo_request_card_evidence
+      // requires one of them, so a caller that supplies neither is refused by the database.
       const requestResult = await cx.query(
-        `INSERT INTO hmo_requests (hmo_provider_id, approval_code, status)
-         VALUES ($1, $2, 'Pending')
+        `INSERT INTO hmo_requests (
+           hmo_provider_id, approval_code, status,
+           card_file_path, card_original_name, card_mime_type, card_size_bytes, card_uploaded_at,
+           card_verified_by, card_verified_at
+         )
+         VALUES ($1, $2, 'Pending', $3, $4, $5, $6, $7, $8, $9)
          RETURNING *`,
-        [hmoProviderId, approvalCode]
+        [
+          hmoProviderId,
+          approvalCode,
+          card?.filePath ?? null,
+          card?.originalName ?? null,
+          card?.mimeType ?? null,
+          card?.sizeBytes ?? null,
+          card?.filePath ? new Date() : null,
+          card?.verifiedBy ?? null,
+          card?.verifiedBy ? new Date() : null
+        ]
       );
       const request = requestResult.rows[0];
 
@@ -67,6 +83,27 @@ class HmoRepository {
     `;
     const result = await client.query(queryText, [visitTestIds]);
     return result.rows;
+  }
+
+  // Everything the card route needs in one read: the file metadata, plus the account that owns
+  // the patient the claim was filed for, so ownership can be checked without a second query.
+  // patients.user_id is nullable (a walk-in has no web account), so the comparison is left to the
+  // caller in JS rather than filtered in SQL where NULL would silently drop the row.
+  async findCardByRequestId(id) {
+    const queryText = `
+      SELECT hr.id,
+             hr.card_file_path, hr.card_original_name, hr.card_mime_type, hr.card_purged_at,
+             MIN(p.user_id) AS patient_user_id
+      FROM hmo_requests hr
+      LEFT JOIN hmo_request_tests hrt ON hrt.hmo_request_id = hr.id
+      LEFT JOIN visit_tests vt ON hrt.visit_test_id = vt.id
+      LEFT JOIN patient_visits pv ON vt.patient_visit_id = pv.id
+      LEFT JOIN patients p ON pv.patient_id = p.id
+      WHERE hr.id = $1
+      GROUP BY hr.id
+    `;
+    const result = await db.query(queryText, [id]);
+    return result.rows[0];
   }
 
   async findRequestById(id) {

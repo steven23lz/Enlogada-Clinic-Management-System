@@ -197,10 +197,26 @@ CREATE TABLE hmo_requests (
     status VARCHAR(50) DEFAULT 'Pending',
     request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     approved_date TIMESTAMP,
+    -- Evidence for the claim. A client booking online attaches a photo of their HMO card; a
+    -- receptionist filing the same claim at the desk has the physical card in hand instead, and
+    -- is recorded as the verifier. The CHECK below requires one or the other.
+    card_file_path VARCHAR(255),
+    card_original_name TEXT,
+    card_mime_type VARCHAR(100),
+    card_size_bytes INT,
+    card_uploaded_at TIMESTAMP,
+    card_verified_by INT REFERENCES users(id),
+    card_verified_at TIMESTAMP,
+    card_purged_at TIMESTAMP, -- set when retention removes the image, so a purged card is
+                              -- distinguishable from one that was never provided
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_hmo_provider FOREIGN KEY (hmo_provider_id) REFERENCES hmo_providers(id),
-    CONSTRAINT chk_hmo_status CHECK (status IN ('Pending', 'Approved', 'Rejected', 'Cancelled'))
+    CONSTRAINT chk_hmo_status CHECK (status IN ('Pending', 'Approved', 'Rejected', 'Cancelled')),
+    -- card_purged_at counts as evidence-of-evidence: retention removes the image but the row
+    -- must remain valid, and a purged card stays distinguishable from one never provided.
+    CONSTRAINT chk_hmo_request_card_evidence
+        CHECK (card_file_path IS NOT NULL OR card_verified_by IS NOT NULL OR card_purged_at IS NOT NULL)
 );
 
 CREATE TABLE hmo_request_tests (

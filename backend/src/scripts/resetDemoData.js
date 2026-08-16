@@ -83,6 +83,45 @@ async function pruneOrphanedResultFiles() {
   logger.info(`  orphaned result files    ${removed} removed`);
 }
 
+/**
+ * The same idea for HMO card images, with one guard the result sweep does not need.
+ *
+ * A card is written to disk by multer BEFORE the booking transaction that will reference it
+ * opens, so during every HMO booking there is a legitimate window — short, but real — where the
+ * file exists and no row points at it yet. Sweeping without an age gate would delete a card out
+ * from under an in-flight booking, which would then commit pointing at nothing.
+ *
+ * Thirty minutes is far longer than any booking takes and far shorter than anyone would wait to
+ * reclaim disk.
+ */
+const HMO_CARD_ORPHAN_GRACE_MS = 30 * 60 * 1000;
+
+async function pruneOrphanedHmoCards() {
+  const uploadsDir = path.resolve(__dirname, '..', '..', 'uploads', 'hmo-cards');
+  if (!fs.existsSync(uploadsDir)) return;
+
+  const referenced = new Set(
+    (await db.query('SELECT card_file_path FROM hmo_requests WHERE card_file_path IS NOT NULL')).rows
+      .map((r) => path.basename(r.card_file_path))
+  );
+
+  const cutoff = Date.now() - HMO_CARD_ORPHAN_GRACE_MS;
+  let removed = 0;
+  let skipped = 0;
+  for (const name of fs.readdirSync(uploadsDir)) {
+    if (referenced.has(name)) continue;
+    const full = path.join(uploadsDir, name);
+    try {
+      if (fs.statSync(full).mtimeMs > cutoff) { skipped += 1; continue; } // may belong to a booking in flight
+      fs.unlinkSync(full);
+      removed += 1;
+    } catch (err) {
+      logger.warn(`  could not remove orphaned card ${name}: ${err.message}`);
+    }
+  }
+  logger.info(`  orphaned HMO cards       ${removed} removed${skipped ? `, ${skipped} too recent to judge` : ''}`);
+}
+
 async function tableCount(table, where = '') {
   try {
     const res = await db.query(`SELECT COUNT(*)::int AS c FROM ${table} ${where}`);
@@ -152,6 +191,7 @@ async function main() {
     // Deletes only files the database no longer knows about, so a file belonging to a surviving
     // result is never touched.
     await pruneOrphanedResultFiles();
+  await pruneOrphanedHmoCards();
     logger.info('Reset complete. Reference data and seeded accounts left intact.');
     logger.info('Re-run `node src/scripts/seedUsers.js` if any seeded account is missing.');
   } else {

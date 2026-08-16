@@ -31,6 +31,8 @@ const ServiceRequests = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [approvalCode, setApprovalCode] = useState('');
   const [detailError, setDetailError] = useState('');
+  const [cardUrl, setCardUrl] = useState('');
+  const [cardError, setCardError] = useState('');
   const [detailSubmitting, setDetailSubmitting] = useState(false);
 
   const fetchRequests = useCallback(async () => {
@@ -103,6 +105,36 @@ const ServiceRequests = () => {
 
   const totalPages = Math.max(1, Math.ceil(requests.length / PAGE_SIZE));
   const pagedRequests = requests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // The card image behind the claim. Fetched as a blob rather than pointed at with an <img src>,
+  // because the route requires a bearer token that a plain browser image request cannot send —
+  // the same reason ClientDashboard downloads results this way.
+  useEffect(() => {
+    let revoked = false;
+    let objectUrl = '';
+    setCardUrl('');
+    setCardError('');
+
+    if (!detailRequest?.id || !detailRequest?.card_file_path) return undefined;
+
+    (async () => {
+      try {
+        const res = await api.get(`/hmo/request/${detailRequest.id}/card`, { responseType: 'blob' });
+        if (revoked) return;
+        objectUrl = URL.createObjectURL(res.data);
+        setCardUrl(objectUrl);
+      } catch (err) {
+        if (!revoked) setCardError(err.response?.status === 410
+          ? 'This card image was removed under the retention policy.'
+          : 'The card image could not be loaded.');
+      }
+    })();
+
+    return () => {
+      revoked = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [detailRequest?.id, detailRequest?.card_file_path]);
 
   return (
     <div className="space-y-6">
@@ -193,6 +225,38 @@ const ServiceRequests = () => {
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-500 font-medium">Request Status</span>
                 <StatusBadge status={detailRequest?.status} />
+              </div>
+
+              {/* The evidence the claim rests on. A client booking online must attach a photo of
+                  their card; a receptionist filing at the desk is recorded as having seen the
+                  physical card instead. Approving without being able to see either would make
+                  the requirement pointless. */}
+              <div className="space-y-1.5">
+                <span className="text-xs text-gray-500 font-medium">HMO Card</span>
+                {cardUrl && (
+                  <a href={cardUrl} target="_blank" rel="noopener noreferrer" className="block">
+                    <img
+                      src={cardUrl}
+                      alt="Photo of the patient's HMO card"
+                      className="w-full max-h-56 object-contain rounded-xl border border-gray-200 bg-gray-50"
+                    />
+                    <span className="text-[11px] text-[#769046] font-bold">Open full size</span>
+                  </a>
+                )}
+                {cardError && (
+                  <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2 m-0">
+                    {cardError}
+                  </p>
+                )}
+                {!detailRequest?.card_file_path && !cardError && (
+                  <p className="text-[11px] text-gray-600 m-0">
+                    {detailRequest?.card_verified_by
+                      ? 'No image — the physical card was confirmed at the front desk.'
+                      : detailRequest?.card_purged_at
+                        ? 'The card image was removed under the retention policy.'
+                        : 'No card on file.'}
+                  </p>
+                )}
               </div>
 
               {detailRequest?.status !== 'Approved' && (

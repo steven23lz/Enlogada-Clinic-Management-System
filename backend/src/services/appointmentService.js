@@ -7,6 +7,7 @@ const patientService = require('./patientService');
 const notificationService = require('./notificationService');
 const testService = require('./testService');
 const hmoService = require('./hmoService');
+const { discardHmoCard } = require('../config/upload');
 const visitService = require('./visitService');
 
 async function assertClientOwnsPatient(requestingUser, patientId) {
@@ -83,7 +84,7 @@ class AppointmentService {
   // not at all.
   async createAppointment({
     patientId, scheduledDate, scheduledTime, notes, createdBy, requestingUser,
-    testIds = [], hmo = null
+    testIds = [], hmo = null, hmoCardFile = null
   }) {
     await assertClientOwnsPatient(requestingUser, patientId);
 
@@ -134,6 +135,11 @@ class AppointmentService {
         await client.query('COMMIT');
         committed = true;
 
+        // A retry re-sends the card the original booking already carries, and this path files no
+        // new claim for it to attach to. Drop the bytes rather than letting a re-submission swap
+        // the evidence under a claim an Admin may already have reviewed.
+        discardHmoCard(hmoCardFile);
+
         // No notification: staff were already told about this booking when it was made.
         return { appointment: existing, visitTests, hmoRequest: null, alreadyBooked: true };
       }
@@ -177,7 +183,8 @@ class AppointmentService {
         hmoRequest = await hmoService.createRequest({
           hmoProviderId: hmo.providerId,
           approvalCode: hmo.approvalCode || null,
-          visitTestIds: visitTests.map((vt) => vt.id)
+          visitTestIds: visitTests.map((vt) => vt.id),
+          cardFile: hmoCardFile
         }, requestingUser, client);
       }
 
@@ -209,6 +216,12 @@ class AppointmentService {
         try {
           await client.query('ROLLBACK');
         } catch { /* the original error is the one worth reporting */ }
+
+        // Nothing committed references the card, so the bytes multer wrote are unreachable.
+        // Gated on `committed` for the same reason the ROLLBACK is: after a successful commit
+        // there IS a row pointing at this file, and deleting it would break a real booking —
+        // which is exactly what would happen if the post-commit notifyRoles call ever threw.
+        discardHmoCard(hmoCardFile);
       }
       throw err;
     } finally {

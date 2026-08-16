@@ -40,6 +40,16 @@ node src/scripts/seedDemoScenario.js
 # Retention pass for notification history. Schedule this daily in any long-lived environment.
 node src/scripts/pruneNotifications.js --dry-run
 node src/scripts/pruneNotifications.js
+
+# Retention pass for HMO card images (insurance documents, not medical records). Dry-run by
+# default; --confirm applies. The window is a constant in the script, overridable per run.
+node src/scripts/pruneHmoCards.js
+node src/scripts/pruneHmoCards.js --days=180
+node src/scripts/pruneHmoCards.js --confirm
+
+# [1.13.0] HMO card evidence columns. Additive, idempotent, and reversible with --rollback.
+node src/scripts/migrateHmoCard.js
+node src/scripts/migrateHmoCard.js --rollback
 ```
 
 **Before a demo:** `resetDemoData.js --confirm` then `seedDemoScenario.js`.

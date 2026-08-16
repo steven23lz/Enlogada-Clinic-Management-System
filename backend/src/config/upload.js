@@ -24,7 +24,9 @@ const storage = multer.diskStorage({
 
 const fileFilter = (req, file, cb) => {
   if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-    return cb(new Error('Unsupported file type. Only PDF, JPEG, and PNG files are allowed.'));
+    const error = new Error('Unsupported file type. Only PDF, JPEG, and PNG files are allowed.');
+    error.statusCode = 400;
+    return cb(error);
   }
   cb(null, true);
 };
@@ -35,13 +37,27 @@ const uploadResultFile = multer({
   limits: { fileSize: MAX_FILE_SIZE_BYTES }
 });
 
-// multer's own errors (wrong type, too large) don't carry a statusCode, so errorHandler.js would
-// otherwise report them as a generic 500 — this normalizes them to a 400 with the real message.
+// multer's own errors (wrong type, too large) carry no statusCode, so errorHandler.js would
+// report them as a generic 500. But stamping everything 400 is wrong in the other direction:
+// diskStorage propagates raw filesystem errors, so a server that has run out of disk told the
+// user their file was bad. A MulterError is the caller's payload; anything else is ours.
+const classifyUploadError = (err) => {
+  if (err.statusCode) return err; // a fileFilter that already said what it meant
+  if (err instanceof multer.MulterError) {
+    err.statusCode = 400;
+    // Only supply a generic message if the caller has not already written a better one.
+    if (err.code === 'LIMIT_FILE_SIZE' && !err.friendlyMessage) err.message = 'That file is too large.';
+    if (err.friendlyMessage) err.message = err.friendlyMessage;
+  } else {
+    err.statusCode = 500; // ENOSPC, EACCES, a broken stream — not something the patient can fix
+  }
+  return err;
+};
+
 const uploadResultFileMiddleware = (req, res, next) => {
   uploadResultFile.single('file')(req, res, (err) => {
     if (err) {
-      err.statusCode = 400;
-      return next(err);
+      return next(classifyUploadError(err));
     }
     next();
   });
@@ -66,7 +82,9 @@ const avatarStorage = multer.diskStorage({
 
 const avatarFileFilter = (req, file, cb) => {
   if (!AVATAR_ALLOWED_MIME_TYPES.has(file.mimetype)) {
-    return cb(new Error('Unsupported file type. Only JPEG, PNG, and WebP images are allowed.'));
+    const error = new Error('Unsupported file type. Only JPEG, PNG, and WebP images are allowed.');
+    error.statusCode = 400;
+    return cb(error);
   }
   cb(null, true);
 };
@@ -80,11 +98,85 @@ const uploadAvatar = multer({
 const uploadAvatarMiddleware = (req, res, next) => {
   uploadAvatar.single('avatar')(req, res, (err) => {
     if (err) {
-      err.statusCode = 400;
-      return next(err);
+      return next(classifyUploadError(err));
     }
     next();
   });
 };
 
-module.exports = { uploadResultFileMiddleware, UPLOAD_ROOT, uploadAvatarMiddleware, AVATAR_UPLOAD_ROOT };
+// [1.13.0] HMO card photos, attached while booking online. Same server-generated-filename
+// pattern as the two above.
+//
+// The filename is seeded on the uploading user rather than the record it belongs to, because the
+// hmo_requests row does not exist yet — it is created inside the booking transaction, long after
+// multer has finished writing. Deliberately NOT seeded from a body field either: busboy emits
+// parts in wire order, so req.body may still be empty when filename() runs, which would make the
+// name depend on the order the browser happened to append fields in.
+const HMO_CARD_UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads', 'hmo-cards');
+fs.mkdirSync(HMO_CARD_UPLOAD_ROOT, { recursive: true });
+
+// PDF is included because scanned cards arrive that way and reception will want to attach them.
+// HEIC is excluded: staff browsers cannot render it, so accepting one would produce a claim with
+// evidence nobody can look at.
+const HMO_CARD_ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+// Larger than an avatar's 3MB, smaller than a result file's 15MB. A card photo does not need
+// more, and this is a mandatory step in a booking — a false rejection here blocks the booking
+// entirely, which is the one outcome worth sizing generously against. The client also downscales
+// before sending, so this ceiling is a backstop rather than the normal case.
+const MAX_HMO_CARD_SIZE_BYTES = 8 * 1024 * 1024; // 8MB
+
+const hmoCardStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, HMO_CARD_UPLOAD_ROOT),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).slice(0, 10);
+    cb(null, `hmo-${req.user.userId}-${crypto.randomBytes(16).toString('hex')}${ext}`);
+  }
+});
+
+const hmoCardFileFilter = (req, file, cb) => {
+  if (!HMO_CARD_ALLOWED_MIME_TYPES.has(file.mimetype)) {
+    const error = new Error('The HMO card must be a JPEG, PNG, WebP or PDF file.');
+    error.statusCode = 400;
+    return cb(error);
+  }
+  cb(null, true);
+};
+
+const uploadHmoCard = multer({
+  storage: hmoCardStorage,
+  fileFilter: hmoCardFileFilter,
+  // files/fields bounds so a multipart body cannot be used to hold the connection open. The
+  // booking body carries at most a handful of fields plus one testIds[] entry per test.
+  limits: { fileSize: MAX_HMO_CARD_SIZE_BYTES, files: 1, fields: 40, fieldNameSize: 200 }
+});
+
+const uploadHmoCardMiddleware = (req, res, next) => {
+  uploadHmoCard.single('hmoCard')(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        err.friendlyMessage = 'The HMO card image must be 8MB or smaller.';
+      }
+      return next(classifyUploadError(err));
+    }
+    next();
+  });
+};
+
+// Best-effort cleanup for a card whose booking did not commit. Callback form with an empty
+// callback, never awaited: mirrors authService.uploadAvatar, and for the same reason — losing a
+// stray file must never turn a rejected booking into a 500, nor mask the real error. multer
+// removes its own partial writes when IT fails, so this only covers files it handed over
+// successfully to a request that then went on to fail.
+const discardHmoCard = (file) => {
+  if (file && file.path) fs.unlink(file.path, () => {});
+};
+
+module.exports = {
+  uploadResultFileMiddleware,
+  UPLOAD_ROOT,
+  uploadAvatarMiddleware,
+  AVATAR_UPLOAD_ROOT,
+  uploadHmoCardMiddleware,
+  HMO_CARD_UPLOAD_ROOT,
+  discardHmoCard
+};

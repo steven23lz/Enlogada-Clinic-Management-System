@@ -1,11 +1,17 @@
 const hmoService = require('../services/hmoService');
+const { discardHmoCard } = require('../config/upload');
 
 class HmoController {
   async createRequest(req, res, next) {
     try {
       const { hmoProviderId, approvalCode, visitTestIds } = req.body;
 
-      if (!hmoProviderId || !visitTestIds || !Array.isArray(visitTestIds) || visitTestIds.length === 0) {
+      // Multipart sends visitTestIds[] as strings; JSON callers still send numbers.
+      let ids = visitTestIds;
+      if (typeof ids === 'string') ids = [ids];
+
+      if (!hmoProviderId || !ids || !Array.isArray(ids) || ids.length === 0) {
+        discardHmoCard(req.file);
         return res.status(400).json({
           status: 'error',
           message: 'HMO provider ID and an array of visit test IDs are required.'
@@ -13,7 +19,7 @@ class HmoController {
       }
 
       const request = await hmoService.createRequest(
-        { hmoProviderId, approvalCode, visitTestIds },
+        { hmoProviderId: Number(hmoProviderId), approvalCode, visitTestIds: ids.map(Number), cardFile: req.file || null },
         req.user
       );
       return res.status(201).json({
@@ -21,6 +27,23 @@ class HmoController {
         message: 'HMO request logged successfully.',
         data: { request }
       });
+    } catch (err) {
+      // The standalone route has no transaction to roll back, so a rejected claim must drop its
+      // own upload here.
+      discardHmoCard(req.file);
+      next(err);
+    }
+  }
+
+  async downloadCard(req, res, next) {
+    try {
+      const { absolutePath, originalName, mimeType } = await hmoService.getCardFile(
+        Number(req.params.id),
+        req.user
+      );
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${originalName.replace(/"/g, '')}"`);
+      return res.sendFile(absolutePath);
     } catch (err) {
       next(err);
     }

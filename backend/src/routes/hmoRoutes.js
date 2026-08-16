@@ -1,6 +1,7 @@
 const express = require('express');
 const hmoController = require('../controllers/hmoController');
 const { verifyToken, authorizeRoles } = require('../middlewares/auth');
+const { uploadHmoCardMiddleware } = require('../config/upload');
 
 const router = express.Router();
 
@@ -22,7 +23,12 @@ router.get('/requests', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Rece
 // appointment had already been created. Ownership is enforced in hmoService: a Client may only
 // file against tests belonging to their own patient profiles. Either way the request starts
 // Pending — stating a claim is not granting it, and only Admin/SuperAdmin can approve.
-router.post('/request', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), hmoController.createRequest);
+router.post('/request', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), uploadHmoCardMiddleware, hmoController.createRequest);
+
+// The card image behind a claim. Authenticated and ownership-checked in the service, streamed
+// rather than served from a static path -- an HMO card carries a name, a member number and often
+// a photo. Same treatment as diagnostic result files.
+router.get('/request/:id/card', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier', 'Client'), hmoController.downloadCard);
 
 // UI/UX Modernization Phase 12: approval is now Admin/SuperAdmin-only — Receptionist could
 // previously approve their own request (the same role that creates it), which combined with
