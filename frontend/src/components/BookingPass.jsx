@@ -17,7 +17,7 @@ import { QrCode, AlertCircle } from 'lucide-react';
  * `qrcode` is imported lazily so it never lands in the initial bundle: only clients who have a
  * paid booking ever need the encoder. Mirrors how QrScanner.jsx defers html5-qrcode.
  */
-const BookingPass = ({ reference, queueNumber }) => {
+const BookingPass = ({ reference, queueNumber, isPaid }) => {
   const [dataUrl, setDataUrl] = useState('');
   const [failed, setFailed] = useState(false);
 
@@ -75,9 +75,23 @@ const BookingPass = ({ reference, queueNumber }) => {
         <div className="w-40 h-40 bg-gray-100 rounded-lg animate-pulse" aria-hidden="true" />
       )}
 
-      <span className="text-xs font-mono font-bold text-slate-900 tracking-wide">{reference}</span>
+      <span className="font-mono text-[13px] font-bold tracking-wide text-slate-900">{reference}</span>
       {queueNumber && (
-        <span className="text-meta text-gray-500 font-semibold">Queue Ticket {queueNumber}</span>
+        <span className="text-micro font-semibold text-slate-500">Queue Ticket {queueNumber}</span>
+      )}
+
+      {/* Payment is stated on the pass rather than deciding whether the pass exists at all.
+          A patient walking in with an unpaid booking still needs a code to be scanned; what they
+          also need is to know they will be paying at the counter first. */}
+      {isPaid === false && (
+        <span className="mt-1 rounded-md bg-amber-50 px-2 py-0.5 text-micro font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
+          Payment due at the counter
+        </span>
+      )}
+      {isPaid === true && (
+        <span className="mt-1 rounded-md bg-emerald-50 px-2 py-0.5 text-micro font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">
+          Paid
+        </span>
       )}
     </div>
   );

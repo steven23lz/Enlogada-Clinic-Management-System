@@ -1386,9 +1386,21 @@ const ClientDashboard = ({ onNavigate }) => {
                   pagedAppointments.map((appt) => {
                     const isCancellable = appt.status === 'Pending' || appt.status === 'Confirmed';
                     const isOpen = appt.status !== 'Cancelled' && appt.status !== 'Completed';
-                    // The booking pass is issued only once payment has settled — that is what
-                    // makes it a pass. An unpaid booking shows how to pay instead.
-                    const showPass = isOpen && appt.is_paid;
+                    // The pass shows for any live booking, paid or not.
+                    //
+                    // It used to require payment first — "that is what makes it a pass". The
+                    // reasoning sounded right and the effect was to disable the feature: this
+                    // clinic takes most payments at the counter, so the large majority of
+                    // bookings never got a QR at all, and the receptionist's scanner had almost
+                    // nothing to read. GET /appointments/verify/:reference has always resolved a
+                    // reference regardless of payment, so the scan worked; the patient simply had
+                    // no code to present.
+                    //
+                    // Nothing is disclosed by showing it. The payload is the appointment
+                    // reference, which is already printed as text underneath and is useless
+                    // without a staff account to verify it against (see BookingPass.jsx).
+                    // Payment is a separate fact, said separately below.
+                    const showPass = isOpen;
                     const showPayOptions = isOpen && !appt.is_paid && gateway.available;
                     return (
                       <div key={appt.id} className="border border-[#e6ebf1] rounded-xl p-3 space-y-2 bg-slate-50/70">
@@ -1406,9 +1418,10 @@ const ClientDashboard = ({ onNavigate }) => {
                           <BookingPass
                             reference={appt.appointment_reference}
                             queueNumber={appt.queue_number}
+                            isPaid={appt.is_paid}
                           />
                         ) : (
-                          <span className="block text-meta text-gray-400 font-mono">{appt.appointment_reference}</span>
+                          <span className="block font-mono text-micro text-slate-400">{appt.appointment_reference}</span>
                         )}
 
                         {showPayOptions && (

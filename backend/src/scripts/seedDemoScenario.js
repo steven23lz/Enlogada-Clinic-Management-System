@@ -382,17 +382,33 @@ async function main() {
     const dateStr = `${slotDate.getFullYear()}-${String(slotDate.getMonth() + 1).padStart(2, '0')}-${String(slotDate.getDate()).padStart(2, '0')}`;
     try {
       const slots = (await call(`/appointments/availability?date=${dateStr}`, { token: client })).data.slots || [];
-      if (slots.length > 0) {
+      // Two bookings, because the QR pass has two states worth seeing side by side: one still to
+      // be paid at the counter (the common case in this clinic) and one already settled online.
+      // With a single unpaid booking the pass was invisible for a long time — the display used to
+      // require payment first — and the demo could not show the scanner having anything to read.
+      const bookings = [
+        { label: 'awaiting payment at the counter', pay: false },
+        { label: 'prepaid', pay: true },
+      ];
+      for (const [i, plan] of bookings.entries()) {
+        if (!slots[i]) break;
         const booking = (await call('/appointments', {
           method: 'POST', token: client,
-          body: { patientId: profiles[0].id, scheduledDate: dateStr, scheduledTime: slots[0].time || slots[0], notes: 'Online booking' },
+          body: { patientId: profiles[0].id, scheduledDate: dateStr, scheduledTime: slots[i].time || slots[i], notes: 'Online booking' },
         })).data.appointment;
         const labTest = catalogue.Laboratory[0];
         await call('/tests/visit-tests', {
           method: 'POST', token: client,
           body: { patientVisitId: booking.patient_visit_id, testIds: [labTest.id] },
         });
-        stages.push(`${profiles[0].first_name} ${profiles[0].last_name} — online appointment ${dateStr} (QR booking pass)`);
+        if (plan.pay) {
+          const bill = (await call(`/payments/bill/${booking.patient_visit_id}`, { token: tok.cashier })).data.bill;
+          await call('/payments', {
+            method: 'POST', token: tok.cashier,
+            body: { patientVisitId: booking.patient_visit_id, paymentMethod: 'GCash', amount: parseFloat(bill.totalAmount) },
+          });
+        }
+        stages.push(`${profiles[0].first_name} ${profiles[0].last_name} — online appointment ${dateStr}, ${plan.label} (QR booking pass)`);
       }
     } catch (err) {
       logger.warn(`  appointment booking skipped: ${err.message}`);
