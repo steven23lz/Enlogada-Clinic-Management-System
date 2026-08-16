@@ -1,6 +1,6 @@
 const express = require('express');
 const patientController = require('../controllers/patientController');
-const { verifyToken, authorizeRoles } = require('../middlewares/auth');
+const { verifyToken, authorizeRoles, authorizePermissions } = require('../middlewares/auth');
 
 const router = express.Router();
 
@@ -24,13 +24,13 @@ const router = express.Router();
 const PATIENT_READ_ROLES = ['SuperAdmin', 'Admin', 'Receptionist', 'Cashier', 'Client'];
 const PATIENT_WRITE_ROLES = ['SuperAdmin', 'Admin', 'Receptionist', 'Client'];
 
-router.post('/', verifyToken, authorizeRoles(...PATIENT_WRITE_ROLES), patientController.addProfile);
+router.post('/', verifyToken, authorizeRoles(...PATIENT_WRITE_ROLES), authorizePermissions('patients:create'), patientController.addProfile);
 router.get('/my-profiles', verifyToken, patientController.getMyProfiles);
 router.get('/types', verifyToken, patientController.getTypes);
 // Staff lookup of existing patient records by name — must be registered before /:id so
 // Express doesn't match "search" itself as an :id param.
-router.get('/search', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), patientController.search);
-router.get('/:id', verifyToken, authorizeRoles(...PATIENT_READ_ROLES), patientController.getProfileById);
-router.put('/:id', verifyToken, authorizeRoles(...PATIENT_WRITE_ROLES), patientController.updateProfile);
+router.get('/search', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), authorizePermissions('patients:read'), patientController.search);
+router.get('/:id', verifyToken, authorizeRoles(...PATIENT_READ_ROLES), authorizePermissions('patients:read'), patientController.getProfileById);
+router.put('/:id', verifyToken, authorizeRoles(...PATIENT_WRITE_ROLES), authorizePermissions('patients:update'), patientController.updateProfile);
 
 module.exports = router;

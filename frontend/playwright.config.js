@@ -11,6 +11,19 @@ export default defineConfig({
   globalSetup: './tests/e2e/globalSetup.js',
   globalTeardown: './tests/e2e/globalTeardown.js',
   fullyParallel: false,
+  // One worker, deliberately.
+  //
+  // `fullyParallel: false` only serialises tests *within* a file — separate files still run
+  // concurrently across workers, and this suite shares one database and one set of seeded
+  // accounts. Specs mutate that shared state: rbac-enforcement.spec.js temporarily revokes a
+  // permission from the seeded Cashier, session-revocation.spec.js changes a password,
+  // discounts.spec.js settles payments. Run in parallel, those changes are visible to whichever
+  // other file happens to be mid-flight, which surfaces as unrelated specs failing at random —
+  // the same misleading signature as the rate limiter and a mid-run nodemon restart.
+  //
+  // The whole suite takes about 14 seconds serially. That is a cheap price for a result that
+  // means what it says.
+  workers: 1,
   retries: 0,
   reporter: [['list']],
   timeout: 30000,

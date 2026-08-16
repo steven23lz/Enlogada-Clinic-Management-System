@@ -43,9 +43,10 @@ const MainApp = () => {
   useEffect(() => {
     if (!user || (user.roles || []).includes('Client')) return;
     const roles = user.roles || [];
+    const permissions = user.permissions || [];
     if (activeNav === 'account') return;
-    if (!activeNav || !consoleForNav(activeNav, roles)) {
-      setActiveNav(defaultNavForRoles(roles));
+    if (!activeNav || !consoleForNav(activeNav, roles, permissions)) {
+      setActiveNav(defaultNavForRoles(roles, permissions));
     }
     // activeNav is deliberately not a dependency: this corrects the destination on sign-in and
     // on a role change, not on every navigation the user makes.
@@ -97,6 +98,8 @@ const MainApp = () => {
 
   // If user IS logged in
   const roles = user.roles || [];
+  // Permissions gate navigation alongside roles — see canSee in config/navigation.js.
+  const permissions = user.permissions || [];
 
   // Client has no sidebar console; it keeps its own public-style shell and tab model.
   if (roles.includes('Client')) {
@@ -127,8 +130,10 @@ const MainApp = () => {
   // and mode straight from this prop, so they must never receive the unset value. An
   // unreachable destination falls back to the user's own default rather than rendering someone
   // else's console, so a stale activeNav cannot leak a screen either.
-  const resolvedNav = consoleForNav(activeNav, roles) ? activeNav : defaultNavForRoles(roles);
-  const targetConsole = consoleForNav(resolvedNav, roles);
+  // Permissions as well as roles: the router must refuse exactly what the sidebar hides, or a
+  // revoked permission would leave a screen reachable by a stale nav id.
+  const resolvedNav = consoleForNav(activeNav, roles, permissions) ? activeNav : defaultNavForRoles(roles, permissions);
+  const targetConsole = consoleForNav(resolvedNav, roles, permissions);
 
   switch (targetConsole) {
     case CONSOLE.RECEPTION:

@@ -26,11 +26,35 @@ export const AuthProvider = ({ children }) => {
     };
     fetchUser();
 
+    // Re-read roles and permissions periodically, and whenever the user comes back to the tab.
+    //
+    // /auth/me resolves both from the database on every request, so this is what makes the
+    // role-permission matrix feel live: a SuperAdmin unticking `billing:process` for Cashier is
+    // reflected in that cashier's sidebar within a minute, without them signing out and back in.
+    // The API already refuses immediately — this keeps the navigation honest about it, rather
+    // than offering a screen whose every request will 403.
+    //
+    // Silent by design: a failed refresh must not sign anyone out mid-shift. A genuine 401 comes
+    // through the auth:unauthorized event below instead.
+    const refreshUser = async () => {
+      if (document.hidden || !localStorage.getItem('token')) return;
+      try {
+        const response = await api.get('/auth/me');
+        setUser(response.data.data.user);
+      } catch {
+        /* transient — the interceptor handles a real 401 */
+      }
+    };
+    const refreshTimer = setInterval(refreshUser, 60000);
+    document.addEventListener('visibilitychange', refreshUser);
+
     const handleUnauthorized = () => {
       setUser(null);
     };
     window.addEventListener('auth:unauthorized', handleUnauthorized);
     return () => {
+      clearInterval(refreshTimer);
+      document.removeEventListener('visibilitychange', refreshUser);
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
     };
   }, []);

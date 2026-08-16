@@ -23,6 +23,9 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const userRoles = user?.roles || [];
+  // Drives the permission half of nav visibility — see canSee in config/navigation.js. Refreshed
+  // from the server by AuthContext, so a matrix change reaches the sidebar without a re-login.
+  const userPermissions = user?.permissions || [];
   const isSuperOrAdmin = userRoles.includes('SuperAdmin') || userRoles.includes('Admin');
 
   // UI/UX Modernization Phase 7: ops destinations are deliberately shared — Admin/SuperAdmin see
@@ -36,7 +39,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // The items themselves now come from config/navigation.js, which App.jsx also routes from —
   // one record per destination carrying both its role gating and the console it opens, so the
   // sidebar can no longer advertise a screen the router will not open.
-  const mainNavItems = visibleMainNavItems(userRoles);
+  const mainNavItems = visibleMainNavItems(userRoles, userPermissions);
 
   // Module 18 UI/UX Phase 1: every operational role previously had exactly one nav
   // destination (some even shared a "Dashboard" item that silently routed to the same page).
@@ -47,7 +50,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // the plan's Section 07 "structure fix"): grouped by department instead of one flat list, so
   // Admin/SuperAdmin — who see all of these at once — get a scannable sidebar instead of 12
   // undifferentiated items. A single-department user still only ever sees their own group.
-  const opsNavGroups = visibleOpsGroups(userRoles);
+  const opsNavGroups = visibleOpsGroups(userRoles, userPermissions);
 
   // Resolve the currently-open ops screen (if any) and whether the viewer is genuinely acting
   // outside their own department on it — i.e. Admin/SuperAdmin without the item's own operational

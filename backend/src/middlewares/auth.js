@@ -127,35 +127,29 @@ const authorizeRoles = (...allowedRoles) => {
   };
 };
 
-// Decision (2026-08-10 remediation pass): NOT currently wired onto any route. Reasons:
-// 1. SuperAdmin/Admin bypass below means this middleware can never additionally restrict
-//    those two roles beyond what authorizeRoles already does — its only theoretical value
-//    is for the 6 non-admin roles.
-// 2. Permissions are granted per-role only (role_permissions), with no per-user override in
-//    the data model, so for those 6 roles a permission check and a role check resolve
-//    identically in every case already covered by authorizeRoles — wiring both is redundant.
-// 3. The seeded permission taxonomy (setupRbac.js) is incomplete relative to the real route
-//    surface: e.g. Receptionist legitimately calls POST /tests/visit-tests today, but no
-//    tests:*-family permission is granted to Receptionist — wiring enforcement now would
-//    break that working flow, not just add security.
-// Future direction (needs Security Engineer + Project Architect sign-off, not a silent
-// change): either complete the permission taxonomy and make authorizePermissions the
-// primary authorization layer, or formally retire it and keep the RBAC matrix UI as
-// informational/future-proofing only. Do not wire this onto routes ad hoc.
-//
-// 2026-08-14 — interim decision: keep the middleware, and stop the UI implying it works.
-// The Role-Permission Matrix now carries an "advisory only, not yet enforced" notice
-// (frontend/src/pages/admin/SuperAdminManagement.jsx), because the screen let a SuperAdmin
-// revoke e.g. billing:process from Cashier, watch it save, and reasonably conclude access had
-// been removed while cashiers kept taking payments. A screen that lies about access is worse
-// than no screen.
-//
-// Completing the taxonomy was deliberately NOT attempted in that pass: it means mapping 83
-// routes onto a 13-permission vocabulary, and the E2E suite was cut to 5 specs the same day,
-// so the safety net for a sweeping authorization change is far thinner than it looks. When it
-// is picked up, the existing authorizeRoles list on each route is the ground truth for who
-// should hold the derived permission — derive from those rather than inventing a new model,
-// grant the full set before enforcing any of it, and grow test coverage first.
+/**
+ * Gates a route on fine-grained permissions from the role-permission matrix.
+ *
+ * ENFORCED as of 2026-08-16. The long-standing note here said this was advisory only, and set out
+ * four preconditions for picking it up: complete the permission taxonomy, derive each grant from
+ * the `authorizeRoles` list already on the route rather than inventing a new model, grant the
+ * full derived set before enforcing any of it, and grow test coverage first. All four are now
+ * met — 27 permissions covering the real route surface, seeded to reproduce exactly what each
+ * role could already do, behind 69 specs rather than the 5 that existed when that note was
+ * written. Turning enforcement on therefore changed nothing on day one; anything that changes
+ * afterwards is a decision somebody made in the matrix.
+ *
+ * Used ALONGSIDE authorizeRoles, not instead of it. The role gate is the coarse, structural
+ * boundary that should not be editable from a screen (a Client must never reach a worklist, and
+ * no permission tick should make that possible); the permission gate is the delegable layer on
+ * top. Two independent checks, and a route passes only if both allow it.
+ *
+ * SuperAdmin bypasses. Admin no longer does — and that single line is what makes the matrix mean
+ * anything. While Admin bypassed, unticking a permission for Admin saved successfully and changed
+ * nothing, which is precisely the "screen that lies about access" the previous note objected to.
+ * The bypass remains for SuperAdmin alone because somebody has to be able to repair a matrix that
+ * has been misconfigured into locking everyone out, and that role is the one that edits it.
+ */
 const authorizePermissions = (...requiredPermissions) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -165,8 +159,8 @@ const authorizePermissions = (...requiredPermissions) => {
       });
     }
 
-    // SuperAdmin or Admin bypass permission checks
-    if (req.user.roles && (req.user.roles.includes('SuperAdmin') || req.user.roles.includes('Admin'))) {
+    // SuperAdmin only. Admin deliberately does NOT bypass — see the note above.
+    if (req.user.roles && req.user.roles.includes('SuperAdmin')) {
       return next();
     }
 

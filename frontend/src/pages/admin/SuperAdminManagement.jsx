@@ -11,7 +11,7 @@ import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import Pagination from '../../components/ui/pagination';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../config/api';
-import { UserPlus, ShieldCheck, Edit, AlertCircle, Info } from 'lucide-react';
+import { UserPlus, ShieldCheck, Edit, AlertCircle } from 'lucide-react';
 
 const ELEVATED_ROLES = ['Admin', 'SuperAdmin'];
 
@@ -91,23 +91,22 @@ const RoleMatrix = () => {
 
   return (
     <div className="space-y-4">
-      {/* This matrix records intent, not enforcement, and says so rather than letting an admin
-          believe otherwise. authorizePermissions (backend/src/middlewares/auth.js) is wired to
-          zero of the API's 83 routes — access is decided by role name alone — so revoking a
-          permission here saves and displays correctly while changing nothing about what the role
-          can actually do. Silently implying otherwise is worse than not having the screen: it
-          invites someone to "remove" access and walk away believing they did. */}
+      {/* This banner used to read "Advisory only — not yet enforced", and the note here explained
+          that authorizePermissions was wired to zero routes so revoking a permission changed
+          nothing. Both were honest at the time and are now the opposite of true: permissions gate
+          46 API routes and the sidebar, and Admin no longer bypasses them. */}
       <div
         role="status"
-        className="flex items-start space-x-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-fine text-amber-900"
+        className="flex items-start space-x-2 rounded-xl border border-[#769046]/30 bg-[#769046]/8 p-3 text-fine text-[#3f5122]"
       >
-        <Info className="w-4 h-4 flex-shrink-0 mt-px" />
+        <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-px text-[#769046]" />
         <span>
-          <strong className="font-bold">Advisory only — not yet enforced.</strong> These
-          assignments are recorded and reportable, but the API currently authorises requests by
-          role, not by permission. Changing a permission here does <strong>not</strong> change
-          what a role can do. To actually restrict access today, change the role assigned to the
-          user under <em>Elevated Accounts</em> or <em>Staff Accounts</em>.
+          <strong className="font-bold">Live — these permissions are enforced.</strong> Unticking
+          one immediately stops that role calling the endpoints behind it, and removes the matching
+          screen from their sidebar (within a minute, without them signing out). Two things are
+          deliberately <em>not</em> governed here: a role&apos;s structural boundary — no permission
+          can put a Client on a diagnostic worklist — and <strong>SuperAdmin</strong>, which
+          bypasses these checks so a misconfigured matrix can always be repaired.
         </span>
       </div>
 

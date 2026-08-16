@@ -1,12 +1,12 @@
 const express = require('express');
 const paymentController = require('../controllers/paymentController');
 const paymentGatewayController = require('../controllers/paymentGatewayController');
-const { verifyToken, authorizeRoles } = require('../middlewares/auth');
+const { verifyToken, authorizeRoles, authorizePermissions } = require('../middlewares/auth');
 
 const router = express.Router();
 
 // Get billing summary for a visit
-router.get('/bill/:visitId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), paymentController.getBill);
+router.get('/bill/:visitId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), authorizePermissions('billing:read'), paymentController.getBill);
 
 // Client-side payment visibility — self-scoped via req.user.userId, no role restriction beyond
 // being logged in (matches /patients/my-profiles, /appointments/my-bookings).
@@ -19,16 +19,16 @@ router.get('/my-payments', verifyToken, paymentController.getMyPayments);
 // that reviews cash-ups via Cashier Monitoring, which stops meaning anything if the reviewer can
 // also be the one taking payments. Refund/cancel below deliberately KEEPS Admin: reversing a
 // transaction is a manager decision, and auditService already records who authorised it.
-router.post('/', verifyToken, authorizeRoles('SuperAdmin', 'Cashier'), paymentController.processPayment);
+router.post('/', verifyToken, authorizeRoles('SuperAdmin', 'Cashier'), authorizePermissions('billing:process'), paymentController.processPayment);
 
 // View transactions (with optional date range filters)
-router.get('/transactions', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), paymentController.getTransactions);
+router.get('/transactions', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), authorizePermissions('billing:read'), paymentController.getTransactions);
 
 // Refund or void a paid payment (Feature Gap Plan Phase A) — Cashier scope matches processPayment
-router.patch('/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), paymentController.updateStatus);
+router.patch('/:id/status', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), authorizePermissions('billing:refund'), paymentController.updateStatus);
 
 // View payments for a specific visit
-router.get('/visit/:visitId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), paymentController.getVisitPayments);
+router.get('/visit/:visitId', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Cashier'), authorizePermissions('billing:read'), paymentController.getVisitPayments);
 
 // --- Online payment gateway (GCash / Maya) ------------------------------------------------
 

@@ -50,15 +50,15 @@ const OPS_BREAK_GLASS = ['SuperAdmin'];
 // console is separated out below rather than mixed in here.
 export const MAIN_NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roleRequired: ADMINS, console: CONSOLE.ADMIN },
-  { id: 'staff', label: 'Staff Accounts', icon: Users, roleRequired: ADMINS, console: CONSOLE.ADMIN },
-  { id: 'service-requests', label: 'Service Requests', icon: ClipboardList, roleRequired: ADMINS, console: CONSOLE.ADMIN },
-  { id: 'services-cat', label: 'Services Catalog', icon: FileText, roleRequired: ADMINS, console: CONSOLE.SERVICES_CATALOG },
-  { id: 'cashier-monitoring', label: 'Cashier Monitoring', icon: CreditCard, roleRequired: ADMINS, console: CONSOLE.ADMIN },
-  { id: 'appointments-list', label: 'Appointments', icon: Calendar, roleRequired: ADMINS, console: CONSOLE.ADMIN },
-  { id: 'patient-records', label: 'Patient Records', icon: FolderKanban, roleRequired: ADMINS, console: CONSOLE.ADMIN },
-  { id: 'reports', label: 'Reports', icon: BarChart3, roleRequired: ADMINS, console: CONSOLE.ADMIN },
-  { id: 'activity', label: 'Activity Log', icon: Activity, roleRequired: ADMINS, console: CONSOLE.ADMIN },
-  { id: 'superadmin', label: 'Super Admin', icon: ShieldCheck, roleRequired: ['SuperAdmin'], console: CONSOLE.ADMIN },
+  { id: 'staff', label: 'Staff Accounts', icon: Users, roleRequired: ADMINS, permission: 'staff:manage', console: CONSOLE.ADMIN },
+  { id: 'service-requests', label: 'Service Requests', icon: ClipboardList, roleRequired: ADMINS, permission: 'hmo:read', console: CONSOLE.ADMIN },
+  { id: 'services-cat', label: 'Services Catalog', icon: FileText, roleRequired: ADMINS, permission: 'tests:manage', console: CONSOLE.SERVICES_CATALOG },
+  { id: 'cashier-monitoring', label: 'Cashier Monitoring', icon: CreditCard, roleRequired: ADMINS, permission: 'billing:read', console: CONSOLE.ADMIN },
+  { id: 'appointments-list', label: 'Appointments', icon: Calendar, roleRequired: ADMINS, permission: 'appointments:read', console: CONSOLE.ADMIN },
+  { id: 'patient-records', label: 'Patient Records', icon: FolderKanban, roleRequired: ADMINS, permission: 'patients:read', console: CONSOLE.ADMIN },
+  { id: 'reports', label: 'Reports', icon: BarChart3, roleRequired: ADMINS, permission: 'reports:view', console: CONSOLE.ADMIN },
+  { id: 'activity', label: 'Activity Log', icon: Activity, roleRequired: ADMINS, permission: 'audit:view', console: CONSOLE.ADMIN },
+  { id: 'superadmin', label: 'Super Admin', icon: ShieldCheck, roleRequired: ['SuperAdmin'], permission: 'rbac:manage', console: CONSOLE.ADMIN },
 ];
 
 // Department-facing destinations, grouped so a viewer who can see several departments at once
@@ -67,40 +67,63 @@ export const OPS_NAV_GROUPS = [
   {
     label: 'Front Desk',
     items: [
-      { id: 'reception-queue', label: 'Active Queue', icon: Calendar, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], console: CONSOLE.RECEPTION },
-      { id: 'reception-walkin', label: 'Walk-In Registration', icon: UserPlus, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], console: CONSOLE.RECEPTION },
-      { id: 'reception-checkin', label: 'Appointment Check-In', icon: QrCode, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], console: CONSOLE.RECEPTION },
-      { id: 'reception-history', label: 'Visit History', icon: History, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], console: CONSOLE.RECEPTION },
+      { id: 'reception-queue', label: 'Active Queue', icon: Calendar, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], permission: 'visits:read', console: CONSOLE.RECEPTION },
+      { id: 'reception-walkin', label: 'Walk-In Registration', icon: UserPlus, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], permission: 'visits:create', console: CONSOLE.RECEPTION },
+      { id: 'reception-checkin', label: 'Appointment Check-In', icon: QrCode, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], permission: 'appointments:update', console: CONSOLE.RECEPTION },
+      { id: 'reception-history', label: 'Visit History', icon: History, roleRequired: ['Receptionist', ...OPS_BREAK_GLASS], permission: 'visits:read', console: CONSOLE.RECEPTION },
     ],
   },
   {
     label: 'Billing',
     items: [
-      { id: 'cashier-queue', label: 'Billing Queue', icon: Receipt, roleRequired: ['Cashier', ...OPS_BREAK_GLASS], console: CONSOLE.CASHIER },
-      { id: 'cashier-history', label: 'Transaction History', icon: History, roleRequired: ['Cashier', ...OPS_BREAK_GLASS], console: CONSOLE.CASHIER },
+      { id: 'cashier-queue', label: 'Billing Queue', icon: Receipt, roleRequired: ['Cashier', ...OPS_BREAK_GLASS], permission: 'billing:process', console: CONSOLE.CASHIER },
+      { id: 'cashier-history', label: 'Transaction History', icon: History, roleRequired: ['Cashier', ...OPS_BREAK_GLASS], permission: 'billing:read', console: CONSOLE.CASHIER },
     ],
   },
   {
     label: 'Diagnostics',
     items: [
-      { id: 'lab-ops', label: 'Laboratory Worklist', icon: FlaskConical, roleRequired: ['Laboratory Staff', ...OPS_BREAK_GLASS], console: CONSOLE.DIAGNOSTIC },
-      { id: 'lab-history', label: 'Laboratory History', icon: History, roleRequired: ['Laboratory Staff', ...OPS_BREAK_GLASS], console: CONSOLE.DIAGNOSTIC },
-      { id: 'ultrasound-ops', label: 'Ultrasound Worklist', icon: Stethoscope, roleRequired: ['Ultrasound Staff', ...OPS_BREAK_GLASS], console: CONSOLE.DIAGNOSTIC },
-      { id: 'ultrasound-history', label: 'Ultrasound History', icon: History, roleRequired: ['Ultrasound Staff', ...OPS_BREAK_GLASS], console: CONSOLE.DIAGNOSTIC },
-      { id: 'xray-ops', label: 'X-Ray Worklist', icon: Scan, roleRequired: ['Xray Staff', ...OPS_BREAK_GLASS], console: CONSOLE.DIAGNOSTIC },
-      { id: 'xray-history', label: 'X-Ray History', icon: History, roleRequired: ['Xray Staff', ...OPS_BREAK_GLASS], console: CONSOLE.DIAGNOSTIC },
+      { id: 'lab-ops', label: 'Laboratory Worklist', icon: FlaskConical, roleRequired: ['Laboratory Staff', ...OPS_BREAK_GLASS], permission: 'results:write', console: CONSOLE.DIAGNOSTIC },
+      { id: 'lab-history', label: 'Laboratory History', icon: History, roleRequired: ['Laboratory Staff', ...OPS_BREAK_GLASS], permission: 'results:read', console: CONSOLE.DIAGNOSTIC },
+      { id: 'ultrasound-ops', label: 'Ultrasound Worklist', icon: Stethoscope, roleRequired: ['Ultrasound Staff', ...OPS_BREAK_GLASS], permission: 'results:write', console: CONSOLE.DIAGNOSTIC },
+      { id: 'ultrasound-history', label: 'Ultrasound History', icon: History, roleRequired: ['Ultrasound Staff', ...OPS_BREAK_GLASS], permission: 'results:read', console: CONSOLE.DIAGNOSTIC },
+      { id: 'xray-ops', label: 'X-Ray Worklist', icon: Scan, roleRequired: ['Xray Staff', ...OPS_BREAK_GLASS], permission: 'results:write', console: CONSOLE.DIAGNOSTIC },
+      { id: 'xray-history', label: 'X-Ray History', icon: History, roleRequired: ['Xray Staff', ...OPS_BREAK_GLASS], permission: 'results:read', console: CONSOLE.DIAGNOSTIC },
     ],
   },
 ];
 
-export const canSee = (item, roles) =>
-  !item.roleRequired || item.roleRequired.some((r) => roles.includes(r));
+/**
+ * Whether this user may see a destination.
+ *
+ * TWO independent gates, and both must pass.
+ *
+ * `roleRequired` is the structural boundary — coarse, and deliberately NOT editable from any
+ * screen. No permission tick should ever be able to put a Client on a diagnostic worklist.
+ *
+ * `permission` is the delegable layer on top, driven by the role-permission matrix a SuperAdmin
+ * edits. This is what makes that screen real: untick `billing:process` for Cashier and the
+ * Billing Queue disappears from their sidebar, because the same permission gates the API route
+ * behind it (see backend/src/routes/paymentRoutes.js). The nav and the API read the same source,
+ * so the sidebar cannot advertise a screen the server will refuse.
+ *
+ * SuperAdmin bypasses the permission half, matching authorizePermissions on the backend —
+ * somebody has to be able to repair a matrix that has been misconfigured into locking everyone
+ * out, and that role is the one that edits it.
+ */
+export const canSee = (item, roles = [], permissions = []) => {
+  if (item.roleRequired && !item.roleRequired.some((r) => roles.includes(r))) return false;
+  if (!item.permission) return true;
+  if (roles.includes('SuperAdmin')) return true;
+  return permissions.includes(item.permission);
+};
 
-export const visibleMainNavItems = (roles) => MAIN_NAV_ITEMS.filter((i) => canSee(i, roles));
+export const visibleMainNavItems = (roles, permissions) =>
+  MAIN_NAV_ITEMS.filter((i) => canSee(i, roles, permissions));
 
-export const visibleOpsGroups = (roles) =>
+export const visibleOpsGroups = (roles, permissions) =>
   OPS_NAV_GROUPS
-    .map((group) => ({ ...group, items: group.items.filter((i) => canSee(i, roles)) }))
+    .map((group) => ({ ...group, items: group.items.filter((i) => canSee(i, roles, permissions)) }))
     .filter((group) => group.items.length > 0);
 
 const allItems = () => [
@@ -113,17 +136,20 @@ export const findNavItem = (navId) => allItems().find((i) => i.id === navId);
 // The console a destination should open for this user, or null when their roles do not grant it.
 // Returning null rather than a fallback keeps the check honest: the caller decides what to do
 // with an unreachable destination instead of silently landing somewhere unrelated.
-export const consoleForNav = (navId, roles) => {
+export const consoleForNav = (navId, roles, permissions) => {
   const item = findNavItem(navId);
-  if (!item || !canSee(item, roles)) return null;
+  if (!item || !canSee(item, roles, permissions)) return null;
   return item.console;
 };
 
 // Where a user lands on sign-in: their first genuinely reachable destination. Previously this
 // was hardcoded to 'dashboard', a destination only Admin/SuperAdmin can open — every other role
 // landed on an id they did not own and reached their console only via App.jsx's role fallback.
-export const defaultNavForRoles = (roles) => {
-  const [first] = [...visibleMainNavItems(roles), ...visibleOpsGroups(roles).flatMap((g) => g.items)];
+export const defaultNavForRoles = (roles, permissions) => {
+  const [first] = [
+    ...visibleMainNavItems(roles, permissions),
+    ...visibleOpsGroups(roles, permissions).flatMap((g) => g.items),
+  ];
   return first ? first.id : null;
 };
 

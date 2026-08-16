@@ -1,15 +1,15 @@
 const express = require('express');
 const reportController = require('../controllers/reportController');
-const { verifyToken, authorizeRoles } = require('../middlewares/auth');
+const { verifyToken, authorizeRoles, authorizePermissions } = require('../middlewares/auth');
 
 const router = express.Router();
 
 // Module 17 (Reporting): clinic-wide metrics for a given date range. Admin/SuperAdmin only,
 // matching the convention already established for /rbac/matrix and /admin/*.
-router.get('/summary', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), reportController.getSummary);
+router.get('/summary', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), authorizePermissions('reports:view'), reportController.getSummary);
 
 // Feature Gap Plan Phase D: per-staff workload for Reception (check-ins) and Diagnostic
 // (results released) — previously only Cashier had this kind of throughput visibility.
-router.get('/staff-workload', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), reportController.getStaffWorkload);
+router.get('/staff-workload', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), authorizePermissions('reports:view'), reportController.getStaffWorkload);
 
 module.exports = router;
