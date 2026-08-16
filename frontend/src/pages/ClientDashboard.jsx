@@ -140,6 +140,7 @@ const ClientDashboard = ({ onNavigate }) => {
   // Appointment Booking Wizard State
   const [showBooking, setShowBooking] = useState(false);
   const [bookingStep, setBookingStep] = useState(1);
+  const [isBooking, setIsBooking] = useState(false);
   const [bookingData, setBookingData] = useState({
     scheduledDate: '',
     scheduledTime: '',
@@ -432,6 +433,7 @@ const ClientDashboard = ({ onNavigate }) => {
 
   const handleBookAppointment = async (e) => {
     e.preventDefault();
+    if (isBooking) return; // a second submit while the first is still in flight books twice
     setBookingError('');
     setBookingConfirmation(null);
 
@@ -441,37 +443,29 @@ const ClientDashboard = ({ onNavigate }) => {
       return;
     }
 
+    // The Self-Pay option carries the string 'none' rather than an empty value, so a bare
+    // truthiness check treated self-pay as an HMO selection. The render guard below already
+    // tests for 'none'; these two must agree.
+    const hmo = hmoProviderId && hmoProviderId !== 'none'
+      ? { providerId: parseInt(hmoProviderId, 10), approvalCode: hmoApprovalCode || null }
+      : null;
+
+    setIsBooking(true);
     try {
-      // 1. Create visit and appointment
+      // One call. The appointment, its tests and any HMO claim are written in a single
+      // transaction server-side — previously these were three sequential requests, and a failure
+      // after the first left a booking the patient had been told did not happen, holding a slot
+      // their own retry was then refused.
       const response = await api.post('/appointments', {
         patientId: parseInt(selectedProfileId, 10),
         scheduledDate,
         scheduledTime,
-        notes
+        notes,
+        testIds: testIds.map((id) => parseInt(id, 10)),
+        hmo
       });
 
       const appt = response.data.data.appointment;
-
-      // 2. Attach selected tests to visit
-      const visitTestsRes = await api.post('/tests/visit-tests', {
-        patientVisitId: appt.patient_visit_id,
-        testIds: testIds.map(id => parseInt(id, 10))
-      });
-
-      // 3. Attach HMO request if one was actually chosen. The Self-Pay option carries the string
-      // 'none' rather than an empty value, so a bare truthiness check treated self-pay as an HMO
-      // selection and filed a request with parseInt('none') — NaN — as the provider. The render
-      // guard below already tests for 'none'; these two must agree.
-      if (hmoProviderId && hmoProviderId !== 'none') {
-        const visitTests = visitTestsRes.data.data.visitTests || [];
-        if (visitTests.length > 0) {
-          await api.post('/hmo/request', {
-            hmoProviderId: parseInt(hmoProviderId, 10),
-            approvalCode: hmoApprovalCode,
-            visitTestIds: visitTests.map(vt => vt.id)
-          });
-        }
-      }
 
       setBookingConfirmation({
         referenceCode: appt.appointment_reference,
@@ -495,6 +489,12 @@ const ClientDashboard = ({ onNavigate }) => {
       if (err.response?.status === 409 && bookingData.scheduledDate) {
         fetchAvailability(bookingData.scheduledDate);
       }
+      // The booking either happened completely or not at all, but a request that failed after
+      // the server committed (dropped connection) still leaves the client unaware of it —
+      // refreshing the list means a booking that does exist shows up rather than being retried.
+      fetchAppointments();
+    } finally {
+      setIsBooking(false);
     }
   };
 
@@ -1105,8 +1105,12 @@ const ClientDashboard = ({ onNavigate }) => {
                           <Button type="button" variant="outline" onClick={() => setBookingStep(1)}>
                             &larr; Back
                           </Button>
-                          <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold">
-                            Submit Schedule Request
+                          <Button
+                            type="submit"
+                            disabled={isBooking}
+                            className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold disabled:opacity-60"
+                          >
+                            {isBooking ? 'Submitting...' : 'Submit Schedule Request'}
                           </Button>
                         </div>
                       </div>

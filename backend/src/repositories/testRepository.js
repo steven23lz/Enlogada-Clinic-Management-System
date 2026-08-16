@@ -14,6 +14,19 @@ class TestRepository {
     return result.rows;
   }
 
+  // Resolves several catalogue tests at once. The per-id loop this replaces ran one query per
+  // test inside the booking transaction, holding the slot's advisory lock for the duration.
+  async findTestsByIds(ids, client = db) {
+    const queryText = `
+      SELECT t.*, tc.name as category_name
+      FROM tests t
+      JOIN test_categories tc ON t.category_id = tc.id
+      WHERE t.id = ANY($1::int[])
+    `;
+    const result = await client.query(queryText, [ids]);
+    return result.rows;
+  }
+
   async findTestById(id) {
     const queryText = `
       SELECT t.*, tc.name as category_name
@@ -64,17 +77,21 @@ class TestRepository {
   }
 
   // Visit-Tests: Link tests to a patient visit
-  async addTestToVisit({ patientVisitId, testId, priceAtTime }) {
+  // ON CONFLICT DO NOTHING against uq_visit_tests_visit_test: a retried booking re-sending the
+  // same tests converges on the same rows instead of failing on the unique constraint. Returns
+  // undefined for a row that already existed, so callers re-read rather than trusting RETURNING.
+  async addTestToVisit({ patientVisitId, testId, priceAtTime }, client = db) {
     const queryText = `
       INSERT INTO visit_tests (patient_visit_id, test_id, price_at_time)
       VALUES ($1, $2, $3)
+      ON CONFLICT (patient_visit_id, test_id) DO NOTHING
       RETURNING *
     `;
-    const result = await db.query(queryText, [patientVisitId, testId, priceAtTime]);
+    const result = await client.query(queryText, [patientVisitId, testId, priceAtTime]);
     return result.rows[0];
   }
 
-  async findTestsByVisitId(patientVisitId) {
+  async findTestsByVisitId(patientVisitId, client = db) {
     const queryText = `
       SELECT vt.*, t.name as test_name, tc.name as category_name
       FROM visit_tests vt
@@ -83,7 +100,7 @@ class TestRepository {
       WHERE vt.patient_visit_id = $1
       ORDER BY tc.name, t.name
     `;
-    const result = await db.query(queryText, [patientVisitId]);
+    const result = await client.query(queryText, [patientVisitId]);
     return result.rows;
   }
 

@@ -10,9 +10,9 @@ const auditService = require('./auditService');
 // Validation is all-or-nothing and runs before any write. Filtering the caller's ids down to the
 // ones they own would silently under-claim: a three-test claim quietly becoming a two-test claim
 // bills the patient out of pocket for the third with nothing on screen to explain it.
-async function assertClientOwnsVisitTests(requestingUser, visitTestIds) {
+async function assertClientOwnsVisitTests(requestingUser, visitTestIds, client) {
   const uniqueIds = [...new Set(visitTestIds)];
-  const rows = await hmoRepository.findOwnershipInfoByVisitTestIds(uniqueIds);
+  const rows = await hmoRepository.findOwnershipInfoByVisitTestIds(uniqueIds, client);
 
   if (rows.length !== uniqueIds.length) {
     const error = new Error('One or more of these tests do not exist.');
@@ -43,14 +43,19 @@ async function assertClientOwnsVisitTests(requestingUser, visitTestIds) {
 }
 
 class HmoService {
-  async createRequest({ hmoProviderId, approvalCode, visitTestIds }, requestingUser) {
-    await assertClientOwnsVisitTests(requestingUser, visitTestIds);
+  async createRequest({ hmoProviderId, approvalCode, visitTestIds }, requestingUser, client = undefined) {
+    // Skipped when called from inside the booking transaction: the visit_tests were minted by
+    // that same transaction from a patient whose ownership was already asserted, and the check
+    // reads on a different connection where those rows are not yet visible.
+    if (client === undefined) {
+      await assertClientOwnsVisitTests(requestingUser, visitTestIds);
+    }
 
     return await hmoRepository.createRequestWithTests({
       hmoProviderId,
       approvalCode,
       visitTestIds: [...new Set(visitTestIds)]
-    });
+    }, client === undefined ? null : client);
   }
 
   // UI/UX Modernization Phase 12: now Admin/SuperAdmin-only (see hmoRoutes.js) — audit-logged

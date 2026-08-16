@@ -2,8 +2,11 @@ const db = require('../config/database');
 const appointmentRepository = require('../repositories/appointmentRepository');
 const visitRepository = require('../repositories/visitRepository');
 const scheduleRepository = require('../repositories/scheduleRepository');
+const testRepository = require('../repositories/testRepository');
 const patientService = require('./patientService');
 const notificationService = require('./notificationService');
+const testService = require('./testService');
+const hmoService = require('./hmoService');
 const visitService = require('./visitService');
 
 async function assertClientOwnsPatient(requestingUser, patientId) {
@@ -70,10 +73,22 @@ class AppointmentService {
     return { date, isOpen: true, slots };
   }
 
-  async createAppointment({ patientId, scheduledDate, scheduledTime, notes, createdBy, requestingUser }) {
+  // Books an appointment and everything that belongs to it in ONE transaction.
+  //
+  // The tests and the optional HMO request used to be two further HTTP calls made by the browser
+  // after this one had already committed. A failure in either left an appointment that existed
+  // while the patient was told the booking failed -- and because a non-cancelled appointment
+  // occupies its slot, that phantom then refused the patient's own retry as "no longer
+  // available". Both now live inside this transaction, so a booking either exists completely or
+  // not at all.
+  async createAppointment({
+    patientId, scheduledDate, scheduledTime, notes, createdBy, requestingUser,
+    testIds = [], hmo = null
+  }) {
     await assertClientOwnsPatient(requestingUser, patientId);
 
     const client = await db.pool.connect();
+    let committed = false;
     try {
       await client.query('BEGIN');
 
@@ -95,7 +110,33 @@ class AppointmentService {
 
       // 2. Serialize concurrent bookings for the same slot (no row exists yet to lock
       //    on an empty slot, so an advisory lock closes that race window).
+      //    Everything from here to COMMIT runs while other bookings for this slot wait, so keep
+      //    it short -- in particular, never put a file write or a network call in here.
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${scheduledDate}|${scheduledTime}`]);
+
+      // 3. Has this patient already booked this exact slot? Checked inside the lock, so it is
+      //    race-free, and BEFORE the capacity check below -- which matters at the seeded
+      //    max_concurrent_bookings of 1, where the patient's own booking would otherwise be the
+      //    thing that makes the slot look full. Returning the existing booking is what makes a
+      //    retry after a lost response safe: the patient re-enters the same patient, date and
+      //    time, which is a natural idempotency key they regenerate for free.
+      //
+      //    Keyed on the patient, not the account: one account owns several profiles, so two
+      //    dependents at the same time are two different patients and correctly both allowed.
+      const existing = await appointmentRepository.findActiveByPatientAndSlot(
+        { patientId, scheduledDate, scheduledTime }, client
+      );
+      if (existing) {
+        const visitTests = testIds.length
+          ? await testService.attachTests(existing.patient_visit_id, testIds, client)
+          : await testRepository.findTestsByVisitId(existing.patient_visit_id, client);
+
+        await client.query('COMMIT');
+        committed = true;
+
+        // No notification: staff were already told about this booking when it was made.
+        return { appointment: existing, visitTests, hmoRequest: null, alreadyBooked: true };
+      }
 
       const { rows } = await client.query(
         `SELECT COUNT(*)::int AS cnt FROM appointments WHERE scheduled_date = $1 AND scheduled_time = $2 AND status <> 'Cancelled'`,
@@ -107,7 +148,7 @@ class AppointmentService {
         throw error;
       }
 
-      // 3. Create the patient_visit record first (visit_type = 'Appointment')
+      // 4. Create the patient_visit record first (visit_type = 'Appointment')
       const queueNumber = await visitRepository.getNextQueueNumber(client);
       const visit = await visitRepository.createVisit({
         patientId,
@@ -117,7 +158,7 @@ class AppointmentService {
         createdBy
       }, client);
 
-      // 4. Create the appointment record linked to the visit
+      // 5. Create the appointment record linked to the visit
       const appointment = await appointmentRepository.createAppointment({
         patientVisitId: visit.id,
         scheduledDate,
@@ -125,11 +166,30 @@ class AppointmentService {
         notes
       }, client);
 
+      // 6. Attach the chosen tests, and the HMO claim if one was made. Order matters:
+      //    hmo_request_tests references visit_tests.
+      const visitTests = testIds.length
+        ? await testService.attachTests(visit.id, testIds, client)
+        : [];
+
+      let hmoRequest = null;
+      if (hmo && visitTests.length) {
+        hmoRequest = await hmoService.createRequest({
+          hmoProviderId: hmo.providerId,
+          approvalCode: hmo.approvalCode || null,
+          visitTestIds: visitTests.map((vt) => vt.id)
+        }, requestingUser, client);
+      }
+
       await client.query('COMMIT');
+      committed = true;
 
       // Module 18 (Notification): Receptionist owns intake/check-in for a booked appointment;
       // Admin/SuperAdmin have standing oversight (matches the existing Appointments Oversight
-      // page). Fired after COMMIT so a notification failure can never roll back a real booking.
+      // page). Fired after COMMIT so a notification failure can never roll back a real booking —
+      // which is why `committed` gates the ROLLBACK below. Before that flag existed this sat
+      // inside the try, so a throw here would have issued ROLLBACK on an already-committed
+      // transaction and reported a real booking as failed.
       await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
         title: 'New Appointment Booked',
         message: `Queue #${visit.queue_number} — ${scheduledDate} at ${scheduledTime}`,
@@ -137,11 +197,19 @@ class AppointmentService {
       });
 
       return {
-        ...appointment,
-        queue_number: visit.queue_number
+        appointment: { ...appointment, queue_number: visit.queue_number },
+        visitTests,
+        hmoRequest,
+        alreadyBooked: false
       };
     } catch (err) {
-      await client.query('ROLLBACK');
+      if (!committed) {
+        // Guarded: a ROLLBACK that itself throws (dead connection) would otherwise replace the
+        // real error with a less useful one.
+        try {
+          await client.query('ROLLBACK');
+        } catch { /* the original error is the one worth reporting */ }
+      }
       throw err;
     } finally {
       client.release();

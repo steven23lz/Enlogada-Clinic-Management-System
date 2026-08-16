@@ -47,6 +47,25 @@ class AppointmentRepository {
     return result.rows[0];
   }
 
+  // Backs the duplicate guard in appointmentService. Keyed on the patient rather than the user
+  // account, because one account owns several profiles and booking two dependents into the same
+  // slot is legitimate. appointments has no patient_id of its own, so it reaches one through the
+  // visit -- which is also why this rule cannot be a UNIQUE constraint.
+  async findActiveByPatientAndSlot({ patientId, scheduledDate, scheduledTime }, client = db) {
+    const queryText = `
+      SELECT a.*, pv.queue_number
+      FROM appointments a
+      JOIN patient_visits pv ON a.patient_visit_id = pv.id
+      WHERE pv.patient_id = $1
+        AND a.scheduled_date = $2
+        AND a.scheduled_time = $3
+        AND a.status <> 'Cancelled'
+      LIMIT 1
+    `;
+    const result = await client.query(queryText, [patientId, scheduledDate, scheduledTime]);
+    return result.rows[0];
+  }
+
   async findById(id) {
     const queryText = `
       SELECT a.*, pv.patient_id, pv.visit_type, pv.status as visit_status,

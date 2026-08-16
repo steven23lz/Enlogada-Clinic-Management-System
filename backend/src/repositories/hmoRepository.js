@@ -16,12 +16,15 @@ class HmoRepository {
   // the Service Requests screen as a claim covering fewer tests than the patient actually asked
   // for, which is a billing error rather than a cosmetic one. Same transaction idiom as
   // notificationRepository.createEventForUsers.
-  async createRequestWithTests({ hmoProviderId, approvalCode = null, visitTestIds }) {
-    const client = await db.pool.connect();
+  async createRequestWithTests({ hmoProviderId, approvalCode = null, visitTestIds }, client = null) {
+    // When the caller supplies a transaction we join it and let the caller own BEGIN/COMMIT;
+    // standalone callers still get their own transaction, so POST /hmo/request is unchanged.
+    const ownsTransaction = client === null;
+    const cx = ownsTransaction ? await db.pool.connect() : client;
     try {
-      await client.query('BEGIN');
+      if (ownsTransaction) await cx.query('BEGIN');
 
-      const requestResult = await client.query(
+      const requestResult = await cx.query(
         `INSERT INTO hmo_requests (hmo_provider_id, approval_code, status)
          VALUES ($1, $2, 'Pending')
          RETURNING *`,
@@ -29,20 +32,20 @@ class HmoRepository {
       );
       const request = requestResult.rows[0];
 
-      const testsResult = await client.query(
+      const testsResult = await cx.query(
         `INSERT INTO hmo_request_tests (hmo_request_id, visit_test_id)
          SELECT $1, unnest($2::int[])
          RETURNING *`,
         [request.id, visitTestIds]
       );
 
-      await client.query('COMMIT');
+      if (ownsTransaction) await cx.query('COMMIT');
       return { ...request, tests: testsResult.rows };
     } catch (err) {
-      await client.query('ROLLBACK');
+      if (ownsTransaction) await cx.query('ROLLBACK');
       throw err;
     } finally {
-      client.release();
+      if (ownsTransaction) cx.release();
     }
   }
 
@@ -52,7 +55,7 @@ class HmoRepository {
   // registered at the front desk has no web account — so the comparison is deliberately left to
   // the caller in JS rather than filtered in SQL, where NULL would compare as UNKNOWN and drop
   // the row silently instead of denying it.
-  async findOwnershipInfoByVisitTestIds(visitTestIds) {
+  async findOwnershipInfoByVisitTestIds(visitTestIds, client = db) {
     const queryText = `
       SELECT vt.id AS visit_test_id,
              pv.id AS visit_id,
@@ -62,7 +65,7 @@ class HmoRepository {
       JOIN patients p ON pv.patient_id = p.id
       WHERE vt.id = ANY($1::int[])
     `;
-    const result = await db.query(queryText, [visitTestIds]);
+    const result = await client.query(queryText, [visitTestIds]);
     return result.rows;
   }
 
