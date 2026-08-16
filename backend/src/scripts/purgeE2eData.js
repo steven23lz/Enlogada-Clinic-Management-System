@@ -20,6 +20,8 @@
  *   node src/scripts/purgeE2eData.js --since=2026-08-14T09:00:00.000Z
  *   node src/scripts/purgeE2eData.js --since=... --dry-run
  */
+const fs = require('fs');
+const path = require('path');
 const db = require('../config/database');
 const logger = require('../config/logger');
 
@@ -28,6 +30,54 @@ const E2E_EMAIL_PATTERN = '%@enlogada-e2e.test';
 function arg(name) {
   const raw = process.argv.find((a) => a.startsWith(`--${name}=`));
   return raw ? raw.split('=')[1] : null;
+}
+
+/**
+ * Deletes upload files the run left behind, once their rows are gone.
+ *
+ * Every DELETE above removes rows that point at files on disk — `test_results.file_path` and
+ * `hmo_requests.card_file_path` — and nothing was removing the files themselves. That went
+ * unnoticed while the only spec touching uploads was asserting a *rejection*, and became a real
+ * leak the moment a spec started attaching an HMO card on every run: the claim row is purged, the
+ * image is not, and the directory grows by a few files per run forever. Same shape as the
+ * notification fan-out, just quieter, because nothing ever lists this directory.
+ *
+ * Two conditions, both required. Nothing in the database references it — so a file belonging to a
+ * surviving record is never touched — and it was written inside the run window, so a demo dataset
+ * seeded beforehand is out of scope even if a row is later removed by hand.
+ *
+ * The mtime test is what lets this skip the 30-minute grace period that resetDemoData's equivalent
+ * sweep needs. That one runs against a live system where a card can legitimately be on disk before
+ * the transaction referencing it commits; this one runs after every test has finished, so an
+ * unreferenced file from inside the window has nothing still coming for it.
+ */
+async function purgeOrphanedUploads(since, dryRun) {
+  const targets = [
+    { dir: 'hmo-cards', sql: 'SELECT card_file_path AS p FROM hmo_requests WHERE card_file_path IS NOT NULL' },
+    { dir: 'results', sql: 'SELECT file_path AS p FROM test_results WHERE file_path IS NOT NULL' },
+  ];
+  const cutoff = Date.parse(since);
+  let removed = 0;
+
+  for (const { dir, sql } of targets) {
+    const root = path.resolve(__dirname, '..', '..', 'uploads', dir);
+    if (!fs.existsSync(root)) continue;
+
+    const referenced = new Set((await db.query(sql)).rows.map((r) => path.basename(r.p)));
+    for (const name of fs.readdirSync(root)) {
+      if (referenced.has(name)) continue;
+      const full = path.join(root, name);
+      try {
+        if (fs.statSync(full).mtimeMs < cutoff) continue; // predates the run; not ours to delete
+        if (!dryRun) fs.unlinkSync(full);
+        removed += 1;
+      } catch (err) {
+        logger.warn(`  could not remove orphaned upload ${dir}/${name}: ${err.message}`);
+      }
+    }
+  }
+
+  if (removed) logger.info(`E2E purge: ${removed} orphaned upload file(s)${dryRun ? ' (DRY RUN)' : ''}`);
 }
 
 async function main() {
@@ -66,8 +116,16 @@ async function main() {
   const userIds = (await db.query('SELECT id FROM users WHERE email LIKE $1', [E2E_EMAIL_PATTERN])).rows.map((r) => r.id);
 
   logger.info(`E2E purge: ${visitIds.length} visit(s), ${userIds.length} throwaway account(s)${dryRun ? ' (DRY RUN)' : ''}`);
-  if (dryRun || (visitIds.length === 0 && userIds.length === 0)) {
-    if (!dryRun) logger.info('Nothing to purge.');
+  if (dryRun) {
+    await purgeOrphanedUploads(since, true);
+    process.exit(0);
+  }
+  if (visitIds.length === 0 && userIds.length === 0) {
+    // Still sweep the uploads. A file can be stranded with no row to match on: multer writes the
+    // card before the booking transaction opens, so a booking the run deliberately made fail
+    // leaves one behind with nothing in the database pointing at it.
+    await purgeOrphanedUploads(since, false);
+    logger.info('Nothing to purge.');
     process.exit(0);
   }
 
@@ -120,6 +178,9 @@ async function main() {
 
   // Audit entries written by the run, for the same reason: the actor is a seeded staff account.
   await db.query('DELETE FROM audit_log WHERE created_at >= $1::timestamptz', [since]);
+
+  // Last, so it sees the post-delete state: a file is orphaned only once its row is gone.
+  await purgeOrphanedUploads(since, false);
 
   logger.info('E2E purge complete.');
   process.exit(0);
