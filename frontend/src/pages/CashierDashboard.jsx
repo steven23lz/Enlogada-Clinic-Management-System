@@ -23,6 +23,9 @@ import api from '../config/api';
 import { todayStr } from '../lib/date';
 import { formatCurrency } from '../lib/currency';
 import { toastError } from '../lib/toast';
+import { useAuth } from '../contexts/AuthContext';
+// Aliased: `Receipt` is already taken by the lucide icon used in this file's headers.
+import ReceiptDocument from '../components/Receipt';
 import {
   Receipt,
   Wallet,
@@ -64,6 +67,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
   // back to the primary billing queue view.
   const view = VALID_VIEWS.includes(activeNav) ? activeNav : 'cashier-queue';
+  // Who is at the till. The receipt names them: a receipt nobody can be asked about is not much
+  // use when a patient comes back three weeks later disputing a charge.
+  const { user } = useAuth();
   const [activeVisits, setActiveVisits] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -118,6 +124,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [discountIdNumber, setDiscountIdNumber] = useState('');
   const [applyingDiscount, setApplyingDiscount] = useState(false);
   const [discountError, setDiscountError] = useState('');
+
+  // Cash tendered and change are on the receipt now, and they only exist at the moment of
+  // sale — a reprint has no record of what was handed over. null therefore means "this is a
+  // reprint", which is also what stamps the duplicate copy.
+  const [receiptTender, setReceiptTender] = useState(null);
 
   const [paymentError, setPaymentError] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState(null);
@@ -253,6 +264,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // beside another patient's queue number, which is the state the wrong-amount charge came from.
   const handleReprintReceipt = async (transaction) => {
     setPaymentSuccess(transaction);
+    setReceiptTender(null);
     setReceiptBill({
       patientName: `${transaction.patient_first_name} ${transaction.patient_last_name}`,
       items: [], // present from the start so the itemised block can never map over undefined
@@ -264,6 +276,23 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     } catch (err) {
       console.error('Failed to load itemized bill for reprint:', err);
       toastError('Could not load the itemized test list for this receipt.');
+    }
+  };
+
+  /**
+   * Prints the receipt at 80mm rather than A4.
+   *
+   * The page size is chosen by a body class (see the @page rule in index.css) because @page
+   * cannot be scoped to an element — it applies to the whole printed document. Set it, print,
+   * take it off again, so printing a diagnostic report afterwards still gets a normal sheet.
+   * The class is removed in a finally so an aborted print dialog cannot leave it stuck on.
+   */
+  const printReceipt = () => {
+    document.body.classList.add('printing-receipt');
+    try {
+      window.print();
+    } finally {
+      document.body.classList.remove('printing-receipt');
     }
   };
 
@@ -429,6 +458,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       // front-desk check-in, and the backend handles that ordering either way.
       setShowPaymentConfirm(false);
       setPaymentSuccess(payment);
+      setReceiptTender(
+        paymentMethod === 'Cash'
+          ? { tendered: parseFloat(amountTendered || 0), change: calculateChange() }
+          : { tendered: null, change: null }
+      );
       // Snapshot the bill for the receipt. The modal reads `receiptBill`, so it keeps showing
       // what was actually charged even once the panel moves on to the next patient.
       setReceiptBill(billDetails);
@@ -607,25 +641,55 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
           {/* Right Panel: Invoice & Cashier POS Terminal */}
           <div className="lg:col-span-7">
-            <Panel className="p-6">
+            <Panel className="overflow-hidden">
               {selectedVisit && billDetails ? (
-                <div className="space-y-6">
-                  
-                  {/* Header Patient Summary */}
-                  <div className="border-b border-[#e6ebf1] pb-4 flex justify-between items-start">
-                    <div>
-                      <span className="field-label">Official Billing Terminal</span>
-                      <h2 className="text-lg font-bold text-slate-900 m-0">{billDetails.patientName}</h2>
-                      <span className="text-xs text-gray-500">Ticket #: {selectedVisit.queue_number} &bull; Type: {selectedVisit.patient_type_name}</span>
+                <div>
+                  {/* Who, how much, and the button — pinned to the top of the terminal.
+                      ── Why the top and not the bottom ──────────────────────────────────────────
+                      The primary action used to be the last element of a long column, which on a
+                      900px screen put it 4px below the fold: completing a sale meant scrolling
+                      past the bill to find the button, by which point the figure being charged
+                      was off screen. The obvious fix — a sticky bar at the bottom — does not
+                      work, and it is worth writing down why: a `position: sticky` element is
+                      constrained by its containing block, and one that is already the LAST child
+                      has no space beneath it to slide into, so it never moves. Measured at
+                      y=904 against a 900px viewport before this changed.
+                      A sticky header has no such problem, and for a till it is arguably better
+                      anyway: the amount stays in front of the cashier the whole time they are
+                      picking a method and counting cash, rather than reappearing at the end.
+                      The button lives outside the form and reaches it by `form="checkout-form"`,
+                      so submit behaviour and Enter-to-pay are unchanged. */}
+                  <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-[#e6ebf1] bg-white/95 px-6 py-4 backdrop-blur-sm">
+                    <div className="min-w-0">
+                      <span className="field-label">Now billing</span>
+                      <h2 className="m-0 truncate text-[15px] font-bold tracking-tight text-slate-900">
+                        {billDetails.patientName}
+                      </h2>
+                      <span className="text-fine text-slate-500">
+                        Ticket {selectedVisit.queue_number} &bull; {selectedVisit.patient_type_name}
+                      </span>
                     </div>
-                    <Badge className="bg-brand-500 text-white font-extrabold px-3 py-1 text-xs">
-                      READY FOR PAYMENT
-                    </Badge>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <span className="block text-micro font-semibold uppercase tracking-[0.1em] text-slate-500">
+                          Amount due
+                        </span>
+                        <span className="block text-xl font-extrabold leading-none tracking-tight tabular-nums text-slate-900">
+                          {formatCurrency(billDetails.totalAmount)}
+                        </span>
+                      </div>
+                      <Button type="submit" form="checkout-form" size="lg">
+                        <CheckCircle className="h-4 w-4" />
+                        Take Payment
+                      </Button>
+                    </div>
                   </div>
+
+                  <div className="space-y-6 p-6">
 
                   {/* Itemized Tests Breakdown Table */}
                   <div className="space-y-2">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Itemized Clinical Services</span>
+                    <span className="field-label">Itemised services</span>
                     <div className="border border-[#e6ebf1] rounded-xl overflow-hidden">
                       <Table>
                         <TableHeader sticky>
@@ -705,9 +769,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       the ID against the person in front of them, and the total has to update
                       before any money is taken. */}
                   <div className="bg-white p-4 rounded-xl border border-gray-200/80 space-y-2.5">
-                    <span className="text-meta font-extrabold text-slate-400 uppercase tracking-widest">
-                      Statutory / Other Discount
-                    </span>
+                    <span className="field-label">Statutory / other discount</span>
                     {billDetails.discount ? (
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2 text-xs">
@@ -763,7 +825,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   </div>
 
                   {/* Payment Processor Form */}
-                  <form onSubmit={handleProcessPayment} className="space-y-4">
+                  {/* id, because the Take Payment button lives in the pinned header above and
+                      reaches this form by `form="checkout-form"`. */}
+                  <form id="checkout-form" onSubmit={handleProcessPayment} className="space-y-4">
                     {paymentError && (
                       <div role="alert" className="alert alert-error">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -772,17 +836,17 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     )}
 
                     <div className="space-y-2">
-                      <label className="field-label">Select Payment Method</label>
+                      <label className="field-label">Payment method</label>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {['Cash', 'GCash', 'PayMaya', 'Bank'].map(method => (
                           <button
                             key={method}
                             type="button"
                             onClick={() => setPaymentMethod(method)}
-                            className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                            className={`cursor-pointer rounded-lg border px-3 py-2 text-fine font-semibold transition-colors ${
                               paymentMethod === method
-                                ? 'bg-brand-500 text-white border-brand-500 shadow-sm'
-                                : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                ? 'border-brand-500 bg-brand-500 text-white'
+                                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                             }`}
                           >
                             {method}
@@ -815,7 +879,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       <div className="space-y-2 bg-white p-3 rounded-xl border border-gray-200">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="text-meta font-bold text-gray-500 uppercase">Cash Tendered (₱)</label>
+                            <label className="field-label">Cash tendered</label>
                             <Input
                               type="number"
                               step="0.01"
@@ -856,7 +920,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       </div>
                     ) : (
                       <div className="space-y-1">
-                        <label className="field-label">Transaction Reference / Ref Number</label>
+                        <label className="field-label">Transaction reference</label>
                         <Input
                           placeholder={`Enter ${paymentMethod} reference code`}
                           value={referenceNumber}
@@ -867,14 +931,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       </div>
                     )}
 
-                    <Button
-                      type="submit"
-                      className="w-full font-extrabold text-sm py-3 rounded-xl shadow-md cursor-pointer transition-all"
-                    >
-                      Process Checkout Payment & Issue Official Receipt
-                    </Button>
                   </form>
-
+                  </div>
                 </div>
               ) : (
                 /* Idle state. This panel is the largest area on the busiest screen in the clinic
@@ -1123,110 +1181,33 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
           error={paymentError}
         />
 
-        {/* Printable Official Receipt Modal Generator */}
+        {/* Printable receipt. The document itself lives in components/Receipt.jsx so the point of
+            sale and a later reprint cannot drift into showing different things. */}
         <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-sm">
             {paymentSuccess && receiptBill && (
-              /* print-area is what makes "Print Receipt" below produce anything at all. The rule
-                 in index.css hides `body *` and reveals only .print-area, and this modal never
-                 carried the class — so the button printed a completely blank sheet, on the one
-                 document the patient actually leaves with. */
-              <div className="space-y-4 print-area">
-                <div className="text-center border-b border-gray-200 pb-3">
-                  <h2 className="text-base font-extrabold text-slate-900 uppercase m-0">ENLOGADA CLINIC</h2>
-                  <p className="text-meta text-gray-500 uppercase font-bold m-0">Official Payment Receipt</p>
-                  <span className="text-fine font-extrabold text-brand-600 block mt-1">Receipt #: {paymentSuccess.receipt_number || `OR-${paymentSuccess.id}`}</span>
-                </div>
-
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 font-medium">Patient:</span>
-                    <span className="font-bold text-slate-900">{receiptBill.patientName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 font-medium">Payment Mode:</span>
-                    <span className="font-bold text-slate-900">{paymentSuccess.payment_method}</span>
-                  </div>
-                </div>
-
-                {receiptBill.items && receiptBill.items.length > 0 && (
-                  <div className="space-y-1.5 py-3 border-t border-b border-[#e6ebf1]">
-                    <span className="field-label">Items</span>
-                    {receiptBill.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between text-xs">
-                        <span className="text-gray-600">{item.name}</span>
-                        <span className="font-semibold text-slate-800">{formatCurrency(item.price)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* A statutory discount must appear on the receipt by name, rate and ID — the
-                    receipt is the patient's evidence that the mandated deduction was given, and
-                    the clinic's evidence for claiming it. Read from the payment's own snapshot
-                    rather than the live catalogue, so a reprint years later shows what was
-                    actually granted. */}
-                {parseFloat(paymentSuccess.discount_amount || 0) > 0 && (
-                  <div className="space-y-1 pb-2 border-b border-[#e6ebf1]">
-                    {/* Reconciles from the payment row alone:
-                        amount + discount_amount + vat_amount = the VAT-inclusive price. */}
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500 font-medium">Gross Amount:</span>
-                      <span className="font-semibold text-slate-800">
-                        {formatCurrency(
-                          parseFloat(paymentSuccess.amount) +
-                            parseFloat(paymentSuccess.discount_amount) +
-                            parseFloat(paymentSuccess.vat_amount || 0)
-                        )}
-                      </span>
-                    </div>
-                    {parseFloat(paymentSuccess.vat_amount || 0) > 0 && (
-                      <>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-500 font-medium">Less VAT (12%):</span>
-                          <span className="font-semibold text-emerald-600">
-                            - {formatCurrency(paymentSuccess.vat_amount)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-500 font-medium">VAT-Exempt Sale:</span>
-                          <span className="font-semibold text-slate-800">
-                            {formatCurrency(
-                              parseFloat(paymentSuccess.amount) + parseFloat(paymentSuccess.discount_amount)
-                            )}
-                          </span>
-                        </div>
-                      </>
-                    )}
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500 font-medium">
-                        {paymentSuccess.discount_type_name} Discount (20%):
-                      </span>
-                      <span className="font-semibold text-emerald-600">
-                        - {formatCurrency(paymentSuccess.discount_amount)}
-                      </span>
-                    </div>
-                    {paymentSuccess.discount_id_number && (
-                      <div className="flex justify-between text-fine">
-                        <span className="text-gray-400">ID Presented:</span>
-                        <span className="text-gray-500 font-semibold">{paymentSuccess.discount_id_number}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 font-medium">Amount Paid:</span>
-                  <span className="font-extrabold text-brand-600 text-sm">{formatCurrency(paymentSuccess.amount)}</span>
-                </div>
-
-                <div className="pt-3 border-t border-[#e6ebf1] flex justify-end space-x-2">
-                  <Button onClick={() => window.print()} className="bg-brand-500 text-white font-bold text-xs flex items-center space-x-1">
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Print Receipt</span>
+              <>
+                <ReceiptDocument
+                  payment={paymentSuccess}
+                  bill={receiptBill}
+                  cashier={user ? `${user.firstName} ${user.lastName}` : undefined}
+                  tendered={receiptTender?.tendered}
+                  change={receiptTender?.change}
+                  reprint={receiptTender == null}
+                />
+                {/* no-print: the print rule reveals every descendant of .print-area, so a toolbar
+                    inside it comes out of the printer with the receipt. That is exactly what the
+                    previous version did — the Print button printed itself. */}
+                <div className="no-print flex justify-end gap-2 border-t border-[#e6ebf1] pt-3">
+                  <Button variant="outline" onClick={() => setShowReceiptModal(false)}>
+                    Close
+                  </Button>
+                  <Button onClick={printReceipt}>
+                    <Printer className="h-3.5 w-3.5" />
+                    Print Receipt
                   </Button>
                 </div>
-              </div>
+              </>
             )}
           </DialogContent>
         </Dialog>

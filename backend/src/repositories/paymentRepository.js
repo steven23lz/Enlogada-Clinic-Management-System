@@ -75,6 +75,9 @@ class PaymentRepository {
   async getBillingSummary(patientVisitId) {
     const visitQuery = `
       SELECT pv.id, p.first_name, p.last_name, pt.name as patient_type_name,
+             -- Printed on the receipt: the ticket number is what the patient was called by, and
+             -- the thing that ties the paper in their hand back to the queue slip.
+             pv.queue_number,
              pv.discount_id_number,
              dt.id   as discount_type_id,
              dt.name as discount_name,

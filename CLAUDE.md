@@ -176,6 +176,16 @@ and the copies had drifted apart:
 | `empty-state.jsx` | what a screen shows when there is nothing. `tone="error"` looks *deliberately* unlike empty — a failed request and a quiet morning must never be confusable |
 | `.field-label` / `.alert` | two component classes in `index.css`, for the form label and the inline alert. Leaf elements, so a class is the right unit |
 
+- **The printed receipt is `components/Receipt.jsx`**, and the clinic's own identity is
+  `lib/clinic.js`. Two rules. First, anything inside `.print-area` prints, including a toolbar
+  that happens to be nested there — the old receipt's Print button printed itself; mark chrome
+  `no-print`. Second, `lib/clinic.js` leaves `tin` / `businessPermit` blank unless configured
+  (`VITE_CLINIC_TIN`), and the receipt then says it is *not* a BIR-registered Official Receipt.
+  Do not invent those numbers to make it look official — a patient may file it for reimbursement.
+- **A sticky action bar cannot be the last child.** `position: sticky` is constrained by its
+  containing block, so an element already at the end of one has no space to slide into and never
+  moves. The cashier's Take Payment button was measured at y=904 on a 900px viewport that way. It
+  is a pinned *header* now, with the button outside the form reaching it via `form="checkout-form"`.
 - `SidebarLayout.jsx` is the shared shell for staff/admin consoles. Its nav column scrolls
   independently and its department groups collapse (remembered in `localStorage`, but the group
   holding the current screen always opens). The top bar is a **breadcrumb**, not a second page

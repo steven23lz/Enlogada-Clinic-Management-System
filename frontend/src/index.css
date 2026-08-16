@@ -367,4 +367,31 @@ h1, h2, h3, h4 {
     left: 0;
     width: 100%;
   }
+
+  /* Anything explicitly marked no-print stays hidden even inside a .print-area.
+     `visibility: visible` on `.print-area *` above is greedy — it reveals every descendant,
+     including a toolbar that happens to sit inside the printable block. The receipt's Print
+     button was inside its own print area and duly printed itself. */
+  .no-print,
+  .no-print * {
+    visibility: hidden !important;
+    display: none !important;
+  }
+}
+
+/* A counter receipt goes to an 80mm thermal roll, not A4. Without this the receipt prints as one
+   narrow column stranded in the top-left corner of a portrait sheet, and the clinic wastes a page
+   per transaction. Scoped to a body class so it only applies while a receipt is the thing being
+   printed — a diagnostic report still wants a normal page. */
+@media print {
+  body.printing-receipt {
+    margin: 0;
+  }
+}
+@page receipt {
+  size: 80mm auto;
+  margin: 4mm;
+}
+body.printing-receipt {
+  page: receipt;
 }

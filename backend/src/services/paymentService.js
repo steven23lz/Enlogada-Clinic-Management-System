@@ -52,6 +52,10 @@ class PaymentService {
     return {
       visitId,
       patientName: `${visitInfo.first_name} ${visitInfo.last_name}`,
+      // The ticket the patient was called by. On the printed receipt it is what ties the piece of
+      // paper back to the queue slip they were holding, which is how a counter dispute actually
+      // gets resolved — the receipt number means nothing to them, the ticket number does.
+      queueNumber: visitInfo.queue_number,
       patientType: visitInfo.patient_type_name,
       items: formattedItems,
       subtotal: subtotal.toFixed(2),
