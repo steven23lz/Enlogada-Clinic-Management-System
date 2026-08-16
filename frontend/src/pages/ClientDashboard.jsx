@@ -458,8 +458,11 @@ const ClientDashboard = ({ onNavigate }) => {
         testIds: testIds.map(id => parseInt(id, 10))
       });
 
-      // 3. Attach HMO request if selected
-      if (hmoProviderId) {
+      // 3. Attach HMO request if one was actually chosen. The Self-Pay option carries the string
+      // 'none' rather than an empty value, so a bare truthiness check treated self-pay as an HMO
+      // selection and filed a request with parseInt('none') — NaN — as the provider. The render
+      // guard below already tests for 'none'; these two must agree.
+      if (hmoProviderId && hmoProviderId !== 'none') {
         const visitTests = visitTestsRes.data.data.visitTests || [];
         if (visitTests.length > 0) {
           await api.post('/hmo/request', {

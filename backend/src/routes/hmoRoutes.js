@@ -16,8 +16,13 @@ router.put('/providers/:id', verifyToken, authorizeRoles('SuperAdmin', 'Admin'),
 // pending requests; approval was only reachable if you already knew a specific request ID.
 router.get('/requests', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier'), hmoController.getAllRequests);
 
-// Create an HMO request (Receptionist logs the manual HMO verification)
-router.post('/request', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist'), hmoController.createRequest);
+// Create an HMO request — Reception logs the manual HMO verification at the desk, and a Client
+// states their own coverage while booking online. Client was missing here since this line was
+// written, so every online booking that selected an HMO provider failed with a 403 after its
+// appointment had already been created. Ownership is enforced in hmoService: a Client may only
+// file against tests belonging to their own patient profiles. Either way the request starts
+// Pending — stating a claim is not granting it, and only Admin/SuperAdmin can approve.
+router.post('/request', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), hmoController.createRequest);
 
 // UI/UX Modernization Phase 12: approval is now Admin/SuperAdmin-only — Receptionist could
 // previously approve their own request (the same role that creates it), which combined with

@@ -12,7 +12,10 @@ class HmoController {
         });
       }
 
-      const request = await hmoService.createRequest({ hmoProviderId, approvalCode, visitTestIds });
+      const request = await hmoService.createRequest(
+        { hmoProviderId, approvalCode, visitTestIds },
+        req.user
+      );
       return res.status(201).json({
         status: 'success',
         message: 'HMO request logged successfully.',

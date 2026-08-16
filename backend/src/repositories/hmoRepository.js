@@ -4,18 +4,66 @@ class HmoRepository {
   // UI/UX Modernization Phase 12: previously a caller-supplied approvalCode auto-approved the
   // request in this same call (status/approved_date set from the code's mere presence) — the
   // create step is Reception logging what the patient's HMO card/LOA shows, not an actual
-  // verification, so a request always starts Pending now regardless of whether a code was typed.
+  // verification, so a request always starts Pending regardless of whether a code was typed.
   // approval_code is still stored (Admin sees exactly what was submitted when reviewing), it just
   // no longer self-approves. Only hmoRepository.approveRequest (Admin/SuperAdmin-only route, see
-  // hmoRoutes.js) can move a request to Approved.
-  async createRequest({ hmoProviderId, approvalCode = null }) {
+  // hmoRoutes.js) can move a request to Approved. That matters more now that Clients can file
+  // their own requests from the booking flow: a client states a claim, staff still grant it.
+  //
+  // The request and its linked tests are written together. Previously the parent row was
+  // inserted first and each link appended in a loop from the service, so a failure partway
+  // through left an orphaned hmo_requests row carrying a partial test set — visible to Admin on
+  // the Service Requests screen as a claim covering fewer tests than the patient actually asked
+  // for, which is a billing error rather than a cosmetic one. Same transaction idiom as
+  // notificationRepository.createEventForUsers.
+  async createRequestWithTests({ hmoProviderId, approvalCode = null, visitTestIds }) {
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const requestResult = await client.query(
+        `INSERT INTO hmo_requests (hmo_provider_id, approval_code, status)
+         VALUES ($1, $2, 'Pending')
+         RETURNING *`,
+        [hmoProviderId, approvalCode]
+      );
+      const request = requestResult.rows[0];
+
+      const testsResult = await client.query(
+        `INSERT INTO hmo_request_tests (hmo_request_id, visit_test_id)
+         SELECT $1, unnest($2::int[])
+         RETURNING *`,
+        [request.id, visitTestIds]
+      );
+
+      await client.query('COMMIT');
+      return { ...request, tests: testsResult.rows };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Resolves a set of visit_test ids to the user account that owns each one, for the ownership
+  // check in hmoService. Returns one row per id that actually exists, so a caller can detect
+  // unknown ids by what is missing from the result. patients.user_id is nullable — a walk-in
+  // registered at the front desk has no web account — so the comparison is deliberately left to
+  // the caller in JS rather than filtered in SQL, where NULL would compare as UNKNOWN and drop
+  // the row silently instead of denying it.
+  async findOwnershipInfoByVisitTestIds(visitTestIds) {
     const queryText = `
-      INSERT INTO hmo_requests (hmo_provider_id, approval_code, status)
-      VALUES ($1, $2, 'Pending')
-      RETURNING *
+      SELECT vt.id AS visit_test_id,
+             pv.id AS visit_id,
+             p.user_id AS patient_user_id
+      FROM visit_tests vt
+      JOIN patient_visits pv ON vt.patient_visit_id = pv.id
+      JOIN patients p ON pv.patient_id = p.id
+      WHERE vt.id = ANY($1::int[])
     `;
-    const result = await db.query(queryText, [hmoProviderId, approvalCode]);
-    return result.rows[0];
+    const result = await db.query(queryText, [visitTestIds]);
+    return result.rows;
   }
 
   async findRequestById(id) {
@@ -48,16 +96,6 @@ class HmoRepository {
       RETURNING *
     `;
     const result = await db.query(queryText, [status, id]);
-    return result.rows[0];
-  }
-
-  async addTestToRequest({ hmoRequestId, visitTestId }) {
-    const queryText = `
-      INSERT INTO hmo_request_tests (hmo_request_id, visit_test_id)
-      VALUES ($1, $2)
-      RETURNING *
-    `;
-    const result = await db.query(queryText, [hmoRequestId, visitTestId]);
     return result.rows[0];
   }
 
