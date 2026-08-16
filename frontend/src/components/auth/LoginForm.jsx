@@ -3,7 +3,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
 import { isGoogleAuthConfigured } from '../../config/googleAuth';
 import { Button } from '../ui/button';
-import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '../ui/card';
 import { Input } from '../ui/input';
 import { PasswordInput } from '../ui/password-input';
 import { AlertCircle, ArrowRight } from 'lucide-react';
@@ -81,15 +80,15 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
   };
 
   return (
-    <Card className="overflow-hidden rounded-2xl border-[#e6ebf1] shadow-raised">
-      <CardHeader className="space-y-1 px-6 pb-2 pt-6">
-        <CardTitle className="text-xl font-bold tracking-tight text-slate-900">Welcome Back</CardTitle>
-        <CardDescription className="text-[13px] text-slate-500">
+    <div>
+      <div className="space-y-1">
+        <h1 className="m-0 text-2xl font-bold tracking-tight text-slate-900">Welcome Back</h1>
+        <p className="m-0 text-[13px] leading-relaxed text-slate-500">
           Sign in to your dashboard to manage records.
-        </CardDescription>
-      </CardHeader>
+        </p>
+      </div>
 
-      <CardContent className="px-6 py-4 space-y-4">
+      <div className="mt-6 space-y-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div role="alert" className="alert alert-error">
@@ -99,20 +98,20 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
           )}
 
           <div className="space-y-1.5">
-            <label className="text-fine font-semibold text-slate-700">Email Address</label>
+            <label className="mb-1.5 block text-fine font-semibold text-slate-700">Email Address</label>
             <Input
               type="email"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-10"
+              className="h-11"
               disabled={submitting}
             />
           </div>
 
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
-              <label className="text-fine font-semibold text-slate-700">Password</label>
+              <label className="mb-1.5 block text-fine font-semibold text-slate-700">Password</label>
               <button
                 type="button"
                 onClick={() => onNavigate('forgot-password')}
@@ -125,7 +124,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-10"
+              className="h-11"
               disabled={submitting}
             />
           </div>
@@ -201,20 +200,18 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
             </span>
           </div>
         )}
-      </CardContent>
+      </div>
 
-      <CardFooter className="flex justify-center border-t border-[#e6ebf1] py-4 bg-slate-50/70">
-        <p className="text-xs text-gray-600 m-0">
-          New to Enlogada?{' '}
-          <button
-            onClick={onSwitchToRegister}
-            className="text-brand-600 font-bold hover:underline bg-transparent border-0 p-0 cursor-pointer"
-          >
-            Create an account
-          </button>
-        </p>
-      </CardFooter>
-    </Card>
+      <p className="mt-6 text-center text-[13px] text-slate-500">
+        New to Enlogada?{' '}
+        <button
+          onClick={onSwitchToRegister}
+          className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-brand-600 hover:underline"
+        >
+          Create an account
+        </button>
+      </p>
+    </div>
   );
 };
 

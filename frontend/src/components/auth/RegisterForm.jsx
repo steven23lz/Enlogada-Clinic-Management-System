@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/button';
-import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '../ui/card';
 import { Input } from '../ui/input';
 import { PasswordInput } from '../ui/password-input';
 import { AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
@@ -60,15 +59,15 @@ const RegisterForm = ({ onSwitchToLogin }) => {
   };
 
   return (
-    <Card className="overflow-hidden rounded-2xl border-[#e6ebf1] shadow-raised">
-      <CardHeader className="space-y-1 px-6 pb-2 pt-6">
-        <CardTitle className="text-xl font-bold tracking-tight text-slate-900">Create an Account</CardTitle>
-        <CardDescription className="text-[13px] text-slate-500">
+    <div>
+      <div className="space-y-1">
+        <h1 className="m-0 text-2xl font-bold tracking-tight text-slate-900">Create an Account</h1>
+        <p className="m-0 text-[13px] leading-relaxed text-slate-500">
           Register to access your clinic account
-        </CardDescription>
-      </CardHeader>
+        </p>
+      </div>
 
-      <CardContent className="px-6 py-4 space-y-4">
+      <div className="mt-6 space-y-4">
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {error && (
             <div role="alert" className="alert alert-error">
@@ -86,7 +85,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-fine font-semibold text-slate-700">First Name</label>
+              <label className="mb-1.5 block text-fine font-semibold text-slate-700">First Name</label>
               <Input
                 type="text"
                 placeholder="First name"
@@ -97,7 +96,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-fine font-semibold text-slate-700">Last Name</label>
+              <label className="mb-1.5 block text-fine font-semibold text-slate-700">Last Name</label>
               <Input
                 type="text"
                 placeholder="Last name"
@@ -110,7 +109,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           </div>
 
           <div className="space-y-1">
-            <label className="text-fine font-semibold text-slate-700">Email Address</label>
+            <label className="mb-1.5 block text-fine font-semibold text-slate-700">Email Address</label>
             <Input
               type="email"
               placeholder="Enter your email"
@@ -122,7 +121,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           </div>
 
           <div className="space-y-1">
-            <label className="text-fine font-semibold text-slate-700">Contact Number</label>
+            <label className="mb-1.5 block text-fine font-semibold text-slate-700">Contact Number</label>
             <Input
               type="text"
               placeholder="09171234567"
@@ -135,7 +134,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-fine font-semibold text-slate-700">Password</label>
+              <label className="mb-1.5 block text-fine font-semibold text-slate-700">Password</label>
               <PasswordInput
                 placeholder="Create a password"
                 value={formData.password}
@@ -145,7 +144,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-fine font-semibold text-slate-700">Confirm Password</label>
+              <label className="mb-1.5 block text-fine font-semibold text-slate-700">Confirm Password</label>
               <PasswordInput
                 placeholder="Confirm your password"
                 value={formData.confirmPassword}
@@ -165,20 +164,18 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             <ArrowRight className="w-4 h-4" />
           </Button>
         </form>
-      </CardContent>
+      </div>
 
-      <CardFooter className="flex justify-center border-t border-[#e6ebf1] py-4 bg-slate-50/70">
-        <p className="text-xs text-gray-600 m-0">
-          Already have an account?{' '}
-          <button
-            onClick={onSwitchToLogin}
-            className="text-brand-600 font-bold hover:underline bg-transparent border-0 p-0 cursor-pointer"
-          >
-            Sign in
-          </button>
-        </p>
-      </CardFooter>
-    </Card>
+      <p className="mt-6 text-center text-[13px] text-slate-500">
+        Already have an account?{' '}
+        <button
+          onClick={onSwitchToLogin}
+          className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-brand-600 hover:underline"
+        >
+          Sign in
+        </button>
+      </p>
+    </div>
   );
 };
 
