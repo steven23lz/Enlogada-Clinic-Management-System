@@ -94,7 +94,7 @@ const AvatarUpload = () => {
   return (
     <div className="flex items-center space-x-4">
       <div className="relative w-16 h-16 flex-shrink-0">
-        <div className="w-16 h-16 rounded-full bg-[#769046] text-white flex items-center justify-center font-bold text-xl overflow-hidden border-2 border-white shadow-md">
+        <div className="w-16 h-16 rounded-full bg-brand-500 text-white flex items-center justify-center font-bold text-xl overflow-hidden border-2 border-white shadow-md">
           {objectUrl ? (
             <img src={objectUrl} alt="Profile" className="w-full h-full object-cover" />
           ) : (
@@ -106,7 +106,7 @@ const AvatarUpload = () => {
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           aria-label="Change profile photo"
-          className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-600 hover:text-[#769046] hover:border-[#769046]/40 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-600 hover:text-brand-600 hover:border-brand-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />}
         </button>
@@ -125,7 +125,7 @@ const AvatarUpload = () => {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="text-fine font-bold text-[#769046] hover:underline bg-transparent border-0 p-0 cursor-pointer disabled:opacity-50"
+            className="text-fine font-bold text-brand-600 hover:underline bg-transparent border-0 p-0 cursor-pointer disabled:opacity-50"
           >
             {objectUrl ? 'Change' : 'Upload'}
           </button>

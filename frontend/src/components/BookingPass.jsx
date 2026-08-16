@@ -51,7 +51,7 @@ const BookingPass = ({ reference, queueNumber }) => {
   return (
     <div className="flex flex-col items-center gap-2 p-4 bg-white border border-gray-200 rounded-xl">
       <span className="text-meta font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-        <QrCode className="w-3.5 h-3.5 text-[#769046]" aria-hidden="true" />
+        <QrCode className="w-3.5 h-3.5 text-brand-600" aria-hidden="true" />
         Present this at the front desk
       </span>
 

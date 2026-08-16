@@ -49,7 +49,7 @@ const ServicesPage = ({ onNavigate }) => {
       return { icon: Activity, bg: 'bg-emerald-50 text-emerald-600' };
     }
     if (lower.includes('ultra')) {
-      return { icon: Stethoscope, bg: 'bg-[#769046]/10 text-[#769046]' };
+      return { icon: Stethoscope, bg: 'bg-brand-50 text-brand-600' };
     }
     if (lower.includes('xray') || lower.includes('x-ray')) {
       return { icon: FileText, bg: 'bg-indigo-50 text-indigo-600' };
@@ -81,11 +81,11 @@ const ServicesPage = ({ onNavigate }) => {
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full space-y-8">
         {loading ? (
           <div className="py-20 flex flex-col items-center justify-center space-y-3">
-            <div className="w-10 h-10 border-4 border-[#769046] border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
             <span className="text-sm font-semibold text-gray-500">Loading diagnostic services catalog...</span>
           </div>
         ) : categories.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm max-w-md mx-auto space-y-2">
+          <div className="bg-white rounded-2xl p-12 text-center border border-[#e6ebf1] shadow-sm max-w-md mx-auto space-y-2">
             <h3 className="text-lg font-bold text-gray-800 m-0">No Active Services</h3>
             <p className="text-xs text-gray-500 m-0">Diagnostic services will appear here once added by clinic administration.</p>
           </div>
@@ -95,8 +95,8 @@ const ServicesPage = ({ onNavigate }) => {
               const meta = getCategoryMeta(cat.title);
               const Icon = meta.icon;
               return (
-                <Card key={idx} className="border-gray-100 shadow-sm rounded-2xl overflow-hidden bg-white hover:shadow-md transition-shadow">
-                  <CardHeader className="py-5 px-6 border-b border-gray-100 flex flex-row items-center space-x-3 space-y-0">
+                <Card key={idx} className="border-[#e6ebf1] shadow-sm rounded-2xl overflow-hidden bg-white hover:shadow-md transition-shadow">
+                  <CardHeader className="py-5 px-6 border-b border-[#e6ebf1] flex flex-row items-center space-x-3 space-y-0">
                     <div className={`p-2.5 rounded-xl ${meta.bg}`}>
                       <Icon className="w-5 h-5" />
                     </div>
@@ -106,7 +106,7 @@ const ServicesPage = ({ onNavigate }) => {
                     {cat.items.map((item) => (
                       <div key={item.id} className="flex justify-between items-center text-xs py-1 border-b border-gray-50 last:border-0">
                         <span className="text-gray-700 font-medium flex items-center space-x-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#769046]"></span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-brand-500"></span>
                           <span>{item.name}</span>
                         </span>
                         <span className="font-bold text-gray-900">{formatCurrency(item.price)}</span>

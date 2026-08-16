@@ -54,12 +54,12 @@ const TermsOfService = ({ onNavigate }) => {
 
       <main className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 w-full space-y-6">
         {SECTIONS.map(({ icon: Icon, title, body }) => (
-          <div key={title} className="bg-white border border-gray-100 rounded-2xl shadow-xs p-6 space-y-3">
+          <div key={title} className="bg-white border border-[#e6ebf1] rounded-2xl p-6 space-y-3">
             <div className="flex items-center space-x-2.5">
-              <div className="w-9 h-9 rounded-xl bg-[#769046]/10 text-[#769046] flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0">
                 <Icon className="w-4.5 h-4.5" />
               </div>
-              <h2 className="text-base font-bold text-slate-900 m-0">{title}</h2>
+              <h2 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">{title}</h2>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed m-0">{body}</p>
           </div>

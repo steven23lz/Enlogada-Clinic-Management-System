@@ -81,10 +81,10 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
   };
 
   return (
-    <Card className="border-gray-100 shadow-lg rounded-2xl border-t-4 border-t-[#769046] bg-white overflow-hidden">
-      <CardHeader className="space-y-1.5 pt-6 pb-2 px-6">
-        <CardTitle className="text-xl font-bold text-dark-slate">Welcome Back</CardTitle>
-        <CardDescription className="text-xs text-gray-500 font-medium">
+    <Card className="overflow-hidden rounded-2xl border-[#e6ebf1] shadow-raised">
+      <CardHeader className="space-y-1 px-6 pb-2 pt-6">
+        <CardTitle className="text-xl font-bold tracking-tight text-slate-900">Welcome Back</CardTitle>
+        <CardDescription className="text-[13px] text-slate-500">
           Sign in to your dashboard to manage records.
         </CardDescription>
       </CardHeader>
@@ -92,31 +92,31 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
       <CardContent className="px-6 py-4 space-y-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div role="alert" className="bg-red-50 border border-red-100 text-red-600 rounded-lg p-3 flex items-center space-x-2 text-xs">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="alert alert-error">
+              <AlertCircle />
               <span>{error}</span>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-700">Email Address</label>
+            <label className="text-fine font-semibold text-slate-700">Email Address</label>
             <Input
               type="email"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="rounded-xl border-gray-200 bg-gray-50/50 focus-visible:ring-[#769046]"
+              className="h-10"
               disabled={submitting}
             />
           </div>
 
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
-              <label className="text-xs font-semibold text-gray-700">Password</label>
+              <label className="text-fine font-semibold text-slate-700">Password</label>
               <button
                 type="button"
                 onClick={() => onNavigate('forgot-password')}
-                className="text-fine font-semibold text-[#769046] hover:underline bg-transparent border-0 cursor-pointer"
+                className="text-fine font-semibold text-brand-600 hover:underline bg-transparent border-0 cursor-pointer"
               >
                 Forgot password?
               </button>
@@ -125,7 +125,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="rounded-xl border-gray-200 bg-gray-50/50 focus-visible:ring-[#769046]"
+              className="h-10"
               disabled={submitting}
             />
           </div>
@@ -137,7 +137,8 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
           <Button
             type="submit"
             disabled={submitting}
-            className="w-full bg-primary-hover hover:bg-primary-active text-white py-3 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-colors border-0 cursor-pointer shadow-md"
+            size="lg"
+            className="w-full"
           >
             <span>{submitting ? 'Signing in...' : 'Sign In'}</span>
             <ArrowRight className="w-4 h-4" />
@@ -145,9 +146,9 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         </form>
 
         <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-gray-100"></div>
-          <span className="flex-shrink mx-3 text-fine text-gray-400 font-medium">Or continue with Google</span>
-          <div className="flex-grow border-t border-gray-100"></div>
+          <div className="flex-grow border-t border-[#e6ebf1]"></div>
+          <span className="mx-3 flex-shrink text-fine font-medium text-slate-400">Or continue with Google</span>
+          <div className="flex-grow border-t border-[#e6ebf1]"></div>
         </div>
 
         {isGoogleAuthConfigured && (
@@ -175,7 +176,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         )}
 
         {!isGoogleAuthConfigured && (
-          <div className="flex items-start space-x-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-fine text-amber-800">
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-fine leading-relaxed text-amber-800 ring-1 ring-inset ring-amber-200">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-px" />
             <span>
               Google Sign-In is not configured on this installation. Set{' '}
@@ -189,7 +190,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         )}
 
         {isGoogleAuthConfigured && googleButtonBroken && (
-          <div className="flex items-start space-x-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-fine text-amber-800">
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-fine leading-relaxed text-amber-800 ring-1 ring-inset ring-amber-200">
             <AlertCircle className="w-4 h-4 flex-shrink-0 mt-px" />
             <span>
               Google Sign-In is unavailable on this address. The configured client ID does not
@@ -202,12 +203,12 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         )}
       </CardContent>
 
-      <CardFooter className="flex justify-center border-t border-gray-100 py-4 bg-gray-50/50">
+      <CardFooter className="flex justify-center border-t border-[#e6ebf1] py-4 bg-slate-50/70">
         <p className="text-xs text-gray-600 m-0">
           New to Enlogada?{' '}
           <button
             onClick={onSwitchToRegister}
-            className="text-[#769046] font-bold hover:underline bg-transparent border-0 p-0 cursor-pointer"
+            className="text-brand-600 font-bold hover:underline bg-transparent border-0 p-0 cursor-pointer"
           >
             Create an account
           </button>

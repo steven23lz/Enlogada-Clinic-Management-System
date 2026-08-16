@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import EmptyState from '../../components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -8,10 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { SearchInput } from '../../components/ui/search-input';
+import { SkeletonRows } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { toastSuccess } from '../../lib/toast';
-import { UserPlus, AlertCircle, KeyRound, CheckCircle2, Pencil } from 'lucide-react';
+import { UserPlus, AlertCircle, KeyRound, CheckCircle2, Pencil, Users, UserX } from 'lucide-react';
 
 // Module 12: staff account management, scoped to the 5 operational roles only (Admin/SuperAdmin
 // account management is Module 13's explicit responsibility — see adminService.js's
@@ -182,58 +185,57 @@ const StaffAccounts = () => {
   const pagedStaff = filteredStaff.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold text-slate-900 m-0">Staff Accounts</h2>
-          <p className="text-xs text-gray-500 m-0">
-            Manage Receptionist, Cashier, and diagnostic staff accounts. Admin/SuperAdmin accounts are managed separately under RBAC administration.
-          </p>
-        </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Administration"
+        icon={Users}
+        title="Staff Accounts"
+        description="Receptionist, Cashier and diagnostic staff logins. Admin and SuperAdmin accounts are managed separately under RBAC administration."
+        actions={
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogTrigger asChild>
-            <Button onClick={handleOpenAdd} className="bg-[#769046] hover:bg-[#657c3a] text-white flex items-center space-x-2 text-xs font-bold px-4 py-2 rounded-xl">
-              <UserPlus className="w-4 h-4" />
-              <span>Add Staff Account</span>
+            <Button onClick={handleOpenAdd}>
+              <UserPlus className="h-4 w-4" />
+              Add Staff Account
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md rounded-2xl">
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold text-slate-900">Add New Staff Account</DialogTitle>
-              <DialogDescription className="text-xs">Creates a login for a Receptionist, Cashier, or diagnostic staff member.</DialogDescription>
+              <DialogTitle>Add New Staff Account</DialogTitle>
+              <DialogDescription>Creates a login for a Receptionist, Cashier, or diagnostic staff member.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddStaff} className="space-y-4 pt-2">
               {formError && (
-                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="alert alert-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{formError}</span>
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-600 uppercase">First Name</label>
+                  <label className="field-label">First Name</label>
                   <Input value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} disabled={submitting} required />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-600 uppercase">Last Name</label>
+                  <label className="field-label">Last Name</label>
                   <Input value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} disabled={submitting} required />
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">Email</label>
+                <label className="field-label">Email</label>
                 <Input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={submitting} required />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">Contact Number</label>
+                <label className="field-label">Contact Number</label>
                 <Input value={formData.contactNumber} onChange={e => setFormData({ ...formData, contactNumber: e.target.value })} disabled={submitting} />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">Temporary Password</label>
+                <label className="field-label">Temporary Password</label>
                 <Input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} disabled={submitting} required />
                 <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">Role</label>
+                <label className="field-label">Role</label>
                 <Select value={formData.role} onValueChange={val => setFormData({ ...formData, role: val })}>
                   <SelectTrigger className="rounded-xl">
                     <SelectValue placeholder="Select a role" />
@@ -245,90 +247,97 @@ const StaffAccounts = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+              <DialogFooter className="border-t border-[#e6ebf1] pt-3">
                 <Button type="button" variant="outline" onClick={() => setShowAddModal(false)} disabled={submitting}>Cancel</Button>
-                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold" disabled={submitting}>
-                  {submitting ? 'Creating...' : 'Create Account'}
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? 'Creating…' : 'Create Account'}
                 </Button>
-              </div>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
 
-      <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <CardTitle className="text-sm font-bold text-slate-800">
-            {filteredStaff.length} Staff Account{filteredStaff.length === 1 ? '' : 's'}
-            {search && <span className="text-xs font-normal text-gray-400"> of {staff.length} total</span>}
-          </CardTitle>
-          <SearchInput
-            placeholder="Search name, email, or role..."
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            containerClassName="w-full sm:w-72"
-          />
-        </CardHeader>
-        <CardContent className="p-0">
+      <Panel>
+        <PanelHeader
+          title={`${filteredStaff.length} staff account${filteredStaff.length === 1 ? '' : 's'}`}
+          description={search ? `filtered from ${staff.length} total` : 'Select a status chip to activate or deactivate an account'}
+          icon={Users}
+          actions={
+            <SearchInput
+              placeholder="Search name, email, or role…"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              containerClassName="w-full sm:w-64"
+            />
+          }
+        />
+        <PanelBody flush>
           <Table>
-            <TableHeader className="bg-gray-50/80">
+            <TableHeader sticky>
               <TableRow>
-                <TableHead className="text-meta font-bold uppercase py-3">Name</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Email</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Role</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Contact</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400">Loading staff accounts…</TableCell></TableRow>
+                <SkeletonRows rows={6} columns={6} />
               ) : pagedStaff.length > 0 ? (
                 pagedStaff.map(s => (
-                  <TableRow key={s.id} className="hover:bg-gray-50/50 transition-colors">
-                    <TableCell className="py-3 font-bold text-xs text-slate-900 max-w-[180px] truncate" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
-                    <TableCell className="py-3 text-xs text-gray-600 max-w-[220px] truncate" title={s.email}>{s.email}</TableCell>
-                    <TableCell className="py-3 text-xs">
-                      <Badge variant="outline" className="text-meta font-bold border-gray-200">{s.roles?.[0]}</Badge>
+                  <TableRow key={s.id}>
+                    <TableCell className="max-w-[180px] truncate font-semibold text-slate-900" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
+                    <TableCell className="max-w-[220px] truncate text-slate-500" title={s.email}>{s.email}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-slate-600">{s.roles?.[0]}</Badge>
                     </TableCell>
-                    <TableCell className="py-3 text-xs text-gray-500">{s.contact_number || 'N/A'}</TableCell>
-                    <TableCell className="py-3">
-                      <Badge
+                    <TableCell className="text-slate-500">{s.contact_number || '—'}</TableCell>
+                    <TableCell>
+                      {/* A button, not a Badge with an onClick. It toggles an account's ability to
+                          log in, so it must be reachable by keyboard and announce itself as
+                          interactive — a clickable <div> did neither. */}
+                      <button
+                        type="button"
                         onClick={() => { setStatusError(''); setStatusTarget(s); }}
-                        className={`cursor-pointer text-meta font-bold px-2.5 py-0.5 rounded-full ${
-                          s.status ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                        title={s.status ? 'Deactivate this account' : 'Activate this account'}
+                        className={`cursor-pointer rounded-md border-0 px-2 py-0.5 text-fine font-semibold leading-5 ring-1 ring-inset transition-colors ${
+                          s.status
+                            ? 'bg-emerald-50 text-emerald-800 ring-emerald-200 hover:bg-emerald-100'
+                            : 'bg-slate-100 text-slate-600 ring-slate-200 hover:bg-slate-200'
                         }`}
                       >
                         {s.status ? 'Active' : 'Deactivated'}
-                      </Badge>
+                      </button>
                     </TableCell>
-                    <TableCell className="py-3 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => handleOpenEdit(s)}
-                          className="text-fine font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
-                        >
-                          <Pencil className="w-3 h-3" />
-                          <span>Edit</span>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button type="button" variant="outline" size="xs" onClick={() => handleOpenEdit(s)}>
+                          <Pencil className="h-3 w-3" />
+                          Edit
                         </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => handleOpenResetPwd(s)}
-                          className="text-fine font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
-                        >
-                          <KeyRound className="w-3 h-3" />
-                          <span>Reset Password</span>
+                        <Button type="button" variant="outline" size="xs" onClick={() => handleOpenResetPwd(s)}>
+                          <KeyRound className="h-3 w-3" />
+                          Reset Password
                         </Button>
                       </div>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 italic">{search ? 'No staff accounts match your search.' : 'No staff accounts yet.'}</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="p-0">
+                    <EmptyState
+                      icon={UserX}
+                      title={search ? 'No staff match that search' : 'No staff accounts yet'}
+                      description={search ? 'Try a surname, an email domain, or a role name.' : 'Add the first Receptionist, Cashier or diagnostic staff login.'}
+                    />
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
@@ -338,44 +347,44 @@ const StaffAccounts = () => {
             onPageChange={setPage}
             totalLabel={`${filteredStaff.length} account${filteredStaff.length === 1 ? '' : 's'}`}
           />
-        </CardContent>
-      </Card>
+        </PanelBody>
+      </Panel>
 
       <Dialog open={!!resetPwdTarget} onOpenChange={(open) => !resettingPwd && !open && setResetPwdTarget(null)}>
-        <DialogContent className="max-w-sm rounded-2xl">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">Reset Password</DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
               {resetPwdTarget && `Set a new temporary password for ${resetPwdTarget.first_name} ${resetPwdTarget.last_name}. Share it with them securely — they should change it after logging in.`}
             </DialogDescription>
           </DialogHeader>
 
           {resetPwdSuccess ? (
             <div className="space-y-4">
-              <div role="status" className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+              <div role="status" className="alert alert-success">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                 <span>Password reset successfully.</span>
               </div>
               <DialogFooter>
-                <Button type="button" onClick={() => setResetPwdTarget(null)} className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold">Done</Button>
+                <Button type="button" onClick={() => setResetPwdTarget(null)} className="font-bold">Done</Button>
               </DialogFooter>
             </div>
           ) : (
             <form onSubmit={confirmResetPassword} className="space-y-4">
               {resetPwdError && (
-                <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="alert alert-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{resetPwdError}</span>
                 </div>
               )}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">New Temporary Password</label>
+                <label className="field-label">New Temporary Password</label>
                 <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={resettingPwd} required autoFocus />
                 <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setResetPwdTarget(null)} disabled={resettingPwd}>Cancel</Button>
-                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold" disabled={resettingPwd}>
+                <Button type="submit" className="font-bold" disabled={resettingPwd}>
                   {resettingPwd ? 'Resetting…' : 'Reset Password'}
                 </Button>
               </DialogFooter>
@@ -385,41 +394,41 @@ const StaffAccounts = () => {
       </Dialog>
 
       <Dialog open={!!editTarget} onOpenChange={(open) => !savingEdit && !open && setEditTarget(null)}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">Edit Staff Account</DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogTitle>Edit Staff Account</DialogTitle>
+            <DialogDescription>
               {editTarget && `Update contact details for ${editTarget.first_name} ${editTarget.last_name}. Role and password are managed separately.`}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={confirmEditStaff} className="space-y-4">
             {editError && (
-              <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+              <div role="alert" className="alert alert-error">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{editError}</span>
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">First Name</label>
+                <label className="field-label">First Name</label>
                 <Input value={editData.firstName} onChange={e => setEditData({ ...editData, firstName: e.target.value })} disabled={savingEdit} required />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">Last Name</label>
+                <label className="field-label">Last Name</label>
                 <Input value={editData.lastName} onChange={e => setEditData({ ...editData, lastName: e.target.value })} disabled={savingEdit} required />
               </div>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-600 uppercase">Email</label>
+              <label className="field-label">Email</label>
               <Input type="email" value={editData.email} onChange={e => setEditData({ ...editData, email: e.target.value })} disabled={savingEdit} required />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-600 uppercase">Contact Number</label>
+              <label className="field-label">Contact Number</label>
               <Input value={editData.contactNumber} onChange={e => setEditData({ ...editData, contactNumber: e.target.value })} disabled={savingEdit} />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>Cancel</Button>
-              <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold" disabled={savingEdit}>
+              <Button type="submit" className="font-bold" disabled={savingEdit}>
                 {savingEdit ? 'Saving…' : 'Save Changes'}
               </Button>
             </DialogFooter>

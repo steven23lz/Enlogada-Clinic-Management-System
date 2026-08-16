@@ -2,7 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { usePolling } from '../hooks/usePolling';
 import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
+import { Panel, PanelHeader, PanelBody } from '../components/ui/panel';
+import PageHeader from '../components/ui/page-header';
+import Toolbar, { ToolbarSpacer } from '../components/ui/toolbar';
+import EmptyState from '../components/ui/empty-state';
 import MetricCard from '../components/ui/metric-card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
@@ -31,12 +34,24 @@ import {
   ArrowUpDown,
   RefreshCw,
   Undo2,
-  BadgeCheck
+  BadgeCheck,
+  History,
+  Inbox
 } from 'lucide-react';
 
 const PAGE_TITLES = {
   'cashier-queue': 'Cashier POS & Billing Terminal',
   'cashier-history': 'Transaction History',
+};
+
+const PAGE_ICONS = {
+  'cashier-queue': Receipt,
+  'cashier-history': History,
+};
+
+const PAGE_BLURBS = {
+  'cashier-queue': 'Select a patient from the billing queue to price their visit, apply a statutory discount, take payment and issue a receipt.',
+  'cashier-history': 'Receipts you and other cashiers have issued, for the daily cash-up. Refunds and cancellations are recorded against the original receipt.',
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 
@@ -457,138 +472,153 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
   return (
     <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
-      <div className="space-y-6">
+      <div className="space-y-5">
+        <PageHeader
+          icon={PAGE_ICONS[view]}
+          title={PAGE_TITLES[view]}
+          description={PAGE_BLURBS[view]}
+        />
 
         {view === 'cashier-queue' && (
         <>
         {queueError && (
-          <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-semibold rounded-xl flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <div role="alert" className="alert alert-error">
+            <AlertCircle />
             <span>{queueError}</span>
-            <button type="button" onClick={retryQueueData} className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-800">Retry</button>
+            <button type="button" onClick={retryQueueData} className="ml-auto cursor-pointer border-0 bg-transparent p-0 font-bold text-rose-800 underline underline-offset-2">Retry</button>
           </div>
         )}
 
         {/* Collections Overview Metrics Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard label="Today's Collections" value={formatCurrency(totalCollectionsToday)} icon={DollarSign} tone="green" />
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <MetricCard label="Collected Today" value={formatCurrency(totalCollectionsToday)} icon={DollarSign} tone="green" />
           <MetricCard label="Cash Collected" value={formatCurrency(cashTotal)} icon={Banknote} tone="emerald" />
-          <MetricCard label="E-Wallet (GCash/PayMaya)" value={formatCurrency(eWalletTotal)} icon={Wallet} tone="indigo" />
-          <MetricCard label="Receipts Processed" value={transactions.length} icon={Receipt} tone="slate" />
+          <MetricCard label="E-Wallet" value={formatCurrency(eWalletTotal)} caption="GCash + PayMaya" captionTone="slate" icon={Wallet} tone="indigo" />
+          <MetricCard label="Receipts Issued" value={transactions.length} icon={Receipt} tone="slate" />
         </div>
 
         {/* POS Split Workstation (Left: Billing Queue, Right: Invoice Checkout Terminal) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
 
           {/* Left Panel: Pending Patients Billing Queue */}
-          <div className="lg:col-span-5 space-y-4">
-            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-xs space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900 m-0 flex items-center space-x-2">
-                  <Receipt className="w-4 h-4 text-[#769046]" />
-                  <span>Pending Billing Queue</span>
-                </h3>
-                <Badge variant="secondary" className="bg-[#769046]/10 text-[#769046] font-bold">
-                  {filteredVisits.length} Pending
-                </Badge>
-              </div>
-
-              <SearchInput
-                placeholder="Search ticket # or name..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+          <div className="lg:col-span-5">
+            <Panel className="overflow-hidden">
+              <PanelHeader
+                title="Pending Billing Queue"
+                icon={Receipt}
+                actions={
+                  <Badge variant="outline" className="border-brand-200 bg-brand-50 text-brand-700">
+                    {filteredVisits.length} waiting
+                  </Badge>
+                }
               />
 
-              <div className="flex items-center gap-2">
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger className="flex-1 text-xs rounded-xl">
-                    <SelectValue placeholder="Patient Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Types</SelectItem>
-                    {patientTypes.map(t => (
-                      <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <button
-                  type="button"
-                  onClick={() => setSortOrder(o => (o === 'oldest' ? 'newest' : 'oldest'))}
-                  title="Toggle sort order"
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-fine font-bold text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors whitespace-nowrap"
-                >
-                  <ArrowUpDown className="w-3.5 h-3.5" />
-                  <span>{sortOrder === 'oldest' ? 'Oldest First' : 'Newest First'}</span>
-                </button>
+              {/* Filters sit in a sunken well rather than loose in the panel body, so the list
+                  below reads as the panel's content and these read as controls over it. */}
+              <div className="space-y-2 border-b border-[#e6ebf1] bg-slate-50/70 p-3">
+                <SearchInput
+                  placeholder="Search ticket # or name..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+
+                <div className="flex items-center gap-2">
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Patient Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Types</SelectItem>
+                      {patientTypes.map(t => (
+                        <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setSortOrder(o => (o === 'oldest' ? 'newest' : 'oldest'))}
+                    title="Toggle sort order"
+                  >
+                    <ArrowUpDown className="h-3.5 w-3.5" />
+                    {sortOrder === 'oldest' ? 'Oldest first' : 'Newest first'}
+                  </Button>
+                </div>
               </div>
 
-              <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+              <div className="max-h-[520px] space-y-2 overflow-y-auto p-3">
                 {loading ? (
                   <SkeletonList rows={4} />
                 ) : filteredVisits.length > 0 ? (
                   filteredVisits.map(visit => {
                     const isSelected = selectedVisit?.id === visit.id;
                     return (
-                      <div
+                      // A button, not a div with onClick. This is how a cashier picks the visit
+                      // they are about to take money for; it has to be reachable by keyboard and
+                      // announce its selected state.
+                      <button
                         key={visit.id}
+                        type="button"
                         onClick={() => handleSelectVisitForBilling(visit)}
-                        className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                        aria-pressed={isSelected}
+                        className={`w-full cursor-pointer rounded-lg border p-3 text-left transition-colors ${
                           isSelected
-                            ? 'bg-[#769046]/10 border-[#769046] shadow-sm'
-                            : 'bg-gray-50/70 border-gray-100 hover:bg-gray-50 hover:border-gray-200'
+                            ? 'border-brand-400 bg-brand-50 ring-1 ring-brand-400'
+                            : 'border-[#e6ebf1] bg-white hover:border-slate-300 hover:bg-slate-50'
                         }`}
                       >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="font-extrabold text-xs text-slate-900">{visit.first_name} {visit.last_name}</span>
-                            <span className="block text-meta text-gray-400 font-bold uppercase">Ticket: {visit.queue_number || `V-${visit.id}`}</span>
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <div className="flex items-center gap-1">
-                              <Badge
-                                className={`text-meta font-bold ${
-                                  visit.visit_type === 'Walk in' ? 'bg-slate-100 text-slate-700' : 'bg-indigo-100 text-indigo-700'
-                                }`}
-                              >
+                        <span className="flex items-start justify-between gap-2">
+                          <span className="min-w-0">
+                            <span className="block truncate text-[13px] font-semibold text-slate-900">{visit.first_name} {visit.last_name}</span>
+                            <span className="block font-mono text-micro font-medium text-slate-400">{visit.queue_number || `V-${visit.id}`}</span>
+                          </span>
+                          <span className="flex flex-shrink-0 flex-col items-end gap-1">
+                            <span className="flex items-center gap-1">
+                              <Badge variant="outline" className={visit.visit_type === 'Walk in' ? 'text-slate-600' : 'border-indigo-200 bg-indigo-50 text-indigo-700'}>
                                 {visit.visit_type}
                               </Badge>
-                              <Badge className="bg-amber-100 text-amber-800 text-meta font-bold">
+                              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
                                 {visit.patient_type_name || 'Self Pay'}
                               </Badge>
-                            </div>
+                            </span>
                             <WaitBadge since={visit.created_at} />
-                          </div>
-                        </div>
-                        <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center text-fine">
-                          <span className="text-gray-500">{visit.tests?.length || 0} diagnostic item(s)</span>
-                          <span className="font-bold text-[#769046]">Select for Checkout &rarr;</span>
-                        </div>
-                      </div>
+                          </span>
+                        </span>
+                        <span className="mt-2 flex items-center justify-between border-t border-[#eef2f6] pt-2 text-fine">
+                          <span className="text-slate-500">{visit.tests?.length || 0} diagnostic item{visit.tests?.length === 1 ? '' : 's'}</span>
+                          <span className={`font-semibold ${isSelected ? 'text-brand-700' : 'text-slate-400'}`}>
+                            {isSelected ? 'Open in terminal' : 'Select for checkout →'}
+                          </span>
+                        </span>
+                      </button>
                     );
                   })
                 ) : (
-                  <div className="p-8 text-center text-xs text-gray-400 font-semibold italic">
-                    No pending patients awaiting billing checkout.
-                  </div>
+                  <EmptyState
+                    compact
+                    icon={Inbox}
+                    title="Nothing awaiting payment"
+                    description="Visits appear here once Reception attaches tests to them."
+                  />
                 )}
               </div>
-            </div>
+            </Panel>
           </div>
 
           {/* Right Panel: Invoice & Cashier POS Terminal */}
-          <div className="lg:col-span-7 space-y-4">
-            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6">
+          <div className="lg:col-span-7">
+            <Panel className="p-6">
               {selectedVisit && billDetails ? (
                 <div className="space-y-6">
                   
                   {/* Header Patient Summary */}
-                  <div className="border-b border-gray-100 pb-4 flex justify-between items-start">
+                  <div className="border-b border-[#e6ebf1] pb-4 flex justify-between items-start">
                     <div>
-                      <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Official Billing Terminal</span>
+                      <span className="field-label">Official Billing Terminal</span>
                       <h2 className="text-lg font-bold text-slate-900 m-0">{billDetails.patientName}</h2>
                       <span className="text-xs text-gray-500">Ticket #: {selectedVisit.queue_number} &bull; Type: {selectedVisit.patient_type_name}</span>
                     </div>
-                    <Badge className="bg-[#769046] text-white font-extrabold px-3 py-1 text-xs">
+                    <Badge className="bg-brand-500 text-white font-extrabold px-3 py-1 text-xs">
                       READY FOR PAYMENT
                     </Badge>
                   </div>
@@ -596,9 +626,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   {/* Itemized Tests Breakdown Table */}
                   <div className="space-y-2">
                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Itemized Clinical Services</span>
-                    <div className="border border-gray-100 rounded-xl overflow-hidden">
+                    <div className="border border-[#e6ebf1] rounded-xl overflow-hidden">
                       <Table>
-                        <TableHeader className="bg-gray-50/80">
+                        <TableHeader sticky>
                           <TableRow>
                             <TableHead className="text-meta font-bold uppercase py-2">Test Name</TableHead>
                             <TableHead className="text-meta font-bold uppercase py-2">Category</TableHead>
@@ -666,7 +696,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     )}
                     <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-sm font-extrabold text-slate-900">
                       <span>NET AMOUNT DUE:</span>
-                      <span className="text-base text-[#769046]">{formatCurrency(billDetails.totalAmount)}</span>
+                      <span className="text-base text-brand-600">{formatCurrency(billDetails.totalAmount)}</span>
                     </div>
                   </div>
 
@@ -681,7 +711,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     {billDetails.discount ? (
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2 text-xs">
-                          <BadgeCheck className="w-4 h-4 text-[#769046] flex-shrink-0" aria-hidden="true" />
+                          <BadgeCheck className="w-4 h-4 text-brand-600 flex-shrink-0" aria-hidden="true" />
                           <span className="font-bold text-slate-900">{billDetails.discount.name}</span>
                           <span className="text-gray-500">
                             {parseFloat(billDetails.discount.percentage)}%
@@ -721,7 +751,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           type="button"
                           disabled={!discountTypeId || applyingDiscount}
                           onClick={handleApplyDiscount}
-                          className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold"
+                          className="font-bold"
                         >
                           {applyingDiscount ? 'Applying…' : 'Apply'}
                         </Button>
@@ -735,14 +765,14 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   {/* Payment Processor Form */}
                   <form onSubmit={handleProcessPayment} className="space-y-4">
                     {paymentError && (
-                      <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+                      <div role="alert" className="alert alert-error">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
                         <span>{paymentError}</span>
                       </div>
                     )}
 
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-600 uppercase block">Select Payment Method</label>
+                      <label className="field-label">Select Payment Method</label>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {['Cash', 'GCash', 'PayMaya', 'Bank'].map(method => (
                           <button
@@ -751,7 +781,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             onClick={() => setPaymentMethod(method)}
                             className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                               paymentMethod === method
-                                ? 'bg-[#769046] text-white border-[#769046] shadow-sm'
+                                ? 'bg-brand-500 text-white border-brand-500 shadow-sm'
                                 : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
                             }`}
                           >
@@ -796,8 +826,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                               required
                             />
                           </div>
-                          <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                            <span className="text-meta font-bold text-gray-400 uppercase block">Change Due</span>
+                          <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-[#e6ebf1]">
+                            <span className="field-label">Change Due</span>
                             <span className="text-base font-extrabold text-emerald-600">{formatCurrency(calculateChange())}</span>
                           </div>
                         </div>
@@ -810,7 +840,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                               key={val}
                               type="button"
                               onClick={() => setAmountTendered(val)}
-                              className="px-2 py-0.5 bg-slate-100 hover:bg-[#769046] hover:text-white rounded-md text-meta font-bold text-slate-700 transition-all border border-slate-200 cursor-pointer"
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-brand-500 hover:text-white rounded-md text-meta font-bold text-slate-700 transition-all border border-slate-200 cursor-pointer"
                             >
                               ₱{val}
                             </button>
@@ -818,7 +848,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           <button
                             type="button"
                             onClick={() => setAmountTendered((billDetails?.totalAmount ?? 0).toString())}
-                            className="px-2 py-0.5 bg-[#769046]/10 text-[#769046] hover:bg-[#769046] hover:text-white rounded-md text-meta font-bold transition-all border border-[#769046]/30 cursor-pointer"
+                            className="px-2 py-0.5 bg-brand-50 text-brand-600 hover:bg-brand-500 hover:text-white rounded-md text-meta font-bold transition-all border border-brand-300 cursor-pointer"
                           >
                             Exact
                           </button>
@@ -826,7 +856,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       </div>
                     ) : (
                       <div className="space-y-1">
-                        <label className="text-xs font-bold text-gray-600 uppercase">Transaction Reference / Ref Number</label>
+                        <label className="field-label">Transaction Reference / Ref Number</label>
                         <Input
                           placeholder={`Enter ${paymentMethod} reference code`}
                           value={referenceNumber}
@@ -839,7 +869,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                     <Button
                       type="submit"
-                      className="w-full bg-[#769046] hover:bg-[#657c3a] text-white font-extrabold text-sm py-3 rounded-xl shadow-md cursor-pointer transition-all"
+                      className="w-full font-extrabold text-sm py-3 rounded-xl shadow-md cursor-pointer transition-all"
                     >
                       Process Checkout Payment & Issue Official Receipt
                     </Button>
@@ -865,16 +895,16 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     )}
                   </div>
 
-                  <div className="border-t border-gray-100 pt-5">
+                  <div className="border-t border-[#e6ebf1] pt-5">
                     <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block mb-3">
                       This shift so far
                     </span>
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                      <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
                         <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Receipts issued</span>
                         <span className="text-lg font-extrabold text-slate-900 tabular-nums">{transactions.length}</span>
                       </div>
-                      <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-3">
+                      <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
                         <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Average per receipt</span>
                         <span className="text-lg font-extrabold text-slate-900 tabular-nums">
                           {transactions.length > 0
@@ -896,7 +926,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         {transactions.slice(0, 4).map((t) => (
                           <div
                             key={t.id}
-                            className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2"
+                            className="flex items-center justify-between rounded-lg border border-[#e6ebf1] px-3 py-2"
                           >
                             <div className="min-w-0">
                               <span className="block text-xs font-bold text-slate-900 truncate">
@@ -914,7 +944,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   )}
                 </div>
               )}
-            </Card>
+            </Panel>
           </div>
 
         </div>
@@ -928,47 +958,38 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
             historyPage * HISTORY_PAGE_SIZE
           );
           return (
-        <div className="space-y-6">
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900 m-0">Transaction History</h3>
-              <p className="text-xs text-gray-500 m-0">Receipts processed within the selected date range.</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="text-xs w-36" />
-              <span className="text-xs text-gray-400">to</span>
-              <Input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="text-xs w-36" />
-              <Button
-                variant="outline"
-                onClick={() => fetchTransactionHistory(historyStartDate, historyEndDate)}
-                className="flex items-center space-x-1.5 text-xs font-semibold"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Apply</span>
-              </Button>
-            </div>
-          </div>
+        <div>
+          <Toolbar attached>
+            <Input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
+            <span className="text-fine text-slate-400">to</span>
+            <Input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
+            <Button variant="outline" onClick={() => fetchTransactionHistory(historyStartDate, historyEndDate)}>
+              <RefreshCw className="h-3.5 w-3.5" />
+              Apply
+            </Button>
+            <ToolbarSpacer />
+            <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
+              {historyTransactions.length} receipt{historyTransactions.length === 1 ? '' : 's'}
+            </span>
+          </Toolbar>
 
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900 m-0">Completed Cashier Transactions</h3>
-              <Badge variant="secondary" className="bg-[#769046]/10 text-[#769046] font-bold">
-                {historyTransactions.length} Receipt(s)
-              </Badge>
-            </div>
-
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
+          <Panel className="overflow-hidden rounded-t-none">
+            {/* Deliberately not "Payment History" — that exact string is the Client's own
+                payments panel, which payment.spec.js anchors on by text. Two screens sharing a
+                heading is how a text-based selector starts matching the wrong thing. */}
+            <PanelHeader title="Completed Transactions" description="Receipts issued in this range" icon={History} />
+            <PanelBody flush>
               <Table>
-                <TableHeader className="bg-gray-50/80">
+                <TableHeader sticky>
                   <TableRow>
-                    <TableHead className="text-meta font-bold uppercase py-3">Receipt #</TableHead>
-                    <TableHead className="text-meta font-bold uppercase py-3">Patient Name</TableHead>
-                    <TableHead className="text-meta font-bold uppercase py-3">Payment Method</TableHead>
-                    <TableHead className="text-meta font-bold uppercase py-3">Reference #</TableHead>
-                    <TableHead className="text-meta font-bold uppercase py-3 text-right">Amount Paid</TableHead>
-                    <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
-                    <TableHead className="text-meta font-bold uppercase py-3 text-right">Date & Time</TableHead>
-                    <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
+                    <TableHead>Receipt #</TableHead>
+                    <TableHead>Patient Name</TableHead>
+                    <TableHead>Payment Method</TableHead>
+                    <TableHead>Reference #</TableHead>
+                    <TableHead className="text-right">Amount Paid</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Date & Time</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -990,39 +1011,33 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   ) : pagedHistoryTransactions.length > 0 ? (
                     pagedHistoryTransactions.map(t => (
                       <TableRow key={t.id}>
-                        <TableCell className="py-3 font-extrabold text-xs text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
-                        <TableCell className="py-3 text-xs font-bold text-gray-800">{t.patient_first_name} {t.patient_last_name}</TableCell>
-                        <TableCell className="py-3 text-xs">
-                          <Badge className="bg-gray-100 text-gray-800 font-bold border-gray-200">
-                            {t.payment_method}
-                          </Badge>
+                        <TableCell className="font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
+                        <TableCell className="font-semibold text-slate-900">{t.patient_first_name} {t.patient_last_name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge>
                         </TableCell>
-                        <TableCell className="py-3 text-xs font-mono text-gray-500">{t.reference_number || 'N/A (Cash)'}</TableCell>
-                        <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">{formatCurrency(t.amount)}</TableCell>
-                        <TableCell className="py-3">
+                        <TableCell className="font-mono text-fine text-slate-500">{t.reference_number || '—'}</TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
+                        <TableCell>
                           <StatusBadge status={t.payment_status || 'Paid'} />
                         </TableCell>
-                        <TableCell className="py-3 text-xs text-gray-500 text-right">{new Date(t.paid_at).toLocaleString()}</TableCell>
-                        <TableCell className="py-3 text-right">
-                          <div className="flex items-center justify-end space-x-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => handleReprintReceipt(t)}
-                              className="text-fine font-bold border-gray-200 px-2.5 py-1 h-auto flex items-center space-x-1"
-                            >
-                              <Printer className="w-3 h-3" />
-                              <span>Reprint</span>
+                        <TableCell className="text-right text-fine text-slate-500">{new Date(t.paid_at).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button type="button" variant="outline" size="xs" onClick={() => handleReprintReceipt(t)}>
+                              <Printer className="h-3 w-3" />
+                              Reprint
                             </Button>
                             {(t.payment_status || 'Paid') === 'Paid' && (
                               <Button
                                 type="button"
                                 variant="outline"
+                                size="xs"
                                 onClick={() => handleOpenRefund(t)}
-                                className="text-fine font-bold text-red-600 border-red-200 hover:bg-red-50 px-2.5 py-1 h-auto flex items-center space-x-1"
+                                className="text-rose-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
                               >
-                                <Undo2 className="w-3 h-3" />
-                                <span>Refund</span>
+                                <Undo2 className="h-3 w-3" />
+                                Refund
                               </Button>
                             )}
                           </div>
@@ -1030,42 +1045,48 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center py-6 text-xs text-gray-400 italic">No payments processed in this date range.</TableCell>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={8} className="p-0">
+                        <EmptyState
+                          icon={Receipt}
+                          title="No payments in this date range"
+                          description="Widen the dates above. Refunds and cancellations stay listed against their original receipt."
+                        />
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
-            </div>
+            </PanelBody>
             <Pagination
               page={historyPage}
               totalPages={historyTotalPages}
               onPageChange={setHistoryPage}
               totalLabel={`${historyTransactions.length} total`}
             />
-          </Card>
+          </Panel>
         </div>
           );
         })()}
 
         <Dialog open={!!refundTarget} onOpenChange={(open) => !refunding && !open && setRefundTarget(null)}>
-          <DialogContent className="max-w-sm rounded-2xl">
+          <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold text-slate-900">Refund Payment</DialogTitle>
+              <DialogTitle>Refund Payment</DialogTitle>
               <DialogDescription className="text-xs text-gray-500">
                 {refundTarget && `Refund ${formatCurrency(refundTarget.amount)} (Receipt ${refundTarget.receipt_number || `OR-${refundTarget.id}`})? This marks the payment as Refunded and cannot be undone from this screen.`}
               </DialogDescription>
             </DialogHeader>
 
             {refundError && (
-              <div role="alert" className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <div role="alert" className="alert alert-error">
+                <AlertCircle />
                 <span>{refundError}</span>
               </div>
             )}
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-600 uppercase">Reason <span className="text-red-600">*</span></label>
+              <label className="field-label">Reason <span className="text-red-600">*</span></label>
               <Textarea
                 value={refundReason}
                 onChange={e => setRefundReason(e.target.value)}
@@ -1104,7 +1125,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
         {/* Printable Official Receipt Modal Generator */}
         <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>
-          <DialogContent className="max-w-md rounded-2xl p-6">
+          <DialogContent className="max-w-md">
             {paymentSuccess && receiptBill && (
               /* print-area is what makes "Print Receipt" below produce anything at all. The rule
                  in index.css hides `body *` and reveals only .print-area, and this modal never
@@ -1114,7 +1135,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 <div className="text-center border-b border-gray-200 pb-3">
                   <h2 className="text-base font-extrabold text-slate-900 uppercase m-0">ENLOGADA CLINIC</h2>
                   <p className="text-meta text-gray-500 uppercase font-bold m-0">Official Payment Receipt</p>
-                  <span className="text-fine font-extrabold text-[#769046] block mt-1">Receipt #: {paymentSuccess.receipt_number || `OR-${paymentSuccess.id}`}</span>
+                  <span className="text-fine font-extrabold text-brand-600 block mt-1">Receipt #: {paymentSuccess.receipt_number || `OR-${paymentSuccess.id}`}</span>
                 </div>
 
                 <div className="space-y-2 text-xs">
@@ -1129,8 +1150,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 </div>
 
                 {receiptBill.items && receiptBill.items.length > 0 && (
-                  <div className="space-y-1.5 py-3 border-t border-b border-gray-100">
-                    <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Items</span>
+                  <div className="space-y-1.5 py-3 border-t border-b border-[#e6ebf1]">
+                    <span className="field-label">Items</span>
                     {receiptBill.items.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-xs">
                         <span className="text-gray-600">{item.name}</span>
@@ -1146,7 +1167,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     rather than the live catalogue, so a reprint years later shows what was
                     actually granted. */}
                 {parseFloat(paymentSuccess.discount_amount || 0) > 0 && (
-                  <div className="space-y-1 pb-2 border-b border-gray-100">
+                  <div className="space-y-1 pb-2 border-b border-[#e6ebf1]">
                     {/* Reconciles from the payment row alone:
                         amount + discount_amount + vat_amount = the VAT-inclusive price. */}
                     <div className="flex justify-between text-xs">
@@ -1196,11 +1217,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500 font-medium">Amount Paid:</span>
-                  <span className="font-extrabold text-[#769046] text-sm">{formatCurrency(paymentSuccess.amount)}</span>
+                  <span className="font-extrabold text-brand-600 text-sm">{formatCurrency(paymentSuccess.amount)}</span>
                 </div>
 
-                <div className="pt-3 border-t border-gray-100 flex justify-end space-x-2">
-                  <Button onClick={() => window.print()} className="bg-[#769046] text-white font-bold text-xs flex items-center space-x-1">
+                <div className="pt-3 border-t border-[#e6ebf1] flex justify-end space-x-2">
+                  <Button onClick={() => window.print()} className="bg-brand-500 text-white font-bold text-xs flex items-center space-x-1">
                     <Printer className="w-3.5 h-3.5" />
                     <span>Print Receipt</span>
                   </Button>

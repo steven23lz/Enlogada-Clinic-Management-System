@@ -60,10 +60,10 @@ const RegisterForm = ({ onSwitchToLogin }) => {
   };
 
   return (
-    <Card className="border-gray-100 shadow-lg rounded-2xl border-t-4 border-t-[#769046] bg-white overflow-hidden">
-      <CardHeader className="space-y-1.5 pt-6 pb-2 px-6">
-        <CardTitle className="text-xl font-bold text-dark-slate">Create an Account</CardTitle>
-        <CardDescription className="text-xs text-gray-500 font-medium">
+    <Card className="overflow-hidden rounded-2xl border-[#e6ebf1] shadow-raised">
+      <CardHeader className="space-y-1 px-6 pb-2 pt-6">
+        <CardTitle className="text-xl font-bold tracking-tight text-slate-900">Create an Account</CardTitle>
+        <CardDescription className="text-[13px] text-slate-500">
           Register to access your clinic account
         </CardDescription>
       </CardHeader>
@@ -71,8 +71,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
       <CardContent className="px-6 py-4 space-y-4">
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {error && (
-            <div role="alert" className="bg-red-50 border border-red-100 text-red-600 rounded-lg p-3 flex items-center space-x-2 text-xs">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="alert alert-error">
+              <AlertCircle />
               <span>{error}</span>
             </div>
           )}
@@ -86,71 +86,71 @@ const RegisterForm = ({ onSwitchToLogin }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-700">First Name</label>
+              <label className="text-fine font-semibold text-slate-700">First Name</label>
               <Input
                 type="text"
                 placeholder="First name"
                 value={formData.firstName}
                 onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                className="rounded-xl border-gray-200 bg-gray-50/50 text-xs focus-visible:ring-[#769046]"
+                className="rounded-xl border-gray-200 bg-slate-50/70 text-xs focus-visible:ring-brand-500"
                 disabled={submitting}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-700">Last Name</label>
+              <label className="text-fine font-semibold text-slate-700">Last Name</label>
               <Input
                 type="text"
                 placeholder="Last name"
                 value={formData.lastName}
                 onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                className="rounded-xl border-gray-200 bg-gray-50/50 text-xs focus-visible:ring-[#769046]"
+                className="rounded-xl border-gray-200 bg-slate-50/70 text-xs focus-visible:ring-brand-500"
                 disabled={submitting}
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-700">Email Address</label>
+            <label className="text-fine font-semibold text-slate-700">Email Address</label>
             <Input
               type="email"
               placeholder="Enter your email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="rounded-xl border-gray-200 bg-gray-50/50 text-xs focus-visible:ring-[#769046]"
+              className="rounded-xl border-gray-200 bg-slate-50/70 text-xs focus-visible:ring-brand-500"
               disabled={submitting}
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-700">Contact Number</label>
+            <label className="text-fine font-semibold text-slate-700">Contact Number</label>
             <Input
               type="text"
               placeholder="09171234567"
               value={formData.contactNumber}
               onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
-              className="rounded-xl border-gray-200 bg-gray-50/50 text-xs focus-visible:ring-[#769046]"
+              className="rounded-xl border-gray-200 bg-slate-50/70 text-xs focus-visible:ring-brand-500"
               disabled={submitting}
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-700">Password</label>
+              <label className="text-fine font-semibold text-slate-700">Password</label>
               <PasswordInput
                 placeholder="Create a password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="rounded-xl border-gray-200 bg-gray-50/50 text-xs focus-visible:ring-[#769046]"
+                className="rounded-xl border-gray-200 bg-slate-50/70 text-xs focus-visible:ring-brand-500"
                 disabled={submitting}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-gray-700">Confirm Password</label>
+              <label className="text-fine font-semibold text-slate-700">Confirm Password</label>
               <PasswordInput
                 placeholder="Confirm your password"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                className="rounded-xl border-gray-200 bg-gray-50/50 text-xs focus-visible:ring-[#769046]"
+                className="rounded-xl border-gray-200 bg-slate-50/70 text-xs focus-visible:ring-brand-500"
                 disabled={submitting}
               />
             </div>
@@ -167,12 +167,12 @@ const RegisterForm = ({ onSwitchToLogin }) => {
         </form>
       </CardContent>
 
-      <CardFooter className="flex justify-center border-t border-gray-100 py-4 bg-gray-50/50">
+      <CardFooter className="flex justify-center border-t border-[#e6ebf1] py-4 bg-slate-50/70">
         <p className="text-xs text-gray-600 m-0">
           Already have an account?{' '}
           <button
             onClick={onSwitchToLogin}
-            className="text-[#769046] font-bold hover:underline bg-transparent border-0 p-0 cursor-pointer"
+            className="text-brand-600 font-bold hover:underline bg-transparent border-0 p-0 cursor-pointer"
           >
             Sign in
           </button>

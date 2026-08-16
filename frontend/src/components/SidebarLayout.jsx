@@ -1,26 +1,64 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import Logo from './Logo';
 import ErrorBoundary from './ErrorBoundary';
 import { usePolling } from '../hooks/usePolling';
 import { Button } from './ui/button';
 import api from '../config/api';
+import { cn } from '../lib/utils';
 import {
-  Activity,
   Bell,
   LogOut,
   X,
   Menu,
-  UserCog,
-  Info,
-  AlertTriangle
+  ChevronRight,
+  CalendarDays,
+  AlertTriangle,
+  CheckCheck,
+  BellOff,
+  Eye,
 } from 'lucide-react';
 import { visibleMainNavItems, visibleOpsGroups, nativeRoleForNav } from '../config/navigation';
+
+// The shared shell for every staff and admin console.
+//
+// ── What changed and why ─────────────────────────────────────────────────────────────────────
+// The rail had three structural problems that no amount of restyling would fix:
+//
+//  1. It could not scroll. The aside was `justify-between` with a fixed account block at the
+//     bottom, so a SuperAdmin — who legitimately sees ten management destinations plus twelve
+//     departmental ones — had the account button pushed off the bottom of a 768px-tall laptop
+//     screen, with no way to reach it. The nav column now scrolls on its own and the brand and
+//     account blocks are pinned.
+//  2. Every group was permanently expanded, so that same SuperAdmin scanned twenty-two items to
+//     find one. Groups collapse now, remembered per user in localStorage, and the group holding
+//     the current screen always opens regardless of what was remembered — a collapsed state must
+//     never hide where you actually are.
+//  3. The "Acting as" notice was a full-width banner inside the content area, which pushed the
+//     work down the page on every borrowed screen. It is a fact about the current screen, not a
+//     message about the content, so it belongs in the header beside the title.
+//
+// The active-item treatment also changed, from a solid green pill to a brand-tinted row with an
+// indicator bar down its leading edge. A solid fill of the primary colour is the strongest visual
+// device the interface has, and spending it on "you are here" left nothing louder for the
+// buttons that actually do something.
+const GROUP_STATE_KEY = 'enlogada.nav.collapsedGroups';
+
+const readCollapsedGroups = () => {
+  try {
+    const raw = localStorage.getItem(GROUP_STATE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    // A corrupt or unavailable localStorage must not take the whole shell down with it.
+    return [];
+  }
+};
 
 const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectNav, children }) => {
   const { user, logout } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState(readCollapsedGroups);
 
   const userRoles = user?.roles || [];
   // Drives the permission half of nav visibility — see canSee in config/navigation.js. Refreshed
@@ -41,15 +79,14 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // sidebar can no longer advertise a screen the router will not open.
   const mainNavItems = visibleMainNavItems(userRoles, userPermissions);
 
-  // Module 18 UI/UX Phase 1: every operational role previously had exactly one nav
-  // destination (some even shared a "Dashboard" item that silently routed to the same page).
-  // Split into real, focused destinations per role, mirroring the pattern mainNavItems above
-  // already uses for Admin/SuperAdmin.
+  // Module 18 UI/UX Phase 1: every operational role previously had exactly one nav destination
+  // (some even shared a "Dashboard" item that silently routed to the same page). Split into real,
+  // focused destinations per role, grouped by department so Admin/SuperAdmin — who see all of
+  // these at once — get a scannable sidebar instead of twelve undifferentiated items.
   //
-  // Visual Design Improvement Plan Phase V2 (see .agents/_shared/VISUAL_IDENTITY.md §3a #11 /
-  // the plan's Section 07 "structure fix"): grouped by department instead of one flat list, so
-  // Admin/SuperAdmin — who see all of these at once — get a scannable sidebar instead of 12
-  // undifferentiated items. A single-department user still only ever sees their own group.
+  // visibleOpsGroups already applies BOTH gates (role and permission). The old code re-filtered
+  // the result by role alone, which was redundant and, had the two ever disagreed, would have
+  // been the looser of the two checks winning.
   const opsNavGroups = visibleOpsGroups(userRoles, userPermissions);
 
   // Resolve the currently-open ops screen (if any) and whether the viewer is genuinely acting
@@ -57,10 +94,22 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // role. A native Receptionist on Active Queue is just doing their job and sees nothing extra,
   // and so is a Receptionist/Cashier on either of their two departments.
   const activeOpsItem = opsNavGroups
-    .flatMap(group => group.items.map(item => ({ ...item, groupLabel: group.label })))
-    .find(item => item.id === activeNav);
+    .flatMap((group) => group.items.map((item) => ({ ...item, groupLabel: group.label })))
+    .find((item) => item.id === activeNav);
   const activeOpsNativeRole = nativeRoleForNav(activeNav);
   const isActingOutsideOwnRole = Boolean(activeOpsItem) && isSuperOrAdmin && !userRoles.includes(activeOpsNativeRole);
+
+  const toggleGroup = (label) => {
+    setCollapsedGroups((prev) => {
+      const next = prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label];
+      try {
+        localStorage.setItem(GROUP_STATE_KEY, JSON.stringify(next));
+      } catch {
+        /* a full or disabled localStorage just means the preference does not survive a reload */
+      }
+      return next;
+    });
+  };
 
   // Module 18 (Notification): real, per-user notifications from the backend, replacing the
   // static 3-item mock list that previously rendered identically for every user regardless of
@@ -90,6 +139,22 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // own — staff had to guess there was something to look at. Slower than the queues because a
   // notification is an FYI, not something anyone is waiting on.
   usePolling(fetchNotifications, 60000);
+
+  // Close the tray on Escape and on a click outside it. It previously stayed open until the bell
+  // was clicked again, so it sat over the top-right of whatever screen you navigated to next.
+  useEffect(() => {
+    if (!showNotifications) return undefined;
+    const onKey = (e) => e.key === 'Escape' && setShowNotifications(false);
+    const onClick = (e) => {
+      if (!e.target.closest('[data-notification-tray]')) setShowNotifications(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onClick);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClick);
+    };
+  }, [showNotifications]);
 
   const handleToggleNotifications = () => {
     const opening = !showNotifications;
@@ -128,74 +193,108 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
     return `${days}d ago`;
   };
 
+  // The clinic's local date, shown in the header.
+  //
+  // Not cosmetic. Every "today" screen in this app filters on the server's CURRENT_DATE, and the
+  // gap between that and what someone assumes the date is has already produced two real bugs (see
+  // the toISOString note in CLAUDE.md). Printing the date the console is actually working against
+  // means an empty queue at 00:30 reads as "it is a new day" rather than "the queue is broken".
+  // Built from local getters via toLocaleDateString, never from an ISO string.
+  const todayLabel = useMemo(
+    () => new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+    []
+  );
+
+  const initials = `${user?.firstName?.charAt(0) || ''}${user?.lastName?.charAt(0) || ''}`.toUpperCase() || 'U';
+
+  const NavButton = ({ item, isActive }) => {
+    const Icon = item.icon;
+    return (
+      <button
+        onClick={() => {
+          onSelectNav?.(item.id);
+          setMobileOpen(false);
+        }}
+        aria-current={isActive ? 'page' : undefined}
+        className={cn(
+          'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 py-2 pl-3 pr-2.5 text-left text-[13px] font-medium transition-colors',
+          isActive
+            ? 'bg-brand-500/[0.16] font-semibold text-white'
+            : 'bg-transparent text-slate-400 hover:bg-white/[0.05] hover:text-slate-100'
+        )}
+      >
+        {isActive && (
+          <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-brand-400" />
+        )}
+        <Icon
+          className={cn(
+            'h-[15px] w-[15px] flex-shrink-0 transition-colors',
+            isActive ? 'text-brand-400' : 'text-slate-500 group-hover:text-slate-300'
+          )}
+        />
+        <span className="truncate">{item.label}</span>
+      </button>
+    );
+  };
+
   const renderNavContent = () => (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl p-3 shadow-sm flex items-center space-x-3 border border-gray-100 transition-all hover:shadow-md">
-        <Logo className="w-9 h-9 flex-shrink-0" />
-        <div className="flex flex-col overflow-hidden">
-          <span className="font-bold text-xs leading-tight tracking-wide text-slate-900 truncate">Enlogada Ultrasound</span>
-          <span className="text-micro text-gray-500 font-semibold uppercase tracking-wider truncate">& Diagnostic Clinic</span>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Brand — flat on the rail rather than a white card floating inside it. A light panel in a
+          dark sidebar is the heaviest element on the screen, which put the most emphasis on the
+          one part of the interface nobody needs to look at twice. */}
+      <div className="flex flex-shrink-0 items-center gap-2.5 px-3 pb-4 pt-1">
+        <Logo className="h-8 w-8 flex-shrink-0" />
+        <div className="flex min-w-0 flex-col leading-tight">
+          <span className="truncate text-[13px] font-bold tracking-tight text-white">Enlogada</span>
+          <span className="truncate text-micro font-medium uppercase tracking-[0.12em] text-slate-500">
+            Diagnostic Clinic
+          </span>
         </div>
       </div>
 
-      <div className="space-y-1">
-        <span className="text-meta font-extrabold text-slate-400 uppercase tracking-widest px-3">Main Navigation</span>
-        <nav className="space-y-1 pt-1">
-          {mainNavItems.map(item => {
-            const Icon = item.icon;
-            const isActive = activeNav === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  onSelectNav?.(item.id);
-                  setMobileOpen(false);
-                }}
-                className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border-0 cursor-pointer ${
-                  isActive 
-                    ? 'bg-[#769046] text-white shadow-md shadow-[#769046]/20 font-bold' 
-                    : 'text-gray-300 hover:bg-slate-800/80 hover:text-white'
-                }`}
-              >
-                <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </div>
+      {/* The only scrolling region in the rail. */}
+      <div className="scroll-dark min-h-0 flex-1 space-y-5 overflow-y-auto pb-2 pr-0.5">
+        {mainNavItems.length > 0 && (
+          <div>
+            <span className="mb-1.5 block px-3 text-micro font-semibold uppercase tracking-[0.14em] text-slate-600">
+              Management
+            </span>
+            <nav className="space-y-0.5">
+              {mainNavItems.map((item) => (
+                <NavButton key={item.id} item={item} isActive={activeNav === item.id} />
+              ))}
+            </nav>
+          </div>
+        )}
 
-      <div className="space-y-3 pt-2">
-        <span className="text-meta font-extrabold text-slate-400 uppercase tracking-widest px-3">Clinical Operations</span>
-        {opsNavGroups.map(group => {
-          const visibleItems = group.items.filter(item => !item.roleRequired || item.roleRequired.some(r => userRoles.includes(r)));
-          if (visibleItems.length === 0) return null;
+        {opsNavGroups.map((group) => {
+          const holdsActive = group.items.some((item) => item.id === activeNav);
+          // A remembered collapse never hides the screen you are on.
+          const collapsed = collapsedGroups.includes(group.label) && !holdsActive;
           return (
-            <div key={group.label} className="space-y-1">
-              <span className="text-micro font-bold text-slate-500 uppercase tracking-wider px-3">{group.label}</span>
-              <nav className="space-y-1 pt-0.5">
-                {visibleItems.map(item => {
-                  const Icon = item.icon;
-                  const isActive = activeNav === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        onSelectNav?.(item.id);
-                        setMobileOpen(false);
-                      }}
-                      className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all border-0 cursor-pointer ${
-                        isActive
-                          ? 'bg-[#769046] text-white shadow-md shadow-[#769046]/20 font-bold'
-                          : 'text-gray-300 hover:bg-slate-800/80 hover:text-white'
-                      }`}
-                    >
-                      <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </nav>
+            <div key={group.label}>
+              <button
+                onClick={() => toggleGroup(group.label)}
+                aria-expanded={!collapsed}
+                className="mb-1.5 flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-3 text-micro font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:text-slate-400"
+              >
+                <ChevronRight
+                  className={cn('h-3 w-3 transition-transform duration-150', !collapsed && 'rotate-90')}
+                />
+                <span>{group.label}</span>
+                {collapsed && (
+                  <span className="ml-auto rounded bg-white/5 px-1 text-micro tabular-nums text-slate-500">
+                    {group.items.length}
+                  </span>
+                )}
+              </button>
+              {!collapsed && (
+                <nav className="space-y-0.5">
+                  {group.items.map((item) => (
+                    <NavButton key={item.id} item={item} isActive={activeNav === item.id} />
+                  ))}
+                </nav>
+              )}
             </div>
           );
         })}
@@ -203,151 +302,216 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
     </div>
   );
 
+  const accountButton = (
+    <button
+      onClick={() => {
+        onSelectNav?.('account');
+        setMobileOpen(false);
+      }}
+      aria-label="My Account"
+      className={cn(
+        'mt-3 flex w-full flex-shrink-0 cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 text-left transition-colors',
+        activeNav === 'account'
+          ? 'border-brand-500/40 bg-brand-500/[0.14]'
+          : 'border-white/[0.07] bg-white/[0.04] hover:bg-white/[0.08]'
+      )}
+    >
+      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-brand-500 text-micro font-bold text-white">
+        {initials}
+      </span>
+      <span className="flex min-w-0 flex-col leading-tight">
+        <span className="truncate text-fine font-semibold text-white">
+          {user?.firstName} {user?.lastName}
+        </span>
+        <span className="truncate text-micro text-slate-500">{userRoles.join(' · ')}</span>
+      </span>
+    </button>
+  );
+
   return (
-    <div className="min-h-screen bg-[#f8f9fa] flex text-slate-800 font-sans">
-      
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-64 bg-[#192534] text-gray-300 flex-col justify-between p-4 shadow-xl z-20 flex-shrink-0">
+    <div className="flex min-h-screen bg-canvas font-sans text-slate-800">
+      {/* Desktop rail */}
+      <aside className="z-20 hidden w-[248px] flex-shrink-0 flex-col border-r border-white/[0.06] bg-rail p-3 lg:flex">
         {renderNavContent()}
-        <button
-          onClick={() => onSelectNav && onSelectNav('account')}
-          aria-label="My Account"
-          className={`w-full text-left rounded-xl p-3 flex items-center justify-between border shadow-inner mt-4 cursor-pointer transition-colors border-0 ${
-            activeNav === 'account' ? 'bg-[#769046]/20 border-[#769046]/40' : 'bg-slate-800/90 border-slate-700/60 hover:bg-slate-800'
-          }`}
-        >
-          <div className="flex items-center space-x-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-[#769046] text-white flex items-center justify-center font-bold text-xs shadow-xs flex-shrink-0">
-              {user?.firstName ? user.firstName.charAt(0) : 'U'}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-white truncate">{user?.firstName} {user?.lastName}</span>
-              <span className="text-meta text-gray-400 truncate">{userRoles.join(', ')}</span>
-            </div>
-          </div>
-          <UserCog className="w-4 h-4 text-gray-400 flex-shrink-0" />
-        </button>
+        {accountButton}
       </aside>
 
-      {/* Mobile Drawer Overlay */}
+      {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={() => setMobileOpen(false)} />
-          <div className="relative flex-1 max-w-xs w-full bg-[#192534] text-gray-300 p-4 flex flex-col justify-between z-10 shadow-2xl">
-            <button 
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setMobileOpen(false)} />
+          <div className="relative z-10 flex w-full max-w-[272px] flex-col bg-rail p-3 shadow-overlay">
+            <button
               onClick={() => setMobileOpen(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-white p-1"
+              aria-label="Close navigation"
+              className="absolute right-2.5 top-2.5 flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-0 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
             >
-              <X className="w-5 h-5" />
+              <X className="h-4 w-4" />
             </button>
             {renderNavContent()}
-            <button
-              onClick={() => { onSelectNav?.('account'); setMobileOpen(false); }}
-              aria-label="My Account"
-              className={`w-full text-left rounded-xl p-3 flex items-center justify-between border shadow-inner mt-4 cursor-pointer transition-colors border-0 ${
-                activeNav === 'account' ? 'bg-[#769046]/20 border-[#769046]/40' : 'bg-slate-800/90 border-slate-700/60 hover:bg-slate-800'
-              }`}
-            >
-              <div className="flex items-center space-x-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-[#769046] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
-                  {user?.firstName ? user.firstName.charAt(0) : 'U'}
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-xs font-bold text-white truncate">{user?.firstName} {user?.lastName}</span>
-                  <span className="text-meta text-gray-400 truncate">{userRoles.join(', ')}</span>
-                </div>
-              </div>
-              <UserCog className="w-4 h-4 text-gray-400 flex-shrink-0" />
-            </button>
+            {accountButton}
           </div>
         </div>
       )}
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="bg-white border-b border-gray-100 px-4 lg:px-8 py-3.5 flex items-center justify-between shadow-2xs sticky top-0 z-30">
-          <div className="flex items-center space-x-3">
-            <button 
+      {/* Main content area */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-[#e6ebf1] bg-white/85 px-4 py-2.5 backdrop-blur-md lg:px-7">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
               onClick={() => setMobileOpen(true)}
-              className="lg:hidden text-slate-600 hover:text-slate-900 p-1.5 rounded-lg border border-gray-200"
+              aria-label="Open navigation"
+              className="flex h-9 w-9 flex-shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 lg:hidden"
             >
-              <Menu className="w-5 h-5" />
+              <Menu className="h-4 w-4" />
             </button>
-            <div className="w-8 h-8 rounded-lg bg-[#769046]/10 text-[#769046] flex items-center justify-center">
-              <Activity className="w-4.5 h-4.5" />
-            </div>
-            <h1 className="text-base lg:text-lg font-bold text-slate-900 m-0 tracking-tight">{title}</h1>
+            {/* A breadcrumb, not a second page title.
+
+                Every console screen renders its own PageHeader — a 20px heading with a
+                description and the screen's primary action. A bold 15px copy of the same words
+                sitting 40px above that read as a mistake, which is exactly what it looked like
+                once both were on screen together. So this bar states *where you are* and the
+                page states *what this is*: the two say different things, and the breadcrumb is
+                the half worth keeping sticky, because it is what you lose when you scroll.
+
+                It also earns the space it takes: "Visit History" exists under Front Desk and,
+                near enough, under Diagnostics too, and only the department tells them apart. */}
+            <nav aria-label="Breadcrumb" className="min-w-0">
+              <ol className="m-0 flex list-none items-center gap-1.5 p-0">
+                {activeOpsItem && (
+                  <>
+                    <li className="hidden whitespace-nowrap text-[13px] text-slate-400 sm:block">{activeOpsItem.groupLabel}</li>
+                    <li aria-hidden="true" className="hidden text-slate-300 sm:block">/</li>
+                  </>
+                )}
+                <li className="min-w-0 truncate text-[13px] font-semibold text-slate-800" aria-current="page">
+                  {title}
+                </li>
+              </ol>
+            </nav>
+            {isActingOutsideOwnRole && (
+              <span
+                title={`You hold Admin access, not ${activeOpsNativeRole}. Actions here are recorded under your name.`}
+                className="hidden flex-shrink-0 items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-micro font-semibold text-amber-800 ring-1 ring-inset ring-amber-200 md:inline-flex"
+              >
+                <Eye className="h-3 w-3" />
+                Acting as {activeOpsNativeRole}
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center space-x-4">
-            {/* Notification Icon with Dropdown */}
-            <div className="relative">
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <span className="hidden items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-fine font-semibold text-slate-600 md:inline-flex">
+              <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+              {todayLabel}
+            </span>
+
+            <div className="relative" data-notification-tray>
               <button
                 onClick={handleToggleNotifications}
                 aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
-                className="relative p-2 text-gray-600 hover:text-slate-900 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200/80 cursor-pointer transition-colors"
+                className={cn(
+                  'relative flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border transition-colors',
+                  showNotifications
+                    ? 'border-slate-300 bg-slate-100 text-slate-900'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                )}
               >
-                <Bell className="w-4 h-4" />
+                <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                  // A count, not a dot. "There is something" is barely more useful than nothing;
+                  // "there are eleven" tells staff whether to open it now or after this patient.
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold tabular-nums text-white ring-2 ring-white">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
                 )}
               </button>
 
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 p-4 animate-fade-in space-y-3">
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                    <span className="font-bold text-xs text-slate-900 uppercase tracking-wider">Notifications</span>
-                    <div className="flex items-center space-x-2">
+                <div className="animate-fade-in absolute right-0 mt-2 w-[340px] overflow-hidden rounded-xl border border-[#e6ebf1] bg-white shadow-float">
+                  <div className="flex items-center justify-between border-b border-[#e6ebf1] px-4 py-2.5">
+                    <span className="text-[13px] font-bold text-slate-900">
+                      Notifications
                       {unreadCount > 0 && (
-                        <button
-                          onClick={handleMarkAllAsRead}
-                          className="text-meta font-bold text-[#769046] hover:underline border-0 bg-transparent cursor-pointer uppercase tracking-wide"
-                        >
-                          Mark all read
-                        </button>
+                        <span className="ml-1.5 rounded bg-rose-50 px-1.5 py-0.5 text-micro font-bold text-rose-700">
+                          {unreadCount} new
+                        </span>
                       )}
-                      <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600 border-0 bg-transparent cursor-pointer" aria-label="Close notifications">
-                        <X className="w-3.5 h-3.5" />
+                    </span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllAsRead}
+                        className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-fine font-semibold text-brand-600 hover:text-brand-700"
+                      >
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        Mark all read
                       </button>
-                    </div>
+                    )}
                   </div>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                  <div className="max-h-[380px] overflow-y-auto p-1.5">
                     {notifLoading ? (
-                      <p className="text-fine text-gray-400 text-center py-4">Loading…</p>
+                      <p className="py-8 text-center text-fine text-slate-400">Loading…</p>
                     ) : notifications.length === 0 ? (
-                      <p className="text-fine text-gray-400 italic text-center py-4">No notifications yet.</p>
+                      <div className="flex flex-col items-center gap-2 py-8 text-center">
+                        <BellOff className="h-5 w-5 text-slate-300" />
+                        <p className="m-0 text-fine text-slate-500">Nothing new. You're up to date.</p>
+                      </div>
                     ) : (
-                      notifications.map(n => {
+                      notifications.map((n) => {
                         // Severity was ignored here entirely — every notification rendered the
                         // same, so a critical result awaiting a patient callback looked exactly
                         // like "New Appointment Booked". A panic value has to be findable in a
                         // list at a glance, and stay visibly urgent even after it is read.
                         const isCritical = n.type === 'critical';
                         return (
-                        <button
-                          key={n.id}
-                          onClick={() => !n.is_read && handleMarkAsRead(n.id)}
-                          className={`w-full text-left p-2.5 rounded-xl space-y-1 border text-xs cursor-pointer transition-colors ${
-                            isCritical
-                              ? 'bg-rose-50 hover:bg-rose-100/70 border-rose-300'
-                              : n.is_read
-                                ? 'bg-gray-50/70 hover:bg-gray-50 border-gray-100'
-                                : 'bg-[#769046]/5 hover:bg-[#769046]/10 border-[#769046]/20'
-                          }`}
-                        >
-                          <div className={`flex justify-between items-center font-bold ${isCritical ? 'text-rose-700' : 'text-gray-800'}`}>
-                            <span className="flex items-center space-x-1.5">
-                              {/* Icon as well as colour: this must survive a colour-vision
-                                  deficiency and a sunlit reception monitor. */}
-                              {isCritical
-                                ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" aria-hidden="true" />
-                                : !n.is_read && <span className="w-1.5 h-1.5 rounded-full bg-[#769046] flex-shrink-0" />}
-                              <span>{n.title}</span>
+                          <button
+                            key={n.id}
+                            onClick={() => !n.is_read && handleMarkAsRead(n.id)}
+                            className={cn(
+                              'flex w-full cursor-pointer gap-2.5 rounded-lg border-0 px-2.5 py-2 text-left transition-colors',
+                              isCritical
+                                ? 'bg-rose-50/70 hover:bg-rose-50'
+                                : n.is_read
+                                  ? 'bg-transparent hover:bg-slate-50'
+                                  : 'bg-brand-50/60 hover:bg-brand-50'
+                            )}
+                          >
+                            {/* Icon as well as colour: this must survive a colour-vision
+                                deficiency and a sunlit reception monitor. */}
+                            <span className="mt-1 flex-shrink-0">
+                              {isCritical ? (
+                                <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5 text-rose-600" />
+                              ) : (
+                                <span
+                                  className={cn(
+                                    'block h-1.5 w-1.5 rounded-full',
+                                    n.is_read ? 'bg-slate-300' : 'bg-brand-500'
+                                  )}
+                                />
+                              )}
                             </span>
-                            <span className="text-meta text-gray-400 font-normal whitespace-nowrap">{timeAgo(n.created_at)}</span>
-                          </div>
-                          <p className={`text-fine leading-snug ${isCritical ? 'text-rose-800 font-semibold' : 'text-gray-600'}`}>{n.message}</p>
-                        </button>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-baseline justify-between gap-2">
+                                <span
+                                  className={cn(
+                                    'truncate text-fine font-semibold',
+                                    isCritical ? 'text-rose-800' : 'text-slate-900'
+                                  )}
+                                >
+                                  {n.title}
+                                </span>
+                                <span className="flex-shrink-0 text-micro text-slate-400">{timeAgo(n.created_at)}</span>
+                              </span>
+                              <span
+                                className={cn(
+                                  'mt-0.5 block text-fine leading-snug',
+                                  isCritical ? 'font-medium text-rose-700' : 'text-slate-500'
+                                )}
+                              >
+                                {n.message}
+                              </span>
+                            </span>
+                          </button>
                         );
                       })
                     )}
@@ -356,25 +520,30 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
               )}
             </div>
 
-            {/* Logout Button */}
+            <span aria-hidden="true" className="hidden h-6 w-px bg-slate-200 sm:block" />
+
             <Button
-              variant="outline"
+              variant="ghost"
+              size="icon"
               onClick={logout}
-              className="text-red-500 border-red-100 hover:bg-red-50 flex items-center space-x-1.5 text-xs font-bold px-3.5 py-1.5 rounded-xl cursor-pointer"
+              aria-label="Log out"
+              title="Log out"
+              className="text-slate-500 hover:bg-rose-50 hover:text-rose-600"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Logout</span>
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </header>
 
-        {/* Dynamic Screen View Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        {/* Dynamic screen view content */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:px-7 lg:py-6">
+          {/* The mobile counterpart of the header chip — there is no room for it up there below
+              `md`, and it is the one piece of context a borrowed screen must not lose. */}
           {isActingOutsideOwnRole && (
-            <div className="mb-4 flex items-center space-x-2.5 bg-[#769046]/8 border border-[#769046]/25 text-[#536630] rounded-xl px-4 py-2.5 text-xs font-semibold">
-              <Info className="w-4 h-4 flex-shrink-0" />
+            <div className="mb-4 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-fine font-semibold text-amber-800 ring-1 ring-inset ring-amber-200 md:hidden">
+              <Eye className="h-3.5 w-3.5 flex-shrink-0" />
               <span>
-                Acting as: <strong>{activeOpsItem.groupLabel}</strong> — {activeOpsNativeRole} tools
+                Acting as {activeOpsNativeRole} — {activeOpsItem.groupLabel}
               </span>
             </div>
           )}
@@ -384,9 +553,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
               so navigating away from a broken console clears the error rather than sticking. */}
           <ErrorBoundary key={activeNav}>{children}</ErrorBoundary>
         </main>
-
       </div>
-
     </div>
   );
 };

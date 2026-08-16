@@ -35,16 +35,20 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
           </div>
 
           {/* Right Column: shared branding graphic — stays put across the crossfade, only the
-              form card to its left changes. */}
-          <div className="hidden md:flex justify-center items-center">
-            <div className="bg-white p-10 rounded-3xl shadow-xl border border-gray-100 flex flex-col items-center justify-center space-y-5 w-full max-w-sm text-center">
-              <div className="w-48 h-48 rounded-full border-4 border-[#769046]/40 flex items-center justify-center p-3 bg-gray-50/30">
-                <Logo className="w-32 h-32" />
+              form card to its left changes.
+
+              Dark rather than another white card. The form beside it is already a white card on a
+              near-white page; a second one made the two read as a pair of equal panels, so the
+              eye had no reason to start at the one you have to fill in. */}
+          <div className="hidden items-center justify-center md:flex">
+            <div className="rail-gradient rail-grid relative flex w-full max-w-sm flex-col items-center justify-center gap-5 overflow-hidden rounded-2xl border border-[#2b3a4d] p-10 text-center">
+              <div className="relative flex h-44 w-44 items-center justify-center rounded-full bg-white/[0.06] p-3 ring-1 ring-inset ring-white/10">
+                <Logo className="h-28 w-28" />
               </div>
-              <div className="space-y-1">
-                <h2 className="text-xl font-extrabold text-[#769046]">Enlogada</h2>
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-600">Ultrasound & Diagnostic Clinic</p>
-                <p className="text-xs text-gray-400 font-medium pt-1">Quality Diagnostic Care You Can Trust</p>
+              <div className="relative space-y-1">
+                <h2 className="m-0 text-xl font-extrabold tracking-tight text-white">Enlogada</h2>
+                <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-brand-300">Ultrasound &amp; Diagnostic Clinic</p>
+                <p className="m-0 pt-1 text-fine text-slate-400">Quality diagnostic care you can trust</p>
               </div>
             </div>
           </div>

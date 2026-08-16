@@ -141,9 +141,43 @@ Schema lives in `database/schema.sql` (source of truth, applied wholesale by `mi
 
 ### UI conventions
 
-- Design tokens: primary accent `#769046` (green), dark slate containers `#1e293b`/`#192534`, font 'Outfit'.
-- `frontend/src/components/ui/` holds shadcn/radix-based primitives (button, dialog, select, table, tabs, etc.) — reuse these instead of hand-rolling new primitives.
-- `SidebarLayout.jsx` is the shared shell for staff/admin consoles (dark sidebar + top bar); `DashboardLayout.jsx` / `PublicHeader.jsx` / `PublicFooter.jsx` are the public-page equivalents.
+**Everything visual is decided once, in `frontend/src/index.css`.** The brand is unchanged —
+`#769046` green, dark slate chrome, 'Outfit' — but it is now reached through tokens rather than
+arbitrary values. Four rules make the difference, and breaking any of them is what the consoles
+looked like before:
+
+- **One neutral ramp.** Tailwind's `gray-*` is remapped onto `slate-*` in `@theme`, so the two
+  ramps the app mixed (`border-gray-100` beside `text-slate-900`, warm against cool) are now the
+  same colour temperature. Use either; they resolve identically. Hairlines are `border-[#e6ebf1]`
+  (the `line` token) — `gray-100` as a *border* is nearly invisible against white.
+- **The brand green comes from the `brand-*` ramp**, not from `bg-[#769046]/10`. Arbitrary
+  opacity variants are how five different pale greens ended up on one screen.
+- **Shadow means "this floats."** Static panels are separated by a hairline border and a tinted
+  canvas, never by a shadow. `shadow-raised` is a hover lift, `shadow-float` is a dropdown,
+  `shadow-overlay` is a dialog. There is no fourth.
+- **Radius encodes size**: `md` (8px) for a badge, `lg` (10px) for a control, `xl` (14px) for a
+  panel, `2xl` (18px) for a dialog or hero.
+
+Layout primitives, all in `frontend/src/components/ui/`. Reach for these before writing a `<div>`
+with a border on it — each exists because the markup it replaces had been copy-pasted 15–40 times
+and the copies had drifted apart:
+
+| | what it is |
+|---|---|
+| `page-header.jsx` | opens every screen — eyebrow, title, one-sentence description, actions. `variant="hero"` is the dark treatment, for the two landing screens only |
+| `panel.jsx` | the section container (`Panel` / `PanelHeader` / `PanelBody` / `PanelFooter`). `<PanelBody flush>` for a table or divided list |
+| `toolbar.jsx` | the filter row above a worklist. `attached` joins it to the panel below; also exports `SegmentedFilter` and `ToolbarField` |
+| `empty-state.jsx` | what a screen shows when there is nothing. `tone="error"` looks *deliberately* unlike empty — a failed request and a quiet morning must never be confusable |
+| `.field-label` / `.alert` | two component classes in `index.css`, for the form label and the inline alert. Leaf elements, so a class is the right unit |
+
+- `SidebarLayout.jsx` is the shared shell for staff/admin consoles. Its nav column scrolls
+  independently and its department groups collapse (remembered in `localStorage`, but the group
+  holding the current screen always opens). The top bar is a **breadcrumb**, not a second page
+  title — the screen's own `PageHeader` carries the heading, so don't add a title to both.
+- `DashboardLayout.jsx` / `PublicHeader.jsx` / `PublicFooter.jsx` are the public-page equivalents.
+- **Don't couple a test to a class name.** `payment.spec.js` used to scope itself with
+  `ancestor::div[contains(@class,"rounded-2xl")]`, so changing a corner radius failed a payment
+  assertion. Add a `data-testid` instead.
 
 ## Repo conventions
 

@@ -2,6 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { Button } from '../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Panel } from '../components/ui/panel';
+import Toolbar, { ToolbarSpacer } from '../components/ui/toolbar';
+import EmptyState from '../components/ui/empty-state';
+import { SearchInput } from '../components/ui/search-input';
+import { SkeletonList } from '../components/ui/skeleton';
 import MetricCard from '../components/ui/metric-card';
 import { Badge } from '../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../components/ui/dialog';
@@ -30,7 +35,6 @@ import {
   UserPlus,
   ShieldCheck,
   Download,
-  Search,
   User,
   FlaskConical,
   Stethoscope,
@@ -557,7 +561,7 @@ const ClientDashboard = ({ onNavigate }) => {
     return (
       <DashboardLayout onNavigate={onNavigate} activeTab="dashboard">
         <div className="flex-1 flex flex-col items-center justify-center space-y-3 py-16">
-          <div className="w-10 h-10 border-4 border-[#769046] border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
           <span className="text-sm font-semibold text-gray-500">Loading your clinic patient profile...</span>
         </div>
       </DashboardLayout>
@@ -596,13 +600,13 @@ const ClientDashboard = ({ onNavigate }) => {
       <div className="flex flex-col space-y-6">
         
         {/* Top Active Profile Bar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-xs gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white border border-[#e6ebf1] rounded-xl p-4 gap-4">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-[#769046]/10 text-[#769046] flex items-center justify-center font-bold">
+            <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center font-bold">
               <User className="w-5 h-5" />
             </div>
             <div>
-              <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Active Profile</span>
+              <span className="field-label">Active Profile</span>
               {profiles.length > 0 ? (
                 <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
                   <SelectTrigger className="w-64 border-0 p-0 font-bold text-slate-800 focus:ring-0 focus:outline-none bg-transparent">
@@ -624,21 +628,21 @@ const ClientDashboard = ({ onNavigate }) => {
 
           <Dialog open={showAddProfile} onOpenChange={(open) => { setShowAddProfile(open); if (!open) setAddProfileError(''); }}>
             <DialogTrigger asChild>
-              <Button className="bg-[#769046] hover:bg-[#657c3a] text-white flex items-center space-x-2 rounded-xl font-bold text-xs shadow-sm cursor-pointer transition-all">
+              <Button className="flex items-center space-x-2 rounded-xl font-bold text-xs shadow-sm cursor-pointer transition-all">
                 <UserPlus className="w-4 h-4" />
                 <span>Add Dependent Profile</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg rounded-2xl">
+            <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle className="text-lg font-bold text-slate-900">Create Patient Profile</DialogTitle>
-                <DialogDescription className="text-xs">
+                <DialogDescription>
                   Register a profile for yourself or a family dependent.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleAddProfile} className="space-y-4 pt-2">
                 {addProfileError && (
-                  <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <div role="alert" className="alert alert-error">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{addProfileError}</span>
                   </div>
@@ -746,9 +750,9 @@ const ClientDashboard = ({ onNavigate }) => {
                   />
                 </div>
 
-                <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+                <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
                   <Button type="button" variant="outline" onClick={() => setShowAddProfile(false)} disabled={isAddingProfile}>Cancel</Button>
-                  <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white" disabled={isAddingProfile}>
+                  <Button type="submit"  disabled={isAddingProfile}>
                     {isAddingProfile ? 'Saving...' : 'Save Profile'}
                   </Button>
                 </div>
@@ -758,16 +762,16 @@ const ClientDashboard = ({ onNavigate }) => {
 
           {/* Edit Profile Dialog (Module 4: Patient Management) */}
           <Dialog open={showEditProfile} onOpenChange={(open) => { setShowEditProfile(open); if (!open) setEditProfileError(''); }}>
-            <DialogContent className="max-w-lg rounded-2xl">
+            <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle className="text-lg font-bold text-slate-900">Edit Patient Profile</DialogTitle>
-                <DialogDescription className="text-xs">
+                <DialogDescription>
                   Update {selectedProfile?.first_name}'s details.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleEditProfile} className="space-y-4 pt-2">
                 {editProfileError && (
-                  <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <div role="alert" className="alert alert-error">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{editProfileError}</span>
                   </div>
@@ -875,9 +879,9 @@ const ClientDashboard = ({ onNavigate }) => {
                   />
                 </div>
 
-                <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+                <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
                   <Button type="button" variant="outline" onClick={() => setShowEditProfile(false)} disabled={isEditingProfile}>Cancel</Button>
-                  <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white" disabled={isEditingProfile}>
+                  <Button type="submit"  disabled={isEditingProfile}>
                     {isEditingProfile ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
@@ -887,20 +891,20 @@ const ClientDashboard = ({ onNavigate }) => {
         </div>
 
         {/* Hero Welcome Banner & Stats */}
-        <div className="bg-[#192534] text-white rounded-3xl p-8 relative overflow-hidden shadow-lg border border-slate-800">
+        <div className="rail-gradient rail-grid relative overflow-hidden rounded-2xl border border-[#2b3a4d] p-6 text-white sm:p-8">
           <div className="relative z-10 space-y-4">
-            <div className="inline-flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full text-xs font-semibold text-[#769046]">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Enlogada Diagnostic Patient Portal</span>
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-micro font-semibold uppercase tracking-[0.14em] text-brand-200 ring-1 ring-inset ring-white/10">
+              <Sparkles className="h-3 w-3" />
+              <span>Patient Portal</span>
             </div>
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-              <div className="space-y-1">
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight m-0 text-white">
-                  {selectedProfile ? `Welcome, ${selectedProfile.first_name} ${selectedProfile.last_name}!` : `Welcome to Enlogada!`}
+            <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+              <div className="space-y-1.5">
+                <h1 className="m-0 text-2xl font-bold tracking-tight text-white md:text-3xl">
+                  {selectedProfile ? `Welcome, ${selectedProfile.first_name}` : 'Welcome to Enlogada'}
                 </h1>
-                <p className="text-gray-300 text-xs md:text-sm max-w-xl leading-relaxed">
-                  Book appointment schedules for Laboratory, Ultrasound, and X-Ray tests, check live visit statuses, and access certified diagnostic reports.
+                <p className="m-0 max-w-xl text-[13px] leading-relaxed text-slate-300">
+                  Book Laboratory, Ultrasound and X-Ray appointments, follow a visit as it moves through the clinic, and download your certified reports.
                 </p>
               </div>
 
@@ -914,15 +918,12 @@ const ClientDashboard = ({ onNavigate }) => {
                 }
               }}>
                 <DialogTrigger asChild>
-                  <Button
-                    disabled={!selectedProfileId}
-                    className="bg-[#769046] hover:bg-[#657c3a] text-white py-5 px-6 font-bold flex items-center space-x-2 rounded-2xl shadow-lg border-0 cursor-pointer transition-all hover:scale-105 active:scale-95 text-sm"
-                  >
-                    <PlusCircle className="w-5 h-5" />
-                    <span>Book Schedule</span>
+                  <Button size="lg" disabled={!selectedProfileId}>
+                    <PlusCircle className="h-4 w-4" />
+                    Book Schedule
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-xl rounded-2xl">
+                <DialogContent className="max-w-xl">
                   {bookingConfirmation ? (
                     <BookingConfirmation
                       {...bookingConfirmation}
@@ -934,19 +935,19 @@ const ClientDashboard = ({ onNavigate }) => {
                     <DialogTitle className="text-lg font-bold text-slate-900">
                       Book Diagnostic Appointment
                     </DialogTitle>
-                    <DialogDescription className="text-xs">
+                    <DialogDescription>
                       Schedule a diagnostic test for <strong>{selectedProfile?.first_name} {selectedProfile?.last_name}</strong>.
                     </DialogDescription>
 
                     {/* Visual Step Progress Bar */}
                     <div className="flex items-center justify-between pt-3 pb-1 border-b border-slate-100 my-2">
-                      <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 1 ? 'text-[#769046]' : 'text-slate-400'}`}>
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-meta ${bookingStep === 1 ? 'bg-[#769046] text-white' : 'bg-slate-200 text-slate-600'}`}>1</span>
+                      <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 1 ? 'text-brand-600' : 'text-slate-400'}`}>
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-meta ${bookingStep === 1 ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'}`}>1</span>
                         <span>Select Tests</span>
                       </div>
                       <div className="h-[2px] flex-1 mx-3 bg-slate-200" />
-                      <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 2 ? 'text-[#769046]' : 'text-slate-400'}`}>
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-meta ${bookingStep === 2 ? 'bg-[#769046] text-white' : 'bg-slate-200 text-slate-600'}`}>2</span>
+                      <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 2 ? 'text-brand-600' : 'text-slate-400'}`}>
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-meta ${bookingStep === 2 ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'}`}>2</span>
                         <span>Schedule & HMO</span>
                       </div>
                     </div>
@@ -961,18 +962,18 @@ const ClientDashboard = ({ onNavigate }) => {
                     )}
 
                     {/* Step Indicators */}
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div className="flex items-center justify-between border-b border-[#e6ebf1] pb-3">
                       <button 
                         type="button"
                         onClick={() => setBookingStep(1)}
-                        className={`text-xs font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${bookingStep === 1 ? 'bg-[#769046] text-white' : 'bg-gray-100 text-gray-500'}`}
+                        className={`text-xs font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${bookingStep === 1 ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}
                       >
                         1. Schedule & Services
                       </button>
                       <button 
                         type="button"
                         onClick={() => setBookingStep(2)}
-                        className={`text-xs font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${bookingStep === 2 ? 'bg-[#769046] text-white' : 'bg-gray-100 text-gray-500'}`}
+                        className={`text-xs font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${bookingStep === 2 ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}
                       >
                         2. HMO / Payment Note
                       </button>
@@ -981,7 +982,7 @@ const ClientDashboard = ({ onNavigate }) => {
                     {bookingStep === 1 && (
                       <div className="space-y-4">
                         <div className="space-y-1">
-                          <label className="text-xs font-bold text-gray-600 uppercase">Date</label>
+                          <label className="field-label">Date</label>
                           <Input
                             type="date"
                             value={bookingData.scheduledDate}
@@ -992,7 +993,7 @@ const ClientDashboard = ({ onNavigate }) => {
 
                         {bookingData.scheduledDate && (
                           <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-600 uppercase">Available Time</label>
+                            <label className="field-label">Available Time</label>
                             {slotsLoading ? (
                               <div className="text-xs text-gray-400 font-semibold py-2">Loading available times...</div>
                             ) : !dayIsOpen ? (
@@ -1011,10 +1012,10 @@ const ClientDashboard = ({ onNavigate }) => {
                                     onClick={() => setBookingData({...bookingData, scheduledTime: slot.time})}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer transition-all ${
                                       bookingData.scheduledTime === slot.time
-                                        ? 'bg-[#769046] text-white border-[#769046]'
+                                        ? 'bg-brand-500 text-white border-brand-500'
                                         : slot.available
-                                        ? 'bg-white text-slate-700 border-gray-200 hover:border-[#769046]'
-                                        : 'bg-gray-100 text-gray-300 border-gray-100 cursor-not-allowed line-through'
+                                        ? 'bg-white text-slate-700 border-gray-200 hover:border-brand-500'
+                                        : 'bg-gray-100 text-gray-300 border-[#e6ebf1] cursor-not-allowed line-through'
                                     }`}
                                   >
                                     {slot.time}
@@ -1027,17 +1028,17 @@ const ClientDashboard = ({ onNavigate }) => {
 
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-center">
-                            <label className="text-xs font-bold text-gray-600 uppercase">Select Diagnostic Tests</label>
-                            <span className="text-xs font-extrabold text-[#769046]">Total: {formatCurrency(calculateTotalPrice())}</span>
+                            <label className="field-label">Select Diagnostic Tests</label>
+                            <span className="text-xs font-extrabold text-brand-600">Total: {formatCurrency(calculateTotalPrice())}</span>
                           </div>
-                          <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-xl p-2.5 space-y-2 bg-gray-50/50">
+                          <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-xl p-2.5 space-y-2 bg-slate-50/70">
                             {testCatalog.map(test => (
-                              <label key={test.id} className="flex items-center space-x-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-100">
+                              <label key={test.id} className="flex items-center space-x-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-[#e6ebf1]">
                                 <input
                                   type="checkbox"
                                   checked={bookingData.testIds.includes(test.id.toString())}
                                   onChange={() => handleTestSelection(test.id.toString())}
-                                  className="rounded text-[#769046] focus:ring-[#769046]"
+                                  className="rounded text-brand-600 focus:ring-brand-500"
                                 />
                                 <div className="flex-1 flex justify-between items-center text-xs">
                                   <span className="font-bold text-gray-800">{test.name} <span className="text-meta text-gray-400 font-medium">({test.category_name})</span></span>
@@ -1049,7 +1050,7 @@ const ClientDashboard = ({ onNavigate }) => {
                         </div>
 
                         <div className="flex justify-end pt-2">
-                          <Button type="button" className="bg-[#769046] hover:bg-[#657c3a]" onClick={() => setBookingStep(2)}>
+                          <Button type="button"  onClick={() => setBookingStep(2)}>
                             Next: HMO & Notes &rarr;
                           </Button>
                         </div>
@@ -1059,7 +1060,7 @@ const ClientDashboard = ({ onNavigate }) => {
                     {bookingStep === 2 && (
                       <div className="space-y-4">
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-gray-600 uppercase">HMO Provider (Optional)</label>
+                          <label className="field-label">HMO Provider (Optional)</label>
                           <Select
                             value={bookingData.hmoProviderId}
                             onValueChange={val => setBookingData({...bookingData, hmoProviderId: val})}
@@ -1080,7 +1081,7 @@ const ClientDashboard = ({ onNavigate }) => {
 
                         {bookingData.hmoProviderId && bookingData.hmoProviderId !== 'none' && (
                           <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-gray-600 uppercase">HMO Authorization / LOA Code</label>
+                            <label className="field-label">HMO Authorization / LOA Code</label>
                             <Input
                               placeholder="Enter approval or card LOA number"
                               value={bookingData.hmoApprovalCode}
@@ -1090,7 +1091,7 @@ const ClientDashboard = ({ onNavigate }) => {
                         )}
 
                         <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-gray-600 uppercase">Additional Clinical Notes</label>
+                          <label className="field-label">Additional Clinical Notes</label>
                           <Input
                             placeholder="Physician referral notes or symptoms..."
                             value={bookingData.notes}
@@ -1098,11 +1099,11 @@ const ClientDashboard = ({ onNavigate }) => {
                           />
                         </div>
 
-                        <div className="flex justify-between pt-2 border-t border-gray-100">
+                        <div className="flex justify-between pt-2 border-t border-[#e6ebf1]">
                           <Button type="button" variant="outline" onClick={() => setBookingStep(1)}>
                             &larr; Back
                           </Button>
-                          <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold">
+                          <Button type="submit" className="font-bold">
                             Submit Schedule Request
                           </Button>
                         </div>
@@ -1116,7 +1117,7 @@ const ClientDashboard = ({ onNavigate }) => {
             </div>
 
             {/* Quick Metrics Bar inside Hero */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-800">
+            <div className="grid grid-cols-2 gap-3 border-t border-white/10 pt-5 md:grid-cols-4">
               <MetricCard variant="dark" label="Pending Requests" value={pendingCount} icon={Clock} tone="amber" />
               <MetricCard variant="dark" label="Completed Reports" value={completedCount} icon={CheckCircle} tone="emerald" />
               <MetricCard variant="dark" label="Total Test History" value={history.length} icon={FileText} tone="slate" />
@@ -1125,7 +1126,6 @@ const ClientDashboard = ({ onNavigate }) => {
 
           </div>
 
-          <div className="absolute right-[-60px] top-[-60px] w-80 h-80 bg-[#769046]/15 rounded-full blur-3xl pointer-events-none"></div>
         </div>
 
         {/* UI/UX Phase 1: previously one long stacked page with no way to jump to a section —
@@ -1133,60 +1133,56 @@ const ClientDashboard = ({ onNavigate }) => {
             to scroll past everything else to reach it (the exact complaint that prompted this
             restructure). Each section now gets its own full-width tab. */}
         <Tabs defaultValue="results" className="w-full space-y-4">
-          <TabsList className="bg-gray-100 p-1 rounded-xl flex-wrap h-auto">
-            <TabsTrigger value="results" className="rounded-lg text-xs font-bold px-4 py-1.5">Diagnostic Results</TabsTrigger>
-            <TabsTrigger value="appointments" className="rounded-lg text-xs font-bold px-4 py-1.5">Appointments</TabsTrigger>
-            <TabsTrigger value="payments" className="rounded-lg text-xs font-bold px-4 py-1.5">Payments</TabsTrigger>
-            <TabsTrigger value="profile" className="rounded-lg text-xs font-bold px-4 py-1.5">Profile</TabsTrigger>
+          <TabsList className="h-auto flex-wrap">
+            <TabsTrigger value="results">Diagnostic Results</TabsTrigger>
+            <TabsTrigger value="appointments">Appointments</TabsTrigger>
+            <TabsTrigger value="payments">Payments</TabsTrigger>
+            <TabsTrigger value="profile">Profile</TabsTrigger>
           </TabsList>
 
           <TabsContent value="results" className="m-0 space-y-4">
 
             {/* Filter & Search Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-              <div className="flex items-center space-x-2">
-                <Activity className="w-5 h-5 text-[#769046]" />
-                <h2 className="text-base font-bold text-slate-900 m-0">Diagnostic History</h2>
-              </div>
+            <Toolbar>
+              <span className="flex items-center gap-2 text-[13px] font-semibold text-slate-900">
+                <Activity className="h-4 w-4 text-brand-600" />
+                Diagnostic History
+              </span>
+              <ToolbarSpacer />
+              <SearchInput
+                placeholder="Search test..."
+                value={searchFilter}
+                onChange={e => setSearchFilter(e.target.value)}
+                containerClassName="w-full sm:w-48"
+              />
 
-              <div className="flex items-center space-x-2 w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-44">
-                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search test..."
-                    value={searchFilter}
-                    onChange={e => setSearchFilter(e.target.value)}
-                    className="pl-8 pr-3 py-1 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus:outline-none focus:ring-1 focus:ring-[#769046]"
-                  />
-                </div>
-
-                <div className="flex bg-gray-100 p-1 rounded-xl text-xs flex-wrap">
+                <div className="inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
                   {/* Mirrors the 5 seeded test_categories rows exactly (database/schema.sql) —
                       previously only 3 of 5 were filterable, silently hiding 2D Echo/ECG results. */}
                   {['All', 'Laboratory', 'Ultrasound', 'Xray', '2D Echo', 'ECG'].map(cat => (
                     <button
                       key={cat}
                       onClick={() => setFilterCategory(cat)}
-                      className={`px-2.5 py-1 rounded-lg border-0 font-semibold cursor-pointer transition-all ${
-                        filterCategory === cat ? 'bg-white text-slate-900 shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                      className={`cursor-pointer rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors ${
+                        filterCategory === cat
+                          ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                          : 'bg-transparent text-slate-500 hover:text-slate-800'
                       }`}
                     >
                       {cat}
                     </button>
                   ))}
                 </div>
-              </div>
-            </div>
+            </Toolbar>
 
             {/* Test Cards List */}
             <div className="space-y-3">
               {filteredHistory.length > 0 ? (
                 filteredHistory.map(item => (
-                  <Card key={item.visit_test_id} className="border-gray-100 shadow-xs rounded-2xl hover:shadow-md transition-all">
+                  <Card key={item.visit_test_id} className="border-[#e6ebf1] rounded-xl hover:shadow-md transition-all">
                     <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div className="flex items-start space-x-3.5">
-                        <div className="w-10 h-10 bg-gray-50 border border-gray-200/80 rounded-xl flex items-center justify-center flex-shrink-0 text-[#769046]">
+                        <div className="w-10 h-10 bg-gray-50 border border-gray-200/80 rounded-xl flex items-center justify-center flex-shrink-0 text-brand-600">
                           {CATEGORY_ICONS[item.category_name] || <FlaskConical className="w-5 h-5" />}
                         </div>
 
@@ -1217,24 +1213,24 @@ const ClientDashboard = ({ onNavigate }) => {
                           <DialogTrigger asChild>
                             <Button 
                               variant="outline" 
-                              className="border-[#769046] text-[#769046] hover:bg-[#769046]/10 text-xs font-bold px-4 rounded-xl flex items-center space-x-1.5 cursor-pointer"
+                              className="border-brand-500 text-brand-600 hover:bg-brand-50 text-xs font-bold px-4 rounded-xl flex items-center space-x-1.5 cursor-pointer"
                             >
                               <CheckCircle className="w-4 h-4" />
                               <span>View Certificate Report</span>
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-2xl rounded-2xl p-6">
+                          <DialogContent className="max-w-2xl">
 
                           <div className="print-area space-y-4">
                             {/* Official Lab Report Simulation Header */}
                             <div className="border-b border-gray-200 pb-4 text-center space-y-1">
                               <h2 className="text-base font-extrabold text-slate-900 uppercase tracking-wide m-0">ENLOGADA ULTRASOUND & DIAGNOSTIC CLINIC</h2>
                               <p className="text-fine text-gray-500 font-semibold m-0">Official Diagnostic Examination Report</p>
-                              <span className="text-meta text-[#769046] font-bold block">CONFIDENTIAL MEDICAL DOCUMENT</span>
+                              <span className="text-meta text-brand-600 font-bold block">CONFIDENTIAL MEDICAL DOCUMENT</span>
                             </div>
 
                             {/* Patient Info Summary Block */}
-                            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                            <div className="bg-gray-50 border border-[#e6ebf1] rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                               <div>
                                 <span className="text-gray-400 font-bold text-meta uppercase block">Patient Name</span>
                                 <span className="font-bold text-slate-900">{selectedProfile?.first_name} {selectedProfile?.last_name}</span>
@@ -1259,7 +1255,7 @@ const ClientDashboard = ({ onNavigate }) => {
                               </div>
 
                               {item.remarks && (
-                                <div className="border-l-4 border-[#769046] pl-3 py-1">
+                                <div className="border-l-4 border-brand-500 pl-3 py-1">
                                   <h4 className="text-fine font-bold text-gray-500 uppercase m-0">Remarks</h4>
                                   <p className="text-xs text-gray-700 m-0">{item.remarks}</p>
                                 </div>
@@ -1298,7 +1294,7 @@ const ClientDashboard = ({ onNavigate }) => {
                             </div>
 
                             {/* Footer Release Stamp */}
-                            <div className="pt-4 border-t border-gray-100 text-fine">
+                            <div className="pt-4 border-t border-[#e6ebf1] text-fine">
                               <span className="text-gray-400 font-medium">Released: {new Date(item.released_at).toLocaleString()}</span>
                             </div>
                           </div>
@@ -1341,16 +1337,16 @@ const ClientDashboard = ({ onNavigate }) => {
               more max-h scroll-box compression forced by sharing a column with two other
               cards. */}
           <TabsContent value="appointments" className="m-0">
-            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden max-w-2xl">
-              <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
+            <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden max-w-2xl">
+              <CardHeader className="bg-slate-50/80 border-b border-[#e6ebf1] py-3.5">
                 <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                  <CalendarClock className="w-4 h-4 text-[#769046]" />
+                  <CalendarClock className="w-4 h-4 text-brand-600" />
                   <span>My Appointments</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 space-y-3">
                 {payError && (
-                  <div role="alert" className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <div role="alert" className="alert alert-error">
                     <XCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{payError}</span>
                   </div>
@@ -1368,7 +1364,7 @@ const ClientDashboard = ({ onNavigate }) => {
                     const showPass = isOpen && appt.is_paid;
                     const showPayOptions = isOpen && !appt.is_paid && gateway.available;
                     return (
-                      <div key={appt.id} className="border border-gray-100 rounded-xl p-3 space-y-2 bg-gray-50/50">
+                      <div key={appt.id} className="border border-[#e6ebf1] rounded-xl p-3 space-y-2 bg-slate-50/70">
                         <div className="flex justify-between items-start">
                           <div>
                             <span className="block text-xs font-extrabold text-slate-900">
@@ -1401,7 +1397,7 @@ const ClientDashboard = ({ onNavigate }) => {
                                   type="button"
                                   disabled={payingAppointmentId === appt.id}
                                   onClick={() => handlePayOnline(appt, method)}
-                                  className="flex-1 bg-[#769046] hover:bg-[#657c3a] text-white text-fine font-bold rounded-lg py-1.5"
+                                  className="flex-1 text-fine font-bold rounded-lg py-1.5"
                                 >
                                   {payingAppointmentId === appt.id ? 'Redirecting…' : `Pay with ${method}`}
                                 </Button>
@@ -1448,36 +1444,43 @@ const ClientDashboard = ({ onNavigate }) => {
               the "scroll to find payments" complaint was about; now its own full-width tab
               instead of 3rd-of-3 in a compressed sidebar. */}
           <TabsContent value="payments" className="m-0">
-            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden max-w-2xl">
-              <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
-                <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                  <Receipt className="w-4 h-4 text-[#769046]" />
-                  <span>Payment History</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3">
+            {/* data-testid, because payment.spec.js needs to scope its assertions to this panel
+                and was doing it by walking up to the nearest element with a `rounded-2xl` class.
+                That coupled a passing test to a corner radius: changing the radius broke the
+                spec, and the spec's failure said nothing about payments. */}
+            <Panel data-testid="payment-history" className="max-w-2xl overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-[#e6ebf1] bg-slate-50/70 px-5 py-3.5">
+                <Receipt className="h-4 w-4 text-brand-600" />
+                <h3 className="m-0 text-[13px] font-semibold text-slate-900">Payment History</h3>
+              </div>
+              <div className="space-y-2 p-4">
                 {paymentHistoryLoading ? (
-                  <p className="text-xs text-gray-400 text-center py-4">Loading payment history…</p>
+                  <SkeletonList rows={3} />
                 ) : paymentHistory.length === 0 ? (
-                  <p className="text-xs text-gray-400 text-center py-4 italic">No payments recorded yet.</p>
+                  <EmptyState
+                    compact
+                    icon={Receipt}
+                    title="No payments yet"
+                    description="Receipts appear here once the clinic has settled a visit for you."
+                  />
                 ) : (
                   pagedPaymentHistory.map((pay) => (
-                    <div key={pay.id} className="border border-gray-100 rounded-xl p-3 space-y-1.5 bg-gray-50/50">
-                      <div className="flex justify-between items-start">
+                    <div key={pay.id} className="rounded-lg border border-[#e6ebf1] p-3">
+                      <div className="flex items-start justify-between gap-2">
                         <div>
-                          <span className="block text-xs font-extrabold text-slate-900">{formatCurrency(pay.amount)}</span>
-                          <span className="block text-fine text-gray-500 font-medium">{pay.patient_first_name} {pay.patient_last_name}</span>
+                          <span className="block text-[15px] font-bold tabular-nums text-slate-900">{formatCurrency(pay.amount)}</span>
+                          <span className="block text-fine text-slate-500">{pay.patient_first_name} {pay.patient_last_name}</span>
                         </div>
                         <StatusBadge status={pay.payment_status} />
                       </div>
-                      <div className="flex items-center justify-between text-meta text-gray-400">
+                      <div className="mt-1.5 flex items-center justify-between text-micro text-slate-400">
                         <span className="font-mono">{pay.receipt_number || `OR-${pay.id}`}</span>
                         <span>{new Date(pay.paid_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                       </div>
                     </div>
                   ))
                 )}
-              </CardContent>
+              </div>
               {paymentHistory.length > 0 && (
                 <Pagination
                   page={safePaymentHistoryPage}
@@ -1486,16 +1489,16 @@ const ClientDashboard = ({ onNavigate }) => {
                   totalLabel={`${paymentHistory.length} total`}
                 />
               )}
-            </Card>
+            </Panel>
           </TabsContent>
 
           {/* Patient Profile Summary + HMO info — grouped under one Profile tab */}
           <TabsContent value="profile" className="m-0 space-y-4 max-w-2xl">
             {selectedProfile && (
-              <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-                <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5 flex-row items-center justify-between space-y-0">
+              <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+                <CardHeader className="bg-slate-50/80 border-b border-[#e6ebf1] py-3.5 flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                    <User className="w-4 h-4 text-[#769046]" />
+                    <User className="w-4 h-4 text-brand-600" />
                     <span>Patient Profile Summary</span>
                   </CardTitle>
                   <Button
@@ -1503,7 +1506,7 @@ const ClientDashboard = ({ onNavigate }) => {
                     variant="outline"
                     onClick={handleOpenEditProfile}
                     aria-label="Edit patient profile"
-                    className="h-7 w-7 p-0 border-gray-200 text-gray-500 hover:text-[#769046] hover:border-[#769046] rounded-lg"
+                    className="h-7 w-7 p-0 border-gray-200 text-gray-500 hover:text-brand-600 hover:border-brand-500 rounded-lg"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
@@ -1525,7 +1528,7 @@ const ClientDashboard = ({ onNavigate }) => {
                   </div>
                   <div className="flex justify-between items-center text-xs pb-1">
                     <span className="text-gray-500 font-medium">Category:</span>
-                    <Badge variant="secondary" className="font-bold text-meta bg-[#769046]/10 text-[#769046]">
+                    <Badge variant="secondary" className="font-bold text-meta bg-brand-50 text-brand-600">
                       {selectedProfile.patient_type_name}
                     </Badge>
                   </div>
@@ -1534,8 +1537,8 @@ const ClientDashboard = ({ onNavigate }) => {
             )}
 
             {/* HMO Coverage Info Card */}
-            <Card className="border-gray-100 bg-[#192534] text-white rounded-2xl overflow-hidden p-5 space-y-3 shadow-sm">
-              <div className="flex items-center space-x-2 text-[#769046]">
+            <Card className="border-[#e6ebf1] bg-rail text-white rounded-2xl overflow-hidden p-5 space-y-3 shadow-sm">
+              <div className="flex items-center space-x-2 text-brand-600">
                 <ShieldCheck className="w-5 h-5" />
                 <h3 className="font-bold text-sm text-white m-0">HMO Accreditation</h3>
               </div>

@@ -56,7 +56,7 @@ const MainApp = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center space-y-3">
-        <div className="w-10 h-10 border-4 border-[#769046] border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
         <span className="text-sm font-semibold text-gray-500">Loading Enlogada Clinic...</span>
       </div>
     );
@@ -153,7 +153,7 @@ const MainApp = () => {
   // Fallback for unauthorized roles
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="text-center space-y-2 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+      <div className="space-y-2 rounded-xl border border-[#e6ebf1] bg-white p-6 text-center shadow-raised">
         <h2 className="text-lg font-bold text-red-500">Unauthorized Profile Access</h2>
         <p className="text-sm text-gray-500">Your account does not have any clinical roles assigned.</p>
       </div>

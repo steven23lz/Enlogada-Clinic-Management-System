@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import EmptyState from '../../components/ui/empty-state';
+import { SearchInput } from '../../components/ui/search-input';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { StatusBadge } from '../../components/ui/status-badge';
+import { SkeletonList } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
-import { Search, Users, AlertCircle, ChevronRight, Printer } from 'lucide-react';
+import { Users, AlertCircle, ChevronRight, Printer, FolderSearch, FileX2 } from 'lucide-react';
 
 // UI/UX Modernization Phase 4: search results come back in one shot with no server-side
 // pagination, so a client-side page size is proportionate (VISUAL_IDENTITY.md §3a #11).
@@ -66,134 +70,157 @@ const PatientRecordsOversight = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold text-slate-900 m-0">Patient Records Oversight</h2>
-          <p className="text-xs text-gray-500 m-0">Search the clinic-wide patient roster, across all client-owned and walk-in profiles.</p>
-        </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Oversight"
+        icon={FolderSearch}
+        title="Patient Records"
+        description="Search the clinic-wide roster, across client-owned and walk-in profiles. Opening a record is audited."
+      />
 
-        {error && (
-          <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSearch} className="flex space-x-2">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search by patient name..."
+      <Panel>
+        <PanelBody className="space-y-3">
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <SearchInput
+              containerClassName="flex-1"
+              placeholder="Search by patient name…"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              className="pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus:outline-none focus:ring-1 focus:ring-[#769046]"
+              aria-label="Search patient records by name"
             />
-          </div>
-          <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white text-xs font-bold px-5" disabled={searching}>
-            {searching ? 'Searching...' : 'Search'}
-          </Button>
-        </form>
-      </div>
+            <Button type="submit" disabled={searching}>
+              {searching ? 'Searching…' : 'Search'}
+            </Button>
+          </form>
+
+          {error && (
+            <div role="alert" className="flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-fine font-semibold text-rose-700 ring-1 ring-inset ring-rose-200">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Search-first screens open on nothing, and nothing is indistinguishable from a
+              failed request unless it says otherwise. */}
+          {!results && !error && (
+            <p className="m-0 pt-1 text-fine text-slate-500">
+              Results appear here. Two characters is enough to start.
+            </p>
+          )}
+        </PanelBody>
+      </Panel>
 
       {results && (() => {
         const totalPages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
         const pagedResults = results.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
         return (
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-row items-center space-x-2">
-            <Users className="w-4 h-4 text-[#769046]" />
-            <CardTitle className="text-sm font-bold text-slate-800">{results.length} Result{results.length === 1 ? '' : 's'}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4">
+        <Panel>
+          <PanelHeader
+            title={`${results.length} match${results.length === 1 ? '' : 'es'}`}
+            description={results.length > 0 ? 'Select a patient to view their test history' : undefined}
+            icon={Users}
+          />
+          <PanelBody flush>
             {results.length === 0 ? (
-              <p className="text-xs text-gray-400 italic text-center py-4">No matching patient records found.</p>
+              <EmptyState
+                icon={FileX2}
+                title="No matching patient records"
+                description="Check the spelling, or try a surname on its own."
+              />
             ) : (
-              <div className="space-y-2">
+              <ul className="m-0 list-none divide-y divide-[#eef2f6] p-0">
                 {pagedResults.map(patient => (
-                  <button
-                    key={patient.id}
-                    type="button"
-                    onClick={() => handleViewHistory(patient)}
-                    className="w-full flex items-center justify-between border border-gray-100 rounded-xl p-3 bg-gray-50/50 hover:bg-gray-50 hover:border-[#769046]/30 cursor-pointer transition-colors text-left"
-                  >
-                    <div className="text-xs space-y-0.5">
-                      <span className="block font-bold text-slate-900">
-                        {patient.first_name} {patient.last_name} <span className="text-meta text-gray-400 font-normal">PT-{patient.id}</span>
+                  <li key={patient.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleViewHistory(patient)}
+                      className="group flex w-full cursor-pointer items-center justify-between gap-3 border-0 bg-transparent px-5 py-3 text-left transition-colors hover:bg-slate-50"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-semibold text-slate-900">
+                          {patient.first_name} {patient.last_name}
+                          <span className="ml-1.5 font-mono text-micro font-normal text-slate-400">PT-{patient.id}</span>
+                        </span>
+                        <span className="block text-fine text-slate-500">
+                          {patient.sex} &bull; DOB {new Date(patient.birthdate).toLocaleDateString()} &bull; {patient.contact_number || 'No contact on file'}
+                        </span>
                       </span>
-                      <span className="block text-gray-500">
-                        {patient.sex} &bull; DOB {new Date(patient.birthdate).toLocaleDateString()} &bull; {patient.contact_number || 'No contact on file'}
+                      <span className="flex flex-shrink-0 items-center gap-2">
+                        <Badge variant="outline" className="border-brand-200 bg-brand-50 text-brand-700">
+                          {patient.patient_type_name}
+                        </Badge>
+                        <ChevronRight className="h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600" />
                       </span>
-                    </div>
-                    <div className="flex items-center space-x-2 flex-shrink-0">
-                      <Badge variant="secondary" className="font-bold text-meta bg-[#769046]/10 text-[#769046]">
-                        {patient.patient_type_name}
-                      </Badge>
-                      <ChevronRight className="w-4 h-4 text-gray-300" />
-                    </div>
-                  </button>
+                    </button>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
-          </CardContent>
+          </PanelBody>
           {results.length > 0 && (
             <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${results.length} total`} />
           )}
-        </Card>
+        </Panel>
         );
       })()}
 
       <Dialog open={!!selectedPatient} onOpenChange={(open) => { if (!open) setSelectedPatient(null); }}>
-        <DialogContent className="max-w-2xl rounded-2xl p-6">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">
+            <DialogTitle>
               {selectedPatient?.first_name} {selectedPatient?.last_name}'s Test Records
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription>
               PT-{selectedPatient?.id} &bull; {selectedPatient?.patient_type_name}
             </DialogDescription>
           </DialogHeader>
 
           {historyError && (
-            <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div role="alert" className="flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-fine font-semibold text-rose-700 ring-1 ring-inset ring-rose-200">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{historyError}</span>
             </div>
           )}
 
           {historyLoading ? (
-            <p className="text-xs text-gray-400 text-center py-8">Loading test records…</p>
+            <SkeletonList rows={3} />
           ) : patientHistory.length === 0 ? (
-            <p className="text-xs text-gray-400 italic text-center py-8">No tests on file for this patient.</p>
+            <EmptyState
+              compact
+              icon={FileX2}
+              title="No tests on file"
+              description="This patient has a record but has not been through a diagnostic visit yet."
+            />
           ) : (
             <>
-              <div className="print-area space-y-3 max-h-96 overflow-y-auto pr-1">
-                <div className="hidden print:block text-center border-b border-gray-100 pb-3 mb-3">
-                  <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide m-0">Enlogada Ultrasound &amp; Diagnostic Clinic</h3>
-                  <p className="text-xs text-gray-500 m-0">Patient Test Records — {selectedPatient?.first_name} {selectedPatient?.last_name} (PT-{selectedPatient?.id})</p>
+              <div className="print-area max-h-96 space-y-2 overflow-y-auto pr-1">
+                <div className="mb-3 hidden border-b border-slate-200 pb-3 text-center print:block">
+                  <h3 className="m-0 text-sm font-extrabold uppercase tracking-wide text-slate-900">Enlogada Ultrasound &amp; Diagnostic Clinic</h3>
+                  <p className="m-0 text-fine text-slate-500">Patient Test Records — {selectedPatient?.first_name} {selectedPatient?.last_name} (PT-{selectedPatient?.id})</p>
                 </div>
                 {patientHistory.map(item => (
-                  <div key={item.visit_test_id} className="border border-gray-100 rounded-xl p-3 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">{item.test_name} <span className="text-meta text-gray-400 font-normal">({item.category_name})</span></span>
+                  <div key={item.visit_test_id} className="rounded-lg border border-[#e6ebf1] p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-semibold text-slate-900">
+                        {item.test_name} <span className="text-fine font-normal text-slate-400">({item.category_name})</span>
+                      </span>
                       <StatusBadge status={item.test_status} />
                     </div>
-                    <div className="flex items-center justify-between text-fine text-gray-500">
+                    <div className="mt-1 flex items-center justify-between text-fine text-slate-500">
                       <span>{new Date(item.visit_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &bull; {formatCurrency(item.price_at_time)}</span>
                       {item.released_at && <span>Released {new Date(item.released_at).toLocaleDateString()}</span>}
                     </div>
                     {item.findings && (
-                      <p className="text-fine text-gray-600 whitespace-pre-wrap m-0 pt-1 border-t border-gray-100">{item.findings}</p>
+                      <p className="m-0 mt-2 whitespace-pre-wrap border-t border-[#eef2f6] pt-2 text-fine leading-relaxed text-slate-600">{item.findings}</p>
                     )}
                   </div>
                 ))}
               </div>
 
-              <div className="flex justify-end pt-2 border-t border-gray-100">
-                <Button type="button" variant="outline" onClick={() => window.print()} className="text-xs font-bold flex items-center space-x-1.5">
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print Patient Test Records</span>
+              <div className="flex justify-end border-t border-[#e6ebf1] pt-3">
+                <Button type="button" variant="outline" onClick={() => window.print()}>
+                  <Printer className="h-3.5 w-3.5" />
+                  Print Patient Test Records
                 </Button>
               </div>
             </>

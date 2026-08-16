@@ -1,29 +1,39 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
-/* Tailwind v4 CSS-based theme configuration */
+/* Tailwind v4 CSS-based theme configuration.
+ *
+ * ── Why this file changed shape ──────────────────────────────────────────────────────────────
+ * The consoles had grown three overlapping vocabularies for the same handful of decisions: two
+ * neutral ramps used interchangeably (`border-gray-100` beside `text-slate-900` in the same
+ * card), four shadow steps chosen by eye, and a type scale whose small end sat at 9px. None of
+ * those are individually wrong, but together they are what made the app read as a dense admin
+ * template rather than a clinical product: nothing on a screen was obviously more important than
+ * anything else, because every surface carried the same border, the same near-invisible shadow
+ * and the same 10px bold uppercase label.
+ *
+ * The fix is a single source for each decision, below. The brand is unchanged — #769046 and
+ * #192534 still carry the identity; what changed is everything arranged around them.
+ */
 @theme {
-  /* Type scale below Tailwind's `text-xs` (12px).
+  /* ── Type scale ────────────────────────────────────────────────────────────────────────────
+   * Sizes below Tailwind's `text-xs`, named for the job rather than the pixel count.
    *
-   * These four sizes were already the app's scale — 10px appeared 155 times and 11px 77 times,
-   * written as arbitrary `text-meta` values with no single place to change them and nothing
-   * naming what each was for. Two consequences: adjusting the small end of the scale meant a
-   * find-and-replace across thirty files, and every new screen picked a size by eye, which is
-   * how a fourth and fifth size appear without anyone deciding to add one.
-   *
-   * Named for the job rather than the pixel count, so a future change to what "meta" measures
-   * does not leave every class lying about its own size.
+   * Every step moved up 1px. The old scale bottomed out at 9px, which is below the size at which
+   * most people read comfortably on a 1080p monitor at desk distance — and the app used it for
+   * record identifiers, the one thing staff read back to a patient over the phone. 10px is the
+   * floor now, and only for genuinely secondary text.
    *   micro — dense identifiers where space is genuinely scarce
    *   meta  — uppercase labels, captions, record IDs
    *   fine  — secondary body text sitting under a primary value
    *   stat  — the headline number on a metric card
    */
-  --text-micro: 0.5625rem;  /*  9px */
-  --text-meta: 0.625rem;    /* 10px */
-  --text-fine: 0.6875rem;   /* 11px */
-  --text-stat: 1.75rem;     /* 28px */
+  --text-micro: 0.625rem;   /* 10px */
+  --text-meta: 0.6875rem;   /* 11px */
+  --text-fine: 0.75rem;     /* 12px */
+  --text-stat: 1.875rem;    /* 30px */
 
-  /* Colors */
+  /* ── Brand ─────────────────────────────────────────────────────────────────────────────── */
   --color-primary: #769046;
   --color-primary-hover: #657c3a;
   --color-primary-active: #536630;
@@ -35,25 +45,107 @@
   --color-secondary-foreground: #ffffff;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
-  --color-muted: #f3f4f6;
-  --color-muted-foreground: #6b7280;
-  --color-accent: #f3f4f6;
-  --color-accent-foreground: #111827;
-  --color-card: #ffffff;
-  --color-card-foreground: #111827;
-  --color-popover: #ffffff;
-  --color-popover-foreground: #111827;
-  --color-dark-slate: #192534;
-  --color-border: #e5e7eb;
-  --color-input: #e5e7eb;
-  --color-ring: #769046;
-  --color-background: #f8f9fa;
-  --color-foreground: #192534;
 
-  /* Border Radius */
-  --radius-lg: 16px;
-  --radius-md: 12px;
-  --radius-sm: 8px;
+  /* Tints of the brand green, so a highlighted row or a selected chip does not have to be
+   * written as `bg-[#769046]/10` at every call site (which is how five slightly different
+   * greens ended up on the same screen). */
+  --color-brand-50: #f4f7ee;
+  --color-brand-100: #e6eed7;
+  --color-brand-200: #cfdcb5;
+  --color-brand-300: #b0c489;
+  --color-brand-400: #93ab63;
+  --color-brand-500: #769046;
+  --color-brand-600: #657c3a;
+  --color-brand-700: #536630;
+  --color-brand-800: #3f4d26;
+  --color-brand-900: #2c351b;
+
+  /* ── Neutral ramp ──────────────────────────────────────────────────────────────────────────
+   * `gray` is remapped onto `slate`. Both ramps were already in use across every console —
+   * Tailwind's gray is warm and its slate is cool, so a card with `border-gray-100` and
+   * `text-slate-900` was quietly mixing two colour temperatures. Nobody names that when they
+   * look at it; it just reads as slightly grubby.
+   *
+   * Rather than rewrite ~900 utility usages, the two ramps are made one. Slate is the survivor
+   * because the dark chrome (#192534, the sidebar) is already cool, so the whole app now sits on
+   * one temperature. Existing `gray-*` classes keep working and simply land on the right colour.
+   */
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+  --color-gray-950: #020617;
+
+  /* ── Semantic surfaces ─────────────────────────────────────────────────────────────────────
+   * Three levels, and only three. Anything that needs a fourth is a dialog, and dialogs get
+   * `shadow-overlay` instead of another surface colour.
+   *   canvas  — the page behind everything
+   *   surface — a panel, card or table sitting on the canvas
+   *   sunken  — a well *inside* a panel: table headers, read-only summaries, code-ish blocks
+   */
+  --color-canvas: #f4f6f9;
+  --color-surface: #ffffff;
+  --color-sunken: #f8fafc;
+  --color-line: #e6ebf1;
+  --color-line-strong: #d3dae4;
+
+  /* Ink. Three weights of text, matching the three that actually appear in the designs. */
+  --color-ink: #0f172a;
+  --color-ink-soft: #475569;
+  --color-ink-muted: #64748b;
+
+  /* Dark chrome — the sidebar rail and the hero panels. */
+  --color-rail: #16212e;
+  --color-rail-raised: #1f2c3c;
+  --color-rail-line: #2b3a4d;
+  --color-dark-slate: #192534;
+
+  /* shadcn compatibility aliases, kept so the vendored primitives keep resolving. */
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-accent: #f1f5f9;
+  --color-accent-foreground: #0f172a;
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0f172a;
+  --color-border: #e6ebf1;
+  --color-input: #e2e8f0;
+  --color-ring: #769046;
+  --color-background: #f4f6f9;
+  --color-foreground: #0f172a;
+
+  /* ── Elevation ─────────────────────────────────────────────────────────────────────────────
+   * Shadow now means "this floats above the page", and nothing else. The old `shadow-xs` on a
+   * white card over a near-white canvas was invisible at 100% zoom — it did not separate the
+   * card, it just blurred its bottom edge. Static panels are separated by a hairline border
+   * instead, which is crisper and survives a low-contrast monitor.
+   *
+   *   raised  — hover state on an interactive card; the only "lift" in normal reading
+   *   float   — dropdowns, popovers, the notification tray
+   *   overlay — modal dialogs
+   */
+  --shadow-raised: 0 1px 2px -1px rgb(15 23 42 / 0.06), 0 4px 12px -4px rgb(15 23 42 / 0.10);
+  --shadow-float: 0 2px 4px -2px rgb(15 23 42 / 0.06), 0 12px 28px -8px rgb(15 23 42 / 0.16);
+  --shadow-overlay: 0 8px 12px -6px rgb(15 23 42 / 0.08), 0 32px 64px -16px rgb(15 23 42 / 0.24);
+  --shadow-rail: 1px 0 0 0 rgb(15 23 42 / 0.06);
+
+  /* ── Radius ────────────────────────────────────────────────────────────────────────────────
+   * Radius encodes size, not taste: the bigger the surface, the larger the corner. Previously a
+   * 28px badge and a full-width panel both used `rounded-2xl`, which is what made small controls
+   * look like pills and large panels look under-rounded.
+   */
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
 }
 
 html {
@@ -62,27 +154,128 @@ html {
 
 body {
   font-family: 'Outfit', sans-serif;
-  background-color: #f8f9fa;
+  background-color: #f4f6f9;
   margin: 0;
-  color: #192534;
+  color: #0f172a;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Outfit's default figures are proportional, so a queue counter ticking 9 → 10 nudges every
+     column beside it. Lining tabular figures everywhere means numbers in a table stay in their
+     column without each call site having to remember `tabular-nums`. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Headings inherit the app's tighter tracking rather than each screen setting it by hand. */
+h1, h2, h3, h4 {
+  letter-spacing: -0.011em;
+}
+
+::selection {
+  background: rgb(118 144 70 / 0.22);
+}
+
+/* One focus treatment for the whole app. Keyboard users previously got Tailwind's default ring
+   on some controls, nothing at all on the hand-rolled `<button className="border-0">` ones, and
+   a browser outline on the rest — so tabbing through a console lost the cursor repeatedly. */
+:focus-visible {
+  outline: 2px solid #769046;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Two component classes ─────────────────────────────────────────────────────────────────────
+ * Deliberately only two, and only because these exact markup strings had been copy-pasted past
+ * the point where a shared definition was optional: the form-field label appeared verbatim 40
+ * times and the inline alert 16 times, across fourteen files. Both are leaf elements with no
+ * structure of their own, so a class is the right unit — wrapping them in React components would
+ * mean touching 56 call sites to gain nothing a class does not already give.
+ *
+ * Written as plain properties rather than @apply so they carry no dependency on Tailwind's
+ * layer-ordering behaviour; utilities on the element still win, which is what lets a call site
+ * override the width or spacing without fighting the base.
+ */
+@layer components {
+  /* The label above a form input. Was `text-xs font-bold text-gray-600 uppercase` — 12px bold
+     uppercase with default tracking, which at that weight sets almost solid. */
+  .field-label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+
+  /* Inline feedback inside a form or panel. Not for page-level errors — those get EmptyState with
+     tone="error", which reserves the vertical space the missing content would have taken. */
+  .alert {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+  }
+  .alert > svg {
+    flex-shrink: 0;
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+  .alert-error {
+    background-color: #fff1f2;
+    color: #be123c;
+    box-shadow: inset 0 0 0 1px #fecdd3;
+  }
+  .alert-success {
+    background-color: #ecfdf5;
+    color: #047857;
+    box-shadow: inset 0 0 0 1px #a7f3d0;
+  }
+  .alert-warning {
+    background-color: #fffbeb;
+    color: #b45309;
+    box-shadow: inset 0 0 0 1px #fde68a;
+  }
+  .alert-info {
+    background-color: #f4f7ee;
+    color: #536630;
+    box-shadow: inset 0 0 0 1px #cfdcb5;
+  }
 }
 
 /* Custom Scrollbar Styles */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 4px;
+  border-radius: 999px;
+  /* Inset via a transparent border so the thumb reads as a slim pill with breathing room,
+     instead of a bar wedged against the edge of the pane. */
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+  background-clip: content-box;
+}
+
+/* A dark pane needs its own thumb — the light one disappears against the rail. */
+.scroll-dark::-webkit-scrollbar-thumb {
+  background: #3b4a5f;
+  background-clip: content-box;
+}
+.scroll-dark::-webkit-scrollbar-thumb:hover {
+  background: #4d5f78;
+  background-clip: content-box;
 }
 
 /* Glassmorphism & Animations */
@@ -96,6 +289,30 @@ body {
   background: rgba(25, 37, 52, 0.95);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* The faint radial wash behind a dark hero panel. Flat #16212e across a full-width banner reads
+   as a dead rectangle; a single off-centre highlight gives it a light source. Kept as a class
+   rather than an inline gradient so the three heroes that use it cannot drift apart. */
+.rail-gradient {
+  background-color: #16212e;
+  background-image:
+    radial-gradient(120% 140% at 12% 0%, rgba(118, 144, 70, 0.20) 0%, rgba(118, 144, 70, 0) 55%),
+    radial-gradient(90% 120% at 100% 0%, rgba(52, 70, 107, 0.35) 0%, rgba(52, 70, 107, 0) 60%);
+}
+
+/* Hairline grid used behind hero panels at very low opacity — enough texture to stop a large
+   dark area looking like a rendering error, not enough to compete with the text on it. */
+.rail-grid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom right, black, transparent 70%);
 }
 
 /* Keyframe animations */
@@ -115,6 +332,17 @@ body {
 
 .animate-pulse-glow {
   animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Anyone who has asked the OS for less motion gets none of the above. Vestibular triggers are an
+   accessibility concern, not a preference — and this app is open all day on a reception desk. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Print-one-element trick: mark the printable content with .print-area and everything else on

@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import { Panel, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import Toolbar, { SegmentedFilter } from '../../components/ui/toolbar';
+import EmptyState from '../../components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { StatusBadge } from '../../components/ui/status-badge';
+import { SkeletonRows, SkeletonList } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
@@ -105,132 +109,131 @@ const ServiceRequests = () => {
   const pagedRequests = requests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold text-slate-900 m-0">Service &amp; HMO Requests</h2>
-          <p className="text-xs text-gray-500 m-0">Review and approve HMO pre-authorization requests logged by Reception.</p>
-        </div>
-        <div className="flex bg-gray-100 p-1 rounded-xl text-xs flex-wrap">
-          {STATUS_FILTERS.map(s => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-2.5 py-1 rounded-lg border-0 font-semibold cursor-pointer transition-all ${
-                statusFilter === s ? 'bg-white text-slate-900 shadow-xs' : 'text-gray-500 hover:text-gray-800'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Oversight"
+        icon={ShieldCheck}
+        title="Service & HMO Requests"
+        description="Review and approve HMO pre-authorisation logged by Reception. Approval is Admin-only — Reception can log a request but not clear it."
+        meta={<span><strong className="font-semibold text-slate-700">{requests.length}</strong> request{requests.length === 1 ? '' : 's'}</span>}
+      />
 
-      <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-row items-center space-x-2">
-          <ShieldCheck className="w-4 h-4 text-[#769046]" />
-          <CardTitle className="text-sm font-bold text-slate-800">{requests.length} Request{requests.length === 1 ? '' : 's'}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-gray-50/80">
-              <TableRow>
-                <TableHead className="text-meta font-bold uppercase py-3">Provider</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Requested</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Tests Approved</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading requests…</TableCell></TableRow>
-              ) : pagedRequests.length > 0 ? (
-                pagedRequests.map(r => (
-                  <TableRow key={r.id} className="hover:bg-gray-50/50 transition-colors">
-                    <TableCell className="py-3 font-bold text-xs text-slate-900">{r.provider_name}</TableCell>
-                    <TableCell className="py-3 text-xs text-gray-500">{new Date(r.request_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</TableCell>
-                    <TableCell className="py-3 text-xs font-semibold text-gray-700">{r.approved_test_count} / {r.test_count}</TableCell>
-                    <TableCell className="py-3"><StatusBadge status={r.status} /></TableCell>
-                    <TableCell className="py-3 text-right">
-                      <Button
-                        onClick={() => openDetail(r.id)}
-                        variant="outline"
-                        className="text-fine font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5"
-                      >
-                        Review
-                      </Button>
+      <div>
+        <Toolbar attached>
+          <SegmentedFilter
+            ariaLabel="Filter HMO requests by status"
+            options={STATUS_FILTERS.map(s => ({ value: s, label: s }))}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
+        </Toolbar>
+
+        <Panel className="overflow-hidden rounded-t-none">
+          <PanelBody flush>
+            <Table>
+              <TableHeader sticky>
+                <TableRow>
+                  <TableHead>Provider</TableHead>
+                  <TableHead>Requested</TableHead>
+                  <TableHead>Tests Approved</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <SkeletonRows rows={5} columns={5} />
+                ) : pagedRequests.length > 0 ? (
+                  pagedRequests.map(r => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-semibold text-slate-900">{r.provider_name}</TableCell>
+                      <TableCell className="text-slate-500">{new Date(r.request_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</TableCell>
+                      <TableCell className="font-medium tabular-nums">{r.approved_test_count} / {r.test_count}</TableCell>
+                      <TableCell><StatusBadge status={r.status} /></TableCell>
+                      <TableCell className="text-right">
+                        <Button onClick={() => openDetail(r.id)} variant="outline" size="xs">
+                          Review
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={5} className="p-0">
+                      <EmptyState
+                        icon={ShieldCheck}
+                        title={statusFilter === 'All' ? 'No HMO requests logged' : `Nothing is ${statusFilter.toLowerCase()}`}
+                        description="Reception logs a pre-authorisation against a visit; it appears here for approval."
+                      />
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400 italic">No HMO requests found for this filter.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${requests.length} total`} />
-      </Card>
+                )}
+              </TableBody>
+            </Table>
+          </PanelBody>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${requests.length} total`} />
+        </Panel>
+      </div>
 
       <Dialog open={!!detailRequest} onOpenChange={(open) => { if (!open) setDetailRequest(null); }}>
-        <DialogContent className="max-w-lg rounded-2xl">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">HMO Request Review</DialogTitle>
-            <DialogDescription className="text-xs">{detailRequest?.provider_name}</DialogDescription>
+            <DialogTitle>HMO Request Review</DialogTitle>
+            <DialogDescription>{detailRequest?.provider_name}</DialogDescription>
           </DialogHeader>
 
           {detailLoading ? (
-            <p className="text-xs text-gray-400 text-center py-6">Loading…</p>
+            <SkeletonList rows={3} />
           ) : (
             <div className="space-y-4">
               {detailError && (
-                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <div role="alert" className="alert alert-error">
+                  <AlertCircle />
                   <span>{detailError}</span>
                 </div>
               )}
 
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500 font-medium">Request Status</span>
+              <div className="flex items-center justify-between">
+                <span className="text-fine font-medium text-slate-500">Request Status</span>
                 <StatusBadge status={detailRequest?.status} />
               </div>
 
               {detailRequest?.status !== 'Approved' && (
-                <form onSubmit={handleApproveRequest} className="space-y-2 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                  <label className="text-xs font-bold text-gray-600 uppercase">Approve Request — Approval / LOA Code</label>
-                  <div className="flex space-x-2">
+                <form onSubmit={handleApproveRequest} className="space-y-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
+                  <label className="field-label">Approve Request — Approval / LOA Code</label>
+                  <div className="flex gap-2">
                     <Input
                       placeholder="Enter approval code"
                       value={approvalCode}
                       onChange={e => setApprovalCode(e.target.value)}
                       disabled={detailSubmitting}
                     />
-                    <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold text-xs" disabled={detailSubmitting}>
-                      {detailSubmitting ? 'Approving...' : 'Approve'}
+                    <Button type="submit" disabled={detailSubmitting}>
+                      {detailSubmitting ? 'Approving…' : 'Approve'}
                     </Button>
                   </div>
                 </form>
               )}
 
               <div className="space-y-1.5">
-                <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Linked Tests</span>
-                <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                <span className="field-label">Linked Tests</span>
+                <div className="max-h-64 space-y-1.5 overflow-y-auto">
                   {(detailRequest?.tests || []).map(t => (
-                    <div key={t.id} className="flex items-center justify-between p-2.5 bg-gray-50/70 rounded-lg border border-gray-100 text-xs">
-                      <div>
-                        <span className="font-bold text-gray-800 block">{t.test_name}</span>
-                        <span className="text-fine text-gray-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
+                    <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] p-2.5">
+                      <div className="min-w-0">
+                        <span className="block truncate text-[13px] font-semibold text-slate-900">{t.test_name}</span>
+                        <span className="text-fine text-slate-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
                       </div>
-                      <div className="flex items-center space-x-1.5">
+                      <div className="flex flex-shrink-0 items-center gap-1">
                         <StatusBadge status={t.approval_status} />
                         {t.approval_status !== 'Approved' && (
                           <button
                             type="button"
                             onClick={() => handleSetTestApproval(t.id, 'Approved')}
                             aria-label={`Approve ${t.test_name}`}
-                            className="p-1 text-emerald-600 hover:bg-emerald-100 rounded-md border-0 bg-transparent cursor-pointer"
+                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-emerald-600 hover:bg-emerald-50"
                           >
-                            <Check className="w-3.5 h-3.5" />
+                            <Check className="h-3.5 w-3.5" />
                           </button>
                         )}
                         {t.approval_status !== 'Rejected' && (
@@ -238,9 +241,9 @@ const ServiceRequests = () => {
                             type="button"
                             onClick={() => handleSetTestApproval(t.id, 'Rejected')}
                             aria-label={`Reject ${t.test_name}`}
-                            className="p-1 text-rose-600 hover:bg-rose-100 rounded-md border-0 bg-transparent cursor-pointer"
+                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-rose-600 hover:bg-rose-50"
                           >
-                            <X className="w-3.5 h-3.5" />
+                            <X className="h-3.5 w-3.5" />
                           </button>
                         )}
                       </div>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Panel, PanelHeader, PanelBody } from '../components/ui/panel';
+import PageHeader from '../components/ui/page-header';
+import Toolbar, { ToolbarSpacer } from '../components/ui/toolbar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -227,90 +229,88 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
     }
   };
 
-  const filteredTests = filterCategory === 'all' 
-    ? tests 
+  const filteredTests = filterCategory === 'all'
+    ? tests
     : tests.filter(t => t.category_id.toString() === filterCategory);
 
   return (
     <SidebarLayout title="Services Catalog Management" activeNav={activeNav} onSelectNav={onSelectNav}>
       <div className="space-y-6">
-        
-        {/* Top Action Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-          <div className="space-y-1">
-            <h2 className="text-xl font-bold text-slate-900 m-0">Clinic Services & Price Catalog</h2>
-            <p className="text-xs text-gray-500 m-0">
-              Manage diagnostic services offered by the clinic. Edits dynamically update the live public website and patient booking forms.
-            </p>
-          </div>
 
-          <div className="flex items-center space-x-3">
-            <Button
-              variant="outline"
-              onClick={fetchCatalogData}
-              className="flex items-center space-x-1.5 text-xs font-semibold"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Refresh</span>
-            </Button>
-            <Button
-              onClick={handleOpenAddModal}
-              className="bg-[#769046] hover:bg-primary-hover text-white flex items-center space-x-2 text-xs font-bold px-4 py-2 rounded-xl"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add New Service</span>
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          eyebrow="Administration"
+          icon={Layers}
+          title="Clinic Services & Price Catalog"
+          description="The diagnostic services the clinic offers and what they cost. Edits appear immediately on the public website and in the patient booking form."
+          actions={
+            <>
+              <Button variant="outline" onClick={fetchCatalogData}>
+                <RefreshCw className="h-3.5 w-3.5" />
+                Refresh
+              </Button>
+              <Button onClick={handleOpenAddModal}>
+                <Plus className="h-4 w-4" />
+                Add New Service
+              </Button>
+            </>
+          }
+        />
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+        <div>
+          {/* Category filter. The counts live in the control rather than in a separate KPI row:
+              "how many Ultrasound services do we offer" and "show me the Ultrasound services"
+              are the same question, so they belong on the same element. */}
+          <Toolbar attached>
+            <div className="inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
           <button
             onClick={() => setFilterCategory('all')}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all border-0 cursor-pointer ${
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors ${
               filterCategory === 'all'
-                ? 'bg-[#192534] text-white shadow-xs'
-                : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                : 'bg-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            All Categories ({tests.length})
+            All Categories
+            <span className={`rounded px-1 py-px text-micro font-bold tabular-nums ${filterCategory === 'all' ? 'bg-brand-100 text-brand-700' : 'bg-slate-200/80 text-slate-600'}`}>
+              {tests.length}
+            </span>
           </button>
           {categories.map(cat => (
             <button
               key={cat.id}
               onClick={() => setFilterCategory(cat.id.toString())}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all border-0 cursor-pointer ${
-                filterCategory === cat.id.toString() 
-                  ? 'bg-[#769046] text-white shadow-xs' 
-                  : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors ${
+                filterCategory === cat.id.toString()
+                  ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                  : 'bg-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              {cat.name} ({tests.filter(t => t.category_id === cat.id).length})
+              {cat.name}
+              <span className={`rounded px-1 py-px text-micro font-bold tabular-nums ${filterCategory === cat.id.toString() ? 'bg-brand-100 text-brand-700' : 'bg-slate-200/80 text-slate-600'}`}>
+                {tests.filter(t => t.category_id === cat.id).length}
+              </span>
             </button>
           ))}
-        </div>
-
-        {/* Services Table Card */}
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="py-4 px-6 border-b border-gray-100 flex flex-row items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Layers className="w-4 h-4 text-[#769046]" />
-              <CardTitle className="text-sm font-bold text-slate-800">Master Services List</CardTitle>
             </div>
-            <span className="text-xs text-gray-400 font-medium">Showing {filteredTests.length} services</span>
-          </CardHeader>
+            <ToolbarSpacer />
+            <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
+              {filteredTests.length} shown
+            </span>
+          </Toolbar>
 
-          <CardContent className="p-0">
+        {/* Services Table */}
+        <Panel className="overflow-hidden rounded-t-none">
+          <PanelBody flush>
             {loading ? (
               <div className="py-16 flex flex-col items-center justify-center space-y-3">
-                <div className="w-8 h-8 border-4 border-[#769046] border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
                 <span className="text-xs font-semibold text-gray-500">Loading catalog...</span>
               </div>
             ) : filteredTests.length === 0 ? (
               <div className="py-12 text-center text-xs text-gray-500">No diagnostic services found in this category.</div>
             ) : (
               <Table>
-                <TableHeader className="bg-gray-50/50">
+                <TableHeader className="bg-slate-50/70">
                   <TableRow>
                     <TableHead className="text-xs font-bold uppercase">ID</TableHead>
                     <TableHead className="text-xs font-bold uppercase">Service Name</TableHead>
@@ -331,8 +331,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                         <Badge
                           onClick={() => { setToggleError(''); setConfirmTarget(test); }}
                           className={`cursor-pointer text-meta font-bold px-2.5 py-0.5 rounded-full ${
-                            test.is_active 
-                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200' 
+                            test.is_active
+                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200'
                               : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
                           }`}
                         >
@@ -355,34 +355,33 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                 </TableBody>
               </Table>
             )}
-          </CardContent>
-        </Card>
+          </PanelBody>
+        </Panel>
+        </div>
 
-        {/* HMO Providers Card */}
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="py-4 px-6 border-b border-gray-100 flex flex-row items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <ShieldPlus className="w-4 h-4 text-[#769046]" />
-              <CardTitle className="text-sm font-bold text-slate-800">HMO Providers</CardTitle>
-            </div>
-            <Button
-              onClick={handleOpenAddProvider}
-              className="bg-[#769046] hover:bg-primary-hover text-white flex items-center space-x-1.5 text-xs font-bold px-3 py-1.5 rounded-xl h-auto"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Provider</span>
-            </Button>
-          </CardHeader>
-          <CardContent className="p-0">
+        {/* HMO Providers */}
+        <Panel className="overflow-hidden">
+          <PanelHeader
+            title="HMO Providers"
+            description="Accredited insurers whose pre-authorisations Reception can log against a visit"
+            icon={ShieldPlus}
+            actions={
+              <Button size="sm" onClick={handleOpenAddProvider}>
+                <Plus className="h-3.5 w-3.5" />
+                Add Provider
+              </Button>
+            }
+          />
+          <PanelBody flush>
             {providersLoading ? (
               <div className="py-10 flex flex-col items-center justify-center space-y-3">
-                <div className="w-6 h-6 border-4 border-[#769046] border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-6 h-6 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : providers.length === 0 ? (
               <div className="py-10 text-center text-xs text-gray-500">No HMO providers added yet.</div>
             ) : (
               <Table>
-                <TableHeader className="bg-gray-50/50">
+                <TableHeader className="bg-slate-50/70">
                   <TableRow>
                     <TableHead className="text-xs font-bold uppercase">Provider Name</TableHead>
                     <TableHead className="text-xs font-bold uppercase">Status</TableHead>
@@ -421,14 +420,14 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                 </TableBody>
               </Table>
             )}
-          </CardContent>
-        </Card>
+          </PanelBody>
+        </Panel>
 
         {/* Add / Edit HMO Provider Dialog */}
         <Dialog open={showProviderModal} onOpenChange={setShowProviderModal}>
-          <DialogContent className="max-w-sm rounded-2xl">
+          <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold text-slate-900">
+              <DialogTitle>
                 {editingProvider ? 'Rename HMO Provider' : 'Add HMO Provider'}
               </DialogTitle>
               <DialogDescription className="text-xs text-gray-500">
@@ -454,9 +453,9 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                   autoFocus
                 />
               </div>
-              <div className="flex justify-end space-x-2 pt-3 border-t border-gray-100">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[#e6ebf1]">
                 <Button type="button" variant="outline" onClick={() => setShowProviderModal(false)}>Cancel</Button>
-                <Button type="submit" disabled={providerSubmitting} className="bg-[#769046] hover:bg-primary-hover text-white">
+                <Button type="submit" disabled={providerSubmitting} className="bg-brand-500 hover:bg-primary-hover text-white">
                   {providerSubmitting ? 'Saving...' : editingProvider ? 'Save Changes' : 'Add Provider'}
                 </Button>
               </div>
@@ -480,14 +479,14 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
 
         {/* Add / Edit Service Dialog Modal */}
         <Dialog open={showModal} onOpenChange={setShowModal}>
-          <DialogContent className="max-w-md rounded-2xl">
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold text-slate-900">
                 {editingTest ? 'Edit Diagnostic Service' : 'Add New Diagnostic Service'}
               </DialogTitle>
               <DialogDescription className="text-xs text-gray-500">
-                {editingTest 
-                  ? 'Update service details and price. Changes will take effect immediately.' 
+                {editingTest
+                  ? 'Update service details and price. Changes will take effect immediately.'
                   : 'Add a new service to the clinic catalog and public website.'}
               </DialogDescription>
             </DialogHeader>
@@ -556,7 +555,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                     id="isActive"
                     checked={formData.isActive}
                     onChange={e => setFormData({...formData, isActive: e.target.checked})}
-                    className="rounded text-[#769046] focus:ring-[#769046]"
+                    className="rounded text-brand-600 focus:ring-brand-500"
                   />
                   <label htmlFor="isActive" className="text-xs font-semibold text-gray-700 cursor-pointer">
                     Active Service (Visible on website & patient booking)
@@ -564,12 +563,12 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                 </div>
               )}
 
-              <div className="flex justify-end space-x-2 pt-3 border-t border-gray-100">
+              <div className="flex justify-end space-x-2 pt-3 border-t border-[#e6ebf1]">
                 <Button type="button" variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={submitting}
-                  className="bg-[#769046] hover:bg-primary-hover text-white"
+                  className="bg-brand-500 hover:bg-primary-hover text-white"
                 >
                   {submitting ? 'Saving...' : editingTest ? 'Update Service' : 'Add Service'}
                 </Button>

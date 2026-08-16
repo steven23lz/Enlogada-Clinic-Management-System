@@ -2,7 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { usePolling } from '../hooks/usePolling';
 import { Button } from '../components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Panel, PanelBody } from '../components/ui/panel';
+import PageHeader from '../components/ui/page-header';
+import Toolbar, { SegmentedFilter, ToolbarSpacer } from '../components/ui/toolbar';
+import EmptyState from '../components/ui/empty-state';
 import MetricCard from '../components/ui/metric-card';
 import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
@@ -473,65 +476,66 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const processingCount = pendingTests.filter(t => t.test_status === 'Processing').length;
   const awaitingReleaseCount = pendingTests.filter(t => t.test_status === 'Waiting for Release').length;
   const pageTitle = mode === 'history' ? `${categoryLabel} Result History` : `${categoryLabel} Operations Worklist`;
+  const modalityIcon = category === 'Ultrasound' ? Stethoscope : category === 'Xray' ? Scan : FlaskConical;
 
   return (
     <SidebarLayout title={pageTitle} activeNav={activeNav} onSelectNav={onSelectNav}>
-      <div className="space-y-6">
+      <div className="space-y-5">
+        <PageHeader
+          icon={modalityIcon}
+          title={pageTitle}
+          description={
+            mode === 'history'
+              ? `Every ${categoryLabel} result this department has released, including amended versions.`
+              : `Patients whose ${categoryLabel} exam has been paid for and released to this department. Record findings, then authorise the release of the report.`
+          }
+        />
 
         {mode === 'worklist' && (
         <>
         {/* Department Modality Worklist Header Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           <MetricCard
             label="Active Modality"
-            value={`${categoryLabel} Department`}
-            icon={category === 'Ultrasound' ? Stethoscope : category === 'Xray' ? Scan : FlaskConical}
+            value={categoryLabel}
+            caption="Your department"
+            captionTone="slate"
+            icon={modalityIcon}
             tone="green"
           />
-          <MetricCard label="Released — Awaiting Exam" value={processingCount} icon={Clock} tone="indigo" />
-          <MetricCard label="Awaiting Result Release" value={awaitingReleaseCount} icon={FileText} tone="amber" />
+          <MetricCard label="Awaiting Exam" value={processingCount} caption="Paid and released to you" captionTone="slate" icon={Clock} tone="indigo" />
+          <MetricCard label="Awaiting Release" value={awaitingReleaseCount} caption="Findings recorded, not authorised" captionTone="slate" icon={FileText} tone="amber" />
         </div>
 
-        {/* Search + Status Filter Toolbar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-          <div className="flex bg-gray-100 p-1 rounded-xl text-xs flex-wrap">
-            {WORKLIST_STATUS_FILTERS.map(s => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`px-2.5 py-1 rounded-lg border-0 font-semibold cursor-pointer transition-all ${
-                  statusFilter === s ? 'bg-white text-slate-900 shadow-xs' : 'text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-
-          <SearchInput
-            placeholder="Search patient, test, queue..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            containerClassName="w-full sm:w-64"
-          />
-        </div>
+        <div>
+          {/* Search + Status Filter Toolbar */}
+          <Toolbar attached>
+            <SegmentedFilter
+              ariaLabel="Filter worklist by status"
+              options={WORKLIST_STATUS_FILTERS.map(f => ({ value: f, label: f }))}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
+            <ToolbarSpacer />
+            <SearchInput
+              placeholder="Search patient, test, queue..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              containerClassName="w-full sm:w-64"
+            />
+          </Toolbar>
 
         {/* Modality Worklist Data Table */}
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-gray-100 py-4 px-6 flex justify-between items-center">
-            <CardTitle className="text-base font-bold text-slate-900 m-0">
-              {categoryLabel} Worklist Queue ({filteredTests.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
+        <Panel className="overflow-hidden rounded-t-none">
+          <PanelBody flush>
             <Table>
-              <TableHeader className="bg-gray-50/80">
+              <TableHeader sticky>
                 <TableRow>
-                  <TableHead className="text-meta font-bold uppercase py-3">Queue Ticket</TableHead>
-                  <TableHead className="text-meta font-bold uppercase py-3">Patient Name</TableHead>
-                  <TableHead className="text-meta font-bold uppercase py-3">Diagnostic Examination</TableHead>
-                  <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
-                  <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
+                  <TableHead>Queue Ticket</TableHead>
+                  <TableHead>Patient Name</TableHead>
+                  <TableHead>Diagnostic Examination</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -552,7 +556,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   <SkeletonRows rows={5} columns={5} />
                 ) : pagedTests.length > 0 ? (
                   pagedTests.map(test => (
-                    <TableRow key={test.visit_test_id} className="hover:bg-gray-50/50 transition-colors">
+                    <TableRow key={test.visit_test_id} className="hover:bg-slate-50/70 transition-colors">
                       <TableCell className="py-3.5">
                         <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
                           {test.queue_number || `VT-${test.visit_test_id}`}
@@ -594,17 +598,14 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                           <Button
                             onClick={() => handleOpenUploadModal(test)}
                             variant="outline"
-                            className="text-xs font-bold px-3 py-1.5 rounded-xl border-gray-200 hover:bg-gray-50 flex items-center space-x-1.5 cursor-pointer"
+                            size="xs"
                           >
-                            <FileText className="w-3.5 h-3.5" />
+                            <FileText className="h-3 w-3" />
                             <span>{test.test_status === 'Waiting for Release' ? 'Edit Findings' : 'Record Findings'}</span>
                           </Button>
                           {test.test_status === 'Waiting for Release' && (
-                            <Button
-                              onClick={() => handleOpenReleaseConfirm(test)}
-                              className="bg-[#769046] hover:bg-[#657c3a] text-white text-xs font-bold px-3.5 py-1.5 rounded-xl flex items-center space-x-1.5 cursor-pointer"
-                            >
-                              <Send className="w-3.5 h-3.5" />
+                            <Button onClick={() => handleOpenReleaseConfirm(test)} size="xs">
+                              <Send className="h-3 w-3" />
                               <span>Release Result</span>
                             </Button>
                           )}
@@ -613,55 +614,62 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                     </TableRow>
                   ))
                 ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-xs text-gray-400 font-semibold italic">
-                      No tickets released to the {categoryLabel} department yet. A ticket appears here
-                      once the receptionist or cashier has confirmed payment and checked the patient in.
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={5} className="p-0">
+                      <EmptyState
+                        icon={modalityIcon}
+                        title={searchQuery || statusFilter !== 'All' ? 'Nothing matches this filter' : `Nothing waiting in ${categoryLabel}`}
+                        description={
+                          searchQuery || statusFilter !== 'All'
+                            ? 'Clear the search box or switch the status filter back to All.'
+                            : 'A ticket reaches this worklist once the cashier has taken payment and released the visit to your department.'
+                        }
+                      />
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
-          </CardContent>
+          </PanelBody>
           <Pagination
             page={worklistPage}
             totalPages={worklistTotalPages}
             onPageChange={setWorklistPage}
             totalLabel={`${filteredTests.length} total`}
           />
-        </Card>
+        </Panel>
+        </div>
         </>
         )}
 
         {mode === 'history' && (
         <>
-        {/* Search Bar */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-end gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-          <SearchInput
-            placeholder="Search patient, test, queue..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            containerClassName="w-full sm:w-64"
-          />
-        </div>
+        <div>
+          {/* Search Bar */}
+          <Toolbar attached>
+            <span className="text-fine font-medium tabular-nums text-slate-500">
+              {filteredReleased.length} released result{filteredReleased.length === 1 ? '' : 's'}
+            </span>
+            <ToolbarSpacer />
+            <SearchInput
+              placeholder="Search patient, test, queue..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              containerClassName="w-full sm:w-64"
+            />
+          </Toolbar>
 
         {/* Released Results Table (read-only) */}
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-gray-100 py-4 px-6 flex justify-between items-center">
-            <CardTitle className="text-base font-bold text-slate-900 m-0 flex items-center space-x-2">
-              <History className="w-4 h-4 text-[#769046]" />
-              <span>{categoryLabel} Released Results ({filteredReleased.length})</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
+        <Panel className="overflow-hidden rounded-t-none">
+          <PanelBody flush>
             <Table>
-              <TableHeader className="bg-gray-50/80">
+              <TableHeader sticky>
                 <TableRow>
-                  <TableHead className="text-meta font-bold uppercase py-3">Queue Ticket</TableHead>
-                  <TableHead className="text-meta font-bold uppercase py-3">Patient Name</TableHead>
-                  <TableHead className="text-meta font-bold uppercase py-3">Diagnostic Examination</TableHead>
-                  <TableHead className="text-meta font-bold uppercase py-3">Released</TableHead>
-                  <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
+                  <TableHead>Queue Ticket</TableHead>
+                  <TableHead>Patient Name</TableHead>
+                  <TableHead>Diagnostic Examination</TableHead>
+                  <TableHead>Released</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -682,7 +690,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   <SkeletonRows rows={5} columns={5} />
                 ) : pagedReleased.length > 0 ? (
                   pagedReleased.map(test => (
-                    <TableRow key={test.visit_test_id} className="hover:bg-gray-50/50 transition-colors">
+                    <TableRow key={test.visit_test_id} className="hover:bg-slate-50/70 transition-colors">
                       <TableCell className="py-3.5">
                         <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
                           {test.queue_number || `VT-${test.visit_test_id}`}
@@ -710,7 +718,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                           <Button
                             onClick={() => setViewingResult(test)}
                             variant="outline"
-                            className="text-fine font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5"
+                            className="text-fine font-bold border-gray-200 hover:bg-brand-500 hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5"
                           >
                             <Eye className="w-3.5 h-3.5" />
                             <span>View Report</span>
@@ -718,9 +726,9 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                           <Button
                             onClick={() => handleOpenEditModal(test)}
                             variant="outline"
-                            className="text-fine font-bold border-gray-200 hover:bg-slate-800 hover:text-white rounded-lg py-1 px-2.5 flex items-center space-x-1.5"
+                            size="xs"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Pencil className="h-3 w-3" />
                             <span>Edit</span>
                           </Button>
                         </div>
@@ -728,31 +736,40 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                     </TableRow>
                   ))
                 ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-xs text-gray-400 font-semibold italic">
-                      No released results yet in the {categoryLabel} history.
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={5} className="p-0">
+                      <EmptyState
+                        icon={History}
+                        title={searchQuery ? 'Nothing matches that search' : `No released ${categoryLabel} results yet`}
+                        description={
+                          searchQuery
+                            ? 'Try a surname, a test name, or a queue ticket number.'
+                            : 'A result appears here once it has been authorised for release from the worklist.'
+                        }
+                      />
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
-          </CardContent>
+          </PanelBody>
           <Pagination
             page={historyPage}
             totalPages={historyTotalPages}
             onPageChange={setHistoryPage}
             totalLabel={`${filteredReleased.length} total`}
           />
-        </Card>
+        </Panel>
+        </div>
         </>
         )}
 
         {/* Read-only Released Result Viewer */}
         <Dialog open={!!viewingResult} onOpenChange={(open) => { if (!open) setViewingResult(null); }}>
-          <DialogContent className="max-w-2xl rounded-2xl p-6">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold text-slate-900">Diagnostic Report</DialogTitle>
-              <DialogDescription className="text-xs">
+              <DialogDescription>
                 Patient: <strong>{viewingResult?.first_name} {viewingResult?.last_name}</strong> &bull; Examination: <strong>{viewingResult?.test_name}</strong>
               </DialogDescription>
             </DialogHeader>
@@ -772,7 +789,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 {viewingResult?.released_by_first_name && ` by ${viewingResult.released_by_first_name} ${viewingResult.released_by_last_name}`}
               </div>
             </div>
-            <div className="flex justify-end pt-2 border-t border-gray-100">
+            <div className="flex justify-end pt-2 border-t border-[#e6ebf1]">
               <Button
                 onClick={() => window.print()}
                 variant="outline"
@@ -793,7 +810,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             if (!open) setJustReleased(null);
           }}
         >
-          <DialogContent className="max-w-2xl rounded-2xl p-6">
+          <DialogContent className="max-w-2xl">
             {justReleased ? (
               <div className="space-y-4">
                 <div className="flex items-center space-x-2 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
@@ -801,8 +818,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   <span className="text-sm font-bold">Result released successfully.</span>
                 </div>
 
-                <div className="print-area space-y-3 bg-white rounded-2xl border border-gray-100 p-5">
-                  <div className="text-center border-b border-gray-100 pb-3 space-y-0.5">
+                <div className="print-area space-y-3 bg-white rounded-2xl border border-[#e6ebf1] p-5">
+                  <div className="text-center border-b border-[#e6ebf1] pb-3 space-y-0.5">
                     <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide m-0">Enlogada Ultrasound &amp; Diagnostic Clinic</h3>
                     <p className="text-xs text-gray-500 m-0">Diagnostic Result Certificate</p>
                   </div>
@@ -819,7 +836,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                       <p className="text-xs m-0">{justReleased.result_remarks}</p>
                     </div>
                   )}
-                  <p className="text-fine text-gray-400 m-0 pt-2 border-t border-gray-100">
+                  <p className="text-fine text-gray-400 m-0 pt-2 border-t border-[#e6ebf1]">
                     Released {new Date(justReleased.released_at).toLocaleString()}
                     {justReleased.released_by_first_name && ` by ${justReleased.released_by_first_name} ${justReleased.released_by_last_name}`}
                   </p>
@@ -833,7 +850,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   <Button
                     type="button"
                     onClick={() => { setShowUploadModal(false); setJustReleased(null); }}
-                    className="bg-[#769046] hover:bg-[#657c3a] text-white text-xs font-bold"
+                    className="text-xs font-bold"
                   >
                     Done
                   </Button>
@@ -845,7 +862,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               <DialogTitle className="text-lg font-bold text-slate-900">
                 {isEditingResult ? 'Correct Released Result' : 'Record Findings & Release Diagnostic Certificate'}
               </DialogTitle>
-              <DialogDescription className="text-xs">
+              <DialogDescription>
                 Patient: <strong>{activeTest?.first_name} {activeTest?.last_name}</strong> &bull; Examination: <strong>{activeTest?.test_name}</strong>
                 {isEditingResult && ' — re-submitting will notify the patient again by email.'}
               </DialogDescription>
@@ -853,7 +870,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
 
             <form onSubmit={handleUploadResult} className="space-y-4 pt-2">
               {uploadError && (
-                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="alert alert-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{uploadError}</span>
                 </div>
@@ -868,7 +885,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   {patientHistoryLoading ? (
                     <p className="text-fine text-gray-400 m-0">Loading history…</p>
                   ) : (
-                    <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 max-h-32 overflow-y-auto">
+                    <div className="border border-gray-200 rounded-xl divide-y divide-[#eef2f6] max-h-32 overflow-y-auto">
                       {patientHistory.map(h => (
                         <div key={h.visit_test_id} className="px-3 py-2 flex items-center justify-between gap-2 text-fine">
                           <span className="font-semibold text-gray-700 truncate">{h.category_name} &middot; {h.test_name}</span>
@@ -900,19 +917,19 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               )}
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-600 uppercase">Findings & Impression (Required)</label>
+                <label className="field-label">Findings & Impression (Required)</label>
                 <textarea
                   rows={6}
                   placeholder="Enter detailed laboratory/imaging findings, measurements, and impression..."
                   value={findings}
                   onChange={e => setFindings(e.target.value)}
-                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-[#769046]"
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-brand-500"
                   required
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-600 uppercase">Remarks / Recommendations (Optional)</label>
+                <label className="field-label">Remarks / Recommendations (Optional)</label>
                 <Input
                   placeholder="e.g. Clinical correlation recommended..."
                   value={remarks}
@@ -922,12 +939,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-600 uppercase">Attach Report File (Optional)</label>
+                <label className="field-label">Attach Report File (Optional)</label>
                 <input
                   type="file"
                   accept="application/pdf,image/jpeg,image/png"
                   onChange={handleFileChange}
-                  className="w-full text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#769046]/10 file:text-[#769046] hover:file:bg-[#769046]/20 file:cursor-pointer cursor-pointer"
+                  className="w-full text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-brand-50 file:text-brand-600 hover:file:bg-brand-100 file:cursor-pointer cursor-pointer"
                 />
                 <p className="text-fine text-gray-400 m-0">
                   PDF, JPEG, or PNG — up to 15MB.
@@ -943,7 +960,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   version is kept, but without a reason nobody can tell why it was replaced. */}
               {isEditingResult && (
                 <div className="space-y-1.5">
-                  <label htmlFor="amendment-reason" className="text-xs font-bold text-gray-600 uppercase">
+                  <label htmlFor="amendment-reason" className="field-label">
                     Reason for Amendment <span className="text-rose-600">*</span>
                   </label>
                   <Input
@@ -965,7 +982,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   thing that can happen on this screen. */}
               <label
                 className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
-                  isCritical ? 'bg-rose-50 border-rose-300' : 'bg-gray-50/70 border-gray-200 hover:bg-gray-50'
+                  isCritical ? 'bg-rose-50 border-rose-300' : 'bg-slate-50/80 border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 <input
@@ -985,7 +1002,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 </span>
               </label>
 
-              <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
                 <Button type="button" variant="outline" onClick={() => setShowUploadModal(false)}>Cancel</Button>
                 <Button
                   type="submit"
@@ -999,7 +1016,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 <Button
                   type="button"
                   onClick={handleSaveAndRelease}
-                  className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold text-xs px-5 py-2 rounded-xl flex items-center space-x-1.5"
+                  className="font-bold text-xs px-5 py-2 rounded-xl flex items-center space-x-1.5"
                 >
                   <Send className="w-4 h-4" />
                   <span>{isEditingResult ? 'Save Correction & Re-notify' : 'Authorize & Release Result'}</span>

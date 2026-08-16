@@ -13,7 +13,7 @@ createRoot(document.getElementById('root')).render(
         classNames: {
           toast: 'rounded-xl border shadow-lg font-sans',
           title: 'font-semibold text-sm',
-          success: '!bg-white !border-[#769046]/30 !text-[#192534] [&_[data-icon]]:!text-[#769046]',
+          success: '!bg-white !border-brand-300 !text-[#192534] [&_[data-icon]]:!text-brand-600',
           error: '!bg-white !border-rose-200 !text-[#192534] [&_[data-icon]]:!text-rose-500',
         },
       }}

@@ -19,7 +19,7 @@ const SERVICE_PREVIEW = [
 
 const Home = ({ onNavigate }) => {
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-canvas">
       <PublicHeader currentTab="home" onNavigate={onNavigate} />
 
       {/* Hero Banner Section */}
@@ -53,14 +53,16 @@ const Home = ({ onNavigate }) => {
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 pt-2">
               <Button
                 onClick={() => onNavigate && onNavigate('login')}
-                className="w-full sm:w-auto bg-primary-hover hover:bg-primary-active text-white px-7 py-6 text-sm font-semibold rounded-xl shadow-lg border-0 cursor-pointer"
+                size="lg"
+                className="w-full sm:w-auto"
               >
                 Book Now
               </Button>
               <Button
                 onClick={() => onNavigate && onNavigate('services')}
                 variant="outline"
-                className="w-full sm:w-auto bg-white hover:bg-gray-100 text-slate-800 border-0 px-7 py-6 text-sm font-semibold rounded-xl cursor-pointer"
+                size="lg"
+                className="w-full sm:w-auto"
               >
                 View Services
               </Button>
@@ -72,13 +74,13 @@ const Home = ({ onNavigate }) => {
               stock photo or a fabricated stat (e.g. "10,000+ patients"), consistent with Phase
               4's earlier decision to keep this hero brand-forward rather than reach for imagery. */}
           <div className="flex justify-center">
-            <div className="glass-card rounded-3xl p-6 sm:p-7 w-full max-w-sm shadow-2xl">
-              <span className="text-fine font-bold text-[#657c3a] uppercase tracking-widest">What We Offer</span>
-              <h3 className="text-lg font-bold text-dark-slate mt-1 mb-5">Our Diagnostic Services</h3>
+            <div className="glass-card w-full max-w-sm rounded-2xl p-6 shadow-float sm:p-7">
+              <span className="text-micro font-semibold uppercase tracking-[0.14em] text-brand-700">What We Offer</span>
+              <h3 className="mb-5 mt-1 text-lg font-bold tracking-tight text-slate-900">Our Diagnostic Services</h3>
               <ul className="space-y-3 list-none p-0 m-0">
                 {SERVICE_PREVIEW.map(({ label, icon: Icon }) => (
                   <li key={label} className="flex items-center space-x-3">
-                    <span className="w-9 h-9 rounded-xl bg-[#769046]/10 text-[#769046] flex items-center justify-center flex-shrink-0">
+                    <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
                       <Icon className="w-4.5 h-4.5" />
                     </span>
                     <span className="text-sm font-semibold text-slate-700">{label}</span>
@@ -91,35 +93,35 @@ const Home = ({ onNavigate }) => {
       </section>
 
       {/* Key Highlights Banner */}
-      <section className="bg-white py-10 sm:py-12 border-b border-gray-100 shadow-xs">
+      <section className="bg-white py-10 sm:py-12 border-b border-[#e6ebf1]">
         <PageShell className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-          <div className="flex items-start space-x-4 p-4 rounded-xl bg-gray-50/50 border border-gray-100">
-            <div className="p-3 bg-[#769046]/10 text-[#769046] rounded-xl">
+          <div className="flex items-start space-x-4 p-4 rounded-xl bg-slate-50/70 border border-[#e6ebf1]">
+            <div className="p-3 bg-brand-50 text-brand-600 rounded-xl">
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="font-bold text-gray-900 text-base m-0">Licensed Diagnostics</h3>
-              <p className="text-xs text-gray-500 m-0">Certified laboratory tech & radiologists handling your medical tests.</p>
+              <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">Licensed Diagnostics</h3>
+              <p className="m-0 text-fine leading-relaxed text-slate-500">Certified laboratory tech & radiologists handling your medical tests.</p>
             </div>
           </div>
 
-          <div className="flex items-start space-x-4 p-4 rounded-xl bg-gray-50/50 border border-gray-100">
+          <div className="flex items-start space-x-4 p-4 rounded-xl bg-slate-50/70 border border-[#e6ebf1]">
             <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
               <Clock className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="font-bold text-gray-900 text-base m-0">Fast & Accurate Results</h3>
-              <p className="text-xs text-gray-500 m-0">Digital result releasing notified directly to your email inbox.</p>
+              <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">Fast & Accurate Results</h3>
+              <p className="m-0 text-fine leading-relaxed text-slate-500">Digital result releasing notified directly to your email inbox.</p>
             </div>
           </div>
 
-          <div className="flex items-start space-x-4 p-4 rounded-xl bg-gray-50/50 border border-gray-100">
+          <div className="flex items-start space-x-4 p-4 rounded-xl bg-slate-50/70 border border-[#e6ebf1]">
             <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
               <Award className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="font-bold text-gray-900 text-base m-0">HMO & Private Support</h3>
-              <p className="text-xs text-gray-500 m-0">HMO verification integrated with manual authorization code tracking.</p>
+              <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">HMO & Private Support</h3>
+              <p className="m-0 text-fine leading-relaxed text-slate-500">HMO verification integrated with manual authorization code tracking.</p>
             </div>
           </div>
         </PageShell>
@@ -127,14 +129,15 @@ const Home = ({ onNavigate }) => {
 
       {/* Call to Action Bar */}
       <PageShell as="section" className="py-12 sm:py-16">
-        <div className="bg-primary-navy rounded-3xl p-6 sm:p-10 text-white flex flex-col md:flex-row items-center justify-between gap-5 shadow-xl">
-          <div className="space-y-2 text-center md:text-left">
+        <div className="rail-gradient rail-grid relative flex flex-col items-center justify-between gap-5 overflow-hidden rounded-2xl border border-[#2b3a4d] p-6 text-white sm:p-10 md:flex-row">
+          <div className="relative space-y-2 text-center md:text-left">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Need a Diagnostic Appointment?</h2>
             <p className="text-xs sm:text-sm text-gray-300">Sign in to your account or register to schedule an appointment today.</p>
           </div>
           <Button
             onClick={() => onNavigate && onNavigate('login')}
-            className="w-full md:w-auto flex-shrink-0 bg-primary-hover hover:bg-primary-active text-white px-8 py-6 text-sm font-bold rounded-xl flex items-center justify-center space-x-2 border-0 cursor-pointer"
+            size="lg"
+            className="relative w-full flex-shrink-0 md:w-auto"
           >
             <span>Access Portal</span>
             <ChevronRight className="w-4 h-4" />

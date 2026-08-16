@@ -280,7 +280,11 @@ test.describe('Payment — browser flow', () => {
     await page.getByRole('tab', { name: 'Payments' }).click();
     await expect(page.getByText('Payment History', { exact: true })).toBeVisible({ timeout: 10000 });
 
-    const paymentCard = page.getByText('Payment History', { exact: true }).locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]');
+    // Scoped by test id, not by walking up to the nearest element with a `rounded-2xl` class.
+    // The old selector meant a change to the panel's corner radius failed this spec, with a
+    // message about a missing payment amount rather than about styling — see the note on the
+    // panel in ClientDashboard.jsx.
+    const paymentCard = page.getByTestId('payment-history');
     await expect(paymentCard.getByText(`₱${parseFloat(bill.totalAmount).toFixed(2)}`)).toBeVisible({ timeout: 10000 });
     await expect(paymentCard.getByText('Paid', { exact: true })).toBeVisible();
   });

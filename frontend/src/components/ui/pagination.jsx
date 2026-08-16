@@ -8,7 +8,7 @@ const Pagination = ({ page, totalPages, onPageChange, totalLabel, className = ''
   if (totalPages <= 1 && !totalLabel) return null;
 
   return (
-    <div className={`flex items-center justify-between px-4 py-3 border-t border-gray-100 ${className}`}>
+    <div className={`flex items-center justify-between px-4 py-3 border-t border-[#e6ebf1] ${className}`}>
       <span className="text-fine font-semibold text-gray-400">{totalLabel}</span>
       <div className="flex items-center space-x-2">
         <button

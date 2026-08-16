@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import PageHeader from '../../components/ui/page-header';
+import Toolbar, { ToolbarField, ToolbarSpacer } from '../../components/ui/toolbar';
+import EmptyState from '../../components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -10,22 +13,17 @@ import RevenueTrendChart from '../../components/charts/RevenueTrendChart';
 import CategoryVolumeChart from '../../components/charts/CategoryVolumeChart';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
-import { ClipboardList, FileText, Info, RefreshCw, ShieldCheck, DollarSign, Users, FlaskConical, Printer } from 'lucide-react';
-
-const dateStr = (d) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-const todayStr = () => dateStr(new Date());
-const daysAgoStr = (n) => dateStr(new Date(Date.now() - n * 86400000));
+// `todayStr` / `daysAgoStr` were re-implemented locally at the top of this file. The local copies
+// were correct (built from local getters, not toISOString), but a second correct copy is still a
+// second place for the toISOString bug to come back — see the dates note in CLAUDE.md.
+import { todayStr, daysAgoStr } from '../../lib/date';
+import { ClipboardList, FileText, Info, RefreshCw, ShieldCheck, DollarSign, Users, FlaskConical, Printer, BarChart3, TrendingUp } from 'lucide-react';
 
 const STATUS_COLORS = {
-  Pending: 'bg-amber-100 text-amber-700 border-amber-200',
-  Processing: 'bg-blue-100 text-blue-700 border-blue-200',
-  Completed: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  Cancelled: 'bg-rose-100 text-rose-700 border-rose-200',
+  Pending: 'bg-amber-50 text-amber-800 ring-amber-200',
+  Processing: 'bg-indigo-50 text-indigo-800 ring-indigo-200',
+  Completed: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+  Cancelled: 'bg-rose-50 text-rose-800 ring-rose-200',
 };
 
 // --- Today's Snapshot (Module 12's original reporting entry point; logic unchanged) --------
@@ -104,12 +102,12 @@ const TodaySnapshot = () => {
           caption="Active diagnostic services"
         />
 
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-5 space-y-1">
-          <span className="text-meta font-bold uppercase tracking-wider text-gray-400">Payment Methods (Today)</span>
+        <Card className="border-[#e6ebf1] rounded-xl bg-white p-5 space-y-1">
+          <span className="field-label">Payment Methods (Today)</span>
           {loading ? (
             <div className="text-2xl font-extrabold text-slate-900">…</div>
           ) : Object.keys(methodBreakdown).length === 0 ? (
-            <p className="text-xs text-gray-400 italic m-0">No payments yet today.</p>
+            <p className="text-xs text-slate-500 m-0">No payments yet today.</p>
           ) : (
             <div className="space-y-0.5 pt-1">
               {Object.entries(methodBreakdown).map(([method, amt]) => (
@@ -123,8 +121,8 @@ const TodaySnapshot = () => {
         </Card>
       </div>
 
-      <div className="bg-[#192534] text-white rounded-2xl p-5 flex items-start space-x-3">
-        <Info className="w-5 h-5 text-[#769046] flex-shrink-0 mt-0.5" />
+      <div className="bg-rail text-white rounded-2xl p-5 flex items-start space-x-3">
+        <Info className="w-5 h-5 text-brand-600 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-gray-300 m-0 leading-relaxed">
           This is a live snapshot of today's activity only. For historical trends and a custom
           date range, see the <strong className="text-white">Date-Range Reports</strong> tab.
@@ -169,72 +167,74 @@ const DateRangeReports = () => {
   const totalVisits = visitStatusBreakdown.reduce((s, v) => s + parseInt(v.visit_count, 10), 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-        <div className="space-y-1">
-          <h3 className="text-sm font-bold text-slate-900 m-0">Custom Date Range</h3>
-          <p className="text-xs text-gray-500 m-0">Revenue, service volume, and operational metrics for the selected period.</p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs w-36" />
-          <span className="text-xs text-gray-400">to</span>
-          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs w-36" />
-          <Button
-            variant="outline"
-            onClick={() => fetchReport(startDate, endDate)}
-            className="flex items-center space-x-1.5 text-xs font-semibold"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Apply</span>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => window.print()}
-            className="flex items-center space-x-1.5 text-xs font-semibold"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print Reports</span>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Oversight"
+        icon={BarChart3}
+        title="Clinic Reports"
+        description="Revenue, service volume and operational metrics for a chosen period. Print produces a clean report without the app chrome."
+      />
+
+      <Toolbar>
+        <ToolbarField label="From" htmlFor="rep-from">
+          <Input id="rep-from" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[150px]" />
+        </ToolbarField>
+        <ToolbarField label="To" htmlFor="rep-to">
+          <Input id="rep-to" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[150px]" />
+        </ToolbarField>
+        <div className="flex items-end self-stretch">
+          <Button variant="outline" onClick={() => fetchReport(startDate, endDate)}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Apply
           </Button>
         </div>
-      </div>
+        <ToolbarSpacer />
+        <div className="flex items-end self-stretch">
+          <Button variant="outline" onClick={() => window.print()}>
+            <Printer className="h-3.5 w-3.5" />
+            Print Reports
+          </Button>
+        </div>
+      </Toolbar>
 
       {error && (
-        <div role="alert" className="bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl p-3">
-          {error}
+        <div role="alert" className="alert alert-error">
+          <Info />
+          <span>{error}</span>
         </div>
       )}
 
       <div className="print-area space-y-6">
-      <div className="hidden print:block text-center border-b border-gray-100 pb-3 mb-3">
+      <div className="hidden print:block text-center border-b border-[#e6ebf1] pb-3 mb-3">
         <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide m-0">Enlogada Ultrasound &amp; Diagnostic Clinic</h3>
         <p className="text-xs text-gray-500 m-0">Clinic Report — {startDate} to {endDate}</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-gray-100 py-4 px-6 space-y-0.5">
-            <CardTitle className="text-sm font-bold text-slate-800">Revenue Trend</CardTitle>
+        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+          <CardHeader className="space-y-0.5 border-b border-[#e6ebf1] px-5 py-3.5">
+            <CardTitle className="text-[13px] font-semibold text-slate-900">Revenue Trend</CardTitle>
             <p className="text-fine text-gray-500 m-0">Total for range: <span className="font-bold text-slate-900">{formatCurrency(totalRevenue)}</span></p>
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
-              <p className="text-xs text-gray-400 text-center py-6">Loading…</p>
+              <div className="h-44 animate-pulse rounded-lg bg-slate-100" />
             ) : revenueTrend.length === 0 ? (
-              <p className="text-xs text-gray-400 italic text-center py-6">No paid transactions in this range.</p>
+              <EmptyState compact icon={TrendingUp} title="No paid transactions in this range" description="Widen the date range above, or check that the cashier has settled the day's bills." />
             ) : (
               <RevenueTrendChart data={revenueTrend} />
             )}
           </CardContent>
         </Card>
 
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-gray-100 py-4 px-6">
-            <CardTitle className="text-sm font-bold text-slate-800">Service Volume by Category</CardTitle>
+        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+          <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
+            <CardTitle className="text-[13px] font-semibold text-slate-900">Service Volume by Category</CardTitle>
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
-              <p className="text-xs text-gray-400 text-center py-6">Loading…</p>
+              <div className="h-44 animate-pulse rounded-lg bg-slate-100" />
             ) : serviceVolume.length === 0 ? (
-              <p className="text-xs text-gray-400 italic text-center py-6">No tests attached to visits in this range.</p>
+              <EmptyState compact icon={FlaskConical} title="No tests recorded in this range" description="Volume is counted from tests attached to a visit, not from bookings." />
             ) : (
               <CategoryVolumeChart data={serviceVolume} />
             )}
@@ -243,15 +243,15 @@ const DateRangeReports = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-gray-100 py-4 px-6">
-            <CardTitle className="text-sm font-bold text-slate-800">Visit Status Breakdown</CardTitle>
+        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+          <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
+            <CardTitle className="text-[13px] font-semibold text-slate-900">Visit Status Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
-              <p className="text-xs text-gray-400 text-center py-6">Loading…</p>
+              <div className="h-44 animate-pulse rounded-lg bg-slate-100" />
             ) : visitStatusBreakdown.length === 0 ? (
-              <p className="text-xs text-gray-400 italic text-center py-6">No visits created in this range.</p>
+              <EmptyState compact icon={ClipboardList} title="No visits in this range" description="Walk-ins and checked-in appointments both count as visits." />
             ) : (
               <div className="flex flex-wrap gap-2">
                 {visitStatusBreakdown.map((row) => (
@@ -264,24 +264,24 @@ const DateRangeReports = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-gray-100 py-4 px-6">
-            <CardTitle className="text-sm font-bold text-slate-800">Payment Method Breakdown</CardTitle>
+        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+          <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
+            <CardTitle className="text-[13px] font-semibold text-slate-900">Payment Method Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
             <Table>
-              <TableHeader className="bg-gray-50/80">
+              <TableHeader sticky>
                 <TableRow>
-                  <TableHead className="text-meta font-bold uppercase py-3">Method</TableHead>
-                  <TableHead className="text-meta font-bold uppercase py-3 text-right">Payments</TableHead>
-                  <TableHead className="text-meta font-bold uppercase py-3 text-right">Total</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead className="text-right">Payments</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={3} className="text-center py-6 text-xs text-gray-400">Loading…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={3} className="py-10 text-center text-fine text-slate-400">Loading…</TableCell></TableRow>
                 ) : paymentMethodBreakdown.length === 0 ? (
-                  <TableRow><TableCell colSpan={3} className="text-center py-6 text-xs text-gray-400 italic">No paid transactions in this range.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={3} className="p-0"><EmptyState compact icon={DollarSign} title="No payments in this range" description="Method breakdown fills in once bills are settled." /></TableCell></TableRow>
                 ) : (
                   paymentMethodBreakdown.map((row) => (
                     <TableRow key={row.payment_method}>
@@ -326,24 +326,24 @@ const RbacMatrixReport = () => {
 
   return (
     <div className="space-y-3">
-      <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="border-b border-gray-100 py-4 px-6">
-          <CardTitle className="text-sm font-bold text-slate-800 flex items-center space-x-2">
-            <ShieldCheck className="w-4 h-4 text-[#769046]" />
+      <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+        <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
+          <CardTitle className="flex items-center gap-2 text-[13px] font-semibold text-slate-900">
+            <ShieldCheck className="w-4 h-4 text-brand-600" />
             <span>Roles &amp; Their Assigned Permissions</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table>
-            <TableHeader className="bg-gray-50/80">
+            <TableHeader sticky>
               <TableRow>
-                <TableHead className="text-meta font-bold uppercase py-3">Role</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Permissions</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Permissions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={2} className="text-center py-6 text-xs text-gray-400">Loading role matrix…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={2} className="py-10 text-center text-fine text-slate-400">Loading role matrix…</TableCell></TableRow>
               ) : (
                 roles.map((role) => (
                   <TableRow key={role.id} className="align-top">
@@ -355,7 +355,7 @@ const RbacMatrixReport = () => {
                             <Badge key={permName} variant="outline" className="text-meta font-semibold border-gray-200">{permName}</Badge>
                           ))
                         ) : (
-                          <span className="text-fine text-gray-400 italic">No permissions assigned</span>
+                          <span className="text-fine text-slate-500">No permissions assigned</span>
                         )}
                       </div>
                     </TableCell>
@@ -418,7 +418,7 @@ const StaffWorkload = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#e6ebf1]">
         <div className="space-y-1">
           <h3 className="text-sm font-bold text-slate-900 m-0">Per-Staff Workload</h3>
           <p className="text-xs text-gray-500 m-0">Reception check-ins and Diagnostic results released, by staff member.</p>
@@ -442,16 +442,16 @@ const StaffWorkload = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-row items-center space-x-2">
-            <Users className="w-4 h-4 text-[#769046]" />
-            <CardTitle className="text-sm font-bold text-slate-800">Reception — Check-Ins by Staff</CardTitle>
+        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+          <CardHeader className="flex flex-row items-center gap-2.5 border-b border-[#e6ebf1] px-5 py-3.5">
+            <Users className="w-4 h-4 text-brand-600" />
+            <CardTitle className="text-[13px] font-semibold text-slate-900">Reception — Check-Ins by Staff</CardTitle>
           </CardHeader>
           <CardContent className="p-5 space-y-3">
             {loading ? (
-              <p className="text-xs text-gray-400 text-center py-6">Loading…</p>
+              <div className="h-44 animate-pulse rounded-lg bg-slate-100" />
             ) : receptionWorkload.length === 0 ? (
-              <p className="text-xs text-gray-400 italic text-center py-6">No visits created in this range.</p>
+              <EmptyState compact icon={ClipboardList} title="No visits in this range" description="Walk-ins and checked-in appointments both count as visits." />
             ) : (
               receptionWorkload.map(row => (
                 <div key={row.staff_id} className="space-y-1">
@@ -461,7 +461,7 @@ const StaffWorkload = () => {
                   </div>
                   <div className="w-full h-2 rounded-full bg-gray-100">
                     <div
-                      className="h-2 rounded-full bg-[#769046]"
+                      className="h-2 rounded-full bg-brand-500"
                       style={{ width: `${Math.max(4, (parseInt(row.visit_count, 10) / maxReceptionCount) * 100)}%` }}
                       role="img"
                       aria-label={`${row.visit_count} check-ins by ${row.first_name} ${row.last_name}`}
@@ -473,16 +473,16 @@ const StaffWorkload = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-row items-center space-x-2">
-            <FlaskConical className="w-4 h-4 text-[#769046]" />
-            <CardTitle className="text-sm font-bold text-slate-800">Diagnostic — Results Released by Staff</CardTitle>
+        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+          <CardHeader className="flex flex-row items-center gap-2.5 border-b border-[#e6ebf1] px-5 py-3.5">
+            <FlaskConical className="w-4 h-4 text-brand-600" />
+            <CardTitle className="text-[13px] font-semibold text-slate-900">Diagnostic — Results Released by Staff</CardTitle>
           </CardHeader>
           <CardContent className="p-5 space-y-3">
             {loading ? (
-              <p className="text-xs text-gray-400 text-center py-6">Loading…</p>
+              <div className="h-44 animate-pulse rounded-lg bg-slate-100" />
             ) : diagnosticRows.length === 0 ? (
-              <p className="text-xs text-gray-400 italic text-center py-6">No results released in this range.</p>
+              <p className="py-10 text-center text-fine text-slate-500">No results released in this range.</p>
             ) : (
               diagnosticRows.map(row => (
                 <div key={row.staff_id} className="space-y-1">
@@ -517,7 +517,7 @@ const StaffWorkload = () => {
 const ReportsOverview = () => {
   return (
     <div className="space-y-6">
-      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-1">
+      <div className="bg-white p-5 rounded-xl border border-[#e6ebf1] space-y-1">
         <h2 className="text-xl font-bold text-slate-900 m-0">Clinic Reports</h2>
         <p className="text-xs text-gray-500 m-0">Live activity, historical trends, and clinic-wide metrics for Admin/SuperAdmin oversight.</p>
       </div>

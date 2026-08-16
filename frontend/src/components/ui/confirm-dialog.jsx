@@ -16,9 +16,9 @@ export function ConfirmDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={(next) => !loading && onOpenChange(next)}>
-      <DialogContent className="max-w-sm rounded-2xl">
+      <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-base font-bold text-slate-900">{title}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="text-xs text-gray-500">{description}</DialogDescription>
         </DialogHeader>
 
@@ -37,7 +37,6 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            className="bg-[#769046] hover:bg-[#657c3a] text-white"
           >
             {loading ? "Please wait..." : confirmLabel}
           </Button>

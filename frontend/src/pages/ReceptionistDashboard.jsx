@@ -2,7 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SidebarLayout from '../components/SidebarLayout';
 import { usePolling } from '../hooks/usePolling';
 import { Button } from '../components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Panel, PanelBody } from '../components/ui/panel';
+import PageHeader from '../components/ui/page-header';
+import Toolbar, { ToolbarSpacer } from '../components/ui/toolbar';
+import EmptyState from '../components/ui/empty-state';
+import { SkeletonRows } from '../components/ui/skeleton';
 import MetricCard from '../components/ui/metric-card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
@@ -45,6 +49,23 @@ const PAGE_TITLES = {
   'reception-walkin': 'Walk-In Registration',
   'reception-checkin': 'Appointment Check-In',
   'reception-history': 'Visit History',
+};
+
+// One sentence per screen, written for someone in their first week on the desk. The four views
+// previously opened straight onto a KPI strip or a bare form with nothing saying what the screen
+// was for or how it related to the other three.
+const PAGE_ICONS = {
+  'reception-queue': UserCheck,
+  'reception-walkin': UserPlus,
+  'reception-checkin': QrCode,
+  'reception-history': History,
+};
+
+const PAGE_BLURBS = {
+  'reception-queue': "Everyone who has checked in today, in arrival order. Attach tests, print a ticket, or send a patient through to billing.",
+  'reception-walkin': 'Register a patient who arrived without an appointment. Creates the patient record if they are new, then opens a visit.',
+  'reception-checkin': 'Scan a booking pass or key in the reference code to turn a confirmed appointment into a live visit.',
+  'reception-history': 'Completed and cancelled visits for a chosen date range. Read-only.',
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 const QUEUE_PAGE_SIZE = 25;
@@ -569,69 +590,80 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
   return (
     <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
-      <div className="space-y-6">
+      <div className="space-y-5">
+        <PageHeader
+          icon={PAGE_ICONS[view]}
+          title={PAGE_TITLES[view]}
+          description={PAGE_BLURBS[view]}
+          actions={
+            view === 'reception-queue' ? (
+              <Button variant="outline" onClick={() => onSelectNav?.('reception-walkin')}>
+                <UserPlus className="h-4 w-4" />
+                Register Walk-In
+              </Button>
+            ) : undefined
+          }
+        />
 
         {staticDataError && (
-          <div role="alert" className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold rounded-xl flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <div role="alert" className="alert alert-warning">
+            <AlertCircle />
             <span>{staticDataError}</span>
-            <button type="button" onClick={fetchStaticData} className="underline font-bold border-0 bg-transparent cursor-pointer text-amber-900">Retry</button>
+            <button type="button" onClick={fetchStaticData} className="ml-auto cursor-pointer border-0 bg-transparent p-0 font-bold text-amber-900 underline underline-offset-2">Retry</button>
           </div>
         )}
 
         {view === 'reception-queue' && (
           <>
             {/* KPI Metrics Header */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
               <MetricCard label="Active Queue Visits" value={queueTotal} icon={UserCheck} tone="green" />
               <MetricCard label="Pending Intake" value={queuePendingCount} icon={Clock} tone="amber" />
-              <MetricCard label="In Diagnostic / Processing" value={queueProcessingCount} icon={ClipboardList} tone="indigo" />
-              <MetricCard label="Walk-In Intake Today" value={queueWalkinCount} icon={UserPlus} tone="emerald" />
+              <MetricCard label="In Diagnostic" value={queueProcessingCount} icon={ClipboardList} tone="indigo" />
+              <MetricCard label="Walk-Ins Today" value={queueWalkinCount} icon={UserPlus} tone="emerald" />
             </div>
 
             {/* UI/UX Modernization Phase 10: read-only visibility into pending HMO requests —
                 approving one still happens from wherever it already does, this card only
                 surfaces that they exist. */}
             {!hmoRequestsLoading && pendingHmoRequests.length > 0 && (
-              <Card className="border-amber-200 bg-amber-50/60 shadow-xs rounded-2xl overflow-hidden">
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <ShieldAlert className="w-4 h-4 text-amber-700 flex-shrink-0" />
-                    <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wider m-0">
-                      {pendingHmoRequests.length} Pending HMO Request{pendingHmoRequests.length === 1 ? '' : 's'}
-                    </h3>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {pendingHmoRequests.slice(0, 6).map(r => (
-                      <span
-                        key={r.id}
-                        className="inline-flex items-center gap-1.5 bg-white border border-amber-200 rounded-lg px-2.5 py-1 text-fine font-semibold text-amber-900"
-                      >
-                        <span className="font-bold">{r.provider_name}</span>
-                        <span className="text-amber-600">&bull;</span>
-                        <span>{r.approved_test_count}/{r.test_count} tests approved</span>
-                      </span>
-                    ))}
-                    {pendingHmoRequests.length > 6 && (
-                      <span className="text-fine font-semibold text-amber-700 self-center">+{pendingHmoRequests.length - 6} more</span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <Panel tone="notice" className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4 flex-shrink-0 text-amber-700" />
+                  <h3 className="m-0 text-fine font-semibold text-amber-900">
+                    {pendingHmoRequests.length} pending HMO request{pendingHmoRequests.length === 1 ? '' : 's'} awaiting Admin approval
+                  </h3>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {pendingHmoRequests.slice(0, 6).map(r => (
+                    <span
+                      key={r.id}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-0.5 text-fine font-medium leading-5 text-amber-900 ring-1 ring-inset ring-amber-200"
+                    >
+                      <span className="font-semibold">{r.provider_name}</span>
+                      <span className="text-amber-500">&bull;</span>
+                      <span className="tabular-nums">{r.approved_test_count}/{r.test_count} approved</span>
+                    </span>
+                  ))}
+                  {pendingHmoRequests.length > 6 && (
+                    <span className="self-center text-fine font-semibold text-amber-700">+{pendingHmoRequests.length - 6} more</span>
+                  )}
+                </div>
+              </Panel>
             )}
 
-            {/* Search + Status Filter Toolbar */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-xs">
-              <div className="flex items-center space-x-3 w-full sm:w-auto">
+            <div>
+              {/* Search + Status Filter Toolbar */}
+              <Toolbar attached>
                 <SearchInput
                   placeholder="Search patient name or Queue #..."
                   value={searchQuery}
                   onChange={e => handleQueueSearchChange(e.target.value)}
-                  containerClassName="flex-1 sm:w-64"
+                  containerClassName="w-full sm:w-64"
                 />
 
                 <Select value={statusFilter} onValueChange={handleQueueStatusFilterChange}>
-                  <SelectTrigger className="w-36 text-xs rounded-xl">
+                  <SelectTrigger className="w-36">
                     <SelectValue placeholder="Status Filter" />
                   </SelectTrigger>
                   <SelectContent>
@@ -641,51 +673,59 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     <SelectItem value="Completed">Completed</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <span className="text-xs font-bold text-gray-400 whitespace-nowrap">Showing {activeVisits.length} of {queueTotal} visit(s)</span>
-            </div>
+                <ToolbarSpacer />
+                <span className="whitespace-nowrap text-fine font-medium text-slate-500 tabular-nums">
+                  Showing {activeVisits.length} of {queueTotal} visit{queueTotal === 1 ? '' : 's'}
+                </span>
+              </Toolbar>
 
             {/* Active Queue Table */}
-            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-              <CardContent className="p-0">
+            <Panel className="overflow-hidden rounded-t-none">
+              <PanelBody flush>
                 <Table>
-                  <TableHeader className="bg-gray-50/80 border-b border-gray-100">
+                  <TableHeader sticky>
                     <TableRow>
-                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Queue Ticket</TableHead>
-                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Patient Name</TableHead>
-                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Visit Type</TableHead>
-                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Patient Category</TableHead>
-                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Assigned Tests</TableHead>
-                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3">Status</TableHead>
-                      <TableHead className="text-meta font-bold uppercase tracking-wider text-gray-500 py-3 text-right">Actions</TableHead>
+                      <TableHead>Queue Ticket</TableHead>
+                      <TableHead>Patient Name</TableHead>
+                      <TableHead>Visit Type</TableHead>
+                      <TableHead>Patient Category</TableHead>
+                      <TableHead>Assigned Tests</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {queueError ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-xs text-rose-600 font-semibold">
-                          {queueError}{' '}
-                          <button
-                            type="button"
-                            onClick={() => fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter })}
-                            className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
-                          >
-                            Retry
-                          </button>
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={7} className="p-0">
+                          <EmptyState
+                            tone="error"
+                            icon={AlertCircle}
+                            title="Couldn't load the queue"
+                            description={queueError}
+                            action={
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter })}
+                              >
+                                Try again
+                              </Button>
+                            }
+                          />
                         </TableCell>
                       </TableRow>
                     ) : loading ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-xs text-gray-500 font-semibold">
-                          Loading active queue…
-                        </TableCell>
-                      </TableRow>
+                      <SkeletonRows rows={6} columns={7} />
                     ) : activeVisits.length > 0 ? (
                       activeVisits.map(visit => (
-                        <TableRow key={visit.id} className="hover:bg-gray-50/50 transition-colors">
-                          <TableCell className="py-3">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-extrabold text-sm text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
+                        <TableRow key={visit.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {/* The ticket number is the thing a receptionist calls out and a
+                                  patient reads back, so it is set larger than the row around it
+                                  rather than smaller — it was 12px in a row of 12px text. */}
+                              <span className="rounded-md bg-slate-900 px-2 py-1 text-fine font-bold tabular-nums text-white">
                                 {visit.queue_number || `V-${visit.id}`}
                               </span>
                               {/* aria-label as well as title: `title` alone is not a reliable
@@ -695,83 +735,80 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                                 onClick={() => speakQueueNumber(visit.queue_number)}
                                 title="Call Queue Number"
                                 aria-label={`Call queue number ${visit.queue_number}`}
-                                className="p-1 text-gray-400 hover:text-[#769046] border-0 bg-transparent cursor-pointer"
+                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-slate-400 hover:bg-brand-50 hover:text-brand-600"
                               >
-                                <Volume2 className="w-4 h-4" />
+                                <Volume2 className="h-3.5 w-3.5" />
                               </button>
                               <button
                                 onClick={() => handlePrintTicket(visit)}
                                 title={`Print queue ticket for ${visit.first_name} ${visit.last_name}`}
                                 aria-label={`Print queue ticket for ${visit.first_name} ${visit.last_name}`}
-                                className="p-1 text-gray-400 hover:text-indigo-600 border-0 bg-transparent cursor-pointer"
+                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
                               >
-                                <Printer className="w-4 h-4" />
+                                <Printer className="h-3.5 w-3.5" />
                               </button>
                             </div>
                           </TableCell>
 
-                          <TableCell className="py-3 font-bold text-xs text-slate-900">
+                          <TableCell className="font-semibold text-slate-900">
                             {visit.first_name} {visit.last_name}
-                            <span className="block text-meta text-gray-400 font-normal">PT-{visit.patient_id}</span>
+                            <span className="block font-mono text-micro font-normal text-slate-400">PT-{visit.patient_id}</span>
                           </TableCell>
 
-                          <TableCell className="py-3 text-xs">
-                            <Badge variant="outline" className="text-meta font-bold border-gray-200">
+                          <TableCell>
+                            <Badge variant="outline" className="text-slate-600">
                               {visit.visit_type}
                             </Badge>
                           </TableCell>
 
-                          <TableCell className="py-3 text-xs font-semibold text-gray-700">
+                          <TableCell className="text-slate-500">
                             {visit.patient_type_name}
                           </TableCell>
 
-                          <TableCell className="py-3 text-xs">
+                          <TableCell>
                             {visit.tests && visit.tests.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {visit.tests.map(t => (
-                                  <span key={t.id} className="inline-flex items-center gap-1">
-                                    <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100 text-meta font-semibold border-gray-200">
-                                      {t.test_name} ({t.test_status})
+                                  <span key={t.id} className="inline-flex items-center gap-0.5">
+                                    <Badge variant="outline" className="text-slate-600">
+                                      {t.test_name}
+                                      <span className="ml-1 text-slate-400">({t.test_status})</span>
                                     </Badge>
                                     <button
                                       type="button"
                                       onClick={() => handleOpenHmoModal(t)}
                                       title="Log HMO pre-authorization for this test"
                                       aria-label={`Log HMO pre-authorization for ${t.test_name}`}
-                                      className="p-0.5 text-gray-400 hover:text-[#769046] border-0 bg-transparent cursor-pointer"
+                                      className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border-0 bg-transparent text-slate-300 hover:bg-brand-50 hover:text-brand-600"
                                     >
-                                      <ShieldAlert className="w-3.5 h-3.5" />
+                                      <ShieldAlert className="h-3 w-3" />
                                     </button>
                                   </span>
                                 ))}
                               </div>
                             ) : (
-                              <span className="text-gray-400 text-fine italic">No tests attached</span>
+                              <span className="text-fine text-slate-400">No tests attached</span>
                             )}
                           </TableCell>
 
-                          <TableCell className="py-3">
-                            <StatusBadge status={visit.visit_status} className="px-2.5 py-0.5" />
+                          <TableCell>
+                            <StatusBadge status={visit.visit_status} />
                             {/* Where the ticket actually is, in the front desk's own terms.
                                 'Pending' alone doesn't say whether reception or the cashier is
                                 holding it up, which is the question this row exists to answer. */}
-                            <span className="block text-meta text-gray-400 font-semibold mt-1">
+                            <span className="mt-1 block whitespace-nowrap text-micro font-medium text-slate-400">
                               {visit.visit_status === 'Pending'
-                                ? 'Awaiting payment — with cashier'
+                                ? 'With cashier'
                                 : visit.visit_status === 'Processing'
-                                  ? 'Released to department'
+                                  ? 'With department'
                                   : ''}
                             </span>
                           </TableCell>
 
-                          <TableCell className="py-3 text-right">
-                            <div className="flex items-center justify-end space-x-2">
-                              <Button
-                                onClick={() => handleOpenAssignTests(visit.id)}
-                                variant="outline"
-                                className="text-fine font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5"
-                              >
-                                + Attach Tests
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button onClick={() => handleOpenAssignTests(visit.id)} variant="outline" size="xs">
+                                Attach Tests
                               </Button>
                               {!['Completed', 'Cancelled'].includes(visit.visit_status) && (
                                 <button
@@ -779,9 +816,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                                   onClick={() => { setCancelVisitError(''); setCancelVisitTarget(visit); }}
                                   title="Cancel this visit"
                                   aria-label={`Cancel visit for ${visit.first_name} ${visit.last_name}`}
-                                  className="p-1.5 text-gray-400 hover:text-red-600 border-0 bg-transparent cursor-pointer"
+                                  className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                                 >
-                                  <XCircle className="w-4 h-4" />
+                                  <XCircle className="h-3.5 w-3.5" />
                                 </button>
                               )}
                             </div>
@@ -789,131 +826,139 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                         </TableRow>
                       ))
                     ) : (
-                      <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-xs text-gray-500 font-semibold">
-                          No active queue visits found.
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={7} className="p-0">
+                          <EmptyState
+                            icon={UserCheck}
+                            title={searchQuery || statusFilter !== 'All' ? 'No visits match this filter' : 'Nobody is waiting'}
+                            description={
+                              searchQuery || statusFilter !== 'All'
+                                ? 'Clear the search or switch the status filter back to All.'
+                                : 'The queue is clear. Register a walk-in or check in an appointment to start one.'
+                            }
+                            action={
+                              !searchQuery && statusFilter === 'All' ? (
+                                <Button size="sm" onClick={() => onSelectNav?.('reception-walkin')}>
+                                  <UserPlus className="h-3.5 w-3.5" />
+                                  Register Walk-In
+                                </Button>
+                              ) : undefined
+                            }
+                          />
                         </TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
-              </CardContent>
+              </PanelBody>
               <Pagination
                 page={queuePage}
                 totalPages={queueTotalPages}
                 onPageChange={handleQueuePageChange}
                 totalLabel={`${queueTotal} total`}
               />
-            </Card>
+            </Panel>
+            </div>
           </>
         )}
 
         {view === 'reception-history' && (
-          <div className="space-y-6">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-slate-900 m-0 flex items-center space-x-2">
-                  <History className="w-5 h-5 text-[#769046]" />
-                  <span>Visit History</span>
-                </h3>
-                <p className="text-fine text-gray-500 mt-1">Look up past patient visits, of any status, by date range.</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <SearchInput
-                  placeholder="Search patient or Queue #..."
-                  value={historySearch}
-                  onChange={e => setHistorySearch(e.target.value)}
-                  containerClassName="w-56"
-                />
-                <Input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="text-xs w-36" />
-                <span className="text-xs text-gray-400">to</span>
-                <Input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="text-xs w-36" />
-                <Button
-                  variant="outline"
-                  onClick={() => fetchVisitHistory(historyStartDate, historyEndDate, historySearch)}
-                  className="flex items-center space-x-1.5 text-xs font-semibold"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Apply</span>
-                </Button>
-              </div>
-            </div>
+          <div>
+            <Toolbar attached>
+              <SearchInput
+                placeholder="Search patient or Queue #..."
+                value={historySearch}
+                onChange={e => setHistorySearch(e.target.value)}
+                containerClassName="w-full sm:w-56"
+              />
+              <Input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
+              <span className="text-fine text-slate-400">to</span>
+              <Input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
+              <Button variant="outline" onClick={() => fetchVisitHistory(historyStartDate, historyEndDate, historySearch)}>
+                <RefreshCw className="h-3.5 w-3.5" />
+                Apply
+              </Button>
+              <ToolbarSpacer />
+              <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
+                {historyVisits.length} visit{historyVisits.length === 1 ? '' : 's'}
+              </span>
+            </Toolbar>
 
-            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-              <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-bold text-slate-800">{historyVisits.length} Visit(s)</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
+            <Panel className="overflow-hidden rounded-t-none">
+              <PanelBody flush>
                 <Table>
-                  <TableHeader className="bg-gray-50/80">
+                  <TableHeader sticky>
                     <TableRow>
-                      <TableHead className="text-meta font-bold uppercase py-3">Queue Ticket</TableHead>
-                      <TableHead className="text-meta font-bold uppercase py-3">Patient</TableHead>
-                      <TableHead className="text-meta font-bold uppercase py-3">Visit Type</TableHead>
-                      <TableHead className="text-meta font-bold uppercase py-3">Tests</TableHead>
-                      <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
-                      <TableHead className="text-meta font-bold uppercase py-3 text-right">Date</TableHead>
+                      <TableHead>Queue Ticket</TableHead>
+                      <TableHead>Patient</TableHead>
+                      <TableHead>Visit Type</TableHead>
+                      <TableHead>Tests</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Date</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {historyError ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-xs text-rose-600 font-semibold">
-                          {historyError}{' '}
-                          <button
-                            type="button"
-                            onClick={() => fetchVisitHistory(historyStartDate, historyEndDate, historySearch)}
-                            className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
-                          >
-                            Retry
-                          </button>
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={6} className="p-0">
+                          <EmptyState
+                            tone="error"
+                            icon={AlertCircle}
+                            title="Couldn't load visit history"
+                            description={historyError}
+                            action={
+                              <Button variant="outline" size="sm" onClick={() => fetchVisitHistory(historyStartDate, historyEndDate, historySearch)}>
+                                Try again
+                              </Button>
+                            }
+                          />
                         </TableCell>
                       </TableRow>
                     ) : historyLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-xs text-gray-500 font-semibold">
-                          Loading visit history…
-                        </TableCell>
-                      </TableRow>
+                      <SkeletonRows rows={6} columns={6} />
                     ) : historyVisits.length > 0 ? (
                       historyVisits.map(v => (
-                        <TableRow key={v.id} className="hover:bg-gray-50/50 transition-colors">
-                          <TableCell className="py-3">
-                            <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
+                        <TableRow key={v.id}>
+                          <TableCell>
+                            <span className="rounded-md bg-slate-100 px-2 py-1 text-fine font-bold tabular-nums text-slate-700">
                               {v.queue_number || `V-${v.id}`}
                             </span>
                           </TableCell>
-                          <TableCell className="py-3 font-bold text-xs text-slate-900">
+                          <TableCell className="font-semibold text-slate-900">
                             {v.first_name} {v.last_name}
-                            <span className="block text-meta text-gray-400 font-normal">{v.patient_type_name}</span>
+                            <span className="block text-micro font-normal text-slate-400">{v.patient_type_name}</span>
                           </TableCell>
-                          <TableCell className="py-3 text-xs">
-                            <Badge variant="outline" className="text-meta font-bold border-gray-200">
+                          <TableCell>
+                            <Badge variant="outline" className="text-slate-600">
                               {v.visit_type}
                             </Badge>
                           </TableCell>
-                          <TableCell className="py-3 text-xs text-gray-600">
-                            {v.tests && v.tests.length > 0 ? v.tests.map(t => t.test_name).join(', ') : <span className="text-gray-400 italic">No tests attached</span>}
+                          <TableCell className="text-slate-500">
+                            {v.tests && v.tests.length > 0 ? v.tests.map(t => t.test_name).join(', ') : <span className="text-slate-400">No tests attached</span>}
                           </TableCell>
-                          <TableCell className="py-3">
+                          <TableCell>
                             <StatusBadge status={v.visit_status} />
                           </TableCell>
-                          <TableCell className="py-3 text-xs text-gray-500 text-right">
+                          <TableCell className="text-right text-fine text-slate-500">
                             {new Date(v.created_at).toLocaleString()}
                           </TableCell>
                         </TableRow>
                       ))
                     ) : (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-xs text-gray-500 font-semibold italic">
-                          No visits found in this date range.
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={6} className="p-0">
+                          <EmptyState
+                            icon={History}
+                            title="No visits in this date range"
+                            description="Widen the dates above, or clear the search box."
+                          />
                         </TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
+              </PanelBody>
+            </Panel>
           </div>
         )}
 
@@ -921,23 +966,23 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           <div className="space-y-4">
 
             {/* Existing Patient Lookup (Module 7: patient record lookup) */}
-            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 max-w-3xl">
-              <div className="border-b border-gray-100 pb-3 mb-4">
-                <h3 className="text-base font-bold text-slate-900 m-0 flex items-center space-x-2">
-                  <Users className="w-5 h-5 text-[#769046]" />
+            <Panel className="max-w-3xl p-6">
+              <div className="border-b border-[#e6ebf1] pb-3 mb-4">
+                <h3 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
+                  <Users className="h-4 w-4 text-brand-600" />
                   <span>Find Existing Patient</span>
                 </h3>
-                <p className="text-fine text-gray-500 mt-1">Search before registering — a returning patient should be checked in, not re-registered.</p>
+                <p className="mt-1 text-fine leading-relaxed text-slate-500">Search before registering — a returning patient should be checked in, not re-registered.</p>
               </div>
 
               {lookupCheckInSuccess && (
-                <div role="status" className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold flex items-center space-x-2">
+                <div role="status" className="mb-4 alert alert-success">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                   <span>{lookupCheckInSuccess}</span>
                 </div>
               )}
               {patientSearchError && (
-                <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold flex items-center space-x-2">
+                <div role="alert" className="mb-4 alert alert-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{patientSearchError}</span>
                 </div>
@@ -950,7 +995,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   onChange={e => setPatientSearchQuery(e.target.value)}
                   className="flex-1"
                 />
-                <Button type="submit" className="bg-[#192534] hover:bg-slate-800 text-white text-xs font-bold px-4" disabled={patientSearching}>
+                <Button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white" disabled={patientSearching}>
                   {patientSearching ? 'Searching...' : 'Search'}
                 </Button>
               </form>
@@ -958,10 +1003,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               {patientSearchResults && (
                 <div className="mt-4 space-y-2">
                   {patientSearchResults.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic text-center py-3">No matching patient records found. Register them as a new patient below.</p>
+                    <p className="text-xs text-slate-500 text-center py-3">No matching patient records found. Register them as a new patient below.</p>
                   ) : (
                     patientSearchResults.map(patient => (
-                      <div key={patient.id} className="flex items-center justify-between border border-gray-100 rounded-xl p-3 bg-gray-50/50">
+                      <div key={patient.id} className="flex items-center justify-between border border-[#e6ebf1] rounded-xl p-3 bg-slate-50/70">
                         <div className="text-xs">
                           <span className="block font-bold text-slate-900">{patient.first_name} {patient.last_name} <span className="text-meta text-gray-400 font-normal">PT-{patient.id}</span></span>
                           <span className="block text-gray-500">{patient.patient_type_name} &middot; DOB {new Date(patient.birthdate).toLocaleDateString()}</span>
@@ -984,7 +1029,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                         <Button
                           type="button"
                           onClick={() => requestCheckIn('walkin', patient)}
-                          className="bg-[#769046] hover:bg-[#657c3a] text-white text-fine font-bold rounded-lg flex items-center space-x-1.5 px-3 py-1.5"
+                          className="text-fine font-bold rounded-lg flex items-center space-x-1.5 px-3 py-1.5"
                         >
                           <CheckCircle className="w-3.5 h-3.5" />
                           <span>Check In This Patient</span>
@@ -994,25 +1039,25 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   )}
                 </div>
               )}
-            </Card>
+            </Panel>
 
-            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 max-w-3xl">
-              <div className="border-b border-gray-100 pb-3 mb-4">
-                <h3 className="text-base font-bold text-slate-900 m-0 flex items-center space-x-2">
-                  <UserPlus className="w-5 h-5 text-[#769046]" />
+            <Panel className="max-w-3xl p-6">
+              <div className="border-b border-[#e6ebf1] pb-3 mb-4">
+                <h3 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
+                  <UserPlus className="h-4 w-4 text-brand-600" />
                   <span>Register Walk-In Patient & Generate Physical Ticket</span>
                 </h3>
               </div>
 
               {registrationSuccess && (
-                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold flex items-center space-x-2">
+                <div className="mb-4 alert alert-success">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                   <span>{registrationSuccess}</span>
                 </div>
               )}
 
               {registrationError && (
-                <div role="alert" className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 rounded-xl text-xs font-bold flex items-center space-x-2">
+                <div role="alert" className="mb-4 alert alert-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{registrationError}</span>
                 </div>
@@ -1021,7 +1066,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               <form onSubmit={handleWalkInRegister} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
+                    <label className="field-label">First Name <span className="text-rose-600">*</span></label>
                     <Input
                       placeholder="Juan"
                       value={newPatient.firstName}
@@ -1031,7 +1076,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
+                    <label className="field-label">Last Name <span className="text-rose-600">*</span></label>
                     <Input
                       placeholder="Dela Cruz"
                       value={newPatient.lastName}
@@ -1044,7 +1089,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1 sm:col-span-2">
-                    <label className="text-xs font-bold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
+                    <label className="field-label">Birthdate <span className="text-rose-600">*</span></label>
                     <Input
                       type="date"
                       value={newPatient.birthdate}
@@ -1054,7 +1099,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-600 uppercase">Sex <span className="text-rose-600">*</span></label>
+                    <label className="field-label">Sex <span className="text-rose-600">*</span></label>
                     <Select
                       value={newPatient.sex}
                       onValueChange={val => setNewPatient({...newPatient, sex: val})}
@@ -1073,7 +1118,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-600 uppercase">Contact Number</label>
+                    <label className="field-label">Contact Number</label>
                     <Input
                       placeholder="09171234567"
                       value={newPatient.contactNumber}
@@ -1082,7 +1127,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-600 uppercase">Patient Type <span className="text-rose-600">*</span></label>
+                    <label className="field-label">Patient Type <span className="text-rose-600">*</span></label>
                     <Select
                       value={newPatient.patientTypeId}
                       onValueChange={val => setNewPatient({...newPatient, patientTypeId: val})}
@@ -1103,7 +1148,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-600 uppercase">Home Address</label>
+                  <label className="field-label">Home Address</label>
                   <Input
                     placeholder="Barangay, City, Province"
                     value={newPatient.address}
@@ -1113,7 +1158,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-600 uppercase">Visit Notes / Referral Reason</label>
+                  <label className="field-label">Visit Notes / Referral Reason</label>
                   <Input
                     placeholder="Walk-in referral for Abdominal Ultrasound..."
                     value={visitNotes}
@@ -1123,23 +1168,23 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </div>
 
                 <div className="flex justify-end pt-3">
-                  <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold text-xs px-6 py-2 rounded-xl" disabled={isRegistering}>
+                  <Button type="submit" className="font-bold text-xs px-6 py-2 rounded-xl" disabled={isRegistering}>
                     {isRegistering ? 'Registering...' : 'Register Walk-In & Issue Queue Ticket'}
                   </Button>
                 </div>
               </form>
-            </Card>
+            </Panel>
           </div>
         )}
 
         {view === 'reception-checkin' && (
-          <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-6 max-w-xl">
-            <div className="border-b border-gray-100 pb-3 mb-4">
-              <h3 className="text-base font-bold text-slate-900 m-0 flex items-center space-x-2">
-                <QrCode className="w-5 h-5 text-[#769046]" />
+          <Panel className="max-w-xl p-6">
+            <div className="border-b border-[#e6ebf1] pb-3 mb-4">
+              <h3 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
+                <QrCode className="h-4 w-4 text-brand-600" />
                 <span>Verify Appointment Reference</span>
               </h3>
-              <p className="text-fine text-gray-500 mt-1">
+              <p className="mt-1 text-fine leading-relaxed text-slate-500">
                 Scan or enter the appointment reference code (e.g. <code>APPT-XXXXX</code>) to check a patient in.
               </p>
             </div>
@@ -1147,7 +1192,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             <button
               type="button"
               onClick={() => setScanMode(m => !m)}
-              className="flex items-center space-x-1.5 text-fine font-bold text-[#769046] hover:text-[#657c3a] cursor-pointer mb-3"
+              className="flex items-center space-x-1.5 text-fine font-bold text-brand-600 hover:text-[#657c3a] cursor-pointer mb-3"
             >
               {scanMode ? <Keyboard className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
               <span>{scanMode ? 'Switch to manual entry' : 'Scan QR with camera'}</span>
@@ -1169,7 +1214,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   onChange={e => setSearchRef(e.target.value)}
                   className="text-xs rounded-xl"
                 />
-                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-xs font-bold px-4">
+                <Button type="submit" className="text-xs font-bold px-4">
                   Lookup
                 </Button>
               </div>
@@ -1182,7 +1227,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               )}
 
               {checkInNotice && (
-                <div role="status" className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="status" className="alert alert-success">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                   <span>{checkInNotice}</span>
                 </div>
@@ -1215,7 +1260,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-gray-500 uppercase">Queue Ticket</span>
-                    <Badge className="bg-[#769046] text-white font-extrabold">{verifyResult.queue_number}</Badge>
+                    <Badge className="bg-brand-500 text-white font-extrabold">{verifyResult.queue_number}</Badge>
                   </div>
 
                   {/* Payment is the other half of the release rule, so the front desk needs to
@@ -1236,7 +1281,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   <Button
                     type="button"
                     onClick={() => requestCheckIn('appointment', verifyResult)}
-                    className="w-full bg-[#769046] hover:bg-[#657c3a] text-white font-bold py-2 rounded-xl"
+                    className="w-full font-bold py-2 rounded-xl"
                   >
                     Confirm Check-In Patient
                   </Button>
@@ -1251,28 +1296,28 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </div>
               )}
             </form>
-          </Card>
+          </Panel>
         )}
 
         {/* Attach Diagnostic Tests Modal */}
         <Dialog open={showTestsModal} onOpenChange={setShowTestsModal}>
-          <DialogContent className="max-w-lg rounded-2xl">
+          <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold text-slate-900">Attach Diagnostic Tests to Visit</DialogTitle>
-              <DialogDescription className="text-xs">
+              <DialogTitle>Attach Diagnostic Tests to Visit</DialogTitle>
+              <DialogDescription>
                 Select tests requested for Visit ID #{selectedVisitId}.
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleAssignTestsSubmit} className="space-y-4 pt-2">
-              <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-xl p-3 space-y-2 bg-gray-50/50">
+              <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-xl p-3 space-y-2 bg-slate-50/70">
                 {testCatalog.map(t => (
-                  <label key={t.id} className="flex items-center space-x-3 p-2 bg-white hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-gray-100 text-xs">
+                  <label key={t.id} className="flex items-center space-x-3 p-2 bg-white hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-[#e6ebf1] text-xs">
                     <input
                       type="checkbox"
                       checked={selectedTestIds.includes(t.id.toString())}
                       onChange={() => handleToggleTest(t.id.toString())}
-                      className="rounded text-[#769046] focus:ring-[#769046]"
+                      className="rounded text-brand-600 focus:ring-brand-500"
                     />
                     <div className="flex-1 flex justify-between items-center">
                       <span className="font-bold text-gray-800">{t.name} <span className="text-meta text-gray-400 font-normal">({t.category_name})</span></span>
@@ -1282,12 +1327,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 ))}
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
                 <Button type="button" variant="outline" onClick={() => setShowTestsModal(false)}>Cancel</Button>
                 <Button
                   type="submit"
                   disabled={isAttachingTests || selectedTestIds.length === 0}
-                  className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold"
+                  className="font-bold"
                 >
                   {isAttachingTests ? 'Attaching…' : 'Attach Selected Tests'}
                 </Button>
@@ -1298,23 +1343,23 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
         {/* HMO Pre-Authorization Logging Modal (Module 7: HMO request initiation) */}
         <Dialog open={showHmoModal} onOpenChange={(open) => { setShowHmoModal(open); if (!open) { setHmoError(''); } }}>
-          <DialogContent className="max-w-md rounded-2xl">
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold text-slate-900">Log HMO Pre-Authorization</DialogTitle>
-              <DialogDescription className="text-xs">
+              <DialogTitle>Log HMO Pre-Authorization</DialogTitle>
+              <DialogDescription>
                 For <strong>{activeVisitTest?.test_name}</strong>. This logs the request for Admin review — it does not approve coverage on its own, even if a code is entered below.
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleHmoSubmit} className="space-y-4 pt-2">
               {hmoError && (
-                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="alert alert-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{hmoError}</span>
                 </div>
               )}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-600 uppercase">HMO Provider <span className="text-rose-600">*</span></label>
+                <label className="field-label">HMO Provider <span className="text-rose-600">*</span></label>
                 <Select value={hmoProviderId} onValueChange={setHmoProviderId}>
                   <SelectTrigger className="rounded-xl">
                     <SelectValue placeholder="Select HMO provider" />
@@ -1330,7 +1375,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-gray-600 uppercase">Card / LOA Number (if shown by patient)</label>
+                <label className="field-label">Card / LOA Number (if shown by patient)</label>
                 <Input
                   placeholder="Enter the code shown on the HMO card or LOA"
                   value={hmoApprovalCode}
@@ -1338,9 +1383,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 />
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
                 <Button type="button" variant="outline" onClick={() => setShowHmoModal(false)}>Cancel</Button>
-                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold">Log HMO Request</Button>
+                <Button type="submit" className="font-bold">Log HMO Request</Button>
               </div>
             </form>
           </DialogContent>

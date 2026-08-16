@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import { SkeletonRows } from '../../components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -97,9 +99,9 @@ const RoleMatrix = () => {
           46 API routes and the sidebar, and Admin no longer bypasses them. */}
       <div
         role="status"
-        className="flex items-start space-x-2 rounded-xl border border-[#769046]/30 bg-[#769046]/8 p-3 text-fine text-[#3f5122]"
+        className="flex items-start gap-2 rounded-lg bg-brand-50 p-3 text-fine leading-relaxed text-brand-800 ring-1 ring-inset ring-brand-200"
       >
-        <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-px text-[#769046]" />
+        <ShieldCheck className="mt-px h-4 w-4 flex-shrink-0 text-brand-600" />
         <span>
           <strong className="font-bold">Live — these permissions are enforced.</strong> Unticking
           one immediately stops that role calling the endpoints behind it, and removes the matching
@@ -110,44 +112,42 @@ const RoleMatrix = () => {
         </span>
       </div>
 
-      <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="border-b border-gray-100 py-4 px-6">
-          <CardTitle className="text-sm font-bold text-slate-800">Roles &amp; Their Assigned Permissions</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
+      <Panel className="overflow-hidden">
+        <PanelHeader
+          title="Roles & Their Assigned Permissions"
+          description="Ticking a permission grants it to that role's API access and sidebar immediately"
+          icon={ShieldCheck}
+        />
+        <PanelBody flush>
           <Table>
-            <TableHeader className="bg-gray-50/80">
+            <TableHeader sticky>
               <TableRow>
-                <TableHead className="text-meta font-bold uppercase py-3">Role</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Permissions</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3 text-right">Actions</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Permissions</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={3} className="text-center py-6 text-xs text-gray-400">Loading role matrix…</TableCell></TableRow>
+                <SkeletonRows rows={5} columns={3} />
               ) : (
                 pagedRoles.map(role => (
-                  <TableRow key={role.id} className="hover:bg-gray-50/50 transition-colors align-top">
-                    <TableCell className="py-3 font-bold text-xs text-slate-900 whitespace-nowrap">{role.name}</TableCell>
-                    <TableCell className="py-3">
-                      <div className="flex flex-wrap gap-1 max-w-2xl">
+                  <TableRow key={role.id} className="align-top">
+                    <TableCell className="whitespace-nowrap font-semibold text-slate-900">{role.name}</TableCell>
+                    <TableCell>
+                      <div className="flex max-w-2xl flex-wrap gap-1">
                         {(rolePermissions[role.name] || []).length > 0 ? (
                           (rolePermissions[role.name] || []).map(permName => (
-                            <Badge key={permName} variant="outline" className="text-meta font-semibold border-gray-200">{permName}</Badge>
+                            <Badge key={permName} variant="outline" className="font-mono text-micro text-slate-600">{permName}</Badge>
                           ))
                         ) : (
-                          <span className="text-fine text-gray-400 italic">No permissions assigned</span>
+                          <span className="text-fine text-slate-400">No permissions assigned</span>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="py-3 text-right">
-                      <Button
-                        onClick={() => handleOpenEdit(role)}
-                        variant="outline"
-                        className="text-fine font-bold border-gray-200 hover:bg-[#769046] hover:text-white rounded-lg py-1 px-2.5"
-                      >
-                        <Edit className="w-3.5 h-3.5 mr-1" />
+                    <TableCell className="text-right">
+                      <Button onClick={() => handleOpenEdit(role)} variant="outline" size="xs">
+                        <Edit className="h-3 w-3" />
                         Edit
                       </Button>
                     </TableCell>
@@ -156,19 +156,19 @@ const RoleMatrix = () => {
               )}
             </TableBody>
           </Table>
-        </CardContent>
+        </PanelBody>
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${roles.length} total`} />
-      </Card>
+      </Panel>
 
       <Dialog open={!!editingRole} onOpenChange={(open) => { if (!open) setEditingRole(null); }}>
-        <DialogContent className="max-w-lg rounded-2xl">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">Edit Permissions — {editingRole?.name}</DialogTitle>
-            <DialogDescription className="text-xs">Changes take effect immediately.</DialogDescription>
+            <DialogTitle>Edit Permissions — {editingRole?.name}</DialogTitle>
+            <DialogDescription>Changes take effect immediately.</DialogDescription>
           </DialogHeader>
 
           {saveError && (
-            <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+            <div role="alert" className="alert alert-error">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>{saveError}</span>
             </div>
@@ -177,20 +177,20 @@ const RoleMatrix = () => {
           <div className="max-h-80 overflow-y-auto space-y-4 pr-1">
             {Object.entries(permissionsByModule).map(([module, perms]) => (
               <div key={module} className="space-y-1.5">
-                <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">{module}</span>
+                <span className="field-label">{module}</span>
                 <div className="space-y-1">
                   {perms.map(p => (
-                    <label key={p.id} className="flex items-center space-x-2.5 p-2 bg-gray-50/70 hover:bg-gray-50 rounded-lg cursor-pointer border border-gray-100">
+                    <label key={p.id} className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-[#e6ebf1] p-2 transition-colors hover:border-brand-300 hover:bg-brand-50/50">
                       <input
                         type="checkbox"
                         checked={checkedIds.has(p.id)}
                         onChange={() => togglePermission(p.id)}
-                        className="rounded text-[#769046] focus:ring-[#769046]"
+                        className="h-4 w-4 rounded accent-[#769046]"
                       />
-                      <div className="text-xs">
-                        <span className="font-bold text-gray-800 block">{p.name}</span>
-                        {p.description && <span className="text-fine text-gray-500">{p.description}</span>}
-                      </div>
+                      <span>
+                        <span className="block font-mono text-fine font-semibold text-slate-900">{p.name}</span>
+                        {p.description && <span className="block text-fine text-slate-500">{p.description}</span>}
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -198,10 +198,10 @@ const RoleMatrix = () => {
             ))}
           </div>
 
-          <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+          <div className="flex justify-end gap-2 border-t border-[#e6ebf1] pt-3">
             <Button type="button" variant="outline" onClick={() => setEditingRole(null)} disabled={saving}>Cancel</Button>
-            <Button type="button" onClick={handleSave} className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold" disabled={saving}>
-              {saving ? 'Saving...' : 'Save Changes'}
+            <Button type="button" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving…' : 'Save Changes'}
             </Button>
           </div>
         </DialogContent>
@@ -302,55 +302,55 @@ const ElevatedAccounts = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-        <div className="space-y-1">
-          <h3 className="text-base font-bold text-slate-900 m-0">Elevated Accounts (Admin / SuperAdmin)</h3>
-          <p className="text-xs text-gray-500 m-0">You cannot deactivate your own account, to prevent locking the clinic out of elevated administration.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">Elevated Accounts (Admin / SuperAdmin)</h3>
+          <p className="m-0 mt-1 text-fine leading-relaxed text-slate-500">You cannot deactivate your own account, to prevent locking the clinic out of elevated administration.</p>
         </div>
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogTrigger asChild>
-            <Button onClick={handleOpenAdd} className="bg-[#769046] hover:bg-[#657c3a] text-white flex items-center space-x-2 text-xs font-bold px-4 py-2 rounded-xl">
-              <UserPlus className="w-4 h-4" />
-              <span>Add Elevated Account</span>
+            <Button onClick={handleOpenAdd}>
+              <UserPlus className="h-4 w-4" />
+              Add Elevated Account
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md rounded-2xl">
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold text-slate-900">Add Elevated Account</DialogTitle>
-              <DialogDescription className="text-xs">Creates an Admin or SuperAdmin login. Grant this power carefully.</DialogDescription>
+              <DialogTitle>Add Elevated Account</DialogTitle>
+              <DialogDescription>Creates an Admin or SuperAdmin login. Grant this power carefully.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAdd} className="space-y-4 pt-2">
               {formError && (
-                <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+                <div role="alert" className="alert alert-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{formError}</span>
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-600 uppercase">First Name</label>
+                  <label className="field-label">First Name</label>
                   <Input value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} disabled={submitting} required />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-600 uppercase">Last Name</label>
+                  <label className="field-label">Last Name</label>
                   <Input value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} disabled={submitting} required />
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">Email</label>
+                <label className="field-label">Email</label>
                 <Input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={submitting} required />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">Contact Number</label>
+                <label className="field-label">Contact Number</label>
                 <Input value={formData.contactNumber} onChange={e => setFormData({ ...formData, contactNumber: e.target.value })} disabled={submitting} />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">Temporary Password</label>
+                <label className="field-label">Temporary Password</label>
                 <Input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} disabled={submitting} required />
                 <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-600 uppercase">Role</label>
+                <label className="field-label">Role</label>
                 <Select value={formData.role} onValueChange={val => setFormData({ ...formData, role: val })}>
                   <SelectTrigger className="rounded-xl">
                     <SelectValue placeholder="Select a role" />
@@ -362,9 +362,9 @@ const ElevatedAccounts = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
                 <Button type="button" variant="outline" onClick={() => setShowAddModal(false)} disabled={submitting}>Cancel</Button>
-                <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white font-bold" disabled={submitting}>
+                <Button type="submit" className="font-bold" disabled={submitting}>
                   {submitting ? 'Creating...' : 'Create Account'}
                 </Button>
               </div>
@@ -373,51 +373,63 @@ const ElevatedAccounts = () => {
         </Dialog>
       </div>
 
-      <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardContent className="p-0">
+      <Panel className="overflow-hidden">
+        <PanelBody flush>
           <Table>
-            <TableHeader className="bg-gray-50/80">
+            <TableHeader sticky>
               <TableRow>
-                <TableHead className="text-meta font-bold uppercase py-3">Name</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Email</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Role</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-6 text-xs text-gray-400">Loading elevated accounts…</TableCell></TableRow>
+                <SkeletonRows rows={4} columns={4} />
               ) : pagedAccounts.length > 0 ? (
                 pagedAccounts.map(a => {
                   const isSelf = currentUser?.id === a.id;
                   return (
-                    <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors">
-                      <TableCell className="py-3 font-bold text-xs text-slate-900">
-                        {a.first_name} {a.last_name} {isSelf && <span className="text-meta text-gray-400 font-normal">(you)</span>}
+                    <TableRow key={a.id}>
+                      <TableCell className="font-semibold text-slate-900">
+                        {a.first_name} {a.last_name} {isSelf && <span className="font-normal text-slate-400">(you)</span>}
                       </TableCell>
-                      <TableCell className="py-3 text-xs text-gray-600">{a.email}</TableCell>
-                      <TableCell className="py-3 text-xs"><Badge variant="outline" className="text-meta font-bold border-gray-200">{a.roles?.[0]}</Badge></TableCell>
-                      <TableCell className="py-3">
-                        <Badge
-                          onClick={() => { if (isSelf) return; setStatusError(''); setStatusTarget(a); }}
-                          className={`text-meta font-bold px-2.5 py-0.5 rounded-full ${isSelf ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} ${
-                            a.status ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-200' : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
+                      <TableCell className="text-slate-500">{a.email}</TableCell>
+                      <TableCell><Badge variant="outline" className="text-slate-600">{a.roles?.[0]}</Badge></TableCell>
+                      <TableCell>
+                        {/* A real button, and genuinely disabled for your own row rather than
+                            just dimmed — the previous version was a clickable <div> whose
+                            "cannot deactivate yourself" rule lived only in an early return. */}
+                        <button
+                          type="button"
+                          disabled={isSelf}
+                          onClick={() => { setStatusError(''); setStatusTarget(a); }}
+                          title={isSelf ? 'You cannot deactivate your own account' : a.status ? 'Deactivate this account' : 'Activate this account'}
+                          className={`rounded-md border-0 px-2 py-0.5 text-fine font-semibold leading-5 ring-1 ring-inset transition-colors ${
+                            isSelf ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                          } ${
+                            a.status
+                              ? 'bg-emerald-50 text-emerald-800 ring-emerald-200 enabled:hover:bg-emerald-100'
+                              : 'bg-slate-100 text-slate-600 ring-slate-200 enabled:hover:bg-slate-200'
                           }`}
                         >
                           {a.status ? 'Active' : 'Deactivated'}
-                        </Badge>
+                        </button>
                       </TableCell>
                     </TableRow>
                   );
                 })
               ) : (
-                <TableRow><TableCell colSpan={4} className="text-center py-6 text-xs text-gray-400 italic">No elevated accounts yet.</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={4} className="py-10 text-center text-fine text-slate-500">No elevated accounts yet.</TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
-        </CardContent>
+        </PanelBody>
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${accounts.length} total`} />
-      </Card>
+      </Panel>
 
       <ConfirmDialog
         open={!!statusTarget}
@@ -435,19 +447,18 @@ const ElevatedAccounts = () => {
 
 const SuperAdminManagement = () => {
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-1">
-        <h2 className="text-xl font-bold text-slate-900 m-0 flex items-center space-x-2">
-          <ShieldCheck className="w-5 h-5 text-[#769046]" />
-          <span>Super Admin Management</span>
-        </h2>
-        <p className="text-xs text-gray-500 m-0">RBAC administration and elevated account management — capabilities beyond what an Admin account can do.</p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="SuperAdmin only"
+        icon={ShieldCheck}
+        title="Super Admin Management"
+        description="RBAC administration and elevated account management — the two capabilities an Admin account deliberately does not have."
+      />
 
       <Tabs defaultValue="matrix" className="w-full space-y-4">
-        <TabsList className="bg-gray-100 p-1 rounded-xl">
-          <TabsTrigger value="matrix" className="rounded-lg text-xs font-bold px-4 py-1.5">Role-Permission Matrix</TabsTrigger>
-          <TabsTrigger value="accounts" className="rounded-lg text-xs font-bold px-4 py-1.5">Elevated Accounts</TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="matrix">Role-Permission Matrix</TabsTrigger>
+          <TabsTrigger value="accounts">Elevated Accounts</TabsTrigger>
         </TabsList>
         <TabsContent value="matrix" className="m-0">
           <RoleMatrix />

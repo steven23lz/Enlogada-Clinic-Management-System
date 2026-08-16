@@ -47,7 +47,7 @@ const AboutUs = ({ onNavigate }) => {
 
         {/* Our Story */}
         <div className="flex flex-col md:flex-row gap-8 items-center">
-          <div className="flex-shrink-0 bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+          <div className="flex-shrink-0 bg-white rounded-2xl border border-[#e6ebf1] p-8">
             <Logo className="w-28 h-28" />
           </div>
           <div className="space-y-3">
@@ -66,8 +66,8 @@ const AboutUs = ({ onNavigate }) => {
           <h2 className="text-xl font-bold text-slate-900 m-0">Why Patients Choose Us</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {VALUES.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="bg-white border border-gray-100 rounded-2xl shadow-xs p-5 space-y-2.5">
-                <div className="w-10 h-10 rounded-xl bg-[#769046]/10 text-[#769046] flex items-center justify-center">
+              <div key={title} className="bg-white border border-[#e6ebf1] rounded-2xl p-5 space-y-2.5">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
                   <Icon className="w-5 h-5" />
                 </div>
                 <h3 className="font-bold text-gray-900 text-sm m-0">{title}</h3>
@@ -78,20 +78,20 @@ const AboutUs = ({ onNavigate }) => {
         </div>
 
         {/* Visit Us */}
-        <div className="bg-primary-navy rounded-3xl p-8 md:p-10 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
+        <div className="rail-gradient rail-grid relative overflow-hidden rounded-2xl border border-[#2b3a4d] p-8 md:p-10 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
           <div className="space-y-3">
             <h2 className="text-xl font-bold tracking-tight m-0">Visit Us</h2>
             <div className="space-y-2 text-sm text-gray-300">
               <div className="flex items-center space-x-2.5">
-                <MapPin className="w-4 h-4 text-[#769046] flex-shrink-0" />
+                <MapPin className="w-4 h-4 text-brand-600 flex-shrink-0" />
                 <span>Bugo, Cagayan de Oro, Philippines 9000</span>
               </div>
               <div className="flex items-center space-x-2.5">
-                <Phone className="w-4 h-4 text-[#769046] flex-shrink-0" />
+                <Phone className="w-4 h-4 text-brand-600 flex-shrink-0" />
                 <span>0936 132 0650</span>
               </div>
               <div className="flex items-center space-x-2.5">
-                <Mail className="w-4 h-4 text-[#769046] flex-shrink-0" />
+                <Mail className="w-4 h-4 text-brand-600 flex-shrink-0" />
                 <span>enlogadaclinic2011@gmail.com</span>
               </div>
             </div>

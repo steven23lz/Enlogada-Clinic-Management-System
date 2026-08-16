@@ -86,10 +86,10 @@ const AccountSettingsForm = ({ className = '' }) => {
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Account Information */}
-      <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-4">
+      <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+        <CardHeader className="bg-slate-50/80 border-b border-[#e6ebf1] py-4">
           <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-            <User className="w-4 h-4 text-[#769046]" />
+            <User className="w-4 h-4 text-brand-600" />
             <span>Account Information</span>
           </CardTitle>
           <p className="text-fine text-gray-500 m-0">Your name, contact number, and profile photo.</p>
@@ -97,9 +97,9 @@ const AccountSettingsForm = ({ className = '' }) => {
         <CardContent className="p-5 space-y-5">
           <AvatarUpload />
 
-          <form onSubmit={handleSaveAccount} className="space-y-4 pt-4 border-t border-gray-100">
+          <form onSubmit={handleSaveAccount} className="space-y-4 pt-4 border-t border-[#e6ebf1]">
             {accountError && (
-              <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+              <div role="alert" className="alert alert-error">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{accountError}</span>
               </div>
@@ -148,8 +148,8 @@ const AccountSettingsForm = ({ className = '' }) => {
               />
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-gray-100">
-              <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white" disabled={isSavingAccount}>
+            <div className="flex justify-end pt-2 border-t border-[#e6ebf1]">
+              <Button type="submit"  disabled={isSavingAccount}>
                 {isSavingAccount ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
@@ -158,10 +158,10 @@ const AccountSettingsForm = ({ className = '' }) => {
       </Card>
 
       {/* Change Password */}
-      <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-4">
+      <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+        <CardHeader className="bg-slate-50/80 border-b border-[#e6ebf1] py-4">
           <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-            <KeyRound className="w-4 h-4 text-[#769046]" />
+            <KeyRound className="w-4 h-4 text-brand-600" />
             <span>Change Password</span>
           </CardTitle>
           <p className="text-fine text-gray-500 m-0">Choose a strong password you don't use elsewhere.</p>
@@ -169,7 +169,7 @@ const AccountSettingsForm = ({ className = '' }) => {
         <CardContent className="p-5">
           <form onSubmit={handleChangePassword} className="space-y-4">
             {passwordError && (
-              <div role="alert" className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center space-x-2">
+              <div role="alert" className="alert alert-error">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{passwordError}</span>
               </div>
@@ -207,8 +207,8 @@ const AccountSettingsForm = ({ className = '' }) => {
             </div>
             <p className="text-fine text-gray-400 m-0">Must be at least 8 characters.</p>
 
-            <div className="flex justify-end pt-2 border-t border-gray-100">
-              <Button type="submit" className="bg-[#769046] hover:bg-[#657c3a] text-white" disabled={isSavingPassword}>
+            <div className="flex justify-end pt-2 border-t border-[#e6ebf1]">
+              <Button type="submit"  disabled={isSavingPassword}>
                 {isSavingPassword ? 'Saving...' : 'Change Password'}
               </Button>
             </div>

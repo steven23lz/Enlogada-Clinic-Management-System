@@ -8,24 +8,31 @@ const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
   const { user, logout } = useAuth();
 
   return (
-    <header className="w-full bg-white border-b border-gray-100 px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between sticky top-0 z-50 gap-2">
+    <header className="sticky top-0 z-50 flex w-full items-center justify-between gap-2 border-b border-[#e6ebf1] bg-white/85 px-4 py-2.5 backdrop-blur-md sm:px-6">
       {/* Clinic Identity (Logo + Name) */}
-      <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-shrink-0">
-        <Logo className="w-9 h-9 sm:w-11 sm:h-11 flex-shrink-0" />
-        <div className="flex flex-col min-w-0">
-          <span className="font-bold text-base sm:text-lg leading-tight tracking-wider text-dark-slate truncate">ENLOGADA</span>
-          <span className="hidden sm:block text-meta text-gray-500 font-medium tracking-wide uppercase truncate">Ultrasound & Diagnostic Clinic</span>
+      <div className="flex min-w-0 flex-shrink-0 items-center gap-2.5">
+        <Logo className="h-9 w-9 flex-shrink-0" />
+        <div className="flex min-w-0 flex-col leading-tight">
+          <span className="truncate text-[15px] font-bold tracking-tight text-slate-900">ENLOGADA</span>
+          <span className="hidden truncate text-micro font-semibold uppercase tracking-[0.12em] text-slate-500 sm:block">
+            Ultrasound &amp; Diagnostic Clinic
+          </span>
         </div>
       </div>
 
-      {/* Navigation and User Actions */}
-      <div className="flex items-center space-x-2 sm:space-x-8 flex-shrink-0">
-        <nav className="flex items-center space-x-2 sm:space-x-6">
+      {/* Navigation and User Actions.
+          The two destinations are a segmented control rather than underlined tabs — the same
+          shape the staff consoles use for switching views, so a patient and a member of staff
+          are not learning two different idioms for the same gesture. */}
+      <div className="flex flex-shrink-0 items-center gap-2 sm:gap-4">
+        <nav className="inline-flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
           <button
             type="button"
             onClick={() => onNavigate?.('dashboard')}
-            className={`text-xs sm:text-sm font-semibold pb-1 bg-transparent border-0 border-b-2 cursor-pointer transition-colors whitespace-nowrap ${
-              activeTab === 'dashboard' ? 'text-[#769046] border-[#769046]' : 'text-gray-400 border-transparent hover:text-gray-600'
+            className={`cursor-pointer whitespace-nowrap rounded-[7px] border-0 px-3 py-1.5 text-fine font-semibold transition-colors ${
+              activeTab === 'dashboard'
+                ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                : 'bg-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             Dashboard
@@ -33,8 +40,10 @@ const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
           <button
             type="button"
             onClick={() => onNavigate?.('account')}
-            className={`text-xs sm:text-sm font-semibold pb-1 bg-transparent border-0 border-b-2 cursor-pointer transition-colors whitespace-nowrap ${
-              activeTab === 'account' ? 'text-[#769046] border-[#769046]' : 'text-gray-400 border-transparent hover:text-gray-600'
+            className={`cursor-pointer whitespace-nowrap rounded-[7px] border-0 px-3 py-1.5 text-fine font-semibold transition-colors ${
+              activeTab === 'account'
+                ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                : 'bg-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             <span className="hidden sm:inline">My Account</span>
@@ -43,29 +52,32 @@ const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
         </nav>
 
         {user && (
-          <div className="flex items-center space-x-2 sm:space-x-4">
+          <div className="flex items-center gap-2">
+            <span aria-hidden="true" className="hidden h-6 w-px bg-slate-200 sm:block" />
+
             {/* User Badge */}
             <button
               type="button"
               onClick={() => onNavigate?.('account')}
               aria-label="Manage account settings"
-              className="flex items-center space-x-2 bg-gray-50 border border-gray-100 rounded-full px-2 sm:px-4 py-2 text-sm text-gray-700 font-medium shadow-sm cursor-pointer hover:border-[#769046]/40 transition-colors"
+              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-fine font-medium text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 sm:px-2.5"
             >
-              <div className="w-6 h-6 bg-primary-navy/15 rounded-full flex items-center justify-center text-primary-navy flex-shrink-0">
-                <User className="w-3.5 h-3.5" />
-              </div>
-              <span className="hidden md:inline whitespace-nowrap">{user.firstName} {user.lastName}</span>
+              <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md bg-brand-100 text-brand-700">
+                <User className="h-3.5 w-3.5" />
+              </span>
+              <span className="hidden whitespace-nowrap md:inline">{user.firstName} {user.lastName}</span>
             </button>
 
             {/* Log Off Button */}
             <Button
               variant="ghost"
+              size="icon"
               onClick={logout}
               aria-label="Log Off"
-              className="text-red-500 hover:text-red-600 hover:bg-red-50/50 flex items-center space-x-2 font-medium text-sm transition-colors rounded-full px-2 sm:px-4"
+              title="Log off"
+              className="text-slate-500 hover:bg-rose-50 hover:text-rose-600"
             >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Log Off</span>
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         )}

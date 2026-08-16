@@ -11,11 +11,15 @@ import { cn } from "../../lib/utils"
 const SearchInput = React.forwardRef(({ className, containerClassName, ...props }, ref) => {
   return (
     <div className={cn("relative", containerClassName)}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
       <input
         type="text"
         className={cn(
-          "pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-xl text-xs w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+          // Matches Input's geometry exactly (h-9, rounded-lg, 13px) so a search box and a date
+          // field sitting in the same toolbar line up on both edges. They previously differed by
+          // 6px of height and 4px of radius, which is enough to make a filter row look assembled
+          // rather than designed.
+          "h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-900 transition-colors placeholder:text-slate-400 hover:border-slate-300 focus-visible:border-brand-400 disabled:cursor-not-allowed disabled:opacity-50",
           className
         )}
         ref={ref}

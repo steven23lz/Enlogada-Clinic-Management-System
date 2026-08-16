@@ -33,7 +33,7 @@ const ClientProfile = ({ onNavigate }) => {
             type="button"
             variant="outline"
             onClick={() => onNavigate?.('dashboard')}
-            className="h-9 w-9 p-0 rounded-xl border-gray-200 text-gray-500 hover:text-[#769046] hover:border-[#769046]"
+            className="h-9 w-9 p-0 rounded-xl border-gray-200 text-gray-500 hover:text-brand-600 hover:border-brand-500"
             aria-label="Back to dashboard"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -53,10 +53,10 @@ const ClientProfile = ({ onNavigate }) => {
 
           {/* Right column: read-only role/permissions */}
           <div className="space-y-6">
-            <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-              <CardHeader className="bg-gray-50/70 border-b border-gray-100 py-3.5">
+            <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
+              <CardHeader className="bg-slate-50/80 border-b border-[#e6ebf1] py-3.5">
                 <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                  <ShieldCheck className="w-4 h-4 text-[#769046]" />
+                  <ShieldCheck className="w-4 h-4 text-brand-600" />
                   <span>Account Type</span>
                 </CardTitle>
               </CardHeader>
@@ -64,18 +64,18 @@ const ClientProfile = ({ onNavigate }) => {
                 <span className="text-meta text-gray-400 font-bold uppercase tracking-wider block">Assigned Role(s)</span>
                 <div className="flex flex-wrap gap-1.5">
                   {roles.length > 0 ? roles.map(role => (
-                    <Badge key={role} className="bg-[#769046]/10 text-[#769046] text-fine font-bold px-2.5 py-1 rounded-full border-0">
+                    <Badge key={role} className="bg-brand-50 text-brand-600 text-fine font-bold px-2.5 py-1 rounded-full border-0">
                       {role}
                     </Badge>
                   )) : (
-                    <span className="text-xs text-gray-400 italic">No role assigned</span>
+                    <span className="text-xs text-slate-500">No role assigned</span>
                   )}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-gray-100 bg-[#192534] text-white rounded-2xl overflow-hidden p-5 space-y-2 shadow-sm">
-              <div className="flex items-center space-x-2 text-[#769046]">
+            <Card className="border-[#e6ebf1] bg-rail text-white rounded-2xl overflow-hidden p-5 space-y-2 shadow-sm">
+              <div className="flex items-center space-x-2 text-brand-600">
                 <ShieldCheck className="w-5 h-5" />
                 <h3 className="font-bold text-sm text-white m-0">Account Security</h3>
               </div>

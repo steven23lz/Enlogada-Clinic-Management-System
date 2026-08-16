@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import EmptyState from '../../components/ui/empty-state';
+import { SkeletonList } from '../../components/ui/skeleton';
+import { Button } from '../../components/ui/button';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
-import { Activity as ActivityIcon, AlertCircle } from 'lucide-react';
+import { Activity as ActivityIcon, ScrollText } from 'lucide-react';
 
 // Feature Gap Plan Phase D: previously the only "who did what" visibility was per-row
 // attribution columns (processed_by, released_by, ...) — no queryable history of edits and no
@@ -10,21 +14,21 @@ import { Activity as ActivityIcon, AlertCircle } from 'lucide-react';
 // sensitive actions this session's other phases added logging for (payments, staff accounts,
 // HMO providers, result corrections) rather than every write in the app.
 const ACTION_TONES = {
-  'payment.refunded': 'text-rose-700 bg-rose-50 border-rose-200',
-  'payment.cancelled': 'text-rose-700 bg-rose-50 border-rose-200',
-  'staff.password_reset': 'text-indigo-700 bg-indigo-50 border-indigo-200',
-  'staff.activated': 'text-emerald-700 bg-emerald-50 border-emerald-200',
-  'staff.deactivated': 'text-gray-700 bg-gray-100 border-gray-200',
-  'hmo_provider.created': 'text-emerald-700 bg-emerald-50 border-emerald-200',
-  'hmo_provider.updated': 'text-amber-700 bg-amber-50 border-amber-200',
-  'result.corrected': 'text-amber-700 bg-amber-50 border-amber-200',
+  'payment.refunded': 'text-rose-700 bg-rose-50 ring-rose-200',
+  'payment.cancelled': 'text-rose-700 bg-rose-50 ring-rose-200',
+  'staff.password_reset': 'text-indigo-700 bg-indigo-50 ring-indigo-200',
+  'staff.activated': 'text-emerald-700 bg-emerald-50 ring-emerald-200',
+  'staff.deactivated': 'text-slate-600 bg-slate-100 ring-slate-200',
+  'hmo_provider.created': 'text-emerald-700 bg-emerald-50 ring-emerald-200',
+  'hmo_provider.updated': 'text-amber-700 bg-amber-50 ring-amber-200',
+  'result.corrected': 'text-amber-700 bg-amber-50 ring-amber-200',
   // UI/UX Modernization Phase 12: HMO approval moved from self-service (Receptionist) to
   // Admin/SuperAdmin-only, now audit-logged for the first time.
-  'hmo_request.approved': 'text-emerald-700 bg-emerald-50 border-emerald-200',
-  'hmo_request_test.approved': 'text-emerald-700 bg-emerald-50 border-emerald-200',
-  'hmo_request_test.rejected': 'text-rose-700 bg-rose-50 border-rose-200',
+  'hmo_request.approved': 'text-emerald-700 bg-emerald-50 ring-emerald-200',
+  'hmo_request_test.approved': 'text-emerald-700 bg-emerald-50 ring-emerald-200',
+  'hmo_request_test.rejected': 'text-rose-700 bg-rose-50 ring-rose-200',
 };
-const DEFAULT_TONE = 'text-gray-700 bg-gray-100 border-gray-200';
+const DEFAULT_TONE = 'text-slate-600 bg-slate-100 ring-slate-200';
 
 const ActivityLog = () => {
   const [entries, setEntries] = useState([]);
@@ -56,52 +60,61 @@ const ActivityLog = () => {
   }, [page]);
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-1">
-        <h2 className="text-xl font-bold text-slate-900 m-0">Activity Log</h2>
-        <p className="text-xs text-gray-500 m-0">
-          Who did what — payment refunds/cancellations, staff account changes, HMO provider changes, and result corrections.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Oversight"
+        icon={ScrollText}
+        title="Activity Log"
+        description="Who did what — payment refunds and cancellations, staff account changes, HMO provider changes, and result corrections."
+        meta={<span><strong className="font-semibold text-slate-700">{total}</strong> recorded action{total === 1 ? '' : 's'}</span>}
+      />
 
-      <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-row items-center space-x-2">
-          <ActivityIcon className="w-4 h-4 text-[#769046]" />
-          <CardTitle className="text-sm font-bold text-slate-800">{total} Recorded Action{total === 1 ? '' : 's'}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+      <Panel>
+        <PanelHeader title="Recorded Actions" description="Newest first" icon={ActivityIcon} />
+        <PanelBody flush>
           {error ? (
-            <div className="text-center py-8 text-xs text-rose-600 font-semibold">
-              <AlertCircle className="w-4 h-4 inline mr-1 -mt-0.5" />
-              {error}{' '}
-              <button type="button" onClick={() => fetchActivity(page)} className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700">
-                Retry
-              </button>
-            </div>
+            <EmptyState
+              tone="error"
+              title="Could not load the activity log"
+              description={error}
+              action={
+                <Button variant="outline" size="sm" onClick={() => fetchActivity(page)}>
+                  Try again
+                </Button>
+              }
+            />
           ) : loading ? (
-            <p className="text-center py-8 text-xs text-gray-400">Loading activity…</p>
+            <div className="p-4">
+              <SkeletonList rows={6} />
+            </div>
           ) : entries.length === 0 ? (
-            <p className="text-center py-8 text-xs text-gray-400 italic">No recorded activity yet.</p>
+            <EmptyState
+              icon={ActivityIcon}
+              title="No recorded activity yet"
+              description="Sensitive actions are logged here as staff perform them — refunds, account changes and result corrections."
+            />
           ) : (
-            <ul className="divide-y divide-gray-100 m-0 p-0 list-none">
+            <ul className="m-0 list-none divide-y divide-[#eef2f6] p-0">
               {entries.map(entry => (
-                <li key={entry.id} className="flex items-start justify-between gap-3 px-6 py-3.5">
-                  <div className="min-w-0 space-y-1">
-                    <p className="text-xs font-semibold text-slate-800 m-0">{entry.description}</p>
-                    <p className="text-fine text-gray-400 m-0">
+                <li key={entry.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0">
+                    <p className="m-0 text-[13px] font-medium text-slate-800">{entry.description}</p>
+                    <p className="m-0 mt-0.5 text-fine text-slate-500">
                       {entry.actor_name} &middot; {new Date(entry.created_at).toLocaleString()}
                     </p>
                   </div>
-                  <span className={`text-meta font-bold uppercase tracking-wide px-2 py-1 rounded-full border whitespace-nowrap ${ACTION_TONES[entry.action] || DEFAULT_TONE}`}>
+                  <span
+                    className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase leading-5 tracking-[0.06em] ring-1 ring-inset ${ACTION_TONES[entry.action] || DEFAULT_TONE}`}
+                  >
                     {entry.action.replace(/[._]/g, ' ')}
                   </span>
                 </li>
               ))}
             </ul>
           )}
-        </CardContent>
+        </PanelBody>
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${total} total`} />
-      </Card>
+      </Panel>
     </div>
   );
 };

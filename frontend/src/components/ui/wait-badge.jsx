@@ -16,10 +16,10 @@ import { cn } from '../../lib/utils';
 
 const THRESHOLDS = [
   // Ordered longest-first; the first match wins.
-  { minAge: 60, tone: 'bg-rose-100 text-rose-800 ring-1 ring-rose-300', icon: AlertTriangle, label: 'Waiting over an hour' },
-  { minAge: 30, tone: 'bg-rose-50 text-rose-700 ring-1 ring-rose-200', icon: AlertTriangle, label: 'Waiting over 30 minutes' },
-  { minAge: 15, tone: 'bg-amber-50 text-amber-800 ring-1 ring-amber-200', icon: Clock, label: 'Waiting over 15 minutes' },
-  { minAge: 0, tone: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200', icon: Clock, label: 'Recently arrived' },
+  { minAge: 60, tone: 'bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-300', icon: AlertTriangle, label: 'Waiting over an hour' },
+  { minAge: 30, tone: 'bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200', icon: AlertTriangle, label: 'Waiting over 30 minutes' },
+  { minAge: 15, tone: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200', icon: Clock, label: 'Waiting over 15 minutes' },
+  { minAge: 0, tone: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200', icon: Clock, label: 'Recently arrived' },
 ];
 
 /**
@@ -61,7 +61,9 @@ const WaitBadge = ({ since, className }) => {
     <span
       title={level.label}
       className={cn(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-meta font-bold tabular-nums whitespace-nowrap',
+        // Squared to match StatusBadge — the two sit side by side in every queue row, and one
+        // being a pill while the other is a tag made them look like different kinds of thing.
+        'inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-micro font-semibold tabular-nums leading-5',
         level.tone,
         className
       )}

@@ -122,14 +122,14 @@ const QrScanner = ({ active, onScan, onError }) => {
       )}
 
       {permissionState === 'unsupported' && (
-        <div className="p-3 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+        <div className="alert alert-warning">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>This browser does not support camera access. Use manual entry below.</span>
         </div>
       )}
 
       {permissionState === 'denied' && (
-        <div className="p-3 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+        <div className="alert alert-warning">
           <CameraOff className="w-4 h-4 flex-shrink-0" />
           <span>Camera unavailable or permission denied. Use manual entry below.</span>
         </div>

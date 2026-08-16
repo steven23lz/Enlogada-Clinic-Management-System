@@ -4,17 +4,21 @@ import { cva } from "class-variance-authority";
 import { cn } from "../../lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  // `rounded-md`, not `rounded-full`. A fully-round pill reads as a button you can press; a
+  // squared tag reads as a label, which is what a status is. On a queue where every row carries
+  // one and some rows also carry a real action button, that distinction stops staff clicking the
+  // status.
+  "inline-flex items-center rounded-md border px-2 py-0.5 text-fine font-semibold leading-5 transition-colors",
   {
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+          "border-transparent bg-brand-500 text-white",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "border-transparent bg-slate-900 text-white",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        outline: "text-foreground",
+          "border-transparent bg-rose-600 text-white",
+        outline: "border-slate-200 bg-white text-slate-700",
       },
     },
     defaultVariants: {

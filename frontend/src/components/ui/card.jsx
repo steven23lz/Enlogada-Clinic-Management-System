@@ -5,7 +5,11 @@ import { cn } from "../../lib/utils"
 const Card = React.forwardRef(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)}
+    // No shadow. A white card carrying `shadow-sm` on a near-white canvas does not lift off the
+    // page, it just blurs its own bottom edge — see the elevation note in index.css. Separation
+    // comes from the hairline border; `shadow-raised` is available where something must actually
+    // float. Prefer <Panel> for new work; this stays for the vendored primitives built on it.
+    className={cn("rounded-xl border border-[#e6ebf1] bg-card text-card-foreground", className)}
     {...props} />
 ))
 Card.displayName = "Card"

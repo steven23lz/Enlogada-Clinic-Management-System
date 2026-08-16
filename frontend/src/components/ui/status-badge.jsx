@@ -26,38 +26,38 @@ const STATUS_GROUPS = {
   // Nothing is happening yet and someone is waiting on a person to act.
   waiting: {
     icon: Clock,
-    className: "bg-amber-50 text-amber-900 ring-1 ring-amber-300/70",
+    className: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200",
     iconClassName: "text-amber-600",
   },
   // Work is underway right now.
   active: {
     icon: Loader,
-    className: "bg-indigo-50 text-indigo-900 ring-1 ring-indigo-300/70",
+    className: "bg-indigo-50 text-indigo-800 ring-1 ring-inset ring-indigo-200",
     iconClassName: "text-indigo-600",
   },
   // Done, but held for a second pair of eyes before it reaches the patient.
   review: {
     icon: FileSearch,
-    className: "bg-violet-50 text-violet-900 ring-1 ring-violet-300/70",
+    className: "bg-violet-50 text-violet-800 ring-1 ring-inset ring-violet-200",
     iconClassName: "text-violet-600",
   },
   // Finished successfully. Nothing further is required.
   done: {
     icon: CheckCircle2,
-    className: "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-300/70",
+    className: "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200",
     iconClassName: "text-emerald-600",
   },
   // Stopped and will not complete. Deliberately the only group using red, so that red keeps
   // meaning "something is wrong" instead of becoming background noise.
   stopped: {
     icon: XCircle,
-    className: "bg-rose-50 text-rose-900 ring-1 ring-rose-300/70",
+    className: "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200",
     iconClassName: "text-rose-600",
   },
   // Unwound after the fact — not a failure, but not a completion either.
   reversed: {
     icon: RotateCcw,
-    className: "bg-slate-100 text-slate-700 ring-1 ring-slate-300",
+    className: "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200",
     iconClassName: "text-slate-500",
   },
 };
@@ -81,7 +81,7 @@ const STATUS_TO_GROUP = {
 
 const DEFAULT_GROUP = {
   icon: null,
-  className: "bg-muted text-muted-foreground ring-1 ring-border",
+  className: "bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200",
   iconClassName: "",
 };
 
@@ -93,7 +93,7 @@ function StatusBadge({ status, className, ...props }) {
     <Badge
       variant="outline"
       className={cn(
-        "border-transparent font-bold gap-1 pl-1.5 pr-2 py-0.5 whitespace-nowrap",
+        "border-transparent gap-1 pl-1.5 pr-2 whitespace-nowrap",
         group.className,
         className
       )}

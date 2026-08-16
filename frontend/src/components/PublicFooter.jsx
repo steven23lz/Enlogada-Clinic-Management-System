@@ -36,15 +36,15 @@ const PublicFooter = ({ onNavigate }) => {
           <h4 className="text-sm font-bold text-white uppercase tracking-wider">Contact Info</h4>
           <div className="space-y-2.5 text-xs text-gray-400">
             <div className="flex items-center space-x-2.5">
-              <Phone className="w-4 h-4 text-[#769046]" />
+              <Phone className="w-4 h-4 text-brand-600" />
               <span>0936 132 0650</span>
             </div>
             <div className="flex items-center space-x-2.5">
-              <Mail className="w-4 h-4 text-[#769046]" />
+              <Mail className="w-4 h-4 text-brand-600" />
               <span>enlogadaclinic2011@gmail.com</span>
             </div>
             <div className="flex items-start space-x-2.5">
-              <MapPin className="w-4 h-4 text-[#769046] flex-shrink-0 mt-0.5" />
+              <MapPin className="w-4 h-4 text-brand-600 flex-shrink-0 mt-0.5" />
               <span>Bugo, Cagayan de Oro, Philippines 9000</span>
             </div>
           </div>

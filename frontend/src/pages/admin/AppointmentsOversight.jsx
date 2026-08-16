@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import { Panel, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import Toolbar, { SegmentedFilter } from '../../components/ui/toolbar';
+import EmptyState from '../../components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { StatusBadge } from '../../components/ui/status-badge';
+import { SkeletonRows } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { CalendarClock } from 'lucide-react';
@@ -45,66 +49,80 @@ const AppointmentsOversight = () => {
   const pagedAppointments = appointments.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold text-slate-900 m-0">Appointments Oversight</h2>
-          <p className="text-xs text-gray-500 m-0">Clinic-wide view of all booked appointments, read-only.</p>
-        </div>
-        <div className="flex bg-gray-100 p-1 rounded-xl text-xs flex-wrap">
-          {STATUS_FILTERS.map(s => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-2.5 py-1 rounded-lg border-0 font-semibold cursor-pointer transition-all ${
-                statusFilter === s ? 'bg-white text-slate-900 shadow-xs' : 'text-gray-500 hover:text-gray-800'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Oversight"
+        icon={CalendarClock}
+        title="Appointments"
+        description="Clinic-wide view of every booked appointment. Read-only — rescheduling and cancellation belong to Reception or the patient."
+        meta={
+          <span>
+            <strong className="font-semibold text-slate-700">{appointments.length}</strong>{' '}
+            {statusFilter === 'All' ? 'total' : statusFilter.toLowerCase()}
+          </span>
+        }
+      />
 
-      <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-row items-center space-x-2">
-          <CalendarClock className="w-4 h-4 text-[#769046]" />
-          <CardTitle className="text-sm font-bold text-slate-800">{appointments.length} Appointment{appointments.length === 1 ? '' : 's'}</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+      {/* Toolbar and table are one object, so they are wrapped in a bare div — the page's
+          `space-y` would otherwise insert a gap between a filter row and the list it filters. */}
+      <div>
+        <Toolbar attached>
+          <SegmentedFilter
+            ariaLabel="Filter appointments by status"
+            options={STATUS_FILTERS.map(s => ({ value: s, label: s }))}
+            value={statusFilter}
+            onChange={setStatusFilter}
+          />
+        </Toolbar>
+
+        <Panel className="overflow-hidden rounded-t-none">
+          <PanelBody flush>
           <Table>
-            <TableHeader className="bg-gray-50/80">
+            <TableHeader sticky>
               <TableRow>
-                <TableHead className="text-meta font-bold uppercase py-3">Reference</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Patient</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Scheduled</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Visit Type</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Status</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Patient</TableHead>
+                <TableHead>Scheduled</TableHead>
+                <TableHead>Visit Type</TableHead>
+                <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400">Loading appointments…</TableCell></TableRow>
+                <SkeletonRows rows={6} columns={5} />
               ) : pagedAppointments.length > 0 ? (
                 pagedAppointments.map(a => (
-                  <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors">
-                    <TableCell className="py-3 font-mono text-xs text-gray-500">{a.appointment_reference}</TableCell>
-                    <TableCell className="py-3 font-bold text-xs text-slate-900">{a.first_name} {a.last_name}</TableCell>
-                    <TableCell className="py-3 text-xs text-gray-700">
+                  <TableRow key={a.id}>
+                    <TableCell className="font-mono text-fine text-slate-500">{a.appointment_reference}</TableCell>
+                    <TableCell className="font-semibold text-slate-900">{a.first_name} {a.last_name}</TableCell>
+                    <TableCell>
                       {new Date(a.scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &bull; {a.scheduled_time?.slice(0, 5)}
                     </TableCell>
-                    <TableCell className="py-3 text-xs text-gray-500">{a.visit_type}</TableCell>
-                    <TableCell className="py-3"><StatusBadge status={a.status} /></TableCell>
+                    <TableCell className="text-slate-500">{a.visit_type}</TableCell>
+                    <TableCell><StatusBadge status={a.status} /></TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={5} className="text-center py-6 text-xs text-gray-400 italic">No appointments found for this filter.</TableCell></TableRow>
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="p-0">
+                    <EmptyState
+                      icon={CalendarClock}
+                      title={statusFilter === 'All' ? 'No appointments booked' : `Nothing is ${statusFilter.toLowerCase()}`}
+                      description={
+                        statusFilter === 'All'
+                          ? 'Appointments booked online or by phone appear here.'
+                          : 'Try another status filter, or switch back to All.'
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
-        </CardContent>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${appointments.length} total`} />
-      </Card>
+          </PanelBody>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${appointments.length} total`} />
+        </Panel>
+      </div>
     </div>
   );
 };

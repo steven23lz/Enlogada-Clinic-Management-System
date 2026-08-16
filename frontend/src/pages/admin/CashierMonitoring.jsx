@@ -1,14 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import { Panel, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import Toolbar, { ToolbarField } from '../../components/ui/toolbar';
+import EmptyState from '../../components/ui/empty-state';
+import MetricCard from '../../components/ui/metric-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { SkeletonRows } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { todayStr } from '../../lib/date';
 import { formatCurrency } from '../../lib/currency';
-import { Receipt, RefreshCw } from 'lucide-react';
+import { Receipt, RefreshCw, Banknote, Hash, UserCircle2 } from 'lucide-react';
 
 // Visual Design Improvement Plan Phase V1 — see VISUAL_IDENTITY.md §3a #11.
 const PAGE_SIZE = 20;
@@ -51,88 +56,111 @@ const CashierMonitoring = () => {
   const pagedTransactions = transactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-xs">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold text-slate-900 m-0">Cashier Monitoring</h2>
-          <p className="text-xs text-gray-500 m-0">Oversight of payment transactions processed across all cashiers.</p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-xs w-36" />
-          <span className="text-xs text-gray-400">to</span>
-          <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-xs w-36" />
-          <Button
-            variant="outline"
-            onClick={() => fetchTransactions(startDate, endDate)}
-            className="flex items-center space-x-1.5 text-xs font-semibold"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Apply</span>
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Oversight"
+        icon={Receipt}
+        title="Cashier Monitoring"
+        description="Every payment taken across all cashiers, for reconciliation and the daily cash-up. Read-only — Admin cannot transact."
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-          <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Total Collections (Range)</span>
-          <span className="text-2xl font-extrabold text-slate-900">{formatCurrency(total)}</span>
-        </Card>
-        <Card className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-          <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">Transactions</span>
-          <span className="text-2xl font-extrabold text-slate-900">{transactions.length}</span>
-        </Card>
-        {Object.entries(byCashier).slice(0, 2).map(([name, amt]) => (
-          <Card key={name} className="border-gray-100 shadow-xs rounded-2xl bg-white p-4">
-            <span className="text-meta font-bold text-gray-400 uppercase tracking-wider block">{name}</span>
-            <span className="text-2xl font-extrabold text-emerald-600">{formatCurrency(amt)}</span>
-          </Card>
-        ))}
-      </div>
+      <div>
+        <Toolbar attached>
+          <ToolbarField label="From" htmlFor="cm-from">
+            <Input id="cm-from" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-[150px]" />
+          </ToolbarField>
+          <ToolbarField label="To" htmlFor="cm-to">
+            <Input id="cm-to" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-[150px]" />
+          </ToolbarField>
+          <div className="flex items-end self-stretch">
+            <Button variant="outline" onClick={() => fetchTransactions(startDate, endDate)}>
+              <RefreshCw className="h-3.5 w-3.5" />
+              Apply
+            </Button>
+          </div>
+        </Toolbar>
 
-      <Card className="border-gray-100 shadow-xs rounded-2xl bg-white overflow-hidden">
-        <CardHeader className="border-b border-gray-100 py-4 px-6 flex flex-row items-center space-x-2">
-          <Receipt className="w-4 h-4 text-[#769046]" />
-          <CardTitle className="text-sm font-bold text-slate-800">Transaction Log</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-gray-50/80">
-              <TableRow>
-                <TableHead className="text-meta font-bold uppercase py-3">Receipt #</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Cashier</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Patient</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3">Method</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3 text-right">Amount</TableHead>
-                <TableHead className="text-meta font-bold uppercase py-3 text-right">Paid At</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400">Loading transactions…</TableCell></TableRow>
-              ) : pagedTransactions.length > 0 ? (
-                pagedTransactions.map(t => (
-                  <TableRow key={t.id}>
-                    <TableCell className="py-3 font-extrabold text-xs text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
-                    <TableCell className="py-3 text-xs text-gray-700 max-w-[160px] truncate" title={`${t.processed_by_first_name} ${t.processed_by_last_name}`}>{t.processed_by_first_name} {t.processed_by_last_name}</TableCell>
-                    <TableCell className="py-3 text-xs text-gray-700 max-w-[160px] truncate" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
-                    <TableCell className="py-3 text-xs"><Badge className="bg-gray-100 text-gray-800 font-bold border-gray-200">{t.payment_method}</Badge></TableCell>
-                    <TableCell className="py-3 text-xs font-extrabold text-emerald-700 text-right">{formatCurrency(t.amount)}</TableCell>
-                    <TableCell className="py-3 text-xs text-gray-500 text-right">{new Date(t.paid_at).toLocaleString()}</TableCell>
+        <Panel className="overflow-hidden rounded-t-none">
+          {/* The range summary sits inside the table's panel rather than in a separate KPI strip
+              above the filters. These figures describe *this* result set — floating them away
+              from the range that produced them was how they got read as clinic-wide totals. */}
+          <div className="grid grid-cols-2 gap-px border-b border-[#e6ebf1] bg-[#e6ebf1] lg:grid-cols-4">
+            <MetricCard
+              className="rounded-none border-0"
+              label="Collections in range"
+              value={formatCurrency(total)}
+              icon={Banknote}
+              tone="emerald"
+            />
+            <MetricCard
+              className="rounded-none border-0"
+              label="Transactions"
+              value={transactions.length}
+              icon={Hash}
+              tone="slate"
+            />
+            {Object.entries(byCashier).slice(0, 2).map(([name, amt]) => (
+              <MetricCard
+                key={name}
+                className="rounded-none border-0"
+                label={name}
+                value={formatCurrency(amt)}
+                caption="Collected by this cashier"
+                captionTone="slate"
+                icon={UserCircle2}
+                tone="indigo"
+              />
+            ))}
+          </div>
+
+          <PanelBody flush>
+            <Table>
+              <TableHeader sticky>
+                <TableRow>
+                  <TableHead>Receipt #</TableHead>
+                  <TableHead>Cashier</TableHead>
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Paid At</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <SkeletonRows rows={6} columns={6} />
+                ) : pagedTransactions.length > 0 ? (
+                  pagedTransactions.map(t => (
+                    <TableRow key={t.id}>
+                      <TableCell className="font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
+                      <TableCell className="max-w-[160px] truncate" title={`${t.processed_by_first_name} ${t.processed_by_last_name}`}>{t.processed_by_first_name} {t.processed_by_last_name}</TableCell>
+                      <TableCell className="max-w-[160px] truncate font-medium text-slate-900" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
+                      <TableCell><Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge></TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
+                      <TableCell className="text-right text-fine text-slate-500">{new Date(t.paid_at).toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="p-0">
+                      <EmptyState
+                        icon={Receipt}
+                        title="No payments in this date range"
+                        description="Widen the range above, or check that the cashier has settled today's bills."
+                      />
+                    </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow><TableCell colSpan={6} className="text-center py-6 text-xs text-gray-400 italic">No transactions in this date range.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          </PanelBody>
           <Pagination
             page={page}
             totalPages={totalPages}
             onPageChange={setPage}
             totalLabel={`${transactions.length} transaction${transactions.length === 1 ? '' : 's'}`}
           />
-        </CardContent>
-      </Card>
+        </Panel>
+      </div>
     </div>
   );
 };
