@@ -20,6 +20,8 @@ import WaitBadge from '../components/ui/wait-badge';
 import { SkeletonRows } from '../components/ui/skeleton';
 import { useAuth } from '../contexts/AuthContext';
 import ResultDocument from '../components/ResultDocument';
+import useOperationsReport from '../hooks/useOperationsReport';
+import { TurnaroundPanel } from '../components/reports/OperationsPanels';
 import {
   Stethoscope,
   FlaskConical,
@@ -72,6 +74,10 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   // read-only) — each diagnostic role now has a real second nav destination for the latter,
   // which previously had no UI anywhere (released results just vanished from this screen).
   const mode = activeNav.endsWith('-history') ? 'history' : 'worklist';
+  // How this department is actually performing, on the History screen where someone is looking
+  // back rather than working the queue. Department-scoped server-side, so a lab account sees
+  // Laboratory turnaround and nobody else's.
+  const operations = useOperationsReport({ days: 7, enabled: mode === 'history' });
   const [pendingTests, setPendingTests] = useState([]);
   const [releasedTests, setReleasedTests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -763,6 +769,16 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             totalLabel={`${filteredReleased.length} total`}
           />
         </Panel>
+
+        {/* Turnaround for this department. The worklist counts what is waiting; this is the
+            only place that says how long the waiting takes. */}
+        <div className="mt-4">
+          <TurnaroundPanel
+            diagnostics={operations.report?.diagnostics}
+            loading={operations.loading}
+            title="Your turnaround"
+          />
+        </div>
         </div>
         </>
         )}

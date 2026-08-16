@@ -12,4 +12,19 @@ router.get('/summary', verifyToken, authorizeStaff, authorizePermissions('report
 // (results released) — previously only Cashier had this kind of throughput visibility.
 router.get('/staff-workload', verifyToken, authorizeStaff, authorizePermissions('reports:view'), reportController.getStaffWorkload);
 
+// [1.22.0] Per-department operating metrics — sales by service, front-desk wait, per-modality
+// turnaround. Every role had a KPI strip counting what was in front of it right now, and none of
+// them measured how the department was actually performing.
+//
+// Deliberately NOT gated on `reports:view`, which is the only route here that is not. That
+// permission means "see the clinic-wide roll-up" and only Admin/SuperAdmin hold it — requiring it
+// would make this Admin-only and defeat the entire point, which is that a cashier can see their
+// own sales and a modality its own turnaround.
+//
+// The route is not therefore ungated: each SLICE of the response is gated individually inside
+// reportService (billing:read / visits:read / results:read), and a caller holding none of the
+// three is refused outright rather than handed an empty object. So the response is the union of
+// what you are already allowed to see, assembled in one request instead of three.
+router.get('/operations', verifyToken, authorizeStaff, reportController.getOperations);
+
 module.exports = router;

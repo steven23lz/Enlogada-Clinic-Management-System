@@ -23,6 +23,8 @@ import { formatCurrency } from '../lib/currency';
 import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
+import useOperationsReport from '../hooks/useOperationsReport';
+import { ReceptionThroughputPanel } from '../components/reports/OperationsPanels';
 import {
   ClipboardList,
   UserCheck,
@@ -74,6 +76,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
   // back to the primary queue view, mirroring DiagnosticDashboard's existing fallback pattern.
   const view = VALID_VIEWS.includes(activeNav) ? activeNav : 'reception-queue';
+  // Desk performance, on Visit History where someone is reviewing rather than checking people
+  // in. The queue KPIs count who is waiting; nothing measured how long they wait.
+  const operations = useOperationsReport({ days: 7, enabled: view === 'reception-history' });
   const [activeVisits, setActiveVisits] = useState([]);
   const [testCatalog, setTestCatalog] = useState([]);
   const [patientTypes, setPatientTypes] = useState([]);
@@ -959,6 +964,15 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </Table>
               </PanelBody>
             </Panel>
+
+            {/* How the desk is performing, not just what it did. The queue KPIs count who is
+                waiting; this is the only place that says how long they wait to be billed. */}
+            <div className="mt-4">
+              <ReceptionThroughputPanel
+                reception={operations.report?.reception}
+                loading={operations.loading}
+              />
+            </div>
           </div>
         )}
 

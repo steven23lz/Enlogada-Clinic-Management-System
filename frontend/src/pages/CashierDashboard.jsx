@@ -26,6 +26,8 @@ import { toastError } from '../lib/toast';
 import { useAuth } from '../contexts/AuthContext';
 // Aliased: `Receipt` is already taken by the lucide icon used in this file's headers.
 import ReceiptDocument from '../components/Receipt';
+import useOperationsReport from '../hooks/useOperationsReport';
+import { BillingTotalsPanel, SalesByServicePanel } from '../components/reports/OperationsPanels';
 import {
   Receipt,
   Wallet,
@@ -70,6 +72,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // Who is at the till. The receipt names them: a receipt nobody can be asked about is not much
   // use when a patient comes back three weeks later disputing a charge.
   const { user } = useAuth();
+  // Sales analysis belongs on the History screen, not the till: a cashier mid-transaction does
+  // not want a report, and a cashier doing the cash-up does. Only fetched when that view is open.
+  const operations = useOperationsReport({ days: 7, enabled: view === 'cashier-history' });
   const [activeVisits, setActiveVisits] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1123,6 +1128,19 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
               totalLabel={`${historyTransactions.length} total`}
             />
           </Panel>
+
+          {/* Sales analysis, under the receipt log rather than on the till.
+              The cashier had four figures — collected, cash, e-wallet, receipts — and no way to
+              answer "which service is actually earning" or "how much did we give away in
+              statutory discounts this week". These are the same panels the Admin roll-up shows,
+              so a question asked upward is answered from the same numbers.
+
+              Its own 7-day range, independent of the receipt list above: reconciling one day's
+              drawer and seeing which services carry the week are different jobs. */}
+          <div className="mt-4 space-y-4">
+            <BillingTotalsPanel billing={operations.report?.billing} loading={operations.loading} />
+            <SalesByServicePanel billing={operations.report?.billing} loading={operations.loading} limit={10} />
+          </div>
         </div>
           );
         })()}

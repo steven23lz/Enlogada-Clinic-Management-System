@@ -352,23 +352,48 @@ async function main() {
   await db.withTransaction(async () => {
     for (const h of historical) {
       const shift = `${h.daysAgo} days`;
+
+      // Spread each visit across a plausible working day instead of collapsing it to the instant
+      // the seeder ran. Turnaround and wait-time reporting measures the gap between these
+      // timestamps, and a dataset where check-in, payment and release all share one second makes
+      // every one of those figures read 0m — which looks like a broken metric rather than an
+      // artificial fixture. Measured before this: every category reported "avg 0m median 0m".
+      //
+      // The numbers are per-modality and roughly what each actually takes: bloods come back
+      // inside the hour, a scan needs the room and a radiographer, an echo needs reporting.
+      const TURNAROUND_MINUTES = { Laboratory: 45, ECG: 25, Xray: 70, Ultrasound: 95, '2D Echo': 130 };
+      const arrival = 8 + (h.daysAgo % 8);                       // 08:00-15:00 arrival
+      const waitToPay = 4 + (h.daysAgo % 17);                    // a few minutes at the desk
+      const turnaround = TURNAROUND_MINUTES[h.category] ?? 60;
+      // ±25% jitter, deterministic per visit so a reseed is reproducible.
+      const jitter = 1 + (((h.daysAgo * 7 + h.visit.id) % 50) - 25) / 100;
+      const releaseAfter = Math.round(turnaround * jitter);
+
       await db.query(
-        `UPDATE patient_visits SET created_at = created_at - $2::interval, updated_at = updated_at - $2::interval WHERE id = $1`,
-        [h.visit.id, shift]
+        `UPDATE patient_visits
+            SET created_at = (CURRENT_DATE - $2::interval) + make_interval(hours => $3),
+                updated_at = (CURRENT_DATE - $2::interval) + make_interval(hours => $3)
+          WHERE id = $1`,
+        [h.visit.id, shift, arrival]
       );
       await db.query(
-        `UPDATE visit_tests SET created_at = created_at - $2::interval WHERE patient_visit_id = $1`,
-        [h.visit.id, shift]
+        `UPDATE visit_tests
+            SET created_at = (CURRENT_DATE - $2::interval) + make_interval(hours => $3, mins => 2)
+          WHERE patient_visit_id = $1`,
+        [h.visit.id, shift, arrival]
       );
       await db.query(
-        `UPDATE payments SET paid_at = paid_at - $2::interval WHERE patient_visit_id = $1`,
-        [h.visit.id, shift]
+        `UPDATE payments
+            SET paid_at = (CURRENT_DATE - $2::interval) + make_interval(hours => $3, mins => $4)
+          WHERE patient_visit_id = $1`,
+        [h.visit.id, shift, arrival, waitToPay]
       );
       await db.query(
-        `UPDATE test_results SET released_at = released_at - $2::interval,
-                                 authorised_at = authorised_at - $2::interval
-         WHERE visit_test_id = $1`,
-        [h.visitTestId, shift]
+        `UPDATE test_results
+            SET released_at    = (CURRENT_DATE - $2::interval) + make_interval(hours => $3, mins => $4),
+                authorised_at  = (CURRENT_DATE - $2::interval) + make_interval(hours => $3, mins => $4)
+          WHERE visit_test_id = $1`,
+        [h.visitTestId, shift, arrival, waitToPay + releaseAfter]
       );
     }
   });

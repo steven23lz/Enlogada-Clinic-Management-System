@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import PageHeader from '../../components/ui/page-header';
+import useOperationsReport from '../../hooks/useOperationsReport';
+import {
+  BillingTotalsPanel,
+  SalesByServicePanel,
+  ReceptionThroughputPanel,
+  TurnaroundPanel,
+} from '../../components/reports/OperationsPanels';
 import Toolbar, { ToolbarField, ToolbarSpacer } from '../../components/ui/toolbar';
 import EmptyState from '../../components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
@@ -514,32 +521,117 @@ const StaffWorkload = () => {
 // Module 12 originally built this page's "Today's Snapshot" as an honest, minimal entry point
 // and explicitly deferred historical trends, date-range filtering, and the RBAC matrix report
 // to this module. That live snapshot logic is unchanged here — only added to, not replaced.
+/**
+ * Every department's operating figures on one page. [1.22.0]
+ *
+ * The roll-up the Admin asked for: the same panels each console shows its own department, side by
+ * side and unrestricted. Literally the same components — a manager querying a department's
+ * numbers has to be reading the version that department reads, or the conversation starts with an
+ * argument about whose figures are right.
+ */
+const OperationsReport = () => {
+  const { report, loading, error, range, setRange, refresh } = useOperationsReport({ days: 7 });
+
+  if (error === 'forbidden') {
+    return (
+      <EmptyState
+        icon={ShieldCheck}
+        title="No departments to report on"
+        description="This account holds no billing, visit or result permission, so there is nothing here to show."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <Toolbar>
+        <ToolbarField label="From" htmlFor="ops-from">
+          <Input
+            id="ops-from"
+            type="date"
+            value={range.startDate}
+            onChange={(e) => setRange((r) => ({ ...r, startDate: e.target.value }))}
+            className="w-[150px]"
+          />
+        </ToolbarField>
+        <ToolbarField label="To" htmlFor="ops-to">
+          <Input
+            id="ops-to"
+            type="date"
+            value={range.endDate}
+            onChange={(e) => setRange((r) => ({ ...r, endDate: e.target.value }))}
+            className="w-[150px]"
+          />
+        </ToolbarField>
+        <div className="flex items-end self-stretch">
+          <Button variant="outline" onClick={refresh}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Apply
+          </Button>
+        </div>
+        <ToolbarSpacer />
+        <Button variant="outline" onClick={() => window.print()}>
+          <Printer className="h-3.5 w-3.5" />
+          Print
+        </Button>
+      </Toolbar>
+
+      {error && error !== 'forbidden' && (
+        <div role="alert" className="alert alert-error">
+          <Info />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="print-area space-y-4">
+        {report?.billing && (
+          <>
+            <BillingTotalsPanel billing={report.billing} loading={loading} />
+            <SalesByServicePanel billing={report.billing} loading={loading} />
+          </>
+        )}
+        {report?.reception && <ReceptionThroughputPanel reception={report.reception} loading={loading} />}
+        {report?.diagnostics && <TurnaroundPanel diagnostics={report.diagnostics} loading={loading} />}
+      </div>
+    </div>
+  );
+};
+
+// Module 12 originally built this page's "Today's Snapshot" as an honest, minimal entry point
+// and explicitly deferred historical trends, date-range filtering, and the RBAC matrix report
+// to this module. That live snapshot logic is unchanged here — only added to, not replaced.
 const ReportsOverview = () => {
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-5 rounded-xl border border-[#e6ebf1] space-y-1">
-        <h2 className="text-xl font-bold text-slate-900 m-0">Clinic Reports</h2>
-        <p className="text-xs text-gray-500 m-0">Live activity, historical trends, and clinic-wide metrics for Admin/SuperAdmin oversight.</p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Oversight"
+        icon={BarChart3}
+        title="Clinic Reports"
+        description="Live activity, historical trends, and every department's operating figures in one place."
+      />
 
       <Tabs defaultValue="snapshot" className="w-full space-y-4">
-        <TabsList className="bg-gray-100 p-1 rounded-xl">
-          <TabsTrigger value="snapshot" className="rounded-lg text-xs font-bold px-4 py-1.5">Today's Snapshot</TabsTrigger>
-          <TabsTrigger value="range" className="rounded-lg text-xs font-bold px-4 py-1.5">Date-Range Reports</TabsTrigger>
-          <TabsTrigger value="rbac" className="rounded-lg text-xs font-bold px-4 py-1.5">RBAC Matrix</TabsTrigger>
-          <TabsTrigger value="workload" className="rounded-lg text-xs font-bold px-4 py-1.5">Staff Workload</TabsTrigger>
+        <TabsList>
+          <TabsTrigger value="snapshot">Today</TabsTrigger>
+          <TabsTrigger value="operations">Operations</TabsTrigger>
+          <TabsTrigger value="range">Trends</TabsTrigger>
+          <TabsTrigger value="workload">Staff Workload</TabsTrigger>
+          <TabsTrigger value="rbac">RBAC Matrix</TabsTrigger>
         </TabsList>
         <TabsContent value="snapshot" className="m-0">
           <TodaySnapshot />
         </TabsContent>
+        <TabsContent value="operations" className="m-0">
+          <OperationsReport />
+        </TabsContent>
         <TabsContent value="range" className="m-0">
           <DateRangeReports />
         </TabsContent>
-        <TabsContent value="rbac" className="m-0">
-          <RbacMatrixReport />
-        </TabsContent>
         <TabsContent value="workload" className="m-0">
           <StaffWorkload />
+        </TabsContent>
+        <TabsContent value="rbac" className="m-0">
+          <RbacMatrixReport />
         </TabsContent>
       </Tabs>
     </div>

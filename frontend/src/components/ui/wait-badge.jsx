@@ -1,6 +1,7 @@
 import React from 'react';
 import { Clock, AlertTriangle } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { formatDuration, minutesSince } from '../../lib/duration';
 
 // How long a patient has been waiting, shown the same way in every queue.
 //
@@ -22,33 +23,10 @@ const THRESHOLDS = [
   { minAge: 0, tone: 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200', icon: Clock, label: 'Recently arrived' },
 ];
 
-/**
- * Minutes into something a person can read at a glance.
- *
- * The billing queue used to render raw minutes, which is fine at "12m" and useless by "294m" —
- * nobody converts that to just under five hours while a patient is standing there. Past an hour
- * it reads as hours and minutes, and past a day as days, so the number stays meaningful however
- * long a ticket has been neglected.
- */
-export function formatWaitDuration(totalMinutes) {
-  const minutes = Math.max(0, Math.floor(totalMinutes));
-  if (minutes < 60) return `${minutes}m`;
-
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  if (hours < 24) return remainder === 0 ? `${hours}h` : `${hours}h ${remainder}m`;
-
-  const days = Math.floor(hours / 24);
-  const leftoverHours = hours % 24;
-  return leftoverHours === 0 ? `${days}d` : `${days}d ${leftoverHours}h`;
-}
-
-export function minutesSince(timestamp) {
-  const parsed = new Date(timestamp).getTime();
-  if (Number.isNaN(parsed)) return null;
-  return Math.max(0, Math.floor((Date.now() - parsed) / 60000));
-}
-
+// formatWaitDuration and minutesSince moved to lib/duration.js when the operations report needed
+// the same formatting. Re-exported here so existing importers are unaffected.
+export { minutesSince };
+export const formatWaitDuration = formatDuration;
 const WaitBadge = ({ since, className }) => {
   const minutes = minutesSince(since);
   // An unparseable or absent timestamp renders nothing rather than "NaNm" or a misleading 0m.
