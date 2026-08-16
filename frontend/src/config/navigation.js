@@ -62,7 +62,14 @@ export const MAIN_NAV_ITEMS = [
   { id: 'services-cat', label: 'Services Catalog', icon: FileText, roleRequired: ADMINS, permission: 'tests:manage', console: CONSOLE.SERVICES_CATALOG },
   { id: 'cashier-monitoring', label: 'Cashier Monitoring', icon: CreditCard, roleRequired: ADMINS, permission: 'billing:read', console: CONSOLE.ADMIN },
   { id: 'appointments-list', label: 'Appointments', icon: Calendar, roleRequired: ADMINS, permission: 'appointments:read', console: CONSOLE.ADMIN },
-  { id: 'patient-records', label: 'Patient Records', icon: FolderKanban, roleRequired: ADMINS, permission: 'patients:read', console: CONSOLE.ADMIN },
+  // Open to any member of staff who holds `patients:read` — which is all of them. [1.21.0]
+  //
+  // It was Admin/SuperAdmin only, which meant a lab tech could see a result but had no way to
+  // look up the patient it belonged to. Widening it is safe because the *contents* are now
+  // confined: without `patients:read_all_departments` a search returns only patients who have
+  // had work in the searcher's own department, and opening anyone else's record 404s. The screen
+  // says which departments it is showing, so a short list reads as scope rather than absence.
+  { id: 'patient-records', label: 'Patient Records', icon: FolderKanban, staffOnly: true, permission: 'patients:read', console: CONSOLE.ADMIN },
   { id: 'reports', label: 'Reports', icon: BarChart3, roleRequired: ADMINS, permission: 'reports:view', console: CONSOLE.ADMIN },
   { id: 'activity', label: 'Activity Log', icon: Activity, roleRequired: ADMINS, permission: 'audit:view', console: CONSOLE.ADMIN },
   { id: 'superadmin', label: 'Super Admin', icon: ShieldCheck, roleRequired: ['SuperAdmin'], permission: 'rbac:manage', console: CONSOLE.ADMIN },
@@ -173,14 +180,27 @@ export const consoleForNav = (navId, roles, permissions, departments) => {
   return item.console;
 };
 
-// Where a user lands on sign-in: their first genuinely reachable destination. Previously this
-// was hardcoded to 'dashboard', a destination only Admin/SuperAdmin can open — every other role
-// landed on an id they did not own and reached their console only via App.jsx's role fallback.
+/**
+ * Where a user lands on sign-in.
+ *
+ * Originally hardcoded to 'dashboard' — a destination only Admin/SuperAdmin can open, so every
+ * other role landed on an id it did not own. That was fixed by taking the first *reachable*
+ * destination, which worked while the management items were Admin-only.
+ *
+ * It stopped working the moment Patient Records opened up to all staff [1.21.0]: that item sits
+ * near the top of MAIN_NAV_ITEMS, so a lab tech signing in was dropped on the records search
+ * instead of their worklist. Reachable is not the same as home.
+ *
+ * So: land on the first destination that *belongs* to a role you hold — the Laboratory Worklist
+ * for a lab tech, the Billing Queue for a cashier — and only fall back to first-reachable for
+ * someone whose roles own no departmental screen, which is Admin and SuperAdmin.
+ */
 export const defaultNavForRoles = (roles, permissions, departments) => {
-  const [first] = [
-    ...visibleMainNavItems(roles, permissions, departments),
-    ...visibleOpsGroups(roles, permissions, departments).flatMap((g) => g.items),
-  ];
+  const ops = visibleOpsGroups(roles, permissions, departments).flatMap((g) => g.items);
+  const home = ops.find((item) => !isBorrowedScreen(item.id, roles));
+  if (home) return home.id;
+
+  const [first] = [...visibleMainNavItems(roles, permissions, departments), ...ops];
   return first ? first.id : null;
 };
 

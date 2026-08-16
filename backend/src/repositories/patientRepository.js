@@ -70,7 +70,24 @@ class PatientRepository {
   // a prior visit was invisible at check-in. unpaid_visit_count treats a visit as unpaid when it
   // isn't Cancelled and has no 'Paid' payment row, rather than reproducing getBillingSummary's
   // full per-test HMO-aware total here just to flag "does this patient owe anything."
-  async searchPatients(query) {
+  /**
+   * Roster search, optionally confined to the caller's own departments. [1.21.0]
+   *
+   * `departments` is `null` for anyone holding `patients:read_all_departments` — Reception, the
+   * Cashier, Admin, SuperAdmin, or an individual granted it — and an array of category names for
+   * everyone else. An array means: only patients who have actually had work in one of those
+   * departments.
+   *
+   * Before this the search was unconditional, so any diagnostic account could type two letters
+   * and page through the entire patient roster of a clinic they see one room of. The name match
+   * was already the whole of the access control, and a name match is not an access control.
+   *
+   * The department predicate is an EXISTS rather than a JOIN so a patient with six lab tests
+   * still comes back once; a JOIN here would multiply the row by their test count and the LIMIT
+   * would then cut the result set at an arbitrary point mid-patient.
+   */
+  async searchPatients(query, departments = null) {
+    const scoped = Array.isArray(departments);
     const queryText = `
       SELECT p.*, pt.name as patient_type_name,
         (SELECT COUNT(*) FROM patient_visits pv WHERE pv.patient_id = p.id) as visit_count,
@@ -85,14 +102,43 @@ class PatientRepository {
         ) as unpaid_visit_count
       FROM patients p
       JOIN patient_types pt ON p.patient_type_id = pt.id
-      WHERE (p.first_name || ' ' || p.last_name) ILIKE $1
-         OR p.first_name ILIKE $1
-         OR p.last_name ILIKE $1
+      WHERE (
+              (p.first_name || ' ' || p.last_name) ILIKE $1
+           OR p.first_name ILIKE $1
+           OR p.last_name ILIKE $1
+            )
+      ${scoped ? `AND EXISTS (
+              SELECT 1
+                FROM patient_visits pv
+                JOIN visit_tests vt     ON vt.patient_visit_id = pv.id
+                JOIN tests t            ON t.id = vt.test_id
+                JOIN test_categories tc ON tc.id = t.category_id
+               WHERE pv.patient_id = p.id
+                 AND tc.name = ANY($2::text[])
+            )` : ''}
       ORDER BY p.last_name, p.first_name
       LIMIT 20
     `;
-    const result = await db.query(queryText, [`%${query}%`]);
+    const params = scoped ? [`%${query}%`, departments] : [`%${query}%`];
+    const result = await db.query(queryText, params);
     return result.rows;
+  }
+
+  /** Whether this patient has had any work in one of `departments`. Used to gate opening a record. */
+  async patientHasWorkInDepartments(patientId, departments) {
+    const result = await db.query(
+      `SELECT EXISTS (
+         SELECT 1
+           FROM patient_visits pv
+           JOIN visit_tests vt     ON vt.patient_visit_id = pv.id
+           JOIN tests t            ON t.id = vt.test_id
+           JOIN test_categories tc ON tc.id = t.category_id
+          WHERE pv.patient_id = $1
+            AND tc.name = ANY($2::text[])
+       ) AS covered`,
+      [patientId, departments]
+    );
+    return result.rows[0].covered;
   }
 
   async findPatientTypes() {

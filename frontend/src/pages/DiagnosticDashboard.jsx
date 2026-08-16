@@ -19,6 +19,7 @@ import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import WaitBadge from '../components/ui/wait-badge';
 import { SkeletonRows } from '../components/ui/skeleton';
 import { useAuth } from '../contexts/AuthContext';
+import ResultDocument from '../components/ResultDocument';
 import {
   Stethoscope,
   FlaskConical,
@@ -29,6 +30,7 @@ import {
   AlertCircle,
   History,
   Eye,
+  Paperclip,
   Pencil,
   Printer,
   ShieldCheck,
@@ -78,6 +80,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const [worklistError, setWorklistError] = useState('');
   const [historyError, setHistoryError] = useState('');
   const [viewingResult, setViewingResult] = useState(null);
+  const [previewDoc, setPreviewDoc] = useState(null);
   const [category, setCategory] = useState('Laboratory');
   const [categoryResolved, setCategoryResolved] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -784,19 +787,40 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   <p className="text-xs m-0">{viewingResult.result_remarks}</p>
                 </div>
               )}
+              {/* The attachment. This screen showed the findings text and nothing about the file
+                  the modality actually uploaded, so verifying that the right scan went to the
+                  right patient meant downloading it from somewhere else. */}
+              {viewingResult?.file_path && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
+                  <span className="flex min-w-0 items-center gap-1.5 text-fine text-slate-600">
+                    <Paperclip className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+                    <span className="truncate">{viewingResult.file_original_name || 'Attached report'}</span>
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    onClick={() => setPreviewDoc({
+                      visitTestId: viewingResult.visit_test_id,
+                      testName: viewingResult.test_name,
+                      patientName: `${viewingResult.first_name} ${viewingResult.last_name}`,
+                      fileName: viewingResult.file_original_name,
+                    })}
+                  >
+                    <Eye className="h-3 w-3" />
+                    View Attachment
+                  </Button>
+                </div>
+              )}
               <div className="text-fine text-gray-400">
                 Released {viewingResult?.released_at ? new Date(viewingResult.released_at).toLocaleString() : '—'}
                 {viewingResult?.released_by_first_name && ` by ${viewingResult.released_by_first_name} ${viewingResult.released_by_last_name}`}
               </div>
             </div>
             <div className="flex justify-end pt-2 border-t border-[#e6ebf1]">
-              <Button
-                onClick={() => window.print()}
-                variant="outline"
-                className="text-xs font-bold flex items-center space-x-1.5"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Print Report</span>
+              <Button onClick={() => window.print()} variant="outline">
+                <Printer className="h-3.5 w-3.5" />
+                Print Report
               </Button>
             </div>
           </DialogContent>
@@ -1045,6 +1069,14 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         />
 
       </div>
+      <ResultDocument
+        open={Boolean(previewDoc)}
+        onOpenChange={(o) => { if (!o) setPreviewDoc(null); }}
+        visitTestId={previewDoc?.visitTestId}
+        testName={previewDoc?.testName}
+        patientName={previewDoc?.patientName}
+        fileName={previewDoc?.fileName}
+      />
     </SidebarLayout>
   );
 };

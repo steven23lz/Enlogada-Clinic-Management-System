@@ -1,5 +1,37 @@
 # Database Migration & Schema History
 
+## [1.21.0] - 2026-08-17 (Department-scoped patient records)
+
+No schema change — run `node src/scripts/setupRbac.js` to seed one new permission.
+
+**`patients:read_all_departments`.** The roster search was unconditional: two characters and any
+staff token could page through every patient the clinic has ever registered. The name match *was*
+the access control, and a name match is not an access control. `GET /patients/:id` had the
+mirror-image problem — a role allow-list that excluded diagnostic staff outright, which was safe
+but meant a lab tech could read a result and had no way to look up whose it was.
+
+Both are now settled by one rule in `patientService.departmentScopeFor`: confine to the caller's
+own departments unless they hold this permission. Seeded to SuperAdmin, Admin, Receptionist and
+Cashier — the front office is clinic-wide by function and neither role implies a modality, so
+scoping them would leave them able to find nobody. Diagnostic roles do not hold it, and a
+SuperAdmin can grant it to an individual account on the Access Control screen.
+
+An out-of-scope record answers **404, not 403**. A 403 confirms the record exists, and "does this
+clinic have a patient called X" is precisely the question the scoping refuses. `api-authorization`
+had asserted the old 403 and was updated with that reasoning.
+
+The write path uses the same check — `updatePatientProfile` calls `getPatientById` rather than
+repeating the rule — because birthdate and sex are the fields diagnostic reference ranges key off,
+so editing another department's patient is a clinical-safety question, not only a privacy one.
+
+Two consequences worth knowing:
+
+- `GET /patients/search` now returns `departmentScope` alongside the results, and the screen prints
+  it. A scoped result set and an empty clinic are otherwise indistinguishable.
+- Opening Patient Records to all staff made it the first *reachable* nav item, so a lab tech was
+  landing on the records search instead of their worklist. `defaultNavForRoles` now prefers the
+  first destination that **belongs** to a role you hold. Reachable is not the same as home.
+
 ## [1.20.0] - 2026-08-17 (Per-account permissions and department assignment)
 
 `node src/scripts/migrateAccountScopedRbac.js` — additive, safe to re-run.

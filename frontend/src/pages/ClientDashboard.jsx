@@ -22,6 +22,7 @@ import { formatCurrency } from '../lib/currency';
 import { toastError } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import BookingPass from '../components/BookingPass';
+import ResultDocument from '../components/ResultDocument';
 import { 
   Activity, 
   Calendar, 
@@ -35,6 +36,7 @@ import {
   UserPlus,
   ShieldCheck,
   Download,
+  Eye,
   User,
   FlaskConical,
   Stethoscope,
@@ -169,6 +171,9 @@ const ClientDashboard = ({ onNavigate }) => {
   const [appointmentsLoading, setAppointmentsLoading] = useState(true);
   const [appointmentsPage, setAppointmentsPage] = useState(1);
   const [cancelTarget, setCancelTarget] = useState(null);
+  // The report currently open in the inline viewer, or null. Held here rather than per-row so
+  // only one blob is ever alive at a time — see the revoke note in ResultDocument.
+  const [previewDoc, setPreviewDoc] = useState(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
 
@@ -1262,32 +1267,54 @@ const ClientDashboard = ({ onNavigate }) => {
                               )}
 
                               {(item.file_path || item.file_url) && (
-                                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between text-xs">
-                                  <div className="flex items-center space-x-2">
-                                    <FileText className="w-4 h-4 text-emerald-600" />
-                                    <span className="font-bold text-emerald-800">Scanned Diagnostic Image / PDF Attachment</span>
-                                  </div>
+                                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
+                                  <span className="flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-brand-600" />
+                                    <span className="text-fine font-semibold text-slate-800">
+                                      {item.file_original_name || 'Attached report'}
+                                    </span>
+                                  </span>
                                   {item.file_path ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => downloadResultFile(item.visit_test_id, item.file_original_name)}
-                                      className="text-xs font-bold text-emerald-800 hover:underline flex items-center space-x-1 border-0 bg-transparent cursor-pointer"
-                                    >
-                                      <Download className="w-3.5 h-3.5" />
-                                      <span>Download Attachment</span>
-                                    </button>
+                                    // View, not download. The patient is already looking at the
+                                    // summary; making them save a file to read the report itself
+                                    // is a step that exists only because nothing rendered it.
+                                    <span className="flex items-center gap-1.5">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="xs"
+                                        onClick={() => setPreviewDoc({
+                                          visitTestId: item.visit_test_id,
+                                          testName: item.test_name,
+                                          patientName: `${selectedProfile?.first_name || ''} ${selectedProfile?.last_name || ''}`.trim(),
+                                          fileName: item.file_original_name,
+                                        })}
+                                      >
+                                        <Eye className="h-3 w-3" />
+                                        View Report
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="xs"
+                                        onClick={() => downloadResultFile(item.visit_test_id, item.file_original_name)}
+                                      >
+                                        <Download className="h-3 w-3" />
+                                        Download
+                                      </Button>
+                                    </span>
                                   ) : isSafeResultUrl(item.file_url) ? (
-                                  <a
-                                    href={item.file_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-xs font-bold text-emerald-800 hover:underline flex items-center space-x-1"
-                                  >
-                                    <Download className="w-3.5 h-3.5" />
-                                    <span>Download Attachment</span>
-                                  </a>
+                                    <a
+                                      href={item.file_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 text-fine font-semibold text-brand-700 hover:underline"
+                                    >
+                                      <Download className="h-3 w-3" />
+                                      Open attachment
+                                    </a>
                                   ) : (
-                                    <span className="text-xs font-bold text-amber-700">Attachment link unavailable</span>
+                                    <span className="text-fine font-semibold text-amber-700">Attachment link unavailable</span>
                                   )}
                                 </div>
                               )}
@@ -1564,6 +1591,15 @@ const ClientDashboard = ({ onNavigate }) => {
         />
 
       </div>
+      <ResultDocument
+        open={Boolean(previewDoc)}
+        onOpenChange={(o) => { if (!o) setPreviewDoc(null); }}
+        visitTestId={previewDoc?.visitTestId}
+        testName={previewDoc?.testName}
+        patientName={previewDoc?.patientName}
+        fileName={previewDoc?.fileName}
+      />
+
     </DashboardLayout>
   );
 };

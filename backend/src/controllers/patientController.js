@@ -54,7 +54,7 @@ class PatientController {
   async getProfileById(req, res, next) {
     try {
       const { id } = req.params;
-      const patient = await patientService.getPatientById(id);
+      const patient = await patientService.getPatientById(id, req.user);
 
       // Security Check: If client, verify patient belongs to them
       if (req.user.roles.includes('Client') && patient.user_id !== req.user.userId) {
@@ -98,7 +98,7 @@ class PatientController {
       }
 
       // Check ownership if user is client
-      const patient = await patientService.getPatientById(id);
+      const patient = await patientService.getPatientById(id, req.user);
       if (req.user.roles.includes('Client') && patient.user_id !== req.user.userId) {
         return res.status(403).json({
           status: 'error',
@@ -115,7 +115,7 @@ class PatientController {
         address,
         contactNumber,
         emergencyContact
-      });
+      }, req.user);
 
       return res.status(200).json({
         status: 'success',
@@ -130,10 +130,12 @@ class PatientController {
   async search(req, res, next) {
     try {
       const { q } = req.query;
-      const patients = await patientService.searchPatients(q);
+      const patients = await patientService.searchPatients(q, req.user);
+      // The UI says which departments a scoped result set was confined to, so a short list reads
+      // as "your department" rather than "the clinic has no such patient".
       return res.status(200).json({
         status: 'success',
-        data: { patients }
+        data: { patients, departmentScope: patientService.departmentScopeFor(req.user) }
       });
     } catch (err) {
       next(err);

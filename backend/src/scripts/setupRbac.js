@@ -27,6 +27,20 @@ const PERMISSIONS = [
   // Patients
   { name: 'patients:create', module: 'Patients', description: 'Register new patient profiles' },
   { name: 'patients:read', module: 'Patients', description: 'View patient records and demographics' },
+  // [1.21.0] The department escape hatch, expressed as a permission so a SuperAdmin can grant it
+  // rather than it being a hardcoded exemption for Admin.
+  //
+  // Without it, a search is filtered to patients who have had work in the searcher's own
+  // department: a Laboratory account finds patients with lab tests, and nobody else. That is the
+  // correct default for a diagnostic role — a lab tech has no clinical reason to pull up an
+  // unrelated patient's X-ray history — and it is precisely the containment the roster search
+  // previously had none of.
+  //
+  // Front-office roles hold it because their job IS clinic-wide: Reception registers everyone
+  // before any department exists on the record, and the Cashier bills for whatever is on the
+  // visit. Scoping them by department would leave them able to find nobody, since neither role
+  // implies a modality.
+  { name: 'patients:read_all_departments', module: 'Patients', description: 'Search and open patient records outside your own department' },
   { name: 'patients:update', module: 'Patients', description: 'Correct patient information' },
 
   // Visits / queue
@@ -82,10 +96,12 @@ const RECEPTION = [
   // carried no permission gate at all, so the role list alone decided. Now that it is gated,
   // stating the grant keeps behaviour byte-identical and makes it visible and revocable.
   'billing:discount',
+  // Front office is clinic-wide by function, not departmental — see the note on the permission.
+  'patients:read_all_departments',
 ];
 
 const CASHIER = [
-  'patients:read', 'visits:read', 'visits:update',
+  'patients:read', 'patients:read_all_departments', 'visits:read', 'visits:update',
   'billing:read', 'billing:process', 'billing:refund', 'billing:discount',
   'hmo:read',
 ];
@@ -102,7 +118,7 @@ const MODALITY = [
 // (a test_result names the clinician who produced it). rbac:manage is excluded too — deciding who
 // may do what is the one thing that separates SuperAdmin from a very capable Admin.
 const ADMIN = [
-  'patients:create', 'patients:read', 'patients:update',
+  'patients:create', 'patients:read', 'patients:read_all_departments', 'patients:update',
   'visits:create', 'visits:read', 'visits:update',
   'appointments:read', 'appointments:update', 'appointments:cancel',
   'tests:manage', 'tests:assign', 'tests:read_assigned',

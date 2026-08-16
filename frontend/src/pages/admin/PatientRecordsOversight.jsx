@@ -11,7 +11,8 @@ import { SkeletonList } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
-import { Users, AlertCircle, ChevronRight, Printer, FolderSearch, FileX2 } from 'lucide-react';
+import ResultDocument from '../../components/ResultDocument';
+import { Users, AlertCircle, ChevronRight, Printer, FolderSearch, FileX2, Eye, Paperclip, Building2 } from 'lucide-react';
 
 // UI/UX Modernization Phase 4: search results come back in one shot with no server-side
 // pagination, so a client-side page size is proportionate (VISUAL_IDENTITY.md §3a #11).
@@ -34,6 +35,12 @@ const PatientRecordsOversight = () => {
   const [patientHistory, setPatientHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
+  const [previewDoc, setPreviewDoc] = useState(null);
+  // Which departments the last search was confined to, straight from the server. Shown, because
+  // a scoped result set and an empty clinic look identical otherwise — and a lab tech who finds
+  // four patients where the receptionist finds twenty should be told why, not left to wonder
+  // whether the search is broken.
+  const [departmentScope, setDepartmentScope] = useState(null);
 
   const handleViewHistory = async (patient) => {
     setSelectedPatient(patient);
@@ -60,6 +67,7 @@ const PatientRecordsOversight = () => {
     try {
       const res = await api.get('/patients/search', { params: { q: query.trim() } });
       setResults(res.data.data.patients);
+      setDepartmentScope(res.data.data.departmentScope ?? null);
       setPage(1);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to search patient records.');
@@ -105,6 +113,13 @@ const PatientRecordsOversight = () => {
           {!results && !error && (
             <p className="m-0 pt-1 text-fine text-slate-500">
               Results appear here. Two characters is enough to start.
+            </p>
+          )}
+
+          {departmentScope && (
+            <p className="m-0 flex items-center gap-1.5 pt-1 text-fine text-slate-500">
+              <Building2 className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+              Showing patients with <strong className="font-semibold text-slate-700">{departmentScope.join(', ')}</strong> work only — that is your department. A SuperAdmin can widen this per account.
             </p>
           )}
         </PanelBody>
@@ -213,6 +228,32 @@ const PatientRecordsOversight = () => {
                     {item.findings && (
                       <p className="m-0 mt-2 whitespace-pre-wrap border-t border-[#eef2f6] pt-2 text-fine leading-relaxed text-slate-600">{item.findings}</p>
                     )}
+                    {/* The attachment was never surfaced on this screen at all — the query has
+                        returned file_path since [1.7.0] and nothing rendered it, so the one
+                        person most likely to be asked "what does the report actually say" could
+                        read the findings text but not open the document itself. */}
+                    {item.file_path && (
+                      <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#eef2f6] pt-2">
+                        <span className="flex min-w-0 items-center gap-1.5 text-fine text-slate-500">
+                          <Paperclip className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate">{item.file_original_name || 'Attached report'}</span>
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          onClick={() => setPreviewDoc({
+                            visitTestId: item.visit_test_id,
+                            testName: item.test_name,
+                            patientName: `${selectedPatient?.first_name || ''} ${selectedPatient?.last_name || ''}`.trim(),
+                            fileName: item.file_original_name,
+                          })}
+                        >
+                          <Eye className="h-3 w-3" />
+                          View Report
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -227,6 +268,14 @@ const PatientRecordsOversight = () => {
           )}
         </DialogContent>
       </Dialog>
+      <ResultDocument
+        open={Boolean(previewDoc)}
+        onOpenChange={(o) => { if (!o) setPreviewDoc(null); }}
+        visitTestId={previewDoc?.visitTestId}
+        testName={previewDoc?.testName}
+        patientName={previewDoc?.patientName}
+        fileName={previewDoc?.fileName}
+      />
     </div>
   );
 };

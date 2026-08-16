@@ -300,12 +300,21 @@ test.describe('Cross-role PHI boundaries', () => {
     await apiContext.dispose();
   });
 
-  test('diagnostic staff cannot read a patient record by id', async () => {
+  test('diagnostic staff cannot read a patient record outside their department', async () => {
+    // Rewritten in [1.21.0], and the change of status code is the point.
+    //
+    // This used to assert 403 with the note "the record exists; the role is what is refused" —
+    // the route excluded diagnostic staff by role, full stop. That was safe but blunt: a lab tech
+    // could read a result and had no way to look up whose it was.
+    //
+    // Now the confinement is by department rather than by role, and an out-of-scope record
+    // answers 404. Deliberately: a 403 confirms the record exists, and "does this clinic have a
+    // patient with id N" is exactly the question the scoping refuses. Patient 1 predates the
+    // seeded clinic day and has no Laboratory work, so it is out of scope either way.
     const res = await apiContext.get(`${API}/patients/1`, {
       headers: { Authorization: `Bearer ${labToken}` },
     });
-    // 403 specifically, not 404 — the record exists; the role is what is refused.
-    expect(res.status()).toBe(403);
+    expect(res.status()).toBe(404);
   });
 
   test('diagnostic staff cannot rewrite a patient record', async () => {
