@@ -1,0 +1,122 @@
+// @ts-check
+import { test, expect, request } from 'playwright/test';
+
+// The two screens the HMO card feature added, driven through the browser rather than the API.
+//
+// Both are inside dialogs, which is why the API tests in booking-atomicity.spec.js do not reach
+// them: the card upload lives in step 2 of the client's booking wizard, and the preview lives in
+// the Admin's claim review. A card that uploads correctly and is then rendered as a broken image
+// on the one screen where somebody approves coverage is a working feature that fails at its job.
+
+const BACKEND_URL = process.env.E2E_API_URL || 'http://localhost:5000';
+const API = `${BACKEND_URL}/api`;
+const PASSWORD = 'Password123!';
+
+// 1x1 PNG, so the server's MIME filter sees a genuine image.
+const CARD_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64');
+
+// Same shape as laboratory.spec.js — the login form has no <label for>, so it is addressed by
+// input type rather than by accessible name.
+async function signIn(page, email) {
+  await page.goto('/');
+  await page.getByText('Sign In', { exact: true }).first().click();
+  await page.fill('input[type="email"]', email);
+  await page.fill('input[type="password"]', PASSWORD);
+  await page.locator('button[type="submit"]').click();
+  await expect(page.getByText(/good day|welcome|queue|terminal|worklist/i).first())
+    .toBeVisible({ timeout: 15000 });
+}
+
+test.describe('HMO card evidence (UI)', () => {
+  test('the booking wizard asks a client for a card photo only when they claim HMO', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+
+    await signIn(page, 'client@enlogada.com');
+
+    await page.getByRole('button', { name: 'Book Schedule' }).first().click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+
+    // Step 1 -> step 2. The card field belongs to the HMO branch of step 2, so getting there is
+    // the whole point of walking the wizard rather than asserting on a rendered fragment.
+    await dialog.getByRole('button', { name: /next: hmo/i }).click();
+
+    // Self-Pay is the default: no card field, because there is no claim to evidence.
+    await expect(dialog.getByText(/photo of your hmo card/i)).toHaveCount(0);
+
+    await dialog.getByRole('combobox').first().click();
+    await page.getByRole('option').nth(1).click(); // first real provider, after "Self-Pay / None"
+
+    await expect(dialog.getByText(/photo of your hmo card/i)).toBeVisible();
+    await expect(dialog.getByText(/claiming hmo coverage requires a photo/i)).toBeVisible();
+
+    expect(errors, `page errors: ${errors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('the Admin claim review renders the card image behind the claim', async ({ page }) => {
+    // Seeded through the API: driving the client's file picker as well as the Admin's review in
+    // one test would be testing the browser, not the feature.
+    const ctx = await request.newContext();
+    const token = async (email) => {
+      const r = await ctx.post(`${API}/auth/login`, { data: { email, password: PASSWORD } });
+      return (await r.json()).data.token;
+    };
+    const clientToken = await token('client@enlogada.com');
+    const auth = { Authorization: `Bearer ${clientToken}` };
+
+    const patientId = (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth })).json())
+      .data.patients[0].id;
+    const testId = (await (await ctx.get(`${API}/tests`)).json()).data.tests[0].id;
+    const providerId = (await (await ctx.get(`${API}/hmo/providers`, { headers: auth })).json())
+      .data.providers[0].id;
+
+    // Far out, and offset per run, so this never collides with another spec's slot or its own
+    // previous run — a repeat of the same patient/date/time returns the existing booking.
+    const when = new Date();
+    when.setDate(when.getDate() + 500 + (Date.now() % 40));
+    if (when.getDay() === 0) when.setDate(when.getDate() + 1);
+    const date = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
+    const slots = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth })).json())
+      .data.slots.filter((s) => s.available);
+    test.skip(!slots.length, 'No available slot to book.');
+
+    const form = new FormData();
+    form.append('patientId', String(patientId));
+    form.append('scheduledDate', date);
+    form.append('scheduledTime', slots[0].time);
+    form.append('testIds[]', String(testId));
+    form.append('hmo[providerId]', String(providerId));
+    form.append('hmoCard', new Blob([CARD_PNG], { type: 'image/png' }), 'card.png');
+
+    const booked = await ctx.post(`${API}/appointments`, { headers: auth, multipart: form });
+    expect(booked.status()).toBe(201);
+    const claim = (await booked.json()).data.hmoRequest;
+    expect(claim.card_file_path).toBeTruthy();
+    await ctx.dispose();
+
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await signIn(page, 'admin@enlogada.com');
+
+    await page.getByText('Service Requests', { exact: true }).first().click();
+    await expect(page.getByRole('heading', { name: 'Service & HMO Requests' })).toBeVisible();
+
+    // The claim just filed is the newest, and the list is ORDER BY request_date DESC — so the
+    // first Review button opens it. The row itself carries no id to match on.
+    await page.getByRole('button', { name: 'Review' }).first().click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('HMO Card')).toBeVisible();
+
+    // The assertion that matters: an <img> that actually decoded. A broken image is still an
+    // <img> in the DOM, so visibility alone would pass on the bug this guards.
+    const img = dialog.getByAltText(/hmo card/i);
+    await expect(img).toBeVisible();
+    await expect.poll(() => img.evaluate((el) => el.naturalWidth)).toBeGreaterThan(0);
+
+    expect(errors, `page errors: ${errors.join(' | ')}`).toHaveLength(0);
+  });
+});

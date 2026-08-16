@@ -141,11 +141,17 @@ const ROLE_PERMISSIONS = {
   // patients:* to manage their own and their dependants' profiles, tests:assign because the
   // booking wizard attaches tests to the visit it just created, and billing:read to see their own
   // payment history.
+  //
+  // hmo:request and hmo:read are the same shape: a patient states their own coverage while
+  // booking and looks at the card photo they themselves attached. Neither reaches the staff HMO
+  // screens — GET /hmo/requests and GET /hmo/request/:id are `authorizeStaff`, which no permission
+  // tick can cross — and hmoService checks ownership on both patient-facing routes.
   Client: [
     'patients:create', 'patients:read', 'patients:update',
     'appointments:create', 'appointments:read', 'appointments:cancel',
     'tests:assign', 'billing:read',
     'visits:read', 'results:read',
+    'hmo:request', 'hmo:read',
   ],
 };
 

@@ -17,8 +17,9 @@ class TestRepository {
   /**
    * Batch form of findTestById — one round trip for a whole set of ids.
    *
-   * Used when attaching tests to a visit, which previously issued a findTestById per test. Ids
-   * absent from the result are simply missing; the caller compares counts to report which.
+   * Used when attaching tests to a visit, which previously issued a findTestById per test. That
+   * loop ran inside the booking transaction, holding the slot's advisory lock for the duration.
+   * Ids absent from the result are simply missing; the caller compares counts to report which.
    */
   async findTestsByIds(ids) {
     if (!ids || ids.length === 0) return [];
@@ -82,10 +83,14 @@ class TestRepository {
   }
 
   // Visit-Tests: Link tests to a patient visit
+  // ON CONFLICT DO NOTHING against uq_visit_tests_visit_test: a retried booking re-sending the
+  // same tests converges on the same rows instead of failing on the unique constraint. Returns
+  // undefined for a row that already existed, so callers re-read rather than trusting RETURNING.
   async addTestToVisit({ patientVisitId, testId, priceAtTime }) {
     const queryText = `
       INSERT INTO visit_tests (patient_visit_id, test_id, price_at_time)
       VALUES ($1, $2, $3)
+      ON CONFLICT (patient_visit_id, test_id) DO NOTHING
       RETURNING *
     `;
     const result = await db.query(queryText, [patientVisitId, testId, priceAtTime]);

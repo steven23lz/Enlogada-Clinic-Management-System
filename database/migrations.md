@@ -1,5 +1,30 @@
 # Database Migration & Schema History
 
+## [1.22.0] - 2026-08-17 (Evidence for an HMO claim)
+
+Originally authored as `[1.13.0]` on a branch cut before [1.13.0]–[1.21.0] landed; renumbered on
+merge. `migrateHmoCard.js` is unchanged by that — it is keyed to the columns it adds, not to the
+number — but two `[1.13.0]` sections describing different tables would have made this file useless
+as a history.
+
+### Added
+* `hmo_requests.card_file_path` / `card_original_name` / `card_mime_type` / `card_size_bytes` / `card_uploaded_at` — the photo of the patient's HMO card, attached during online booking. Server-generated filename, stored under `backend/uploads/hmo-cards/` (covered by the existing `backend/uploads/` gitignore entry). Never served statically: an HMO card carries a name, a member number and often a photo, so it is retrieved through an authenticated, ownership-checked route like diagnostic result files.
+* `hmo_requests.card_verified_by` / `card_verified_at` — the staff member who confirmed the physical card at the desk. Reception is deliberately not required to photograph a card they are holding; they are required to be named. Derived from the request's own token, so no existing caller had to change.
+* `hmo_requests.card_purged_at` — set when retention removes the image. Without it a purged card is indistinguishable from one that was never provided, and Admin cannot tell a policy working correctly from a gap in the record.
+* `chk_hmo_request_card_evidence` — `CHECK (card_file_path IS NOT NULL OR card_verified_by IS NOT NULL OR card_purged_at IS NOT NULL)`. Every claim carries either an image, a named verifier, or a record that its image was purged under retention. The third arm is not optional: `NOT VALID` skips only the initial scan of historical rows, so without it the retention pass would violate the constraint the moment it nulled a client-uploaded card's path. The service layer enforces the same rule, but only the constraint covers routes and scripts that do not exist yet.
+* `idx_hmo_requests_card_verified_by`, for staff-attestation reporting.
+* Two permission grants to the **Client** role — `hmo:request` and `hmo:read`. Run `node src/scripts/setupRbac.js`. `POST /hmo/request` and `GET /hmo/request/:id/card` are patient-reachable, so under [1.20.0] they keep an explicit `authorizeRoles` list naming Client, and `verifyRbacWiring.js` requires every named role to hold the permission the route enforces. Both are ownership-scoped in `hmoService` exactly like the Client's other grants; neither reaches the staff HMO screens, which are `authorizeStaff` and therefore closed to a patient account whatever the matrix says.
+
+### Why
+* Online booking lets a client state HMO coverage themselves. A client can select a provider by mistake as easily as deliberately, and unlike a walk-in there is nobody at a desk to notice. The card photo is the evidence that makes the claim reviewable — it is not verification, and does not pretend to be: no Philippine HMO exposes an API that would let a clinic confirm a member number, so approval remains the existing manual Admin step.
+
+### Migration
+* `node src/scripts/migrateHmoCard.js` — additive and idempotent, runs in one transaction.
+* The constraint is added **NOT VALID** deliberately. Rows predating this migration have neither an image nor a verifier, and back-filling a staff id to satisfy the check would invent an attestation nobody made. New and updated rows are enforced; history stays honestly incomplete.
+* Reversible: `node src/scripts/migrateHmoCard.js --rollback` drops the constraint, the index and the columns in one transaction. Image files are left on disk, so a rollback loses the links but not the evidence.
+
+---
+
 ## [1.21.0] - 2026-08-17 (Department-scoped patient records)
 
 No schema change — run `node src/scripts/setupRbac.js` to seed one new permission.

@@ -2,8 +2,12 @@ const db = require('../config/database');
 const appointmentRepository = require('../repositories/appointmentRepository');
 const visitRepository = require('../repositories/visitRepository');
 const scheduleRepository = require('../repositories/scheduleRepository');
+const testRepository = require('../repositories/testRepository');
 const patientService = require('./patientService');
 const notificationService = require('./notificationService');
+const testService = require('./testService');
+const hmoService = require('./hmoService');
+const { discardHmoCard } = require('../config/upload');
 const visitService = require('./visitService');
 
 async function assertClientOwnsPatient(requestingUser, patientId) {
@@ -70,82 +74,155 @@ class AppointmentService {
     return { date, isOpen: true, slots };
   }
 
-  async createAppointment({ patientId, scheduledDate, scheduledTime, notes, createdBy, requestingUser }) {
-    await assertClientOwnsPatient(requestingUser, patientId);
-
-    const client = await db.pool.connect();
+  // Books an appointment and everything that belongs to it in ONE transaction.
+  //
+  // The tests and the optional HMO request used to be two further HTTP calls made by the browser
+  // after this one had already committed. A failure in either left an appointment that existed
+  // while the patient was told the booking failed -- and because a non-cancelled appointment
+  // occupies its slot, that phantom then refused the patient's own retry as "no longer
+  // available". Both now live inside this transaction, so a booking either exists completely or
+  // not at all.
+  async createAppointment({
+    patientId, scheduledDate, scheduledTime, notes, createdBy, requestingUser,
+    testIds = [], hmo = null, hmoCardFile = null
+  }) {
+    // db.withTransaction rather than a hand-managed db.pool.connect(). Everything underneath —
+    // testService.attachTests, hmoService.createRequest and the auditService.log inside it — runs
+    // on this one connection automatically, so nothing under the advisory lock can check out a
+    // second connection while holding the first. With a bounded pool that is a deadlock: ten
+    // concurrent bookings hold all ten connections, each waiting for one that will never come
+    // free. It also removes the `committed` flag this used to need — the post-commit work below
+    // is now structurally outside the transaction rather than inside its try.
+    let outcome;
     try {
-      await client.query('BEGIN');
+      // Inside the try, though it runs before the transaction: multer has already written the card
+      // by the time this method is entered, so a 403 here would otherwise leave it on disk forever.
+      await assertClientOwnsPatient(requestingUser, patientId);
 
-      // 1. Validate the requested slot against clinic operating hours
-      const dayOfWeek = new Date(`${scheduledDate}T12:00:00Z`).getUTCDay();
-      const hours = await scheduleRepository.findOperatingHoursForDay(dayOfWeek, client);
+      outcome = await db.withTransaction(async () => {
+        // 1. Validate the requested slot against clinic operating hours
+        const dayOfWeek = new Date(`${scheduledDate}T12:00:00Z`).getUTCDay();
+        const hours = await scheduleRepository.findOperatingHoursForDay(dayOfWeek);
 
-      if (!hours || !hours.is_open) {
-        const error = new Error('The clinic is closed on the selected date.');
-        error.statusCode = 409;
-        throw error;
-      }
-      const requestedMinutes = timeToMinutes(scheduledTime);
-      if (requestedMinutes < timeToMinutes(hours.open_time) || requestedMinutes >= timeToMinutes(hours.close_time)) {
-        const error = new Error('The selected time is outside clinic operating hours.');
-        error.statusCode = 409;
-        throw error;
-      }
+        if (!hours || !hours.is_open) {
+          const error = new Error('The clinic is closed on the selected date.');
+          error.statusCode = 409;
+          throw error;
+        }
+        const requestedMinutes = timeToMinutes(scheduledTime);
+        if (requestedMinutes < timeToMinutes(hours.open_time) || requestedMinutes >= timeToMinutes(hours.close_time)) {
+          const error = new Error('The selected time is outside clinic operating hours.');
+          error.statusCode = 409;
+          throw error;
+        }
 
-      // 2. Serialize concurrent bookings for the same slot (no row exists yet to lock
-      //    on an empty slot, so an advisory lock closes that race window).
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${scheduledDate}|${scheduledTime}`]);
+        // 2. Serialize concurrent bookings for the same slot (no row exists yet to lock
+        //    on an empty slot, so an advisory lock closes that race window).
+        //    Everything from here to COMMIT runs while other bookings for this slot wait, so keep
+        //    it short -- in particular, never put a file write or a network call in here.
+        await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${scheduledDate}|${scheduledTime}`]);
 
-      const { rows } = await client.query(
-        `SELECT COUNT(*)::int AS cnt FROM appointments WHERE scheduled_date = $1 AND scheduled_time = $2 AND status <> 'Cancelled'`,
-        [scheduledDate, scheduledTime]
-      );
-      if (rows[0].cnt >= hours.max_concurrent_bookings) {
-        const error = new Error('This time slot is no longer available. Please select a different time.');
-        error.statusCode = 409;
-        throw error;
-      }
+        // 3. Has this patient already booked this exact slot? Checked inside the lock, so it is
+        //    race-free, and BEFORE the capacity check below -- which matters at the seeded
+        //    max_concurrent_bookings of 1, where the patient's own booking would otherwise be the
+        //    thing that makes the slot look full. Returning the existing booking is what makes a
+        //    retry after a lost response safe: the patient re-enters the same patient, date and
+        //    time, which is a natural idempotency key they regenerate for free.
+        //
+        //    Keyed on the patient, not the account: one account owns several profiles, so two
+        //    dependents at the same time are two different patients and correctly both allowed.
+        const existing = await appointmentRepository.findActiveByPatientAndSlot(
+          { patientId, scheduledDate, scheduledTime }
+        );
+        if (existing) {
+          const visitTests = testIds.length
+            ? await testService.attachTests(existing.patient_visit_id, testIds)
+            : await testRepository.findTestsByVisitId(existing.patient_visit_id);
 
-      // 3. Create the patient_visit record first (visit_type = 'Appointment')
-      const queueNumber = await visitRepository.getNextQueueNumber(client);
-      const visit = await visitRepository.createVisit({
-        patientId,
-        visitType: 'Appointment',
-        notes,
-        queueNumber,
-        createdBy
-      }, client);
+          return { appointment: existing, visitTests, hmoRequest: null, alreadyBooked: true };
+        }
 
-      // 4. Create the appointment record linked to the visit
-      const appointment = await appointmentRepository.createAppointment({
-        patientVisitId: visit.id,
-        scheduledDate,
-        scheduledTime,
-        notes
-      }, client);
+        const { rows } = await db.query(
+          `SELECT COUNT(*)::int AS cnt FROM appointments WHERE scheduled_date = $1 AND scheduled_time = $2 AND status <> 'Cancelled'`,
+          [scheduledDate, scheduledTime]
+        );
+        if (rows[0].cnt >= hours.max_concurrent_bookings) {
+          const error = new Error('This time slot is no longer available. Please select a different time.');
+          error.statusCode = 409;
+          throw error;
+        }
 
-      await client.query('COMMIT');
+        // 4. Create the patient_visit record first (visit_type = 'Appointment')
+        const queueNumber = await visitRepository.getNextQueueNumber();
+        const visit = await visitRepository.createVisit({
+          patientId,
+          visitType: 'Appointment',
+          notes,
+          queueNumber,
+          createdBy
+        });
 
-      // Module 18 (Notification): Receptionist owns intake/check-in for a booked appointment;
-      // Admin/SuperAdmin have standing oversight (matches the existing Appointments Oversight
-      // page). Fired after COMMIT so a notification failure can never roll back a real booking.
-      await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
-        title: 'New Appointment Booked',
-        message: `Queue #${visit.queue_number} — ${scheduledDate} at ${scheduledTime}`,
-        type: 'info'
+        // 5. Create the appointment record linked to the visit
+        const appointment = await appointmentRepository.createAppointment({
+          patientVisitId: visit.id,
+          scheduledDate,
+          scheduledTime,
+          notes
+        });
+
+        // 6. Attach the chosen tests, and the HMO claim if one was made. Order matters:
+        //    hmo_request_tests references visit_tests.
+        const visitTests = testIds.length
+          ? await testService.attachTests(visit.id, testIds)
+          : [];
+
+        let hmoRequest = null;
+        if (hmo && visitTests.length) {
+          hmoRequest = await hmoService.createRequest({
+            hmoProviderId: hmo.providerId,
+            approvalCode: hmo.approvalCode || null,
+            visitTestIds: visitTests.map((vt) => vt.id),
+            cardFile: hmoCardFile
+          }, requestingUser, { ownershipAlreadyAsserted: true });
+        }
+
+        return {
+          appointment: { ...appointment, queue_number: visit.queue_number },
+          visitTests,
+          hmoRequest,
+          alreadyBooked: false,
+          queueNumber: visit.queue_number
+        };
       });
-
-      return {
-        ...appointment,
-        queue_number: visit.queue_number
-      };
     } catch (err) {
-      await client.query('ROLLBACK');
+      // Nothing committed, so nothing references the card and the bytes multer wrote are
+      // unreachable. This is the ONLY place the card is discarded on failure: past this catch the
+      // transaction has committed, and deleting the file would break a booking that exists.
+      discardHmoCard(hmoCardFile);
       throw err;
-    } finally {
-      client.release();
     }
+
+    // ── Committed from here. Nothing below may delete the card or fail the booking. ──────────
+    if (outcome.alreadyBooked) {
+      // A retry re-sends the card the original booking already carries, and this path files no
+      // new claim for it to attach to. Drop the bytes rather than letting a re-submission swap
+      // the evidence under a claim an Admin may already have reviewed.
+      discardHmoCard(hmoCardFile);
+      // No notification either: staff were already told about this booking when it was made.
+      return outcome;
+    }
+
+    // Module 18 (Notification): Receptionist owns intake/check-in for a booked appointment;
+    // Admin/SuperAdmin have standing oversight (matches the existing Appointments Oversight
+    // page). Outside the transaction so a notification failure can never roll back a real
+    // booking — and notifyRoles swallows its own errors, so it cannot fail the request either.
+    await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
+      title: 'New Appointment Booked',
+      message: `Queue #${outcome.queueNumber} — ${scheduledDate} at ${scheduledTime}`,
+      type: 'info'
+    });
+
+    return outcome;
   }
 
   async verifyByReference(reference) {

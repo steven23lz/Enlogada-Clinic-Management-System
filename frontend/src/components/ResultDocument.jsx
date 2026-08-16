@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import EmptyState from './ui/empty-state';
 import { Skeleton } from './ui/skeleton';
 import api from '../config/api';
+import { canRenderPdfInline, previewKindFor } from '../lib/preview';
 import { FileText, Download, Printer, AlertCircle, ExternalLink } from 'lucide-react';
 
 /**
@@ -31,32 +32,6 @@ import { FileText, Download, Printer, AlertCircle, ExternalLink } from 'lucide-r
  * grey box for an unknown type is worse than one that admits it cannot show it.
  */
 
-const PREVIEWABLE = {
-  'application/pdf': 'pdf',
-  'image/jpeg': 'image',
-  'image/png': 'image',
-  'image/webp': 'image',
-};
-
-/**
- * Whether this browser will actually draw a PDF in an iframe.
- *
- * An <iframe src=blob:…> pointed at a PDF does not fail when the browser has no viewer — it
- * renders an empty white box, with no event and no error. So the honest-looking result and the
- * broken one are pixel-identical, which is the silent failure this app keeps finding and
- * removing. Chromium in headless mode reports false here; so do some embedded webviews and
- * locked-down mobile browsers, which is the case that matters for a patient opening their result
- * on a phone.
- *
- * Feature-detected rather than sniffed, and defaulted to `true` on the older browsers that do not
- * expose the flag at all: those overwhelmingly do have a viewer, and being wrong that way shows a
- * working preview where we predicted none, rather than hiding a working preview behind a warning.
- */
-const canRenderPdfInline = () =>
-  typeof navigator === 'undefined' || navigator.pdfViewerEnabled === undefined
-    ? true
-    : navigator.pdfViewerEnabled;
-
 const ResultDocument = ({ open, onOpenChange, visitTestId, testName, patientName, fileName }) => {
   const [state, setState] = useState({ status: 'idle', url: null, kind: null, error: '' });
   // Held in a ref as well as state so the cleanup effect can revoke the *current* URL without
@@ -80,8 +55,7 @@ const ResultDocument = ({ open, onOpenChange, visitTestId, testName, patientName
       try {
         const res = await api.get(`/results/${visitTestId}/file`, { responseType: 'blob' });
         if (cancelled) return;
-        const type = res.data?.type || '';
-        const kind = PREVIEWABLE[type.split(';')[0].trim()] || null;
+        const kind = previewKindFor(res.data?.type);
         const url = window.URL.createObjectURL(res.data);
         urlRef.current = url;
         setState({ status: 'ready', url, kind, error: '' });

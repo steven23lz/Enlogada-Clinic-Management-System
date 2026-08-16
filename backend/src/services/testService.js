@@ -1,6 +1,6 @@
+const db = require('../config/database');
 const testRepository = require('../repositories/testRepository');
 const visitRepository = require('../repositories/visitRepository');
-const db = require('../config/database');
 const patientService = require('./patientService');
 
 // Mirrors appointmentService.js's assertClientOwnsPatient exactly. POST /tests/visit-tests
@@ -78,39 +78,63 @@ class TestService {
    * strictly from visit_tests, so the patient is billed for a partial workup while the missing
    * test never reaches its modality.
    *
-   * Validating every id up front, inside the transaction, means a bad id costs nothing: the batch
-   * rolls back and the retry is clean.
+   * Validating every id up front means a bad id costs nothing: the batch rolls back and the retry
+   * is clean.
+   *
+   * No transaction and no ownership check of its own — both belong to the caller, because the two
+   * callers need different ones. `addTestsToVisit` below wraps it for Reception's walk-in flow;
+   * `appointmentService.createAppointment` calls it inside the transaction that is also minting
+   * the visit.
+   *
+   * It must NOT call assertClientOwnsVisit. Under the booking transaction that helper would be
+   * reading a `patient_visits` row the transaction has not committed — which used to mean a
+   * different pooled connection and a guaranteed 404, and even now that every query joins the
+   * ambient transaction it is redundant: appointmentService asserts ownership on the patient
+   * before it opens the transaction, and then mints the visit itself.
    */
+  async attachTests(patientVisitId, testIds) {
+    // Normalised to numbers up front: JSON callers send numbers, multipart sends strings, and the
+    // catalogue Map below is keyed on the integer id Postgres returns. A string id would miss
+    // every lookup and report a perfectly real test as "not found".
+    const uniqueIds = [...new Set((testIds || []).map((id) => parseInt(id, 10)))];
+    if (uniqueIds.length === 0) return [];
+
+    // One query for every price instead of one per test — this is the receptionist's hot path,
+    // and a six-test workup was twelve round trips. It also matters inside the booking
+    // transaction, where the per-id loop held the slot's advisory lock for its whole duration.
+    const catalogue = await testRepository.findTestsByIds(uniqueIds);
+    const byId = new Map(catalogue.map((t) => [t.id, t]));
+
+    // Every id checked before anything is written, and all of them reported at once — the old
+    // loop named only the first bad id, so a receptionist fixed them one round trip at a time.
+    const missing = uniqueIds.filter((id) => !byId.has(id));
+    if (missing.length > 0) {
+      const error = new Error(
+        `Test${missing.length > 1 ? 's' : ''} with ID ${missing.join(', ')} not found`
+      );
+      error.statusCode = 404;
+      throw error;
+    }
+
+    for (const testId of uniqueIds) {
+      await testRepository.addTestToVisit({
+        patientVisitId,
+        testId,
+        priceAtTime: byId.get(testId).price
+      });
+    }
+
+    // Re-read rather than collecting the inserts: addTestToVisit is ON CONFLICT DO NOTHING, so a
+    // row that already existed returns undefined. Reading back gives the caller the true set.
+    return await testRepository.findTestsByVisitId(patientVisitId);
+  }
+
   async addTestsToVisit(patientVisitId, testIds, requestingUser) {
     await assertClientOwnsVisit(requestingUser, patientVisitId);
 
-    return await db.withTransaction(async () => {
-      // One query for every price instead of one per test — this is the receptionist's hot path,
-      // and a six-test workup was twelve round trips.
-      const tests = await testRepository.findTestsByIds(testIds);
-      const priceById = new Map(tests.map((t) => [String(t.id), t.price]));
-
-      const missing = testIds.filter((id) => !priceById.has(String(id)));
-      if (missing.length > 0) {
-        const error = new Error(
-          `Test${missing.length > 1 ? 's' : ''} with ID ${missing.join(', ')} not found`
-        );
-        error.statusCode = 404;
-        throw error;
-      }
-
-      const results = [];
-      for (const testId of testIds) {
-        results.push(
-          await testRepository.addTestToVisit({
-            patientVisitId,
-            testId,
-            priceAtTime: priceById.get(String(testId))
-          })
-        );
-      }
-      return results;
-    });
+    // Standalone callers (Reception's walk-in flow) get their own transaction. Previously this
+    // looped bare db.query calls, so a failure partway through left a half-attached visit.
+    return await db.withTransaction(() => this.attachTests(patientVisitId, testIds));
   }
 
   async getVisitTests(patientVisitId) {

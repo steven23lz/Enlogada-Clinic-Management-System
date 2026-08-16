@@ -207,6 +207,15 @@ test.describe('Online appointment gating (API)', () => {
     await apiContext.dispose();
   });
 
+  // Slots this file has already booked into. Each test needs its OWN appointment: POST
+  // /appointments recognises a repeat of a booking the same patient already holds and returns the
+  // original rather than creating a second one, so two tests landing on the same slot would
+  // silently share one visit — and the third test here would then be checking in a visit the
+  // second test already checked in. `find(s => s.available)` cannot prevent that on its own,
+  // because a dev database with the slot cap lifted (cleanE2eData.js --unlimited-slots) reports
+  // every slot as available however many bookings it holds.
+  const claimedSlots = new Set();
+
   async function createOnlineBooking() {
     const profilesRes = await apiContext.get(`${API}/patients/my-profiles`, {
       headers: { Authorization: `Bearer ${clientToken}` }
@@ -220,8 +229,9 @@ test.describe('Online appointment gating (API)', () => {
     });
     const avail = (await availRes.json()).data;
     test.skip(!avail.isOpen, 'Clinic closed on the probed date.');
-    const slot = avail.slots.find((s) => s.available);
+    const slot = avail.slots.find((s) => s.available && !claimedSlots.has(s.time));
     test.skip(!slot, 'No available slot to book.');
+    claimedSlots.add(slot.time);
 
     const apptRes = await apiContext.post(`${API}/appointments`, {
       headers: { Authorization: `Bearer ${clientToken}` },

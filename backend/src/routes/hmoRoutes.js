@@ -1,6 +1,7 @@
 const express = require('express');
 const hmoController = require('../controllers/hmoController');
-const { verifyToken, authorizeStaff, authorizePermissions } = require('../middlewares/auth');
+const { verifyToken, authorizeStaff, authorizeRoles, authorizePermissions } = require('../middlewares/auth');
+const { uploadHmoCardMiddleware } = require('../config/upload');
 
 const router = express.Router();
 
@@ -16,8 +17,23 @@ router.put('/providers/:id', verifyToken, authorizeStaff, authorizePermissions('
 // pending requests; approval was only reachable if you already knew a specific request ID.
 router.get('/requests', verifyToken, authorizeStaff, authorizePermissions('hmo:read'), hmoController.getAllRequests);
 
-// Create an HMO request (Receptionist logs the manual HMO verification)
-router.post('/request', verifyToken, authorizeStaff, authorizePermissions('hmo:request'), hmoController.createRequest);
+// Create an HMO request — Reception logs the manual HMO verification at the desk, and a Client
+// states their own coverage while booking online. Client was missing here since this line was
+// written, so every online booking that selected an HMO provider failed with a 403 after its
+// appointment had already been created. Ownership is enforced in hmoService: a Client may only
+// file against tests belonging to their own patient profiles. Either way the request starts
+// Pending — stating a claim is not granting it, and only Admin/SuperAdmin can approve.
+//
+// This is one of the routes that keeps an explicit role list rather than `authorizeStaff` [1.20.0]:
+// it is reachable by a patient, and the staff/patient boundary is the one a permission tick must
+// never be able to cross. The permission still decides which *staff* may file at the desk, so the
+// matrix can delegate it; Client holds `hmo:request` for its own, ownership-scoped path.
+router.post('/request', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), authorizePermissions('hmo:request'), uploadHmoCardMiddleware, hmoController.createRequest);
+
+// The card image behind a claim. Authenticated and ownership-checked in the service, streamed
+// rather than served from a static path -- an HMO card carries a name, a member number and often
+// a photo. Same treatment as diagnostic result files.
+router.get('/request/:id/card', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier', 'Client'), authorizePermissions('hmo:read'), hmoController.downloadCard);
 
 // UI/UX Modernization Phase 12: approval is now Admin/SuperAdmin-only — Receptionist could
 // previously approve their own request (the same role that creates it), which combined with

@@ -12,6 +12,7 @@ import { SkeletonRows, SkeletonList } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
+import { canRenderPdfInline, previewKindFor } from '../../lib/preview';
 import { ShieldCheck, AlertCircle, Check, X } from 'lucide-react';
 
 const STATUS_FILTERS = ['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'];
@@ -35,6 +36,8 @@ const ServiceRequests = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [approvalCode, setApprovalCode] = useState('');
   const [detailError, setDetailError] = useState('');
+  const [card, setCard] = useState({ url: '', kind: null });
+  const [cardError, setCardError] = useState('');
   const [detailSubmitting, setDetailSubmitting] = useState(false);
 
   const fetchRequests = useCallback(async () => {
@@ -107,6 +110,41 @@ const ServiceRequests = () => {
 
   const totalPages = Math.max(1, Math.ceil(requests.length / PAGE_SIZE));
   const pagedRequests = requests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // The card image behind the claim. Fetched as a blob rather than pointed at with an <img src>,
+  // because the route requires a bearer token that a plain browser image request cannot send —
+  // the same reason ClientDashboard downloads results this way.
+  //
+  // The kind is read off the blob rather than assumed, because a card may be a PDF: reception
+  // scans arrive that way and the upload allowlist accepts them. Rendering one in an <img> gives
+  // Admin a broken-image icon under the heading "HMO Card" and no way to tell that apart from a
+  // claim filed without evidence — on the screen where they are about to approve coverage.
+  useEffect(() => {
+    let revoked = false;
+    let objectUrl = '';
+    setCard({ url: '', kind: null });
+    setCardError('');
+
+    if (!detailRequest?.id || !detailRequest?.card_file_path) return undefined;
+
+    (async () => {
+      try {
+        const res = await api.get(`/hmo/request/${detailRequest.id}/card`, { responseType: 'blob' });
+        if (revoked) return;
+        objectUrl = URL.createObjectURL(res.data);
+        setCard({ url: objectUrl, kind: previewKindFor(res.data?.type) });
+      } catch (err) {
+        if (!revoked) setCardError(err.response?.status === 410
+          ? 'This card image was removed under the retention policy.'
+          : 'The card image could not be loaded.');
+      }
+    })();
+
+    return () => {
+      revoked = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [detailRequest?.id, detailRequest?.card_file_path]);
 
   return (
     <div className="space-y-5">
@@ -196,6 +234,74 @@ const ServiceRequests = () => {
               <div className="flex items-center justify-between">
                 <span className="text-fine font-medium text-slate-500">Request Status</span>
                 <StatusBadge status={detailRequest?.status} />
+              </div>
+
+              {/* The evidence the claim rests on. A client booking online must attach a photo of
+                  their card; a receptionist filing at the desk is recorded as having seen the
+                  physical card instead. Approving without being able to see either would make
+                  the requirement pointless. */}
+              <div className="space-y-1.5">
+                <span className="text-fine font-medium text-slate-500">HMO Card</span>
+
+                {card.url && card.kind === 'image' && (
+                  <a href={card.url} target="_blank" rel="noopener noreferrer" className="block">
+                    <img
+                      src={card.url}
+                      alt="Photo of the patient's HMO card"
+                      className="max-h-56 w-full rounded-xl border border-[#e6ebf1] bg-sunken object-contain"
+                    />
+                    <span className="text-micro font-semibold text-brand-700">Open full size</span>
+                  </a>
+                )}
+
+                {card.url && card.kind === 'pdf' && (
+                  canRenderPdfInline() ? (
+                    <>
+                      <iframe
+                        title="Scan of the patient's HMO card"
+                        src={card.url}
+                        className="h-56 w-full rounded-xl border border-[#e6ebf1] bg-white"
+                      />
+                      <a href={card.url} target="_blank" rel="noopener noreferrer" className="text-micro font-semibold text-brand-700">
+                        Open full size
+                      </a>
+                    </>
+                  ) : (
+                    <p className="m-0 text-fine text-slate-600">
+                      The card is a PDF and this browser has no viewer for it.{' '}
+                      <a href={card.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-700">
+                        Open it in a new tab
+                      </a>{' '}
+                      to review the claim.
+                    </p>
+                  )
+                )}
+
+                {card.url && !card.kind && (
+                  <p className="m-0 text-fine text-slate-600">
+                    The attached file is not a format this page can display.{' '}
+                    <a href={card.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-700">
+                      Open it in a new tab
+                    </a>.
+                  </p>
+                )}
+
+                {cardError && (
+                  <div role="alert" className="alert alert-warning">
+                    <AlertCircle />
+                    <span>{cardError}</span>
+                  </div>
+                )}
+
+                {!detailRequest?.card_file_path && !cardError && (
+                  <p className="m-0 text-fine text-slate-600">
+                    {detailRequest?.card_verified_by
+                      ? 'No image — the physical card was confirmed at the front desk.'
+                      : detailRequest?.card_purged_at
+                        ? 'The card image was removed under the retention policy.'
+                        : 'No card on file.'}
+                  </p>
+                )}
               </div>
 
               {detailRequest?.status !== 'Approved' && (

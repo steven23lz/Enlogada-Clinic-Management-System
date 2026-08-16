@@ -1,33 +1,208 @@
+const fs = require('fs');
+const path = require('path');
 const hmoRepository = require('../repositories/hmoRepository');
 const db = require('../config/database');
 const auditService = require('./auditService');
+const { HMO_CARD_UPLOAD_ROOT } = require('../config/upload');
+const { CLIENT_ROLE, isStaffUser } = require('../constants/roles');
+
+// Mirrors testService.js's assertClientOwnsVisit, which exists for the same reason: that endpoint
+// also authorizes the Client role for self-service booking and originally trusted whatever ids the
+// caller sent. This endpoint opened to Clients when online booking needed it, and without this a
+// client could attach an HMO claim to a stranger's tests — a claim against someone else's bill,
+// filed under their own provider and LOA code.
+//
+// Validation is all-or-nothing and runs before any write. Filtering the caller's ids down to the
+// ones they own would silently under-claim: a three-test claim quietly becoming a two-test claim
+// bills the patient out of pocket for the third with nothing on screen to explain it.
+async function assertClientOwnsVisitTests(requestingUser, visitTestIds) {
+  const uniqueIds = [...new Set(visitTestIds)];
+  const rows = await hmoRepository.findOwnershipInfoByVisitTestIds(uniqueIds);
+
+  if (rows.length !== uniqueIds.length) {
+    const error = new Error('One or more of these tests do not exist.');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // An HMO request is one approval covering one visit. The schema cannot express that —
+  // hmo_requests has no patient_visit_id, reaching a visit only transitively through
+  // hmo_request_tests — so this is the only place the rule can be enforced. Applies to staff
+  // callers too: it is a data-integrity rule, not an authorization one.
+  if (new Set(rows.map((r) => r.visit_id)).size > 1) {
+    const error = new Error('An HMO request must cover tests from a single visit.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Deliberately "does not hold Client", matching assertClientOwnsPatient and assertClientOwnsVisit
+  // byte for byte, rather than the isStaffUser() test resolveCardEvidence uses below. The two ask
+  // different questions: "may you claim for this patient" is about being a patient-only account,
+  // while "must you photograph the card" is about standing at a desk holding one. They differ only
+  // for an account holding Client *and* a staff role, and widening an ownership check to cover a
+  // shape that does not exist yet is not something to do in passing.
+  if (!requestingUser?.roles?.includes(CLIENT_ROLE)) return; // staff roles are not ownership-restricted
+
+  // patients.user_id is null for a walk-in registered at the front desk with no web account, so
+  // this comparison denies rather than matches — which is the correct outcome for a Client.
+  const ownsEvery = rows.every((r) => r.patient_user_id === requestingUser.userId);
+  if (!ownsEvery) {
+    const error = new Error('Access forbidden. One or more of these tests do not belong to your account.');
+    error.statusCode = 403;
+    throw error;
+  }
+}
+
+// Every HMO claim must carry evidence, and what counts as evidence depends on who is filing it.
+//
+// A client booking online is not in the building, so the photo of their card is the only thing
+// the clinic can look at before approving coverage. A receptionist filing the same claim has the
+// physical card in their hand — a photo would add nothing their own eyes did not already verify,
+// and demanding one mid-queue would slow a working desk to fix a problem it does not have. They
+// are exempt from uploading, not from accountability: their user id is recorded as the verifier.
+//
+// Either way the claim is reviewable, and chk_hmo_request_card_evidence enforces that at the
+// database, covering routes and scripts that do not exist yet.
+function resolveCardEvidence(requestingUser, cardFile) {
+  // Keyed on HOLDING a staff role, not on the absence of Client. Combined-role accounts are a
+  // supported thing here, and a receptionist who is also a patient of the clinic is ordinary —
+  // testing for Client would refuse her the desk exemption while she is standing at the desk
+  // holding the card.
+  //
+  // Uses the system's one definition of staff rather than a local allow-list of role names. A
+  // list of ['SuperAdmin','Admin','Receptionist','Cashier'] would have quietly disagreed with the
+  // permission matrix [1.20.0]: since `hmo:request` can be delegated to any staff account, a lab
+  // tech granted it would have reached this route and then been told to photograph a card they
+  // were holding, with no way to complete the claim.
+  const isStaff = isStaffUser(requestingUser);
+
+  if (cardFile) {
+    return {
+      filePath: cardFile.filename,
+      originalName: cardFile.originalname,
+      mimeType: cardFile.mimetype,
+      sizeBytes: cardFile.size,
+      // Staff who do attach a photo are still recorded as having seen the card in person.
+      verifiedBy: isStaff ? (requestingUser?.userId ?? null) : null
+    };
+  }
+
+  if (!isStaff) {
+    const error = new Error('Please attach a photo of your HMO card to claim HMO coverage.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Staff, no photo: the attestation IS the evidence, so an unidentifiable caller cannot
+  // produce a valid claim. Fails here with a readable message rather than as a 23514 further in.
+  if (!requestingUser?.userId) {
+    const error = new Error('Cannot record who confirmed this HMO card.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return { verifiedBy: requestingUser.userId };
+}
 
 class HmoService {
-  async createRequest({ hmoProviderId, approvalCode, visitTestIds }) {
-    // A request and the tests it covers are one submission to the HMO. Without a transaction, a
-    // failure partway through the loop left a request covering only the tests linked so far —
-    // and nothing anywhere says how many it was meant to cover, so the shortfall is invisible.
-    // The patient is then billed out-of-pocket for tests the HMO had in fact approved, which is
-    // a billing dispute discovered weeks later rather than an error caught at the desk.
+  /**
+   * Files an HMO claim: the request row, the tests it covers, and the evidence behind it.
+   *
+   * A request and the tests it covers are one submission to the HMO. Without a transaction, a
+   * failure partway through the loop left a request covering only the tests linked so far — and
+   * nothing anywhere says how many it was meant to cover, so the shortfall is invisible. The
+   * patient is then billed out-of-pocket for tests the HMO had in fact approved, which is a
+   * billing dispute discovered weeks later rather than an error caught at the desk.
+   *
+   * `ownershipAlreadyAsserted` is set only by the booking flow, which minted these visit_tests
+   * itself from a patient whose ownership it asserted before opening the transaction. Re-checking
+   * there would be a redundant query issued while the slot's advisory lock is held.
+   */
+  async createRequest(
+    { hmoProviderId, approvalCode, visitTestIds, cardFile = null },
+    requestingUser,
+    { ownershipAlreadyAsserted = false } = {}
+  ) {
+    if (!ownershipAlreadyAsserted) {
+      await assertClientOwnsVisitTests(requestingUser, visitTestIds);
+    }
+
+    const card = resolveCardEvidence(requestingUser, cardFile);
+
+    // Joins the caller's transaction when there is one (the booking flow), and opens its own when
+    // there is not (POST /hmo/request) — see db.withTransaction's nesting rule.
     return await db.withTransaction(async () => {
-      // 1. Create the HMO request
-      const request = await hmoRepository.createRequest({ hmoProviderId, approvalCode });
+      const request = await hmoRepository.createRequestWithTests({
+        hmoProviderId,
+        approvalCode,
+        visitTestIds: [...new Set(visitTestIds)],
+        card
+      });
 
-      // 2. Link each visit_test to the HMO request
-      const linkedTests = [];
-      for (const visitTestId of visitTestIds) {
-        const linked = await hmoRepository.addTestToRequest({
-          hmoRequestId: request.id,
-          visitTestId
-        });
-        linkedTests.push(linked);
-      }
+      // Approving coverage is already audited; the evidence the approval rests on should be too.
+      // Inside the transaction for the same reason resultService audits an amendment inside its
+      // own: an entry attesting to evidence for a claim that was then rolled back is worse than
+      // no entry, because the log's whole value is being trustworthy.
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: 'hmo_request.evidence_recorded',
+        entityType: 'hmo_request',
+        entityId: request.id,
+        description: card.filePath
+          ? 'HMO card image attached to the claim'
+          : 'Physical HMO card confirmed at the desk'
+      });
 
-      return {
-        ...request,
-        tests: linkedTests
-      };
+      return request;
     });
+  }
+
+  // Streams the card image back. Never a static path: an HMO card carries a name, a member
+  // number and often a photo. Mirrors resultService.getResultFile, including the deliberate
+  // handling of a row that says a file exists when the disk disagrees.
+  async getCardFile(requestId, requestingUser) {
+    const row = await hmoRepository.findCardByRequestId(requestId);
+    if (!row) {
+      const error = new Error('HMO request not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (requestingUser?.roles?.includes(CLIENT_ROLE)) {
+      // Exactly one owner, and it has to be them. A claim spanning two patients — impossible for
+      // anything filed since the single-visit rule, but not for older rows — belongs to neither
+      // of them as far as this route is concerned.
+      const owners = row.patient_user_ids || [];
+      if (owners.length !== 1 || owners[0] !== requestingUser.userId) {
+        const error = new Error('Access forbidden. This HMO request does not belong to your account.');
+        error.statusCode = 403;
+        throw error;
+      }
+    }
+
+    if (row.card_purged_at) {
+      const error = new Error('This card image was removed under the clinic\'s retention policy.');
+      error.statusCode = 410;
+      throw error;
+    }
+
+    if (!row.card_file_path) {
+      const error = new Error('No card image was attached to this request. It was confirmed in person at the desk.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const absolutePath = path.join(HMO_CARD_UPLOAD_ROOT, row.card_file_path);
+    if (!fs.existsSync(absolutePath)) {
+      const error = new Error('The card image could not be found on the server.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return {
+      absolutePath,
+      originalName: row.card_original_name || 'hmo-card',
+      mimeType: row.card_mime_type || 'application/octet-stream'
+    };
   }
 
   // UI/UX Modernization Phase 12: now Admin/SuperAdmin-only (see hmoRoutes.js) — audit-logged

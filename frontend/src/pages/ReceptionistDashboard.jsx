@@ -72,6 +72,16 @@ const PAGE_BLURBS = {
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 const QUEUE_PAGE_SIZE = 25;
 
+// scheduled_date arrives as a full ISO instant (pg parses the DATE column with the local-time
+// constructor, then JSON serialises it to UTC). Formatting it back to a local calendar date is
+// what every other screen in the app does; this one was interpolating it raw.
+const formatScheduledDate = (value) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) => {
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
   // back to the primary queue view, mirroring DiagnosticDashboard's existing fallback pattern.
@@ -1270,7 +1280,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-gray-500 uppercase">Scheduled</span>
-                    <span className="font-bold text-gray-800">{verifyResult.scheduled_date} at {verifyResult.scheduled_time}</span>
+                    {/* The API sends scheduled_date as a full ISO instant, so interpolating it
+                        raw printed "2026-08-10T16:00:00.000Z" — unreadable, and one day behind
+                        the real date on a UTC+8 clock. This is the screen where reception
+                        confirms a booking is for today, so it was also the worst place for it. */}
+                    <span className="font-bold text-gray-800">{formatScheduledDate(verifyResult.scheduled_date)} at {verifyResult.scheduled_time}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-gray-500 uppercase">Queue Ticket</span>

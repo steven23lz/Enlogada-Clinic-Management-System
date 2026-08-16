@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const env = require('../config/environment');
 const userRepository = require('../repositories/userRepository');
 const { departmentsForUser } = require('../constants/modality');
+const { isStaffUser } = require('../constants/roles');
 
 /**
  * Establishes WHO is calling, then asks the database WHAT they may do.
@@ -158,10 +159,7 @@ const authorizeRoles = (...allowedRoles) => {
  * the service layer against req.user.departments — see resultService.assertStaffAllowedCategory.
  */
 const authorizeStaff = (req, res, next) => {
-  const roles = req.user?.roles || [];
-  const isStaff = roles.some((role) => role !== 'Client');
-
-  if (!isStaff) {
+  if (!isStaffUser(req.user)) {
     return res.status(403).json({
       status: 'error',
       message: 'Access forbidden. Staff access is required for this action.'
