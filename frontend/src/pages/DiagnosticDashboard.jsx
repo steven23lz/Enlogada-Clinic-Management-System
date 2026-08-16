@@ -479,7 +479,13 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const historyTotalPages = Math.max(1, Math.ceil(filteredReleased.length / PAGE_SIZE));
   const pagedReleased = filteredReleased.slice((historyPage - 1) * PAGE_SIZE, historyPage * PAGE_SIZE);
 
-  const categoryLabel = category === 'Ultrasound' ? 'Ultrasound (incl. 2D Echo)' : category;
+  // Display name, not the database name. `test_categories.name` is 'Xray' — a perfectly good
+  // identifier and not how anyone writes it, so every heading on this console read "Xray
+  // Operations Worklist". The value itself stays untouched: it is the join key for the worklist
+  // queries and the department scope, and renaming it in the database to fix a caption would be
+  // the wrong end of the problem.
+  const CATEGORY_LABELS = { Xray: 'X-Ray', Ultrasound: 'Ultrasound (incl. 2D Echo)' };
+  const categoryLabel = CATEGORY_LABELS[category] || category;
   // 'Processing' = released to this department, exam not yet done.
   // 'Waiting for Release' = exam done and findings recorded, awaiting authorisation.
   const processingCount = pendingTests.filter(t => t.test_status === 'Processing').length;
