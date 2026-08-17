@@ -633,11 +633,17 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     );
                   })
                 ) : (
+                  /* "Nothing awaiting payment" is false when seven people are waiting and the
+                     search simply matched none of them — and it sends the cashier looking for
+                     Reception instead of clearing their own filter. The two situations get
+                     different words, as they do on every other queue in the app. */
                   <EmptyState
                     compact
                     icon={Inbox}
-                    title="Nothing awaiting payment"
-                    description="Visits appear here once Reception attaches tests to them."
+                    title={(searchQuery || typeFilter !== 'All') ? 'No tickets match this filter' : 'Nothing awaiting payment'}
+                    description={(searchQuery || typeFilter !== 'All')
+                      ? 'Clear the search or choose All Types to see the whole queue.'
+                      : 'Visits appear here once Reception attaches tests to them.'}
                   />
                 )}
               </div>

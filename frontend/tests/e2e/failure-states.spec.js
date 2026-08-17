@@ -100,3 +100,46 @@ test('the public services page does not tell a stranger the clinic offers nothin
   // And still offers a way through, because somebody who cannot read the price list can ring up.
   expect(body).toMatch(/call us on/i);
 });
+
+// The fifth state: a filter matching nothing, which is NOT the same as nothing existing.
+//
+// "Nothing awaiting payment" while seven people are waiting and the search matched none of them
+// is false, and it sends the cashier to ask Reception why the queue is empty instead of clearing
+// their own filter. Every queue in the app has a search or a status chip, so every one of them
+// can reach this state.
+const NO_MATCH = 'zzzznomatchzzzz';
+
+const FILTERED_QUEUES = [
+  { email: 'cashier@enlogada.com', nav: 'Billing Queue', placeholder: /search ticket # or name/i,
+    says: /no tickets match/i, mustNotSay: /nothing awaiting payment/i },
+  { email: 'receptionist@enlogada.com', nav: 'Active Queue', placeholder: /search patient name or queue/i,
+    says: /no visits match/i, mustNotSay: /nobody is waiting/i },
+  { email: 'lab@enlogada.com', nav: 'Laboratory Worklist', placeholder: /search patient, test, queue/i,
+    says: /nothing matches/i, mustNotSay: /nothing waiting in/i },
+  { email: 'admin@enlogada.com', nav: 'Staff Accounts', placeholder: /search name, email, or role/i,
+    says: /no staff match/i, mustNotSay: /no staff accounts yet/i },
+];
+
+for (const { email, nav, placeholder, says, mustNotSay } of FILTERED_QUEUES) {
+  test(`${nav} says "no match" rather than "empty" when a search filters everything out`, async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: /^sign in$/i }).first().click();
+    await page.getByLabel(/email/i).first().fill(email);
+    await page.getByLabel(/password/i).first().fill(PASSWORD);
+    await page.getByRole('button', { name: /^sign in$/i }).last().click();
+    await page.waitForTimeout(2500);
+
+    const navButton = page.getByRole('button', { name: nav, exact: true }).first();
+    if (await navButton.isVisible().catch(() => false)) {
+      await navButton.click();
+      await page.waitForTimeout(1500);
+    }
+
+    await page.getByPlaceholder(placeholder).first().fill(NO_MATCH);
+    await page.waitForTimeout(1800);
+
+    const body = await page.evaluate(() => document.body.innerText);
+    expect(body, `${nav} did not distinguish a filtered-out list`).toMatch(says);
+    expect(body, `${nav} claims to be empty while a filter is active`).not.toMatch(mustNotSay);
+  });
+}
