@@ -31,7 +31,7 @@ node src/scripts/testRbacEndpoints.js  # manual RBAC endpoint smoke test
 node src/scripts/verifyRbacWiring.js  # asserts every permission-gated route matches the seeded matrix
 
 # Additive migrations for an EXISTING database (migrateDb.js is destructive and cannot be used on
-# a live one). Each is safe to re-run; run them in order on any database created before [1.24.0].
+# a live one). Each is safe to re-run; run them in order on any database created before [1.25.0].
 node src/scripts/migrateIndexes.js           # [1.11.0] foreign-key and lookup indexes
 node src/scripts/migrateResultAttribution.js # [1.12.0] recorded_by vs released_by
 node src/scripts/migrateDataIntegrity.js     # [1.13.0] daily_counters + queue/receipt/payment uniqueness
@@ -45,6 +45,7 @@ node src/scripts/migrateAccountScopedRbac.js # [1.20.0] per-account permissions 
 node src/scripts/migrateHmoCard.js           # [1.22.0] HMO card evidence columns (--rollback reverses it)
 node src/scripts/migrateReferringPhysician.js # [1.23.0] referring physician on a visit (--rollback reverses it)
 node src/scripts/migrateTestPreparation.js    # [1.24.0] patient preparation per test (--rollback reverses it)
+node src/scripts/migrateAppointmentReminders.js # [1.25.0] day-before reminder tracking (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -65,6 +66,17 @@ node src/scripts/pruneNotifications.js --dry-run
 node src/scripts/pruneNotifications.js
 node src/scripts/pruneAuditLog.js --dry-run
 node src/scripts/pruneAuditLog.js            # PHI reads 2y, everything else 7y
+
+# Day-before appointment reminders. Schedule DAILY, in the evening. Dry-run by default.
+#
+# The clinic has counted 'No Show' since [1.0.0] with no tool against it; this is the standard
+# one. It also carries the preparation instructions, which is where they matter most — "nothing
+# to eat after 10pm tonight" is actionable the evening before and forgotten at booking time.
+#
+# Safe to re-run: each appointment is stamped once handled, so a second run finds nothing. That
+# is what makes it safe to schedule.
+node src/scripts/sendAppointmentReminders.js              # report only
+node src/scripts/sendAppointmentReminders.js --confirm    # actually send
 
 # Retention pass for HMO card images (insurance documents, not medical records). Dry-run by
 # default; --confirm applies. The window is a constant in the script, overridable per run.

@@ -144,6 +144,36 @@ class AppointmentEmailService {
     });
   }
 
+  /**
+   * Sent the day before. [1.25.0]
+   *
+   * Worth more here than in most booking systems, because this is where the preparation
+   * instruction actually lands: "nothing to eat after 10pm tonight" is useful the evening before
+   * and nearly useless at the moment of booking, which may have been three weeks earlier. The
+   * clinic has been counting 'No Show' since the beginning with no tool against it; this is the
+   * standard one.
+   */
+  async sendReminder({ to, patientName, reference, date, time, queueNumber, tests }) {
+    if (!to) return { skipped: true };
+
+    // Names the day rather than saying "tomorrow". The job can be run at any offset, so
+    // "tomorrow" would simply be wrong at --days=2 — and it is ambiguous even at one day, since
+    // an email sent at 23:50 and read at 00:10 means two different dates to writer and reader.
+    return sendEmail({
+      to,
+      subject: `Reminder: your appointment on ${readableDate(date)} at ${readableTime(time)}`,
+      html: shell(`Hello ${patientName},`, `
+        <p>This is a reminder of your appointment on
+           <strong>${esc(readableDate(date))}</strong> at <strong>${esc(readableTime(time))}</strong>.</p>
+        ${detailTable({ reference, date, time, queueNumber })}
+        ${preparationBlock(tests)}
+        <p style="font-size:14px;">Please arrive about 10 minutes early and bring a valid ID. If
+           you can no longer make it, cancelling from your account frees the slot for someone
+           else.</p>
+      `),
+    });
+  }
+
   /** Sent when a booking is cancelled, so the patient has a record that it really was. */
   async sendCancellationNotice({ to, patientName, reference, date, time }) {
     if (!to) return { skipped: true };

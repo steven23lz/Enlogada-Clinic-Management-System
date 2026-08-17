@@ -216,6 +216,9 @@ CREATE TABLE appointments (
     scheduled_time TIME NOT NULL,
     status VARCHAR(50) DEFAULT 'Pending',
     notes TEXT,
+    -- When the day-before reminder went out. NULL means it has not. Exists so the reminder sweep
+    -- is safe to re-run, which is what makes it safe to schedule. See migrations.md [1.25.0].
+    reminder_sent_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_appointments_visit FOREIGN KEY (patient_visit_id) REFERENCES patient_visits(id),

@@ -12,7 +12,9 @@
     "clean:e2e": "node src/scripts/cleanE2eData.js",
     "clean:e2e:apply": "node src/scripts/cleanE2eData.js --apply",
     "slots:unlimited": "node src/scripts/cleanE2eData.js --apply --unlimited-slots",
-    "slots:restore": "node src/scripts/cleanE2eData.js --apply --restore-slots"
+    "slots:restore": "node src/scripts/cleanE2eData.js --apply --restore-slots",
+    "reminders": "node src/scripts/sendAppointmentReminders.js",
+    "reminders:send": "node src/scripts/sendAppointmentReminders.js --confirm"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

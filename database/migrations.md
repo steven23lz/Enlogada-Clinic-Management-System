@@ -1,5 +1,30 @@
 # Database Migration & Schema History
 
+## [1.25.0] - 2026-08-17 (Reminding people to turn up)
+
+### Added
+* `appointments.reminder_sent_at` — when the day-before reminder went out; NULL means it has not. One column, because the only thing the sweep needs to remember is whether it has already handled a row.
+* `idx_appointments_pending_reminder`, partial (`WHERE reminder_sent_at IS NULL AND status = 'Pending'`) — which is exactly the query the job runs. Most rows are historical and already handled, so indexing them would be dead weight.
+
+### Why
+* `appointments.status` has carried 'No Show' since [1.0.0], so the clinic was already counting the problem and had nothing to do about it. A no-show is a slot that earns nothing and cannot be reassigned, because by the time you know, the day is gone.
+* The reminder is also where the preparation instructions from [1.24.0] actually land. "Nothing to eat or drink except water for 8 hours" is actionable the evening before; at the moment of booking, possibly three weeks earlier, it is forgotten by definition.
+
+### The design that matters
+* **Safe to re-run, which is what makes it safe to schedule.** Rows are stamped once handled and the query only selects unstamped ones, so running it hourly is harmless. A job that cannot be run twice is one nobody dares automate, so it gets run by hand — which is to say not at all.
+* The stamp is written even when the patient has **no email address**. A walk-in registered at the desk has no account; that is a permanent condition, not a transient failure, and leaving it unstamped would re-examine the same unreachable rows every night forever.
+* It is **not** written when the send itself errors, so a transient SMTP failure is retried on the next run.
+* Only 'Pending' appointments. 'Confirmed' means the patient is already checked in, and Cancelled / Completed / No Show are finished — reminding any of them is worse than not reminding.
+* "Tomorrow" is never used in the copy. The job accepts any `--days` offset, and an email sent at 23:50 and read at 00:10 means two different dates to writer and reader. It names the day.
+* Dates are computed in SQL (`CURRENT_DATE + `), per the standing rule: building "tomorrow" from a JS Date gives the UTC day, which in Philippine time is wrong every morning before 08:00.
+
+### Migration
+* `node src/scripts/migrateAppointmentReminders.js` — additive, idempotent, one transaction.
+* Reversible, and the rollback is **safe**: it loses only the record of which reminders were sent, so the worst consequence is a patient reminded twice.
+* Schedule `sendAppointmentReminders.js --confirm` daily in the evening.
+
+---
+
 ## [1.24.0] - 2026-08-17 (Telling the patient what to do)
 
 ### Added
