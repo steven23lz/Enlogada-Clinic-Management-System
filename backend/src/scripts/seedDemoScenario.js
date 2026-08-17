@@ -91,6 +91,29 @@ async function main() {
     ECG: byCategory('ECG'),
   };
 
+  // Preparation instructions on the tests that really need them [1.24.0], so a demo shows the
+  // amber note in the booking wizard and the "Before your appointment" block in the confirmation
+  // email. Matched by name fragment rather than by id — the catalogue is clinic-edited and ids
+  // are not stable across a rebuild. Anything not matched keeps NULL, which is correct: most
+  // Laboratory tests need nothing, and a note on every line would train patients to ignore them.
+  const PREP = [
+    [/fasting|fbs|glucose|lipid|cholesterol/i, 'Nothing to eat or drink except water for 8 hours before your appointment. Take your usual medicines unless your doctor says otherwise.'],
+    [/pelvic|abdominal|kub|ultrasound/i, 'Drink 3–4 glasses of water an hour before your appointment and do not empty your bladder.'],
+    [/2d echo|echo/i, 'Wear a loose top that opens at the front. No fasting is needed.'],
+    [/x-?ray|chest/i, 'Please tell us before the scan if you are or might be pregnant. Leave jewellery at home.'],
+  ];
+  let prepped = 0;
+  for (const t of tests) {
+    const match = PREP.find(([re]) => re.test(t.name));
+    if (!match || t.preparation) continue;
+    await call(`/tests/${t.id}`, {
+      method: 'PUT', token: tok.admin,
+      body: { categoryId: t.category_id, name: t.name, price: t.price, isActive: t.is_active, preparation: match[1] },
+    });
+    prepped += 1;
+  }
+  if (prepped) logger.info(`Preparation instructions set on ${prepped} test(s).`);
+
   const discounts = (await call('/discounts', { token: tok.cashier })).data.discounts;
   const senior = discounts.find((d) => d.name === 'Senior Citizen');
   const pwd = discounts.find((d) => d.name === 'PWD');

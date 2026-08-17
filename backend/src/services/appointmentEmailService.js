@@ -1,0 +1,165 @@
+const { sendEmail } = require('../config/email');
+const logger = require('../config/logger');
+
+/**
+ * What the patient receives about their own booking. [1.24.0]
+ *
+ * The system sent exactly two emails: a password reset, and a result release. Booking online
+ * produced an in-app notification for *staff* and nothing at all for the patient — so the only
+ * record of their appointment was a confirmation screen that vanished when they closed the tab,
+ * taking the reference code the front desk asks for with it.
+ *
+ * That is the standard email a booking system sends, and its absence pushes work onto the clinic:
+ * every patient who cannot find their reference becomes a phone call to reception.
+ *
+ * ── Preparation is the part that actually saves a visit ───────────────────────────────────────
+ * A Fasting Blood Sugar needs eight hours without food; a pelvic ultrasound needs a full bladder.
+ * A patient told neither arrives unable to be tested, and the slot is lost with them. The
+ * instructions are included here because this is the message they will still have on the morning
+ * of the appointment — the booking screen is not.
+ *
+ * ── Never throws, never blocks ────────────────────────────────────────────────────────────────
+ * Every function here is called AFTER the booking has committed, and sendEmail already swallows
+ * SMTP failures. A clinic with no SMTP configured gets a logged skip and a working booking, which
+ * is the correct trade: the appointment is the thing that matters, the email is a courtesy.
+ */
+
+const CLINIC_NAME = 'Enlogada Ultrasound and Diagnostic Clinic';
+
+/** A DATE/date-string as something a patient reads, not an ISO instant. */
+const readableDate = (value) => {
+  const d = value instanceof Date ? value : new Date(`${value}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('en-PH', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+};
+
+const readableTime = (value) => String(value || '').slice(0, 5);
+
+/** Bare-minimum HTML escaping. Test names and instructions are clinic-authored, not user input,
+ *  but they land in an email body and a stray angle bracket should not break the layout. */
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
+));
+
+const shell = (heading, inner) => `
+  <div style="font-family: Arial, sans-serif; max-width: 560px; padding: 20px; color: #1e293b;">
+    <h2 style="margin:0 0 16px;">${esc(heading)}</h2>
+    ${inner}
+    <p style="margin-top:24px;">Thank you,<br/><strong>${CLINIC_NAME}</strong></p>
+  </div>
+`;
+
+const detailTable = ({ reference, date, time, queueNumber }) => `
+  <table style="border-collapse:collapse;margin:16px 0;font-size:14px;">
+    <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Reference</td>
+        <td style="padding:4px 0;"><strong>${esc(reference)}</strong></td></tr>
+    <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Date</td>
+        <td style="padding:4px 0;"><strong>${esc(readableDate(date))}</strong></td></tr>
+    <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Time</td>
+        <td style="padding:4px 0;"><strong>${esc(readableTime(time))}</strong></td></tr>
+    ${queueNumber ? `<tr><td style="padding:4px 16px 4px 0;color:#64748b;">Queue</td>
+        <td style="padding:4px 0;"><strong>${esc(queueNumber)}</strong></td></tr>` : ''}
+  </table>
+`;
+
+/**
+ * Preparation instructions, one per test that has any.
+ *
+ * Rendered only when at least one test needs something. A "Preparation: none required" block on
+ * every booking trains the patient to skip the section, which is precisely the wrong habit for
+ * the one time it says do not eat.
+ */
+const preparationBlock = (tests = []) => {
+  const needing = tests.filter((t) => t.preparation && String(t.preparation).trim());
+  if (needing.length === 0) return '';
+
+  return `
+    <div style="margin:16px 0;padding:12px 14px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;">
+      <p style="margin:0 0 8px;font-weight:bold;color:#92400e;">Before your appointment</p>
+      <ul style="margin:0;padding-left:18px;color:#78350f;font-size:14px;">
+        ${needing.map((t) => `<li style="margin-bottom:6px;"><strong>${esc(t.test_name || t.name)}</strong> — ${esc(t.preparation)}</li>`).join('')}
+      </ul>
+    </div>
+  `;
+};
+
+const testList = (tests = []) => {
+  if (!tests.length) return '';
+  return `
+    <p style="margin:16px 0 4px;font-weight:bold;">Tests booked</p>
+    <ul style="margin:0;padding-left:18px;font-size:14px;">
+      ${tests.map((t) => `<li>${esc(t.test_name || t.name)}</li>`).join('')}
+    </ul>
+  `;
+};
+
+class AppointmentEmailService {
+  /** Sent once, immediately after a booking commits. */
+  async sendBookingConfirmation({ to, patientName, reference, date, time, queueNumber, tests }) {
+    if (!to) {
+      // A walk-in registered at the desk has no account and no address. Not a failure.
+      logger.debug('Booking confirmation skipped: no email address on the patient.');
+      return { skipped: true };
+    }
+
+    return sendEmail({
+      to,
+      subject: `Your appointment on ${readableDate(date)} — ${CLINIC_NAME}`,
+      html: shell(`Hello ${patientName},`, `
+        <p>Your appointment is confirmed. Please keep this email — the reference below is what our
+           front desk uses to check you in.</p>
+        ${detailTable({ reference, date, time, queueNumber })}
+        ${testList(tests)}
+        ${preparationBlock(tests)}
+        <p style="font-size:14px;">Please arrive about 10 minutes early. If you need to change or
+           cancel this appointment, you can do it from your account.</p>
+      `),
+    });
+  }
+
+  /**
+   * Sent when a booking moves — by the patient, or by reception on their behalf.
+   *
+   * The slots are `from` / `moved` rather than `from` / `to`, because `to` is already the
+   * recipient. Naming both `to` is not a style question: destructuring took the second and the
+   * address silently became a `{date, time}` object.
+   */
+  async sendRescheduleNotice({ to, patientName, reference, from, moved, queueNumber }) {
+    if (!to) return { skipped: true };
+
+    return sendEmail({
+      to,
+      subject: `Your appointment has moved to ${readableDate(moved.date)} — ${CLINIC_NAME}`,
+      html: shell(`Hello ${patientName},`, `
+        <p>Your appointment has been rescheduled.</p>
+        <p style="font-size:14px;color:#64748b;margin:8px 0;">
+          Was: ${esc(readableDate(from.date))} at ${esc(readableTime(from.time))}
+        </p>
+        ${detailTable({ reference, date: moved.date, time: moved.time, queueNumber })}
+        <p style="font-size:14px;">Your reference code has <strong>not</strong> changed, so any
+           booking pass you already have is still valid.</p>
+      `),
+    });
+  }
+
+  /** Sent when a booking is cancelled, so the patient has a record that it really was. */
+  async sendCancellationNotice({ to, patientName, reference, date, time }) {
+    if (!to) return { skipped: true };
+
+    return sendEmail({
+      to,
+      subject: `Your appointment on ${readableDate(date)} has been cancelled`,
+      html: shell(`Hello ${patientName},`, `
+        <p>Your appointment on <strong>${esc(readableDate(date))}</strong> at
+           <strong>${esc(readableTime(time))}</strong> (reference ${esc(reference)}) has been
+           cancelled, and the slot has been released.</p>
+        <p style="font-size:14px;">If this was not you, please contact the clinic — nobody will
+           be expecting you at that time.</p>
+      `),
+    });
+  }
+}
+
+module.exports = new AppointmentEmailService();

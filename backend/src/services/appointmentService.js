@@ -10,6 +10,8 @@ const hmoService = require('./hmoService');
 const { discardHmoCard } = require('../config/upload');
 const visitService = require('./visitService');
 const auditService = require('./auditService');
+const appointmentEmailService = require('./appointmentEmailService');
+const logger = require('../config/logger');
 const { normaliseReferral } = require('./referralService');
 
 async function assertClientOwnsPatient(requestingUser, patientId) {
@@ -254,6 +256,12 @@ class AppointmentService {
       type: 'info'
     });
 
+    // And tell the patient. [1.24.0] Staff got a notification and the patient got nothing but a
+    // confirmation screen that vanishes when the tab closes — taking the reference the front desk
+    // asks for with it. The email also carries the preparation instructions, which is the part
+    // that stops somebody arriving unable to be tested.
+    await this.emailBookingConfirmation(outcome.appointment.id);
+
     return outcome;
   }
 
@@ -296,11 +304,60 @@ class AppointmentService {
     // — a phantom booking that the patient believes is cancelled and that the front desk still
     // sees in the queue, still counts toward the slot capacity check in bookAppointment, and
     // still appears on the cashier's billing list.
-    return await db.withTransaction(async () => {
-      const updated = await appointmentRepository.updateAppointmentStatus(id, 'Cancelled');
+    // Read before the cancel: the context query joins visit_tests, and the row is easier to read
+    // while the booking is still live than to reason about afterwards.
+    const ctx = await appointmentRepository.findEmailContextById(id).catch(() => null);
+
+    const updated = await db.withTransaction(async () => {
+      const result = await appointmentRepository.updateAppointmentStatus(id, 'Cancelled');
       await visitRepository.updateVisitStatus(appointment.patient_visit_id, 'Cancelled');
-      return updated;
+      return result;
     });
+
+    // After the commit. A patient who cancels needs a record that it actually happened, and one
+    // whose appointment was cancelled *for* them needs to find out some way other than turning up.
+    try {
+      if (ctx) {
+        await appointmentEmailService.sendCancellationNotice({
+          to: ctx.email,
+          patientName: `${ctx.first_name} ${ctx.last_name}`,
+          reference: ctx.appointment_reference,
+          date: ctx.scheduled_date,
+          time: ctx.scheduled_time,
+        });
+      }
+    } catch (err) {
+      logger.error(`Cancellation email failed for appointment ${id}: ${err.message}`);
+    }
+
+    return updated;
+  }
+
+  /**
+   * Emails the patient their own booking. [1.24.0]
+   *
+   * Wrapped rather than inlined at each call site because all three appointment emails share the
+   * same shape — read the context, skip quietly if there is nobody to write to, never let a mail
+   * problem surface as a failed booking. Every caller is past its COMMIT.
+   */
+  async emailBookingConfirmation(appointmentId) {
+    try {
+      const ctx = await appointmentRepository.findEmailContextById(appointmentId);
+      if (!ctx) return;
+      await appointmentEmailService.sendBookingConfirmation({
+        to: ctx.email,
+        patientName: `${ctx.first_name} ${ctx.last_name}`,
+        reference: ctx.appointment_reference,
+        date: ctx.scheduled_date,
+        time: ctx.scheduled_time,
+        queueNumber: ctx.queue_number,
+        tests: ctx.tests || [],
+      });
+    } catch (err) {
+      // The booking is already committed and correct. An email problem is not the patient's
+      // problem and must not be reported as one.
+      logger.error(`Booking confirmation email failed for appointment ${appointmentId}: ${err.message}`);
+    }
   }
 
   /**
@@ -398,6 +455,24 @@ class AppointmentService {
         `${scheduledDate} ${String(scheduledTime).slice(0, 5)}`,
       type: 'info',
     });
+
+    // The patient needs this one more than staff do, and especially when reception moved it on
+    // their behalf over the phone — otherwise the only record of the new time is a conversation.
+    try {
+      const ctx = await appointmentRepository.findEmailContextById(id);
+      if (ctx) {
+        await appointmentEmailService.sendRescheduleNotice({
+          to: ctx.email,
+          patientName: `${ctx.first_name} ${ctx.last_name}`,
+          reference: ctx.appointment_reference,
+          from: previous,
+          moved: { date: scheduledDate, time: scheduledTime },
+          queueNumber: ctx.queue_number,
+        });
+      }
+    } catch (err) {
+      logger.error(`Reschedule email failed for appointment ${id}: ${err.message}`);
+    }
 
     return { ...updated, queue_number: appointment.queue_number, previous };
   }

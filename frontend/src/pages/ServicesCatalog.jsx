@@ -27,6 +27,9 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
     categoryId: '',
     name: '',
     price: '',
+    // What the patient must do beforehand. Blank means nothing is required, which is true of most
+    // Laboratory tests — see migrations.md [1.24.0].
+    preparation: '',
     isActive: true
   });
   const [modalError, setModalError] = useState('');
@@ -141,6 +144,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
       categoryId: categories[0]?.id?.toString() || '',
       name: '',
       price: '',
+      preparation: '',
       isActive: true
     });
     setModalError('');
@@ -154,6 +158,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
       categoryId: test.category_id.toString(),
       name: test.name,
       price: test.price,
+      preparation: test.preparation || '',
       isActive: test.is_active
     });
     setModalError('');
@@ -185,6 +190,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
           categoryId: parseInt(formData.categoryId, 10),
           name: formData.name,
           price: numericPrice,
+          preparation: formData.preparation,
           isActive: formData.isActive
         });
         setModalSuccess('Service updated successfully! Live website catalog updated.');
@@ -193,7 +199,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
         await api.post('/tests', {
           categoryId: parseInt(formData.categoryId, 10),
           name: formData.name,
-          price: numericPrice
+          price: numericPrice,
+          preparation: formData.preparation
         });
         setModalSuccess('New service added successfully! Now live on public Services page.');
       }
@@ -546,6 +553,27 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                   className="rounded-xl"
                   required
                 />
+              </div>
+
+              {/* [1.24.0] The one field that stops a wasted trip. It reaches the patient in the
+                  booking confirmation email and while they are choosing tests, so it is written
+                  to them directly — "Nothing to eat…", not "Patient must fast". */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700">
+                  Patient Preparation
+                  <span className="ml-1 font-normal text-slate-400">(optional)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Nothing to eat or drink except water for 8 hours before your appointment."
+                  value={formData.preparation}
+                  onChange={e => setFormData({...formData, preparation: e.target.value})}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus-visible:border-brand-500"
+                />
+                <p className="m-0 text-micro leading-relaxed text-slate-500">
+                  Written straight to the patient — this text appears in their confirmation email
+                  and while they choose this test. Leave blank if no preparation is needed.
+                </p>
               </div>
 
               {editingTest && (

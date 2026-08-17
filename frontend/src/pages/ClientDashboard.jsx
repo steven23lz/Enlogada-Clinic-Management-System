@@ -50,6 +50,7 @@ import {
   CalendarClock,
   Receipt,
   Pencil,
+  AlertTriangle,
   HeartPulse
 } from 'lucide-react';
 
@@ -1131,20 +1132,36 @@ const ClientDashboard = ({ onNavigate }) => {
                             <span className="text-xs font-extrabold text-brand-600">Total: {formatCurrency(calculateTotalPrice())}</span>
                           </div>
                           <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-xl p-2.5 space-y-2 bg-slate-50/70">
-                            {testCatalog.map(test => (
-                              <label key={test.id} className="flex items-center space-x-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-[#e6ebf1]">
-                                <input
-                                  type="checkbox"
-                                  checked={bookingData.testIds.includes(test.id.toString())}
-                                  onChange={() => handleTestSelection(test.id.toString())}
-                                  className="rounded text-brand-600 focus:ring-brand-500"
-                                />
-                                <div className="flex-1 flex justify-between items-center text-xs">
-                                  <span className="font-bold text-gray-800">{test.name} <span className="text-meta text-gray-400 font-medium">({test.category_name})</span></span>
-                                  <span className="font-extrabold text-slate-900">{formatCurrency(test.price)}</span>
-                                </div>
-                              </label>
-                            ))}
+                            {testCatalog.map(test => {
+                              const selected = bookingData.testIds.includes(test.id.toString());
+                              return (
+                                <label key={test.id} className="flex items-start space-x-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-[#e6ebf1]">
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() => handleTestSelection(test.id.toString())}
+                                    className="mt-0.5 rounded text-brand-600 focus:ring-brand-500"
+                                  />
+                                  <div className="min-w-0 flex-1 text-xs">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-bold text-gray-800">{test.name} <span className="text-meta text-gray-400 font-medium">({test.category_name})</span></span>
+                                      <span className="flex-shrink-0 font-extrabold text-slate-900">{formatCurrency(test.price)}</span>
+                                    </div>
+                                    {/* [1.24.0] Shown only once the test is actually chosen. A
+                                        preparation note against every line in a scrolling list is
+                                        wallpaper; against the two you picked it is an instruction.
+                                        It is repeated in the confirmation email, which is what
+                                        they will still have on the morning. */}
+                                    {selected && test.preparation && (
+                                      <p className="m-0 mt-1 flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-fine leading-relaxed text-amber-800 ring-1 ring-inset ring-amber-200">
+                                        <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
+                                        <span>{test.preparation}</span>
+                                      </p>
+                                    )}
+                                  </div>
+                                </label>
+                              );
+                            })}
                           </div>
                         </div>
 

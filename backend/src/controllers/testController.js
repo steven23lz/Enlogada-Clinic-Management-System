@@ -29,7 +29,7 @@ class TestController {
 
   async create(req, res, next) {
     try {
-      const { categoryId, name, price } = req.body;
+      const { categoryId, name, price, preparation } = req.body;
 
       if (!categoryId || !name || price === undefined) {
         return res.status(400).json({
@@ -38,7 +38,9 @@ class TestController {
         });
       }
 
-      const test = await testService.createTest({ categoryId, name, price });
+      // Optional [1.24.0]. Blank and absent both mean "no preparation needed", which is the
+      // common case, so they are normalised to NULL rather than to an empty instruction.
+      const test = await testService.createTest({ categoryId, name, price, preparation });
       return res.status(201).json({
         status: 'success',
         message: 'Test created successfully.',
@@ -52,7 +54,7 @@ class TestController {
   async update(req, res, next) {
     try {
       const { id } = req.params;
-      const { categoryId, name, price, isActive } = req.body;
+      const { categoryId, name, price, isActive, preparation } = req.body;
 
       if (!categoryId || !name || price === undefined) {
         return res.status(400).json({
@@ -65,6 +67,7 @@ class TestController {
         categoryId,
         name,
         price,
+        preparation,
         isActive: isActive !== undefined ? isActive : true
       });
       return res.status(200).json({

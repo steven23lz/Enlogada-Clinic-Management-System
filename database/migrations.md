@@ -1,5 +1,24 @@
 # Database Migration & Schema History
 
+## [1.24.0] - 2026-08-17 (Telling the patient what to do)
+
+### Added
+* `tests.preparation` — what the patient must do beforehand: fast for eight hours, arrive with a full bladder, stop a medication. Free text, written by clinical staff in the words they already use with patients. NULL means no preparation is needed, which is true of most Laboratory tests, so nothing is back-filled and the UI renders nothing rather than an empty instruction.
+
+### Why
+* A patient booking a Fasting Blood Sugar online was told nothing, anywhere — not on the services page, not while choosing tests, not on the confirmation, and not by email, because no booking email existed. They arrive unable to be tested, the slot is wasted, and the front desk absorbs the conversation. It is the most expensive kind of defect in a clinic system because the cost lands on the patient, the schedule and the staff at once, and among the cheapest to fix: the information existed and had nowhere to live.
+
+### Also in this release (no schema change)
+* **Booking confirmation, reschedule and cancellation emails.** The system previously sent exactly two emails — password reset and result release. Booking online produced an in-app notification for *staff* and nothing for the patient, so the only record was a confirmation screen that vanished with the tab, taking the reference the front desk asks for. `appointmentEmailService` sends all three; every one carries the reference, and the confirmation carries the preparation instructions, because that is the message the patient still has on the morning of the appointment.
+* All three are sent after their transaction commits and cannot fail the operation: `sendEmail` swallows SMTP errors and each call site wraps it. A clinic with no SMTP configured gets a logged skip and a working booking.
+* A walk-in registered at the desk has no account and no address; that is a quiet skip, not an error.
+
+### Migration
+* `node src/scripts/migrateTestPreparation.js` — additive, idempotent, one transaction.
+* Reversible with `--rollback`, which **destroys the instructions** — this column is their only home. The script counts and warns before dropping, like [1.23.0].
+
+---
+
 ## [1.23.0] - 2026-08-17 (The doctor who requested the test)
 
 ### Added

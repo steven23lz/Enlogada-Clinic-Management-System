@@ -44,24 +44,27 @@ class TestRepository {
     return result.rows[0];
   }
 
-  async createTest({ categoryId, name, price }) {
+  // `preparation` is normalised to NULL when blank [1.24.0]: an empty string and "no preparation
+  // needed" mean the same thing, and only one of them renders as nothing at all.
+  async createTest({ categoryId, name, price, preparation = null }) {
     const queryText = `
-      INSERT INTO tests (category_id, name, price)
-      VALUES ($1, $2, $3)
+      INSERT INTO tests (category_id, name, price, preparation)
+      VALUES ($1, $2, $3, NULLIF(TRIM($4), ''))
       RETURNING *
     `;
-    const result = await db.query(queryText, [categoryId, name, price]);
+    const result = await db.query(queryText, [categoryId, name, price, preparation]);
     return result.rows[0];
   }
 
-  async updateTest(id, { categoryId, name, price, isActive }) {
+  async updateTest(id, { categoryId, name, price, isActive, preparation = null }) {
     const queryText = `
       UPDATE tests
-      SET category_id = $1, name = $2, price = $3, is_active = $4, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5
+      SET category_id = $1, name = $2, price = $3, is_active = $4,
+          preparation = NULLIF(TRIM($5), ''), updated_at = CURRENT_TIMESTAMP
+      WHERE id = $6
       RETURNING *
     `;
-    const result = await db.query(queryText, [categoryId, name, price, isActive, id]);
+    const result = await db.query(queryText, [categoryId, name, price, isActive, preparation, id]);
     return result.rows[0];
   }
 

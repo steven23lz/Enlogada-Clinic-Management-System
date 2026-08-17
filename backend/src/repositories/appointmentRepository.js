@@ -143,6 +143,43 @@ class AppointmentRepository {
     return result.rows[0];
   }
 
+  /**
+   * Everything an appointment email needs, in one read. [1.24.0]
+   *
+   * The patient's address, their name, and the tests with their preparation instructions —
+   * because the instruction is the part of the email that stops a wasted trip, and it is per
+   * test rather than per booking.
+   *
+   * `u.email` is LEFT JOINed: a walk-in registered at the desk has no user account, so this
+   * returns a row with a null email rather than no row at all. The caller treats that as "no
+   * email to send", which is different from "this booking does not exist".
+   */
+  async findEmailContextById(appointmentId) {
+    const queryText = `
+      SELECT a.appointment_reference, a.scheduled_date, a.scheduled_time,
+             pv.queue_number,
+             p.first_name, p.last_name,
+             u.email,
+             COALESCE(
+               ARRAY_AGG(
+                 JSON_BUILD_OBJECT('test_name', t.name, 'preparation', t.preparation)
+                 ORDER BY t.name
+               ) FILTER (WHERE t.id IS NOT NULL),
+               '{}'
+             ) AS tests
+      FROM appointments a
+      JOIN patient_visits pv ON a.patient_visit_id = pv.id
+      JOIN patients p ON pv.patient_id = p.id
+      LEFT JOIN users u ON p.user_id = u.id
+      LEFT JOIN visit_tests vt ON vt.patient_visit_id = pv.id
+      LEFT JOIN tests t ON vt.test_id = t.id
+      WHERE a.id = $1
+      GROUP BY a.id, pv.queue_number, p.first_name, p.last_name, u.email
+    `;
+    const result = await db.query(queryText, [appointmentId]);
+    return result.rows[0];
+  }
+
   // Moves a booking to a different slot.
   //
   // appointment_reference is deliberately NOT reissued. The patient is holding that code — on a

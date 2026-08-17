@@ -1,0 +1,154 @@
+// @ts-check
+import { test, expect, request } from 'playwright/test';
+
+// What the patient is told about their own booking. [1.24.0]
+//
+// Before this the system sent exactly two emails — a password reset and a result release. Booking
+// online notified *staff* and told the patient nothing, so their only record was a confirmation
+// screen that vanished with the tab, taking the reference the front desk asks for.
+//
+// And nowhere did it say what to do beforehand. A Fasting Blood Sugar needs eight hours without
+// food; a pelvic ultrasound needs a full bladder. A patient told neither arrives unable to be
+// tested and the slot is lost with them — the most expensive kind of defect in a clinic system,
+// because the cost lands on the patient, the schedule and the front desk at once.
+//
+// SMTP is usually unconfigured in development, and sendEmail returns `{skipped:true}` rather than
+// throwing. So these tests assert the things that hold either way: the instruction reaches the
+// API, it reaches the screen where the patient chooses, and a booking still succeeds when there
+// is no mail server and no address to send to.
+
+const BACKEND_URL = process.env.E2E_API_URL || 'http://localhost:5000';
+const API = `${BACKEND_URL}/api`;
+const PASSWORD = 'Password123!';
+
+test.describe('Booking communication and preparation', () => {
+  let ctx;
+  let adminToken;
+  let clientToken;
+
+  const auth = (t) => ({ Authorization: `Bearer ${t}` });
+  const login = async (email) => {
+    const res = await ctx.post(`${API}/auth/login`, { data: { email, password: PASSWORD } });
+    expect(res.ok(), `login ${email}`).toBeTruthy();
+    return (await res.json()).data.token;
+  };
+
+  test.beforeAll(async () => {
+    ctx = await request.newContext();
+    adminToken = await login('admin@enlogada.com');
+    clientToken = await login('client@enlogada.com');
+  });
+
+  test.afterAll(async () => ctx.dispose());
+
+  test('preparation is served with the public catalogue', async () => {
+    // Public, because the services page and the booking wizard both need it before anyone has
+    // committed to anything.
+    const res = await ctx.get(`${API}/tests`);
+    expect(res.status()).toBe(200);
+
+    const tests = (await res.json()).data.tests;
+    expect(tests.length).toBeGreaterThan(0);
+    expect(tests[0]).toHaveProperty('preparation');
+
+    // The seed sets instructions on the tests that need them, and leaves the rest null.
+    const withPrep = tests.filter((t) => t.preparation);
+    expect(withPrep.length).toBeGreaterThan(0);
+    expect(tests.some((t) => !t.preparation), 'not every test should carry one').toBe(true);
+  });
+
+  test('staff can write and clear a preparation instruction', async () => {
+    const tests = (await (await ctx.get(`${API}/tests`)).json()).data.tests;
+    const target = tests[0];
+    const payload = (preparation) => ({
+      categoryId: target.category_id, name: target.name,
+      price: target.price, isActive: target.is_active, preparation,
+    });
+
+    const set = await ctx.put(`${API}/tests/${target.id}`, {
+      headers: auth(adminToken), data: payload('Fast for 8 hours before this test.'),
+    });
+    expect(set.status()).toBe(200);
+    expect((await set.json()).data.test.preparation).toBe('Fast for 8 hours before this test.');
+
+    // Blank means "nothing required" and must land as NULL, not as an empty instruction that
+    // renders an empty amber box.
+    const cleared = await ctx.put(`${API}/tests/${target.id}`, {
+      headers: auth(adminToken), data: payload('   '),
+    });
+    expect(cleared.status()).toBe(200);
+    expect((await cleared.json()).data.test.preparation).toBeNull();
+
+    // Put the seeded value back so this test leaves the catalogue as it found it.
+    await ctx.put(`${API}/tests/${target.id}`, {
+      headers: auth(adminToken), data: payload(target.preparation),
+    });
+  });
+
+  test('a booking still succeeds when there is no mail server', async () => {
+    // The email is a courtesy; the appointment is the thing that matters. sendEmail swallows its
+    // own failures, and appointmentService wraps the whole send — so an SMTP outage must not
+    // surface as a failed booking.
+    const patientId = (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth(clientToken) })).json())
+      .data.patients[0].id;
+
+    const day = new Date();
+    day.setDate(day.getDate() + 250 + (Date.now() % 40));
+    if (day.getDay() === 0) day.setDate(day.getDate() + 1);
+    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+
+    const slots = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth(clientToken) })).json())
+      .data.slots.filter((s) => s.available);
+    test.skip(!slots.length, 'no free slot');
+
+    const booked = await ctx.post(`${API}/appointments`, {
+      headers: auth(clientToken),
+      data: { patientId, scheduledDate: date, scheduledTime: slots[0].time },
+    });
+    expect(booked.status()).toBe(201);
+
+    // And the same for a reschedule and a cancel, which also send now.
+    const appt = (await booked.json()).data.appointment;
+    const later = slots[1] || slots[0];
+    const moved = await ctx.put(`${API}/appointments/${appt.id}/reschedule`, {
+      headers: auth(clientToken), data: { scheduledDate: date, scheduledTime: later.time },
+    });
+    expect(moved.status()).toBe(200);
+
+    const cancelled = await ctx.put(`${API}/appointments/${appt.id}/cancel`, { headers: auth(clientToken) });
+    expect(cancelled.status()).toBe(200);
+  });
+});
+
+test('the booking wizard shows preparation for the test the patient picks', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  await page.goto('/');
+  await page.getByText('Sign In', { exact: true }).first().click();
+  await page.fill('input[type="email"]', 'client@enlogada.com');
+  await page.fill('input[type="password"]', PASSWORD);
+  await page.locator('button[type="submit"]').click();
+  await expect(page.getByText(/welcome/i).first()).toBeVisible({ timeout: 15000 });
+
+  await page.getByRole('button', { name: 'Book Schedule' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+
+  // Nothing is shown until a test is actually chosen — a note against every line in a scrolling
+  // catalogue is wallpaper, and the point is that it is read.
+  await expect(dialog.getByText(/8 hours|full bladder|do not empty your bladder/i)).toHaveCount(0);
+
+  // Tick the tests until one of them carries an instruction.
+  const boxes = dialog.locator('input[type="checkbox"]');
+  const count = Math.min(await boxes.count(), 8);
+  let shown = false;
+  for (let i = 0; i < count && !shown; i += 1) {
+    await boxes.nth(i).check();
+    shown = await dialog.getByText(/water for 8 hours|do not empty your bladder|pregnant|loose top/i)
+      .first().isVisible().catch(() => false);
+  }
+
+  expect(shown, 'at least one seeded test should show its preparation once selected').toBe(true);
+  expect(errors, `page errors: ${errors.join(' | ')}`).toHaveLength(0);
+});

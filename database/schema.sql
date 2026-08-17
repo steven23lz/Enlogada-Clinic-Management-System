@@ -258,6 +258,11 @@ CREATE TABLE tests (
     category_id INT NOT NULL,
     name VARCHAR(150) NOT NULL,
     price NUMERIC(10,2) NOT NULL,
+    -- What the patient must do beforehand: fast for 8 hours, arrive with a full bladder, stop a
+    -- medication. Free text, written by clinical staff in the words they already use. NULL means
+    -- no preparation is needed, which is true of most Laboratory tests. See migrations.md
+    -- [1.24.0] — a patient who is not told this makes a wasted trip and the slot is lost with them.
+    preparation TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
