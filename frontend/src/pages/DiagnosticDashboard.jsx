@@ -725,7 +725,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             page={worklistPage}
             totalPages={worklistTotalPages}
             onPageChange={setWorklistPage}
-            totalLabel={`${filteredTests.length} total`}
+            total={filteredTests.length} pageSize={PAGE_SIZE}
           />
         </Panel>
         </div>
@@ -793,6 +793,18 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
 
                       <TableCell className="py-3.5 text-xs font-bold text-gray-800">
                         {test.test_name}
+                        {/* A corrected report is not the same document as a first one, and this
+                            screen's own description promises "including amended versions" while
+                            showing nothing that distinguished them. A v2 read exactly like a v1,
+                            so somebody scanning the history could not tell which reports had been
+                            re-issued — which is the first thing you want to know when a patient
+                            or a referring doctor rings up about one. `version` was already in the
+                            payload; nothing displayed it. */}
+                        {test.version > 1 && (
+                          <span className="ml-1.5 inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wide text-amber-800 ring-1 ring-inset ring-amber-200">
+                            Amended &middot; v{test.version}
+                          </span>
+                        )}
                         <span className="block text-meta text-gray-400 font-normal">{test.category_name}</span>
                       </TableCell>
 
@@ -847,7 +859,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             page={historyPage}
             totalPages={historyTotalPages}
             onPageChange={setHistoryPage}
-            totalLabel={`${filteredReleased.length} total`}
+            total={filteredReleased.length} pageSize={PAGE_SIZE}
           />
         </Panel>
 

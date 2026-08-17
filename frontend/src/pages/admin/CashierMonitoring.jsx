@@ -52,6 +52,9 @@ const CashierMonitoring = () => {
     acc[name] = (acc[name] || 0) + parseFloat(t.amount || 0);
     return acc;
   }, {});
+  // Capped at two: the strip has room for two per-cashier cards beside the two fixed ones, and
+  // the count also decides how many columns the grid draws so no empty cell is left over.
+  const cashierCards = Object.entries(byCashier).slice(0, 2);
   const totalPages = Math.max(1, Math.ceil(transactions.length / PAGE_SIZE));
   const pagedTransactions = transactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -84,7 +87,14 @@ const CashierMonitoring = () => {
           {/* The range summary sits inside the table's panel rather than in a separate KPI strip
               above the filters. These figures describe *this* result set — floating them away
               from the range that produced them was how they got read as clinic-wide totals. */}
-          <div className="grid grid-cols-2 gap-px border-b border-[#e6ebf1] bg-[#e6ebf1] lg:grid-cols-4">
+          {/* The column count follows the number of cards, rather than always being four.
+              The strip is `gap-px` over a tinted container, so the gaps ARE the dividers — and a
+              column with no card in it therefore rendered as a plain grey rectangle sitting where
+              a figure should be. With one cashier on shift, which is the ordinary case for this
+              clinic, a quarter of the strip was an empty box that read as a failed tile. */}
+          <div className={`grid grid-cols-2 gap-px border-b border-[#e6ebf1] bg-[#e6ebf1] ${
+            { 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' }[2 + cashierCards.length]
+          }`}>
             <MetricCard
               className="rounded-none border-0"
               label="Collections in range"
@@ -99,7 +109,7 @@ const CashierMonitoring = () => {
               icon={Hash}
               tone="slate"
             />
-            {Object.entries(byCashier).slice(0, 2).map(([name, amt]) => (
+            {cashierCards.map(([name, amt]) => (
               <MetricCard
                 key={name}
                 className="rounded-none border-0"
