@@ -175,12 +175,14 @@ const DateRangeReports = () => {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Oversight"
-        icon={BarChart3}
-        title="Clinic Reports"
-        description="Revenue, service volume and operational metrics for a chosen period. Print produces a clean report without the app chrome."
-      />
+      {/* No PageHeader here. This renders inside the Date Range tab of ReportsOverview, which
+          already titles the page — a second one printed "Clinic Reports" twice down the screen,
+          the same duplicate-title problem the breadcrumb change fixed on the console shells. The
+          tab label says which view this is; the one line worth keeping is the print hint. */}
+      <p className="m-0 text-fine leading-relaxed text-slate-500">
+        Revenue, service volume and operational metrics for a chosen period. Print produces a clean
+        report without the app chrome.
+      </p>
 
       <Toolbar>
         <ToolbarField label="From" htmlFor="rep-from">

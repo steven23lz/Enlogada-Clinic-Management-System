@@ -20,6 +20,17 @@ import { cn } from '../../lib/utils';
  * the Client's home) where the page opens on a welcome rather than on work. Every other screen
  * uses the light variant — a dark banner on top of a worklist is a decoration the person using
  * it has to scroll past forty times a shift.
+ *
+ * ── The title is an <h1>, and there must be exactly one per screen ────────────────────────────
+ * It rendered an <h2> for a long time, which meant no console screen had an <h1> at all: the
+ * public pages had one, the staff consoles started at level two with nothing above them. Screen
+ * readers navigate by heading level, so a document whose outline begins at h2 reads as though its
+ * first section has been cut off.
+ *
+ * Because this is now the page's h1, a screen must render exactly one. That caught a real
+ * duplicate: `DateRangeReports` rendered its own PageHeader inside a tab of `ReportsOverview`,
+ * which already had one, so that tab printed "Clinic Reports" twice down the page. If a section
+ * inside a screen needs a heading, it is a `PanelHeader`, not a second PageHeader.
  */
 const PageHeader = ({
   eyebrow,
@@ -48,7 +59,7 @@ const PageHeader = ({
                 {eyebrow}
               </span>
             )}
-            <h2 className="m-0 text-xl font-bold tracking-tight text-white sm:text-2xl">{title}</h2>
+            <h1 className="m-0 text-xl font-bold tracking-tight text-white sm:text-2xl">{title}</h1>
             {description && <p className="m-0 mt-1.5 text-[13px] leading-relaxed text-slate-300">{description}</p>}
           </div>
           {actions && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{actions}</div>}
@@ -67,7 +78,7 @@ const PageHeader = ({
             {eyebrow}
           </span>
         )}
-        <h2 className="m-0 text-lg font-bold tracking-tight text-slate-900 sm:text-xl">{title}</h2>
+        <h1 className="m-0 text-lg font-bold tracking-tight text-slate-900 sm:text-xl">{title}</h1>
         {description && <p className="m-0 mt-1 max-w-2xl text-[13px] leading-relaxed text-slate-500">{description}</p>}
         {meta && <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-fine text-slate-500">{meta}</div>}
       </div>

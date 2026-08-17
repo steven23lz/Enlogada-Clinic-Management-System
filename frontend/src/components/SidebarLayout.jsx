@@ -223,6 +223,10 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
           setMobileOpen(false);
         }}
         aria-current={isActive ? 'page' : undefined}
+        // Addressed by id rather than by label, so a sweep across every role's sidebar does not
+        // break when a screen is renamed.
+        data-testid="nav-item"
+        data-nav-id={item.id}
         className={cn(
           'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 py-2 pl-3 pr-2.5 text-left text-[13px] font-medium transition-colors',
           isActive
