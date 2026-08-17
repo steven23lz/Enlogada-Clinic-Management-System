@@ -26,6 +26,13 @@
  * Additive, idempotent, one transaction. Reversible:
  *   node src/scripts/migrateReferringPhysician.js
  *   node src/scripts/migrateReferringPhysician.js --rollback
+ *
+ * ── The rollback DESTROYS DATA ────────────────────────────────────────────────────────────────
+ * Unlike migrateHmoCard's, which drops columns whose files survive on disk, these two columns are
+ * the only place the referring physician is stored. Dropping them discards every name recorded
+ * since the migration ran, with nothing to restore from. Verified rather than assumed: rolling
+ * back and re-applying reports "0 naming a referring physician" on a database that had several.
+ * Take a dump first if the data matters.
  */
 const db = require('../config/database');
 const logger = require('../config/logger');
@@ -65,6 +72,15 @@ async function migrate(client) {
 }
 
 async function rollback(client) {
+  // Said out loud before it happens, because these columns are the only copy: unlike the HMO card
+  // rollback, whose images survive on disk, there is nothing to restore these names from.
+  const { rows } = await db.query(`
+    SELECT COUNT(referring_physician)::int AS n FROM patient_visits
+  `).catch(() => ({ rows: [{ n: 0 }] }));
+  if (rows[0].n > 0) {
+    logger.warn(`  ! ${rows[0].n} recorded referring physician(s) will be permanently discarded`);
+  }
+
   await client.query('DROP INDEX IF EXISTS idx_patient_visits_referring_physician');
   logger.info('  - drop idx_patient_visits_referring_physician');
   for (const [name] of COLUMNS) {

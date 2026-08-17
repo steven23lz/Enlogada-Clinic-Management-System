@@ -19,7 +19,7 @@
 
 ### Migration
 * `node src/scripts/migrateReferringPhysician.js` — additive, idempotent, one transaction.
-* Reversible: `node src/scripts/migrateReferringPhysician.js --rollback`.
+* Reversible: `node src/scripts/migrateReferringPhysician.js --rollback` — but **the rollback destroys data**. Unlike [1.22.0], whose dropped columns leave their card images on disk, these two columns are the only place the physician is stored, so dropping them discards every name recorded since the migration ran with nothing to restore from. Verified by rolling back and re-applying on a populated database: the re-applied schema reports zero. The script now counts and warns before it drops. Take a dump first if the data matters.
 * Existing visits keep `NULL`. Back-filling a doctor nobody named would invent a referral.
 
 ### Consequences for fixtures
