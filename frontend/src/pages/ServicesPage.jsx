@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import api from '../config/api';
 import { formatCurrency } from '../lib/currency';
 import { Activity, Stethoscope, FileText, Heart, Zap } from 'lucide-react';
+import { categoryKey, categoryTint } from '../lib/categories';
 
 const ServicesPage = ({ onNavigate }) => {
   const [categories, setCategories] = useState([]);
@@ -43,25 +44,22 @@ const ServicesPage = ({ onNavigate }) => {
     fetchServices();
   }, []);
 
-  const getCategoryMeta = (title) => {
-    const lower = title.toLowerCase();
-    if (lower.includes('lab')) {
-      return { icon: Activity, bg: 'bg-emerald-50 text-emerald-600' };
-    }
-    if (lower.includes('ultra')) {
-      return { icon: Stethoscope, bg: 'bg-brand-50 text-brand-600' };
-    }
-    if (lower.includes('xray') || lower.includes('x-ray')) {
-      return { icon: FileText, bg: 'bg-indigo-50 text-indigo-600' };
-    }
-    if (lower.includes('echo')) {
-      return { icon: Heart, bg: 'bg-rose-50 text-rose-600' };
-    }
-    if (lower.includes('ecg')) {
-      return { icon: Zap, bg: 'bg-amber-50 text-amber-600' };
-    }
-    return { icon: Activity, bg: 'bg-slate-100 text-slate-700' };
+  // Icon per category is this page's own business; the COLOUR is not. It came from a second,
+  // independent map that disagreed with the report chart on all five categories — Xray was
+  // indigo here and amber there — so a patient browsing services and a manager reading a report
+  // saw the same five things in two unrelated schemes. lib/categories is the single source now.
+  const CATEGORY_ICONS = {
+    Laboratory: Activity,
+    Ultrasound: Stethoscope,
+    Xray: FileText,
+    '2D Echo': Heart,
+    ECG: Zap,
   };
+
+  const getCategoryMeta = (title) => ({
+    icon: CATEGORY_ICONS[categoryKey(title)] || Activity,
+    bg: categoryTint(title),
+  });
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -104,12 +102,25 @@ const ServicesPage = ({ onNavigate }) => {
                   </CardHeader>
                   <CardContent className="p-6 space-y-3">
                     {cat.items.map((item) => (
-                      <div key={item.id} className="flex justify-between items-center text-xs py-1 border-b border-gray-50 last:border-0">
-                        <span className="text-gray-700 font-medium flex items-center space-x-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-brand-500"></span>
-                          <span>{item.name}</span>
-                        </span>
-                        <span className="font-bold text-gray-900">{formatCurrency(item.price)}</span>
+                      <div key={item.id} className="text-xs py-1 border-b border-gray-50 last:border-0">
+                        <div className="flex justify-between items-center gap-3">
+                          <span className="text-gray-700 font-medium flex items-center space-x-1.5">
+                            <span className="w-1.5 h-1.5 flex-shrink-0 rounded-full bg-brand-500"></span>
+                            <span>{item.name}</span>
+                          </span>
+                          <span className="font-bold text-gray-900 whitespace-nowrap">{formatCurrency(item.price)}</span>
+                        </div>
+                        {/* What the patient has to do beforehand, on the page they read BEFORE
+                            booking. [1.24.0] put this on the booking picker, the confirmation and
+                            the day-before reminder — all of which happen after somebody has
+                            already decided. "Nothing to eat for 8 hours" is the kind of thing
+                            that decides whether you book a morning slot, and this is the only
+                            screen a person reads while they are still deciding. */}
+                        {item.preparation && (
+                          <p className="m-0 mt-1 pl-3 text-fine leading-snug text-slate-500">
+                            {item.preparation}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </CardContent>

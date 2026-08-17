@@ -1,32 +1,21 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
+import { categoryColor } from '../../lib/categories';
 
-// Colour is keyed to the CATEGORY, not to its position in the array.
+// Colour is keyed to the CATEGORY, not to its position in the array, and the map itself now
+// lives in lib/categories so the public Services page paints the same five things the same way.
 //
-// Two defects this replaces. The list held four colours and was indexed with `index % length`,
-// but test_categories has five rows (Laboratory, Ultrasound, Xray, 2D Echo, ECG) — so the fifth
-// category rendered in the first one's exact green, and the chart showed two different services
-// as the same colour with nothing to tell them apart. And keying on array position meant colour
-// followed rank rather than identity: a quiet week where one category recorded no tests dropped
-// it from the response and repainted every survivor, so Laboratory was green on Monday and blue
-// on Tuesday. A reader who has learned the colours is worse off than one who never trusted them.
+// Two defects that keying fixed. The list held four colours and was indexed with
+// `index % length`, but test_categories has five rows — so the fifth category rendered in the
+// first one's exact green, and the chart showed two different services as the same colour with
+// nothing to tell them apart. And keying on array position meant colour followed rank rather
+// than identity: a quiet week where one category recorded no tests dropped it from the response
+// and repainted every survivor, so Laboratory was green on Monday and blue on Tuesday. A reader
+// who has learned the colours is worse off than one who never trusted them.
 //
 // Verified with the dataviz palette validator (light surface): lightness band, chroma floor,
-// contrast and CVD separation all pass, worst adjacent pair ΔE 15.0 under deuteranopia against a
-// target of 8. The previous set's emerald/amber pair sat at 7.9 — inside the floor band where a
-// palette is only legal alongside secondary encoding.
-const CATEGORY_COLORS = {
-  Laboratory: '#769046',   // brand green, the clinic's primary service
-  Ultrasound: '#2563eb',   // chart-only blue; navy fails the categorical lightness check
-  Xray: '#d97706',         // amber
-  '2D Echo': '#7c3aed',    // violet
-  ECG: '#0891b2',          // cyan
-};
-
-// Anything not in the map — a category added to the database but not here — falls back to a
-// neutral rather than silently reusing another service's colour. Grey reads as "unclassified",
-// which is true, instead of quietly lying about which service a bar belongs to.
-const UNMAPPED_CATEGORY_COLOR = '#94a3b8';
+// contrast and CVD separation all pass, worst adjacent pair deltaE 15.0 under deuteranopia
+// against a target of 8.
 
 const ChartTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
@@ -66,7 +55,7 @@ const CategoryVolumeChart = ({ data }) => {
           {chartData.map((entry) => (
             <Cell
               key={entry.category_name}
-              fill={CATEGORY_COLORS[entry.category_name] || UNMAPPED_CATEGORY_COLOR}
+              fill={categoryColor(entry.category_name)}
             />
           ))}
           {/* The count, at the end of its own bar. Five bars is few enough that labelling each
