@@ -13,7 +13,19 @@ const SearchInput = React.forwardRef(({ className, containerClassName, ...props 
     <div className={cn("relative", containerClassName)}>
       <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
       <input
-        type="text"
+        type="search"
+        // A search box that a screen reader announces as "edit, blank".
+        //
+        // These never carry a visible <label> — the magnifier and the placeholder are the whole
+        // affordance, which is the right visual design and leaves the field with no accessible
+        // name at all. The placeholder is not one: it is not exposed as a name, and it disappears
+        // the moment anybody types. Every screen with a search box had this, so it was one flaw
+        // in one component repeated ten times.
+        //
+        // Defaulted from the placeholder rather than made a required prop, so the ten existing
+        // call sites are fixed without touching any of them, and any caller that wants different
+        // wording can still pass aria-label explicitly.
+        aria-label={props['aria-label'] || props.placeholder || 'Search'}
         className={cn(
           // Matches Input's geometry exactly (h-9, rounded-lg, 13px) so a search box and a date
           // field sitting in the same toolbar line up on both edges. They previously differed by

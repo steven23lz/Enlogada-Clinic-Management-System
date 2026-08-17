@@ -690,9 +690,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               <Panel tone="notice" className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="h-4 w-4 flex-shrink-0 text-amber-700" />
-                  <h3 className="m-0 text-fine font-semibold text-amber-900">
+                  {/* A count in an alert banner is not a section heading — it was an <h3>, which
+                      put a heading between the page title and the queue's own and broke the
+                      outline for anyone navigating by heading. */}
+                  <p className="m-0 text-fine font-semibold text-amber-900">
                     {pendingHmoRequests.length} pending HMO request{pendingHmoRequests.length === 1 ? '' : 's'} awaiting Admin approval
-                  </h3>
+                  </p>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {pendingHmoRequests.slice(0, 6).map(r => (
@@ -1037,10 +1040,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             {/* Existing Patient Lookup (Module 7: patient record lookup) */}
             <Panel className="max-w-3xl p-6">
               <div className="border-b border-[#e6ebf1] pb-3 mb-4">
-                <h3 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
+                <h2 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
                   <Users className="h-4 w-4 text-brand-600" />
                   <span>Find Existing Patient</span>
-                </h3>
+                </h2>
                 <p className="mt-1 text-fine leading-relaxed text-slate-500">Search before registering — a returning patient should be checked in, not re-registered.</p>
               </div>
 
@@ -1059,6 +1062,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
               <form onSubmit={handlePatientSearch} className="flex space-x-2">
                 <Input
+                  aria-label="Search existing patients by name"
                   placeholder="Search by patient name..."
                   value={patientSearchQuery}
                   onChange={e => setPatientSearchQuery(e.target.value)}
@@ -1112,10 +1116,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
             <Panel className="max-w-3xl p-6">
               <div className="border-b border-[#e6ebf1] pb-3 mb-4">
-                <h3 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
+                <h2 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
                   <UserPlus className="h-4 w-4 text-brand-600" />
                   <span>Register Walk-In Patient & Generate Physical Ticket</span>
-                </h3>
+                </h2>
               </div>
 
               {registrationSuccess && (
@@ -1135,8 +1139,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               <form onSubmit={handleWalkInRegister} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="field-label">First Name <span className="text-rose-600">*</span></label>
+                    <label className="field-label" htmlFor="wi-first">First Name <span className="text-rose-600">*</span></label>
                     <Input
+                      id="wi-first"
                       placeholder="Juan"
                       value={newPatient.firstName}
                       onChange={e => setNewPatient({...newPatient, firstName: e.target.value})}
@@ -1145,8 +1150,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="field-label">Last Name <span className="text-rose-600">*</span></label>
+                    <label className="field-label" htmlFor="wi-last">Last Name <span className="text-rose-600">*</span></label>
                     <Input
+                      id="wi-last"
                       placeholder="Dela Cruz"
                       value={newPatient.lastName}
                       onChange={e => setNewPatient({...newPatient, lastName: e.target.value})}
@@ -1158,8 +1164,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1 sm:col-span-2">
-                    <label className="field-label">Birthdate <span className="text-rose-600">*</span></label>
+                    <label className="field-label" htmlFor="wi-birthdate">Birthdate <span className="text-rose-600">*</span></label>
                     <Input
+                      id="wi-birthdate"
                       type="date"
                       value={newPatient.birthdate}
                       onChange={e => setNewPatient({...newPatient, birthdate: e.target.value})}
@@ -1187,8 +1194,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="field-label">Contact Number</label>
+                    <label className="field-label" htmlFor="wi-contact">Contact Number</label>
                     <Input
+                      id="wi-contact"
                       placeholder="09171234567"
                       value={newPatient.contactNumber}
                       onChange={e => setNewPatient({...newPatient, contactNumber: e.target.value})}
@@ -1247,6 +1255,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </div>
 
                 <ReferringPhysicianFields
+                  idPrefix="wi-ref"
                   physician={referringPhysician}
                   prc={referringPhysicianPrc}
                   onPhysicianChange={setReferringPhysician}
@@ -1261,8 +1270,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 />
 
                 <div className="space-y-1">
-                  <label className="field-label">Home Address</label>
+                  <label className="field-label" htmlFor="wi-address">Home Address</label>
                   <Input
+                    id="wi-address"
                     placeholder="Barangay, City, Province"
                     value={newPatient.address}
                     onChange={e => setNewPatient({...newPatient, address: e.target.value})}
@@ -1271,8 +1281,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </div>
 
                 <div className="space-y-1">
-                  <label className="field-label">Visit Notes / Referral Reason</label>
+                  <label className="field-label" htmlFor="wi-notes">Visit Notes / Referral Reason</label>
                   <Input
+                    id="wi-notes"
                     placeholder="Walk-in referral for Abdominal Ultrasound..."
                     value={visitNotes}
                     onChange={e => setVisitNotes(e.target.value)}
@@ -1293,10 +1304,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         {view === 'reception-checkin' && (
           <Panel className="max-w-xl p-6">
             <div className="border-b border-[#e6ebf1] pb-3 mb-4">
-              <h3 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
+              <h2 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
                 <QrCode className="h-4 w-4 text-brand-600" />
                 <span>Verify Appointment Reference</span>
-              </h3>
+              </h2>
               <p className="mt-1 text-fine leading-relaxed text-slate-500">
                 Scan or enter the appointment reference code (e.g. <code>APPT-XXXXX</code>) to check a patient in.
               </p>
@@ -1322,6 +1333,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             <form onSubmit={handleVerifyReference} className="space-y-4 pt-2">
               <div className="flex space-x-2">
                 <Input
+                  aria-label="Appointment reference code"
                   placeholder="APPT-104928"
                   value={searchRef}
                   onChange={e => setSearchRef(e.target.value)}

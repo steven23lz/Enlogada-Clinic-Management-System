@@ -76,7 +76,7 @@ const Home = ({ onNavigate }) => {
           <div className="flex justify-center">
             <div className="glass-card w-full max-w-sm rounded-2xl p-6 shadow-float sm:p-7">
               <span className="text-micro font-semibold uppercase tracking-[0.14em] text-brand-700">What We Offer</span>
-              <h3 className="mb-5 mt-1 text-lg font-bold tracking-tight text-slate-900">Our Diagnostic Services</h3>
+              <h2 className="mb-5 mt-1 text-lg font-bold tracking-tight text-slate-900">Our Diagnostic Services</h2>
               <ul className="space-y-3 list-none p-0 m-0">
                 {SERVICE_PREVIEW.map(({ label, icon: Icon }) => (
                   <li key={label} className="flex items-center space-x-3">
