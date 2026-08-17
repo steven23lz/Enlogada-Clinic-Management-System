@@ -70,7 +70,11 @@ const PAGE_BLURBS = {
   'reception-queue': "Everyone who has checked in today, in arrival order. Attach tests, print a ticket, or send a patient through to billing.",
   'reception-walkin': 'Register a patient who arrived without an appointment. Creates the patient record if they are new, then opens a visit.',
   'reception-checkin': 'Scan a booking pass or key in the reference code to turn a confirmed appointment into a live visit.',
-  'reception-history': 'Completed and cancelled visits for a chosen date range. Read-only.',
+  // Says what the screen does. It described itself as "Completed and cancelled visits" while
+  // showing Pending and Processing ones too — findVisitsByDateRange is deliberately any-status,
+  // so the copy was the half that was wrong. A receptionist looking a patient up does not know
+  // what state the visit reached, which is usually why they are looking.
+  'reception-history': 'Every visit in a chosen date range, whatever state it reached. Read-only.',
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 const QUEUE_PAGE_SIZE = 25;

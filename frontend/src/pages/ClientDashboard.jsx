@@ -1557,22 +1557,31 @@ const ClientDashboard = ({ onNavigate }) => {
 
           {/* My Appointments (Module 3: view/cancel own appointments) — full width now, no
               more max-h scroll-box compression forced by sharing a column with two other
-              cards. */}
+              cards.
+
+              The card said "full width" and carried max-w-2xl, so on a laptop it sat in the left
+              672px of a 1440px page with the whole right half empty — and each booking carries a
+              QR pass, so the list is tall as well as narrow and a patient with two bookings
+              scrolled past a screenful of nothing. The panel fills the page now and the bookings
+              themselves lay out two-up once there is room for it, which is the shape that
+              actually uses a wide screen: each pass stays its natural size and two fit side by
+              side instead of stacking. */}
           <TabsContent value="appointments" className="m-0">
-            <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden max-w-2xl">
+            <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
               <CardHeader className="bg-slate-50/80 border-b border-[#e6ebf1] py-3.5">
                 <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
                   <CalendarClock className="w-4 h-4 text-brand-600" />
                   <span>My Appointments</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4 space-y-3">
+              <CardContent className="p-4">
                 {payError && (
-                  <div role="alert" className="alert alert-error">
+                  <div role="alert" className="alert alert-error mb-3">
                     <XCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{payError}</span>
                   </div>
                 )}
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                 {appointmentsLoading ? (
                   <p className="text-xs text-gray-400 text-center py-4">Loading appointments…</p>
                 ) : appointments.length === 0 ? (
@@ -1708,13 +1717,15 @@ const ClientDashboard = ({ onNavigate }) => {
                     );
                   })
                 )}
+                </div>
               </CardContent>
               {appointments.length > 0 && (
                 <Pagination
                   page={safeAppointmentsPage}
                   totalPages={appointmentsTotalPages}
                   onPageChange={setAppointmentsPage}
-                  totalLabel={`${appointments.length} total`}
+                  total={appointments.length}
+                  pageSize={LIST_PAGE_SIZE}
                 />
               )}
             </Card>
@@ -1766,7 +1777,7 @@ const ClientDashboard = ({ onNavigate }) => {
                   page={safePaymentHistoryPage}
                   totalPages={paymentHistoryTotalPages}
                   onPageChange={setPaymentHistoryPage}
-                  totalLabel={`${paymentHistory.length} total`}
+                  total={paymentHistory.length} pageSize={LIST_PAGE_SIZE}
                 />
               )}
             </Panel>

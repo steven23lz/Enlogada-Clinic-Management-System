@@ -1095,8 +1095,12 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   <TableRow>
                     <TableHead>Receipt #</TableHead>
                     <TableHead>Patient Name</TableHead>
+                    {/* The reference number moved under the payment method it belongs to. As its
+                        own column it was empty on every cash row — which is most of them — so a
+                        whole column of dashes was taking the width that made the receipt number
+                        and the timestamp each wrap onto two lines. A GCash reference is a
+                        property of the GCash payment, not a separate fact about the receipt. */}
                     <TableHead>Payment Method</TableHead>
-                    <TableHead>Reference #</TableHead>
                     <TableHead className="text-right">Amount Paid</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Date & Time</TableHead>
@@ -1106,7 +1110,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 <TableBody>
                   {historyError ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-6 text-xs text-rose-600 font-semibold">
+                      <TableCell colSpan={7} className="text-center py-6 text-xs text-rose-600 font-semibold">
                         {historyError}{' '}
                         <button
                           type="button"
@@ -1118,21 +1122,23 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       </TableCell>
                     </TableRow>
                   ) : historyLoading ? (
-                    <SkeletonRows rows={6} columns={8} />
+                    <SkeletonRows rows={6} columns={7} />
                   ) : pagedHistoryTransactions.length > 0 ? (
                     pagedHistoryTransactions.map(t => (
                       <TableRow key={t.id}>
-                        <TableCell className="font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
                         <TableCell className="font-semibold text-slate-900">{t.patient_first_name} {t.patient_last_name}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge>
+                          {t.reference_number && (
+                            <span className="mt-0.5 block font-mono text-fine text-slate-500">{t.reference_number}</span>
+                          )}
                         </TableCell>
-                        <TableCell className="font-mono text-fine text-slate-500">{t.reference_number || '—'}</TableCell>
                         <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
                         <TableCell>
                           <StatusBadge status={t.payment_status || 'Paid'} />
                         </TableCell>
-                        <TableCell className="text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
+                        <TableCell className="whitespace-nowrap text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <Button type="button" variant="outline" size="xs" onClick={() => handleReprintReceipt(t)}>
@@ -1157,7 +1163,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     ))
                   ) : (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={8} className="p-0">
+                      <TableCell colSpan={7} className="p-0">
                         <EmptyState
                           icon={Receipt}
                           title="No payments in this date range"
