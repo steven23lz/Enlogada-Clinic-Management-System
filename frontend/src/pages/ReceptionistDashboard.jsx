@@ -19,12 +19,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
 import { todayStr } from '../lib/date';
-import { formatCurrency } from '../lib/currency';
 import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
 import RescheduleDialog from '../components/booking/RescheduleDialog';
 import ReferringPhysicianFields from '../components/booking/ReferringPhysicianFields';
+import TestPicker from '../components/booking/TestPicker';
 import useOperationsReport from '../hooks/useOperationsReport';
 import { ReceptionThroughputPanel } from '../components/reports/OperationsPanels';
 import {
@@ -99,6 +99,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   // belongs to one episode of care, not to the person forever.
   const [referringPhysician, setReferringPhysician] = useState('');
   const [referringPhysicianPrc, setReferringPhysicianPrc] = useState('');
+  // Tests chosen during walk-in registration, attached in the same flow as the visit. [1.26.0]
+  const [walkInTestIds, setWalkInTestIds] = useState([]);
   const [hmoProviders, setHmoProviders] = useState([]);
   const [staticDataError, setStaticDataError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -496,7 +498,27 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       });
 
       const visit = vRes.data.data.visit;
-      setRegistrationSuccess(`Walk-In registered successfully! Physical Queue Ticket: ${visit.queue_number}`);
+
+      // Attach in the same flow. Deliberately after the visit exists and deliberately not fatal:
+      // the patient is registered and holds a queue number either way, so a failure here is
+      // "tests still to add", not "registration failed" — and telling them to queue again would
+      // be the worse outcome.
+      let attachedNote = '';
+      if (walkInTestIds.length > 0) {
+        try {
+          await api.post('/tests/visit-tests', {
+            patientVisitId: visit.id,
+            testIds: walkInTestIds.map((id) => parseInt(id, 10)),
+          });
+          attachedNote = ` ${walkInTestIds.length} test${walkInTestIds.length === 1 ? '' : 's'} attached.`;
+        } catch {
+          attachedNote = ' Tests could not be attached — add them from the Active Queue.';
+        }
+      }
+
+      setRegistrationSuccess(
+        `Walk-In registered successfully! Physical Queue Ticket: ${visit.queue_number}.${attachedNote}`
+      );
 
       setNewPatient({
         firstName: '',
@@ -513,6 +535,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       // next patient registered, attaching a doctor to somebody they never saw.
       setReferringPhysician('');
       setReferringPhysicianPrc('');
+      // Cleared with the rest: a test list left in state would follow the next patient registered.
+      setWalkInTestIds([]);
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
     } catch (err) {
       setRegistrationError(err.response?.data?.message || 'Failed to register walk-in patient');
@@ -1197,6 +1221,31 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     'Private' makes it mandatory, since at this clinic that type means "a physician
                     sent them". The server enforces the same rule; this mirrors it so the
                     receptionist is not told at submit what could have been said while typing. */}
+                {/* Tests, chosen here rather than on a second screen. [1.26.0]
+                    Reception used to register the patient, then find them again in the queue to
+                    attach anything — two screens for one interaction at the busiest point of the
+                    day, and a visit whose second half never happened reaches the cashier as a
+                    zero bill. The picker also totals the selection, so the price can be quoted
+                    across the desk, and shows any preparation while the patient is still
+                    standing there. */}
+                <div className="space-y-1.5">
+                  <label className="field-label">
+                    Tests Requested
+                    <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">
+                      (optional — can be added later from the queue)
+                    </span>
+                  </label>
+                  <TestPicker
+                    tests={testCatalog}
+                    selectedIds={walkInTestIds}
+                    onToggle={(id) => setWalkInTestIds((prev) => (
+                      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                    ))}
+                    disabled={isRegistering}
+                    maxHeight="max-h-44"
+                  />
+                </div>
+
                 <ReferringPhysicianFields
                   physician={referringPhysician}
                   prc={referringPhysicianPrc}
@@ -1397,22 +1446,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             </DialogHeader>
 
             <form onSubmit={handleAssignTestsSubmit} className="space-y-4 pt-2">
-              <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-xl p-3 space-y-2 bg-slate-50/70">
-                {testCatalog.map(t => (
-                  <label key={t.id} className="flex items-center space-x-3 p-2 bg-white hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-[#e6ebf1] text-xs">
-                    <input
-                      type="checkbox"
-                      checked={selectedTestIds.includes(t.id.toString())}
-                      onChange={() => handleToggleTest(t.id.toString())}
-                      className="rounded text-brand-600 focus:ring-brand-500"
-                    />
-                    <div className="flex-1 flex justify-between items-center">
-                      <span className="font-bold text-gray-800">{t.name} <span className="text-meta text-gray-400 font-normal">({t.category_name})</span></span>
-                      <span className="font-extrabold text-slate-900">{formatCurrency(t.price)}</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
+              {/* Same control as the registration form below, so the two cannot drift on
+                  grouping, the running total, or the preparation warning. */}
+              <TestPicker
+                tests={testCatalog}
+                selectedIds={selectedTestIds}
+                onToggle={handleToggleTest}
+                disabled={isAttachingTests}
+              />
 
               <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
                 <Button type="button" variant="outline" onClick={() => setShowTestsModal(false)}>Cancel</Button>
