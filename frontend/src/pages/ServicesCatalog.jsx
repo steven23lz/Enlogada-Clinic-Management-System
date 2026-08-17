@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
 import { formatCurrency } from '../lib/currency';
-import { Plus, Edit2, CheckCircle2, AlertCircle, RefreshCw, Layers, ShieldPlus } from 'lucide-react';
+import { Plus, Edit2, CheckCircle2, AlertCircle, RefreshCw, Layers, ShieldPlus, Info } from 'lucide-react';
 
 const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
   const [tests, setTests] = useState([]);
@@ -331,7 +331,25 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                   {filteredTests.map(test => (
                     <TableRow key={test.id}>
                       <TableCell className="font-bold text-xs text-slate-900">SRV-{test.id}</TableCell>
-                      <TableCell className="font-semibold text-xs text-slate-800">{test.name}</TableCell>
+                      {/* Whether this service tells the patient how to prepare. [1.24.0] added
+                          `tests.preparation` and every patient-facing screen reads it, but this
+                          screen — the one where it is written — gave no sign of which services
+                          had it. Finding the gaps meant opening all fifteen in turn, so in
+                          practice nobody did, and a Fasting Blood Sugar with no instruction looks
+                          exactly like one that needs none. Shown truncated: the point is to see
+                          at a glance which rows are blank. */}
+                      <TableCell className="font-semibold text-xs text-slate-800">
+                        {test.name}
+                        {test.preparation && (
+                          <span
+                            className="mt-0.5 flex items-start gap-1 text-fine font-normal text-slate-500"
+                            title={test.preparation}
+                          >
+                            <Info className="mt-px h-3 w-3 flex-shrink-0 text-brand-600" />
+                            <span className="line-clamp-1">{test.preparation}</span>
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs text-gray-600 font-medium">{test.category_name}</TableCell>
                       <TableCell className="font-bold text-xs text-slate-900">{formatCurrency(test.price)}</TableCell>
                       <TableCell>

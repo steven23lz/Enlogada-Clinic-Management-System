@@ -178,7 +178,9 @@ const StaffAccounts = () => {
     return (
       `${s.first_name} ${s.last_name}`.toLowerCase().includes(q) ||
       s.email.toLowerCase().includes(q) ||
-      (s.roles?.[0] || '').toLowerCase().includes(q)
+      // Every role, not just the first. Searching "receptionist" used to miss the combined
+      // Receptionist+Cashier account entirely, because that account's first role is Cashier.
+      (s.roles || []).some((r) => (r || '').toLowerCase().includes(q))
     );
   });
   const totalPages = Math.max(1, Math.ceil(filteredStaff.length / PAGE_SIZE));
@@ -293,8 +295,18 @@ const StaffAccounts = () => {
                   <TableRow key={s.id}>
                     <TableCell className="max-w-[180px] truncate font-semibold text-slate-900" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
                     <TableCell className="max-w-[220px] truncate text-slate-500" title={s.email}>{s.email}</TableCell>
+                    {/* Every role this account holds. This rendered `roles[0]` only, so the
+                        combined Receptionist+Cashier account appeared in the staff list as a
+                        plain Cashier — the screen that exists to tell an administrator what
+                        access somebody has was understating it. Combined-role accounts are a
+                        supported shape here, not an edge case. */}
                     <TableCell>
-                      <Badge variant="outline" className="text-slate-600">{s.roles?.[0]}</Badge>
+                      <div className="flex flex-wrap gap-1">
+                        {(s.roles || []).map((role) => (
+                          <Badge key={role} variant="outline" className="text-slate-600">{role}</Badge>
+                        ))}
+                        {(s.roles || []).length === 0 && <span className="text-fine text-slate-400">No role</span>}
+                      </div>
                     </TableCell>
                     <TableCell className="text-slate-500">{s.contact_number || '—'}</TableCell>
                     <TableCell>
@@ -345,7 +357,7 @@ const StaffAccounts = () => {
             page={page}
             totalPages={totalPages}
             onPageChange={setPage}
-            totalLabel={`${filteredStaff.length} account${filteredStaff.length === 1 ? '' : 's'}`}
+            total={filteredStaff.length} pageSize={PAGE_SIZE}
           />
         </PanelBody>
       </Panel>
