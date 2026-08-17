@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 
 // Colour is keyed to the CATEGORY, not to its position in the array.
 //
@@ -50,7 +50,7 @@ const CategoryVolumeChart = ({ data }) => {
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 16, left: 0, bottom: 4 }} barCategoryGap={14}>
+      <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 32, left: 0, bottom: 4 }} barCategoryGap={14}>
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
         <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
         <YAxis
@@ -69,6 +69,20 @@ const CategoryVolumeChart = ({ data }) => {
               fill={CATEGORY_COLORS[entry.category_name] || UNMAPPED_CATEGORY_COLOR}
             />
           ))}
+          {/* The count, at the end of its own bar. Five bars is few enough that labelling each
+              is not clutter, and the exact figure was otherwise reachable only by hovering —
+              which is no help at all on this screen, because it carries a Print Reports button
+              and a printed chart has no hover. A reader with the sheet in their hand could see
+              that Laboratory ran the most and not what "the most" was.
+
+              Slate ink rather than the bar's colour: text wears text tokens, so the coloured
+              mark carries the identity and the number stays legible against the page. */}
+          <LabelList
+            dataKey="test_count"
+            position="right"
+            offset={8}
+            style={{ fontSize: 11, fontWeight: 700, fill: '#475569' }}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
