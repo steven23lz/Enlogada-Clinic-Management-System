@@ -1,5 +1,24 @@
 # Database Migration & Schema History
 
+## [1.26.0] - 2026-08-17 (What happens after the money moves and the report goes out)
+
+No schema change — every fix here is a query, a guard or a status transition. Recorded because
+each one changes what the tables end up holding.
+
+### Changed
+* **A refund now recalls the visit from the modalities.** `visitRepository.recallVisitFromModalities` returns tests still in `Processing` to `Pending` and resets the visit — but only when no work has been done. A ticket already at `Waiting for Release` or `Completed` is left alone, because the work exists and the record of it must not be erased by a billing action.
+* **A refund now requires a reason** (≥4 characters), recorded against the operator's account.
+* **`findVisitReleaseStateByVisitTestId` also returns `vt.status`.** Two rules below need to distinguish "the report has gone out" from "the visit happens to be closed", and only the test's own status says that.
+* **The result read guard is now separate from the write guard.** `assertStaffMayReadVisitTest` checks department scope only; `assertStaffOwnsVisitTest` additionally requires the ticket to have been released. Both reads (`getResultByVisitTestId`, `getVersionHistory`) were using the write guard, so the technician who produced a report lost access to it and to its version history the instant the visit completed.
+* **The write guard accepts `Completed` as well as `Processing`.** A visit completes when its last result is released, so refusing writes from that moment made amending a released result impossible — which is the one thing result versioning [1.15.0] exists for, since a correction is nearly always found after the report has gone out. The alternative in practice was editing the row by hand, which keeps no history at all.
+* **An amendment reason is required once the report has been released,** and only then. Re-saving a ticket still at `Waiting for Release` is drafting; demanding a justification for fixing your own typo fills the reason box with "typo" until it means nothing. The audit entry for a released amendment could previously read "no reason given" against a corrected medical report.
+* **Amending a released result reopens the visit to `Processing`.** The ticket returns to `Waiting for Release`, but the modality worklist filters on `pv.status = 'Processing'` and the Released tab filters on `vt.status = 'Completed'` — so the amended ticket appeared on neither. The correction was accepted, shown as saved, and then reached nobody: the patient and the referring physician kept the wrong report. `releaseResult` closes the visit again once the corrected version goes out.
+
+### Added
+* `GET /api/results/critical/outstanding` — every released critical result still awaiting its callback. Deliberately **not** department-scoped: a potassium of 7.4 belongs to whoever can act on it, not to the room that produced it. Until now the only sign of a panic value was a badge on one department's worklist row, so one flagged near the end of a shift had nobody watching it.
+
+---
+
 ## [1.25.0] - 2026-08-17 (Reminding people to turn up)
 
 ### Added

@@ -114,6 +114,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   // Phase C finding 03: correcting an already-released result — reuses the same modal/upsert
   // path, just pre-filled and opened from the History table instead of the worklist.
   const [isEditingResult, setIsEditingResult] = useState(false);
+  // A reason is owed once the report has left the department, and only then. Re-saving a ticket
+  // that is still 'Waiting for Release' is drafting — the findings have been seen by nobody, so
+  // demanding a justification for fixing your own typo just fills the reason box with "typo"
+  // until it stops meaning anything. This mirrors the server rule in resultService.uploadResult;
+  // the server is the one that enforces it.
+  const isAmendingReleased = isEditingResult && activeTest?.test_status === 'Completed';
   // A panic value used to release with the same silent email as a routine result. Flagging it
   // here routes an urgent callback notification to the front desk on release.
   const [isCritical, setIsCritical] = useState(false);
@@ -1023,7 +1029,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               {/* Why a released report is being changed. Required on an amendment because the
                   audit entry is otherwise "something changed" and nothing more — the superseded
                   version is kept, but without a reason nobody can tell why it was replaced. */}
-              {isEditingResult && (
+              {isAmendingReleased && (
                 <div className="space-y-1.5">
                   <label htmlFor="amendment-reason" className="field-label">
                     Reason for Amendment <span className="text-rose-600">*</span>
@@ -1071,7 +1077,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 <Button type="button" variant="outline" onClick={() => setShowUploadModal(false)}>Cancel</Button>
                 <Button
                   type="submit"
-                  disabled={savingFindings || (isEditingResult && !amendmentReason.trim())}
+                  disabled={savingFindings || (isAmendingReleased && amendmentReason.trim().length < 4)}
                   variant="outline"
                   className="font-bold text-xs px-5 py-2 rounded-xl border-gray-200 flex items-center space-x-1.5"
                 >

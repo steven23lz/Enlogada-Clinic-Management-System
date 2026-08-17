@@ -116,6 +116,18 @@ class ResultController {
     }
   }
 
+  async getOutstandingCriticals(req, res, next) {
+    try {
+      const outstanding = await resultService.getOutstandingCriticals();
+      return res.status(200).json({
+        status: 'success',
+        data: { outstanding, count: outstanding.length },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async acknowledgeCritical(req, res, next) {
     try {
       const { visitTestId } = req.params;
