@@ -23,6 +23,7 @@ import { formatCurrency } from '../lib/currency';
 import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
+import RescheduleDialog from '../components/booking/RescheduleDialog';
 import useOperationsReport from '../hooks/useOperationsReport';
 import { ReceptionThroughputPanel } from '../components/reports/OperationsPanels';
 import {
@@ -43,7 +44,8 @@ import {
   History,
   RefreshCw,
   XCircle,
-  UserX
+  UserX,
+  CalendarClock
 } from 'lucide-react';
 
 const PAGE_TITLES = {
@@ -145,6 +147,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [cancelingVisit, setCancelingVisit] = useState(false);
   const [cancelVisitError, setCancelVisitError] = useState('');
   const [noShowTarget, setNoShowTarget] = useState(null);
+  // The verified booking currently open in the reschedule dialog, or null.
+  const [reschedulingAppointment, setReschedulingAppointment] = useState(null);
   const [markingNoShow, setMarkingNoShow] = useState(false);
   const [noShowError, setNoShowError] = useState('');
 
@@ -1313,6 +1317,25 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   >
                     Confirm Check-In Patient
                   </Button>
+
+                  {/* The desk's half of rescheduling. This screen is where a receptionist already
+                      has a booking in hand — from a scan, or from the reference a patient reads
+                      out over the phone — so it is where "can I move this to Thursday?" gets
+                      answered. Only offered while the booking is still Pending: once it is
+                      Confirmed the patient is standing here, and a new date is not what is being
+                      asked for. */}
+                  {verifyResult.status === 'Pending' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setReschedulingAppointment(verifyResult)}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2 font-bold"
+                    >
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      <span>Reschedule this booking</span>
+                    </Button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => { setNoShowError(''); setNoShowTarget(verifyResult); }}
@@ -1458,6 +1481,20 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           onConfirm={confirmMarkNoShow}
           loading={markingNoShow}
           error={noShowError}
+        />
+
+        {/* Same dialog the patient sees on their own booking, so the receptionist on the phone and
+            the patient on the app are working from one set of rules and one availability grid. */}
+        <RescheduleDialog
+          open={Boolean(reschedulingAppointment)}
+          onOpenChange={(open) => { if (!open) setReschedulingAppointment(null); }}
+          appointment={reschedulingAppointment}
+          onRescheduled={(moved) => {
+            // Keep the verified booking on screen showing its new time, rather than clearing the
+            // panel and making the receptionist re-scan to confirm the move landed.
+            setVerifyResult((prev) => (prev ? { ...prev, ...moved } : prev));
+            toastSuccess('Appointment rescheduled.');
+          }}
         />
 
         {/* The physical queue slip.

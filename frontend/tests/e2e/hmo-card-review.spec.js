@@ -56,6 +56,37 @@ test.describe('HMO card evidence (UI)', () => {
     expect(errors, `page errors: ${errors.join(' | ')}`).toHaveLength(0);
   });
 
+  // The booking wizard's date/slot control was extracted so the reschedule dialog could reuse it.
+  // That refactor is invisible to the API tests, so this walks the wizard far enough to prove the
+  // shared component still fetches availability and still gates step 2 behind a chosen slot.
+  test('the shared slot picker still drives the booking wizard', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+
+    await signIn(page, 'client@enlogada.com');
+    await page.getByRole('button', { name: 'Book Schedule' }).first().click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+
+    const when = new Date();
+    when.setDate(when.getDate() + 120);
+    if (when.getDay() === 0) when.setDate(when.getDate() + 1);
+    const date = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
+
+    await dialog.locator('input[type="date"]').fill(date);
+
+    // Slots are fetched by the component itself now, not by the page.
+    const slot = dialog.locator('button', { hasText: /^\d{2}:\d{2}$/ }).first();
+    await expect(slot).toBeVisible({ timeout: 10000 });
+    await slot.click();
+
+    await dialog.getByRole('button', { name: /next: hmo/i }).click();
+    await expect(dialog.getByText(/hmo provider/i).first()).toBeVisible();
+
+    expect(errors, `page errors: ${errors.join(' | ')}`).toHaveLength(0);
+  });
+
   test('the Admin claim review renders the card image behind the claim', async ({ page }) => {
     // Seeded through the API: driving the client's file picker as well as the Admin's review in
     // one test would be testing the browser, not the feature.

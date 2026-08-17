@@ -142,6 +142,45 @@ class AppointmentRepository {
     const result = await db.query(queryText, [status, id]);
     return result.rows[0];
   }
+
+  // Moves a booking to a different slot.
+  //
+  // appointment_reference is deliberately NOT reissued. The patient is holding that code — on a
+  // screenshot, in an email, as the QR on their booking pass — and a reschedule is the same
+  // booking on a different day, not a new one. Reissuing would silently invalidate the pass they
+  // will present at the desk.
+  //
+  // The old slot is released by this same UPDATE: capacity is counted from these two columns, so
+  // there is no second write that could fail and leave the booking occupying two slots.
+  async updateSchedule(id, { scheduledDate, scheduledTime }) {
+    const queryText = `
+      UPDATE appointments
+      SET scheduled_date = $1, scheduled_time = $2, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING *
+    `;
+    const result = await db.query(queryText, [scheduledDate, scheduledTime, id]);
+    return result.rows[0];
+  }
+
+  // How full a slot is, ignoring one appointment.
+  //
+  // The exclusion is what makes a reschedule work at the seeded capacity of 1. Without it a
+  // booking moved from 09:00 to 09:00 — which the UI allows, because the patient may be changing
+  // only the date — counts itself and is refused as full, and the patient is told their own
+  // booking is in the way.
+  async countActiveInSlot({ scheduledDate, scheduledTime, excludeId = null }) {
+    const queryText = `
+      SELECT COUNT(*)::int AS cnt
+      FROM appointments
+      WHERE scheduled_date = $1
+        AND scheduled_time = $2
+        AND status <> 'Cancelled'
+        AND ($3::int IS NULL OR id <> $3)
+    `;
+    const result = await db.query(queryText, [scheduledDate, scheduledTime, excludeId]);
+    return result.rows[0].cnt;
+  }
 }
 
 module.exports = new AppointmentRepository();

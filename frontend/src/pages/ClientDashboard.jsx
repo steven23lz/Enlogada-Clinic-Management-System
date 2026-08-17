@@ -17,6 +17,8 @@ import { StatusBadge } from '../components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import Pagination from '../components/ui/pagination';
 import BookingConfirmation from '../components/BookingConfirmation';
+import SlotPicker from '../components/booking/SlotPicker';
+import RescheduleDialog from '../components/booking/RescheduleDialog';
 import api from '../config/api';
 import { formatCurrency } from '../lib/currency';
 import { toastError } from '../lib/toast';
@@ -224,10 +226,10 @@ const ClientDashboard = ({ onNavigate }) => {
   const [bookingConfirmation, setBookingConfirmation] = useState(null);
   const [bookingError, setBookingError] = useState('');
 
-  // Live slot availability for the selected date
-  const [availableSlots, setAvailableSlots] = useState([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [dayIsOpen, setDayIsOpen] = useState(true);
+  // Slot availability lives in SlotPicker, which fetches it itself. This counter is the one thing
+  // the page still needs to say about it: bump it to make the grid refetch after a 409, when the
+  // slot the patient chose turned out to have gone.
+  const [slotsRefreshKey, setSlotsRefreshKey] = useState(0);
 
   // My Appointments (Module 3: view/cancel own appointments)
   const [appointments, setAppointments] = useState([]);
@@ -250,6 +252,9 @@ const ClientDashboard = ({ onNavigate }) => {
   // and the patient simply pays at the counter — the pre-existing behaviour.
   const [gateway, setGateway] = useState({ available: false, methods: [] });
   const [payingAppointmentId, setPayingAppointmentId] = useState(null);
+  // The booking currently open in the reschedule dialog, or null. Held as the whole appointment
+  // rather than an id so the dialog can show what is being moved without a second lookup.
+  const [reschedulingAppointment, setReschedulingAppointment] = useState(null);
   const [payError, setPayError] = useState('');
 
   const fetchProfiles = useCallback(async () => {
@@ -343,21 +348,6 @@ const ClientDashboard = ({ onNavigate }) => {
     }
   };
 
-  const fetchAvailability = useCallback(async (date) => {
-    setSlotsLoading(true);
-    try {
-      const response = await api.get('/appointments/availability', { params: { date } });
-      setAvailableSlots(response.data.data.slots || []);
-      setDayIsOpen(response.data.data.isOpen);
-    } catch (err) {
-      console.error('Failed to fetch availability:', err);
-      setAvailableSlots([]);
-      setDayIsOpen(true);
-    } finally {
-      setSlotsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     fetchProfiles();
     fetchStaticData();
@@ -386,27 +376,6 @@ const ClientDashboard = ({ onNavigate }) => {
 
     window.history.replaceState({}, '', window.location.pathname);
   }, [fetchAppointments, fetchPaymentHistory]);
-
-  useEffect(() => {
-    if (bookingData.scheduledDate) {
-      fetchAvailability(bookingData.scheduledDate);
-    } else {
-      setAvailableSlots([]);
-      setDayIsOpen(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookingData.scheduledDate, fetchAvailability]);
-
-  // If the previously selected time is no longer in the fresh slot list, clear it
-  useEffect(() => {
-    if (bookingData.scheduledTime && availableSlots.length > 0) {
-      const stillAvailable = availableSlots.some(s => s.time === bookingData.scheduledTime && s.available);
-      if (!stillAvailable) {
-        setBookingData(prev => ({ ...prev, scheduledTime: '' }));
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableSlots]);
 
   useEffect(() => {
     if (selectedProfileId) {
@@ -637,7 +606,7 @@ const ClientDashboard = ({ onNavigate }) => {
     } catch (err) {
       setBookingError(err.response?.data?.message || 'Failed to book appointment');
       if (err.response?.status === 409 && bookingData.scheduledDate) {
-        fetchAvailability(bookingData.scheduledDate);
+        setSlotsRefreshKey((k) => k + 1);
       }
       // The booking either happened completely or not at all, but a request that failed after
       // the server committed (dropped connection) still leaves the client unaware of it —
@@ -1131,50 +1100,15 @@ const ClientDashboard = ({ onNavigate }) => {
 
                     {bookingStep === 1 && (
                       <div className="space-y-4">
-                        <div className="space-y-1">
-                          <label className="field-label">Date</label>
-                          <Input
-                            type="date"
-                            value={bookingData.scheduledDate}
-                            onChange={e => setBookingData({...bookingData, scheduledDate: e.target.value, scheduledTime: ''})}
-                            required
-                          />
-                        </div>
-
-                        {bookingData.scheduledDate && (
-                          <div className="space-y-1.5">
-                            <label className="field-label">Available Time</label>
-                            {slotsLoading ? (
-                              <div className="text-xs text-gray-400 font-semibold py-2">Loading available times...</div>
-                            ) : !dayIsOpen ? (
-                              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 font-semibold">
-                                Clinic is closed on this date. Please choose another date.
-                              </div>
-                            ) : availableSlots.length === 0 ? (
-                              <div className="text-xs text-gray-400 font-semibold py-2">No time slots configured for this date.</div>
-                            ) : (
-                              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-0.5">
-                                {availableSlots.map(slot => (
-                                  <button
-                                    key={slot.time}
-                                    type="button"
-                                    disabled={!slot.available}
-                                    onClick={() => setBookingData({...bookingData, scheduledTime: slot.time})}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer transition-all ${
-                                      bookingData.scheduledTime === slot.time
-                                        ? 'bg-brand-500 text-white border-brand-500'
-                                        : slot.available
-                                        ? 'bg-white text-slate-700 border-gray-200 hover:border-brand-500'
-                                        : 'bg-gray-100 text-gray-300 border-[#e6ebf1] cursor-not-allowed line-through'
-                                    }`}
-                                  >
-                                    {slot.time}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        {/* Same control the reschedule dialog uses. It owns its own availability
+                            fetch, so the two cannot disagree about which slots are free. */}
+                        <SlotPicker
+                          date={bookingData.scheduledDate}
+                          time={bookingData.scheduledTime}
+                          onDateChange={(d) => setBookingData({ ...bookingData, scheduledDate: d, scheduledTime: '' })}
+                          onTimeChange={(t) => setBookingData({ ...bookingData, scheduledTime: t })}
+                          refreshKey={slotsRefreshKey}
+                        />
 
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-center">
@@ -1603,7 +1537,12 @@ const ClientDashboard = ({ onNavigate }) => {
                     const showPass = isOpen;
                     const showPayOptions = isOpen && !appt.is_paid && gateway.available;
                     return (
-                      <div key={appt.id} className="border border-[#e6ebf1] rounded-xl p-3 space-y-2 bg-slate-50/70">
+                      <div
+                        key={appt.id}
+                        data-testid="appointment-card"
+                        data-reference={appt.appointment_reference}
+                        className="border border-[#e6ebf1] rounded-xl p-3 space-y-2 bg-slate-50/70"
+                      >
                         <div className="flex justify-between items-start">
                           <div>
                             <span className="block text-xs font-extrabold text-slate-900">
@@ -1653,16 +1592,37 @@ const ClientDashboard = ({ onNavigate }) => {
                           </p>
                         )}
 
-                        {isCancellable && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => handleRequestCancelAppointment(appt)}
-                            className="w-full text-fine font-bold text-rose-600 border-rose-200 hover:bg-rose-50 rounded-lg py-1.5 flex items-center justify-center space-x-1.5"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>Cancel Appointment</span>
-                          </Button>
+                        {/* Reschedule sits before Cancel, and only while the booking is still
+                            Pending — once reception has checked the patient in, the date is not
+                            the thing anyone is changing. Ordering matters here: cancelling used to
+                            be the only way to change a booking, so it was doing duty as both, and
+                            a patient who only wanted a different Tuesday gave their slot up to get
+                            it. The gentler action goes first. */}
+                        {(appt.status === 'Pending' || isCancellable) && (
+                          <div className="flex gap-2 pt-0.5">
+                            {appt.status === 'Pending' && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setReschedulingAppointment(appt)}
+                                className="flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-fine font-bold"
+                              >
+                                <CalendarClock className="h-3.5 w-3.5" />
+                                <span>Reschedule</span>
+                              </Button>
+                            )}
+                            {isCancellable && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleRequestCancelAppointment(appt)}
+                                className="flex-1 items-center justify-center gap-1.5 rounded-lg border-rose-200 py-1.5 text-fine font-bold text-rose-600 hover:bg-rose-50"
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                                <span>Cancel</span>
+                              </Button>
+                            )}
+                          </div>
                         )}
                       </div>
                     );
@@ -1801,6 +1761,13 @@ const ClientDashboard = ({ onNavigate }) => {
           onConfirm={confirmCancelAppointment}
           loading={cancelling}
           error={cancelError}
+        />
+
+        <RescheduleDialog
+          open={Boolean(reschedulingAppointment)}
+          onOpenChange={(open) => { if (!open) setReschedulingAppointment(null); }}
+          appointment={reschedulingAppointment}
+          onRescheduled={() => fetchAppointments()}
         />
 
       </div>

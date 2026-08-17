@@ -34,6 +34,14 @@ router.get('/verify/:reference', verifyToken, authorizeStaff, authorizePermissio
 // cascading each cancellation to the linked visit.
 router.put('/:id/cancel', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), authorizePermissions('appointments:cancel'), appointmentController.cancel);
 
+// Move a booking to a different slot. Patient-reachable, so it keeps an explicit role list rather
+// than authorizeStaff — same rule as /cancel above.
+//
+// Its own permission rather than reusing appointments:cancel. They are different decisions and a
+// clinic may well want one without the other: reception rescheduling freely while patients are
+// asked to phone in, or the reverse. Reusing the cancel grant would make that undecidable.
+router.put('/:id/reschedule', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), authorizePermissions('appointments:reschedule'), appointmentController.reschedule);
+
 // Staff updates appointment status (Confirmed, Completed, No Show)
 router.put('/:id/status', verifyToken, authorizeStaff, authorizePermissions('appointments:update'), appointmentController.updateStatus);
 router.patch('/:id/status', verifyToken, authorizeStaff, authorizePermissions('appointments:update'), appointmentController.updateStatus);

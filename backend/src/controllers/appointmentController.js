@@ -162,6 +162,43 @@ class AppointmentController {
     }
   }
 
+  async reschedule(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { scheduledDate, scheduledTime } = req.body;
+
+      if (!scheduledDate || !scheduledTime) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'A new date and time are both required.'
+        });
+      }
+      // Shape-checked here so a malformed value is refused before the service opens a transaction
+      // and takes the slot's advisory lock. YYYY-MM-DD and HH:MM (seconds optional, since a
+      // scheduled_time read back from Postgres carries them).
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate) || !/^\d{2}:\d{2}(:\d{2})?$/.test(scheduledTime)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Date must be YYYY-MM-DD and time HH:MM.'
+        });
+      }
+
+      const appointment = await appointmentService.rescheduleAppointment(
+        id,
+        { scheduledDate, scheduledTime: scheduledTime.slice(0, 5) },
+        req.user
+      );
+
+      return res.status(200).json({
+        status: 'success',
+        message: `Appointment moved to ${scheduledDate} at ${scheduledTime.slice(0, 5)}.`,
+        data: { appointment }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async cancel(req, res, next) {
     try {
       const { id } = req.params;

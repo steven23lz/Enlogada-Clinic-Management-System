@@ -53,6 +53,10 @@ const PERMISSIONS = [
   { name: 'appointments:read', module: 'Appointments', description: 'View appointments' },
   { name: 'appointments:update', module: 'Appointments', description: 'Check in, mark no-show' },
   { name: 'appointments:cancel', module: 'Appointments', description: 'Cancel an appointment' },
+  // Separate from cancel on purpose. Cancelling gives the slot up; rescheduling holds a slot while
+  // swapping it, so a clinic that wants patients to phone in for a change can revoke this and keep
+  // cancel, or the other way round. Reusing one grant for both makes that choice unexpressible.
+  { name: 'appointments:reschedule', module: 'Appointments', description: 'Move a booking to a different slot' },
 
   // Test catalogue and assignment
   { name: 'tests:manage', module: 'Tests', description: 'Manage the service catalogue and prices' },
@@ -87,7 +91,7 @@ const PERMISSIONS = [
 const RECEPTION = [
   'patients:create', 'patients:read', 'patients:update',
   'visits:create', 'visits:read', 'visits:update',
-  'appointments:read', 'appointments:update', 'appointments:cancel',
+  'appointments:read', 'appointments:update', 'appointments:cancel', 'appointments:reschedule',
   'tests:assign', 'tests:read_assigned', 'hmo:read', 'hmo:request',
   'results:acknowledge_critical',
   // Reception applies the statutory (Senior Citizen / PWD) discount at the desk, when the ID is
@@ -120,7 +124,7 @@ const MODALITY = [
 const ADMIN = [
   'patients:create', 'patients:read', 'patients:read_all_departments', 'patients:update',
   'visits:create', 'visits:read', 'visits:update',
-  'appointments:read', 'appointments:update', 'appointments:cancel',
+  'appointments:read', 'appointments:update', 'appointments:cancel', 'appointments:reschedule',
   'tests:manage', 'tests:assign', 'tests:read_assigned',
   'results:read', 'results:acknowledge_critical',
   'billing:read', 'billing:refund', 'billing:discount',
@@ -148,7 +152,7 @@ const ROLE_PERMISSIONS = {
   // tick can cross — and hmoService checks ownership on both patient-facing routes.
   Client: [
     'patients:create', 'patients:read', 'patients:update',
-    'appointments:create', 'appointments:read', 'appointments:cancel',
+    'appointments:create', 'appointments:read', 'appointments:cancel', 'appointments:reschedule',
     'tests:assign', 'billing:read',
     'visits:read', 'results:read',
     'hmo:request', 'hmo:read',

@@ -9,6 +9,7 @@ const testService = require('./testService');
 const hmoService = require('./hmoService');
 const { discardHmoCard } = require('../config/upload');
 const visitService = require('./visitService');
+const auditService = require('./auditService');
 
 async function assertClientOwnsPatient(requestingUser, patientId) {
   if (!requestingUser?.roles?.includes('Client')) return; // staff roles are not ownership-restricted
@@ -25,6 +26,33 @@ function timeToMinutes(timeStr) {
   return h * 60 + m;
 }
 
+/**
+ * Is this date/time a slot the clinic actually offers? Returns that day's operating hours, which
+ * the caller needs anyway for the capacity ceiling.
+ *
+ * Shared by booking and rescheduling because the two must agree. A reschedule that skipped this
+ * would let a patient move a booking to a Sunday, or to 19:00 — through a UI that never offered
+ * either, but the API is reachable directly and the check is the only thing that makes the
+ * availability screen more than a suggestion.
+ */
+async function assertSlotWithinOperatingHours(scheduledDate, scheduledTime) {
+  const dayOfWeek = new Date(`${scheduledDate}T12:00:00Z`).getUTCDay();
+  const hours = await scheduleRepository.findOperatingHoursForDay(dayOfWeek);
+
+  if (!hours || !hours.is_open) {
+    const error = new Error('The clinic is closed on the selected date.');
+    error.statusCode = 409;
+    throw error;
+  }
+  const requestedMinutes = timeToMinutes(scheduledTime);
+  if (requestedMinutes < timeToMinutes(hours.open_time) || requestedMinutes >= timeToMinutes(hours.close_time)) {
+    const error = new Error('The selected time is outside clinic operating hours.');
+    error.statusCode = 409;
+    throw error;
+  }
+  return hours;
+}
+
 function minutesToTime(mins) {
   const h = String(Math.floor(mins / 60)).padStart(2, '0');
   const m = String(mins % 60).padStart(2, '0');
@@ -32,11 +60,22 @@ function minutesToTime(mins) {
 }
 
 function todayLocalDateString() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return formatDateOnly(new Date());
+}
+
+/**
+ * A DATE column as the calendar date it actually is.
+ *
+ * node-pg parses DATE at LOCAL midnight, so toISOString() on it returns the previous day
+ * everywhere east of UTC — in Philippine time, every date in the system, always. Local getters,
+ * same rule as frontend/src/lib/date.js.
+ */
+function formatDateOnly(value) {
+  const d = value instanceof Date ? value : new Date(value);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 class AppointmentService {
@@ -101,20 +140,7 @@ class AppointmentService {
 
       outcome = await db.withTransaction(async () => {
         // 1. Validate the requested slot against clinic operating hours
-        const dayOfWeek = new Date(`${scheduledDate}T12:00:00Z`).getUTCDay();
-        const hours = await scheduleRepository.findOperatingHoursForDay(dayOfWeek);
-
-        if (!hours || !hours.is_open) {
-          const error = new Error('The clinic is closed on the selected date.');
-          error.statusCode = 409;
-          throw error;
-        }
-        const requestedMinutes = timeToMinutes(scheduledTime);
-        if (requestedMinutes < timeToMinutes(hours.open_time) || requestedMinutes >= timeToMinutes(hours.close_time)) {
-          const error = new Error('The selected time is outside clinic operating hours.');
-          error.statusCode = 409;
-          throw error;
-        }
+        const hours = await assertSlotWithinOperatingHours(scheduledDate, scheduledTime);
 
         // 2. Serialize concurrent bookings for the same slot (no row exists yet to lock
         //    on an empty slot, so an advisory lock closes that race window).
@@ -269,6 +295,105 @@ class AppointmentService {
       await visitRepository.updateVisitStatus(appointment.patient_visit_id, 'Cancelled');
       return updated;
     });
+  }
+
+  /**
+   * Moves an existing booking to a different slot.
+   *
+   * Cancel-and-rebook was the only way to change a booking, and it is not equivalent: between the
+   * two calls the patient holds nothing, and at the seeded capacity of one patient per slot
+   * somebody else can take the replacement in the gap. The patient ends up with no appointment
+   * having started with one, which is a worse outcome than being told the new time is unavailable.
+   * Here the move either happens or the original stands.
+   *
+   * Only a Pending booking can move. 'Confirmed' is the receptionist's check-in — the patient is
+   * at the desk, so a new date is not what anyone means — and Completed / No Show / Cancelled are
+   * all finished.
+   */
+  async rescheduleAppointment(id, { scheduledDate, scheduledTime }, requestingUser) {
+    const appointment = await appointmentRepository.findById(id);
+    if (!appointment) {
+      const error = new Error('Appointment not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    await assertClientOwnsPatient(requestingUser, appointment.patient_id);
+
+    if (appointment.status !== 'Pending') {
+      const error = new Error(
+        appointment.status === 'Confirmed'
+          ? 'This appointment has already been checked in and cannot be rescheduled.'
+          : `A ${appointment.status.toLowerCase()} appointment cannot be rescheduled.`
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const previous = {
+      date: formatDateOnly(appointment.scheduled_date),
+      time: String(appointment.scheduled_time).slice(0, 5),
+    };
+
+    const updated = await db.withTransaction(async () => {
+      const hours = await assertSlotWithinOperatingHours(scheduledDate, scheduledTime);
+
+      // Same advisory lock as booking, on the same key, so a reschedule and a fresh booking
+      // competing for the last place in a slot are serialised against each other rather than both
+      // reading a stale count.
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${scheduledDate}|${scheduledTime}`]);
+
+      // Another of this patient's bookings already sitting in the target slot. Refused rather
+      // than merged: two bookings becoming one silently loses whatever was attached to this one.
+      const clash = await appointmentRepository.findActiveByPatientAndSlot({
+        patientId: appointment.patient_id, scheduledDate, scheduledTime,
+      });
+      if (clash && clash.id !== appointment.id) {
+        const error = new Error('This patient already has a booking at that time.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      // Excluding itself, so moving to a different date at the same time of day is not blocked
+      // by its own row.
+      const taken = await appointmentRepository.countActiveInSlot({
+        scheduledDate, scheduledTime, excludeId: appointment.id,
+      });
+      if (taken >= hours.max_concurrent_bookings) {
+        const error = new Error('This time slot is no longer available. Please select a different time.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const moved = await appointmentRepository.updateSchedule(id, { scheduledDate, scheduledTime });
+
+      // Audited: a booking moving is a change to a commitment made to a patient, and when staff
+      // do it on someone's behalf the record of who and when is the whole point. Low volume, so
+      // none of the fan-out concern that keeps logPhiRead off worklists applies.
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: 'appointment.rescheduled',
+        entityType: 'appointment',
+        entityId: appointment.id,
+        description:
+          `${appointment.appointment_reference}: ${previous.date} ${previous.time} → ` +
+          `${scheduledDate} ${String(scheduledTime).slice(0, 5)}`,
+      });
+
+      return moved;
+    });
+
+    // After the commit, and notifyRoles swallows its own errors, so a notification problem can
+    // never report a completed move as failed.
+    await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
+      title: 'Appointment Rescheduled',
+      message:
+        `${appointment.first_name} ${appointment.last_name} — ${previous.date} ${previous.time} → ` +
+        `${scheduledDate} ${String(scheduledTime).slice(0, 5)}`,
+      type: 'info',
+    });
+
+    return { ...updated, queue_number: appointment.queue_number, previous };
   }
 
   async updateStatus(id, status) {
