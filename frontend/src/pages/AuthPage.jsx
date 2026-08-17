@@ -3,7 +3,7 @@ import PublicHeader from '../components/PublicHeader';
 import Logo from '../components/Logo';
 import LoginForm from '../components/auth/LoginForm';
 import RegisterForm from '../components/auth/RegisterForm';
-import { CLINIC } from '../lib/clinic';
+import { useClinic } from '../lib/clinic';
 import { ShieldCheck, Clock, HeartHandshake } from 'lucide-react';
 
 // UI/UX Modernization Phase 6: merges Login.jsx and Register.jsx into one page that owns its own
@@ -43,6 +43,8 @@ const TRUST_POINTS = [
 
 const AuthPage = ({ initialMode = 'login', onNavigate }) => {
   const [mode, setMode] = useState(initialMode);
+  // Runtime identity, so the address here and on the receipt cannot disagree. See lib/clinic.js.
+  const CLINIC = useClinic();
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">

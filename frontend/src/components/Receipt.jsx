@@ -1,5 +1,5 @@
 import React from 'react';
-import { CLINIC, hasStatutoryIdentity } from '../lib/clinic';
+import { useClinic, hasStatutoryIdentity } from '../lib/clinic';
 import { formatCurrency } from '../lib/currency';
 
 /**
@@ -57,6 +57,9 @@ const Rule = ({ dashed = false }) => (
  * @param reprint  stamps the copy, so an original and a duplicate are distinguishable
  */
 const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) => {
+  // Fetched at runtime so the clinic can set its TIN without rebuilding the frontend; falls back
+  // to the built-in name and address if the API is unreachable. See lib/clinic.js.
+  const CLINIC = useClinic();
   if (!payment) return null;
 
   const paidAt = payment.paid_at ? new Date(payment.paid_at) : new Date();
@@ -85,7 +88,7 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
       <Rule />
 
       <p className="m-0 text-center text-[11px] font-bold uppercase tracking-[0.12em]">
-        {hasStatutoryIdentity() ? 'Official Receipt' : 'Payment Receipt'}
+        {hasStatutoryIdentity(CLINIC) ? 'Official Receipt' : 'Payment Receipt'}
       </p>
       {reprint && (
         <p className="m-0 mt-0.5 text-center text-[10px] font-bold uppercase tracking-widest text-rose-600">
@@ -181,7 +184,7 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
           Thank you. Please keep this receipt — it is required for any refund, and for claiming
           your results.
         </p>
-        {!hasStatutoryIdentity() && (
+        {!hasStatutoryIdentity(CLINIC) && (
           // Said plainly rather than dressed up. A document that looks like a BIR Official
           // Receipt but is not one is worse than one that admits what it is.
           <p className="m-0 text-[9px] leading-snug text-slate-400">
