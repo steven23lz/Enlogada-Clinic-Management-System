@@ -10,6 +10,7 @@ const hmoService = require('./hmoService');
 const { discardHmoCard } = require('../config/upload');
 const visitService = require('./visitService');
 const auditService = require('./auditService');
+const { normaliseReferral } = require('./referralService');
 
 async function assertClientOwnsPatient(requestingUser, patientId) {
   if (!requestingUser?.roles?.includes('Client')) return; // staff roles are not ownership-restricted
@@ -123,7 +124,7 @@ class AppointmentService {
   // not at all.
   async createAppointment({
     patientId, scheduledDate, scheduledTime, notes, createdBy, requestingUser,
-    testIds = [], hmo = null, hmoCardFile = null
+    testIds = [], hmo = null, hmoCardFile = null, referral = null
   }) {
     // db.withTransaction rather than a hand-managed db.pool.connect(). Everything underneath —
     // testService.attachTests, hmoService.createRequest and the auditService.log inside it — runs
@@ -179,13 +180,18 @@ class AppointmentService {
         }
 
         // 4. Create the patient_visit record first (visit_type = 'Appointment')
+        //
+        // The referring physician goes on at creation rather than being written back afterwards
+        // by hmoService: this path is minting the visit, so it can simply record it, and
+        // assertVisitNamesReferrer then finds the visit already named one and has nothing to do.
         const queueNumber = await visitRepository.getNextQueueNumber();
         const visit = await visitRepository.createVisit({
           patientId,
           visitType: 'Appointment',
           notes,
           queueNumber,
-          createdBy
+          createdBy,
+          ...normaliseReferral(referral || {})
         });
 
         // 5. Create the appointment record linked to the visit

@@ -236,6 +236,27 @@ const ServiceRequests = () => {
                 <StatusBadge status={detailRequest?.status} />
               </div>
 
+              {/* The doctor the LOA is issued against. Mandatory on a claim, so its absence here
+                  means an older claim filed before the rule — worth showing as such rather than
+                  leaving Admin to wonder whether the screen simply does not display it. */}
+              <div className="flex items-start justify-between gap-4">
+                <span className="text-fine font-medium text-slate-500">Referring Physician</span>
+                <span className="text-right text-fine">
+                  {detailRequest?.referring_physician ? (
+                    <>
+                      <span className="block font-semibold text-slate-900">{detailRequest.referring_physician}</span>
+                      {detailRequest.referring_physician_prc && (
+                        <span className="block text-micro text-slate-500">
+                          PRC {detailRequest.referring_physician_prc}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-slate-500">Not recorded — this claim predates the requirement.</span>
+                  )}
+                </span>
+              </div>
+
               {/* The evidence the claim rests on. A client booking online must attach a photo of
                   their card; a receptionist filing at the desk is recorded as having seen the
                   physical card instead. Approving without being able to see either would make

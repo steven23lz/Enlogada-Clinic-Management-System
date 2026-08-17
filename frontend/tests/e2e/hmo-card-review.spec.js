@@ -120,6 +120,7 @@ test.describe('HMO card evidence (UI)', () => {
     form.append('scheduledTime', slots[0].time);
     form.append('testIds[]', String(testId));
     form.append('hmo[providerId]', String(providerId));
+    form.append('referringPhysician', 'Dr. E2E Referrer'); // mandatory on a claim since [1.23.0]
     form.append('hmoCard', new Blob([CARD_PNG], { type: 'image/png' }), 'card.png');
 
     const booked = await ctx.post(`${API}/appointments`, { headers: auth, multipart: form });

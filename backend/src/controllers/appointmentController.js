@@ -1,6 +1,7 @@
 const appointmentService = require('../services/appointmentService');
 const { discardHmoCard } = require('../config/upload');
 const { isStaffUser } = require('../constants/roles');
+const { isNamed } = require('../services/referralService');
 
 class AppointmentController {
   async create(req, res, next) {
@@ -67,6 +68,17 @@ class AppointmentController {
         return reject('Please attach a photo of your HMO card to claim HMO coverage.');
       }
 
+      // Same shape as the card check above, and for the same reason: refuse before the transaction
+      // so a doomed booking never holds the slot's advisory lock. The authoritative rule is in
+      // referralService, which hmoService also consults — this is the early exit, not the gate.
+      const referral = {
+        referringPhysician: req.body.referringPhysician,
+        referringPhysicianPrc: req.body.referringPhysicianPrc,
+      };
+      if (normalisedHmo && !isNamed(referral.referringPhysician)) {
+        return reject("Please give the referring physician's name — an HMO claim needs it for the LOA.");
+      }
+
       const result = await appointmentService.createAppointment({
         patientId,
         scheduledDate,
@@ -76,7 +88,8 @@ class AppointmentController {
         requestingUser: req.user,
         testIds: normalisedTestIds,
         hmo: normalisedHmo,
-        hmoCardFile: req.file || null
+        hmoCardFile: req.file || null,
+        referral
       });
 
       const { appointment, visitTests, hmoRequest, alreadyBooked } = result;

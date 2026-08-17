@@ -24,6 +24,7 @@ import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
 import RescheduleDialog from '../components/booking/RescheduleDialog';
+import ReferringPhysicianFields from '../components/booking/ReferringPhysicianFields';
 import useOperationsReport from '../hooks/useOperationsReport';
 import { ReceptionThroughputPanel } from '../components/reports/OperationsPanels';
 import {
@@ -94,6 +95,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [activeVisits, setActiveVisits] = useState([]);
   const [testCatalog, setTestCatalog] = useState([]);
   const [patientTypes, setPatientTypes] = useState([]);
+  // The requesting doctor, captured alongside the visit rather than the patient: a referral
+  // belongs to one episode of care, not to the person forever.
+  const [referringPhysician, setReferringPhysician] = useState('');
+  const [referringPhysicianPrc, setReferringPhysicianPrc] = useState('');
   const [hmoProviders, setHmoProviders] = useState([]);
   const [staticDataError, setStaticDataError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -184,6 +189,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [registrationSuccess, setRegistrationSuccess] = useState('');
   const [registrationError, setRegistrationError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+
+  // The form holds the patient type as an id; the referral rule is expressed in names. Resolved
+  // here rather than comparing against a hardcoded id, which a reseed could renumber.
+  const selectedPatientTypeName = patientTypes.find(
+    (t) => String(t.id) === String(newPatient.patientTypeId)
+  )?.name;
 
   // Manual HMO logging State
   const [showHmoModal, setShowHmoModal] = useState(false);
@@ -479,7 +490,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       const vRes = await api.post('/visits', {
         patientId: patient.id,
         visitType: 'Walk in',
-        notes: visitNotes
+        notes: visitNotes,
+        referringPhysician,
+        referringPhysicianPrc
       });
 
       const visit = vRes.data.data.visit;
@@ -496,6 +509,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         patientTypeId: ''
       });
       setVisitNotes('');
+      // Cleared with the rest of the form. A referring physician left in state would follow the
+      // next patient registered, attaching a doctor to somebody they never saw.
+      setReferringPhysician('');
+      setReferringPhysicianPrc('');
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
     } catch (err) {
       setRegistrationError(err.response?.data?.message || 'Failed to register walk-in patient');
@@ -1174,6 +1191,25 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     </Select>
                   </div>
                 </div>
+
+                {/* Shown for every patient type, because a self-paying patient who was referred
+                    still needs the doctor on the record — the report goes back to them. Only
+                    'Private' makes it mandatory, since at this clinic that type means "a physician
+                    sent them". The server enforces the same rule; this mirrors it so the
+                    receptionist is not told at submit what could have been said while typing. */}
+                <ReferringPhysicianFields
+                  physician={referringPhysician}
+                  prc={referringPhysicianPrc}
+                  onPhysicianChange={setReferringPhysician}
+                  onPrcChange={setReferringPhysicianPrc}
+                  required={selectedPatientTypeName === 'Private'}
+                  reason={
+                    selectedPatientTypeName === 'Private'
+                      ? 'A Private patient is one a physician referred, so the record needs to name them.'
+                      : null
+                  }
+                  disabled={isRegistering}
+                />
 
                 <div className="space-y-1">
                   <label className="field-label">Home Address</label>

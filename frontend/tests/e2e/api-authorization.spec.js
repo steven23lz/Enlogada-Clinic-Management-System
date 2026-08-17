@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { selfPayTypeId } from './helpers/patients.js';
 
 // Backend API-level authorization tests. These hit the Express API directly (no browser),
 // exercising a real end-to-end workflow and regression-testing the five ownership/IDOR
@@ -45,7 +46,9 @@ async function registerAndLoginClient(apiContext, prefix) {
   const patientRes = await apiContext.post(`${API}/patients`, {
     headers: { Authorization: `Bearer ${token}` },
     data: {
-      patientTypeId: 2, // "Private" — seeded 2nd in patient_types
+      // Self Pay by name. Was `2` — 'Private' — which [1.23.0] turned into "a physician referred
+      // them", so it began demanding a referring physician this fixture has no reason to carry.
+      patientTypeId: await selfPayTypeId(apiContext, API, token),
       firstName: 'E2E',
       lastName: `${prefix}Patient`,
       birthdate: '1990-01-01',

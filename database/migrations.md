@@ -1,5 +1,32 @@
 # Database Migration & Schema History
 
+## [1.23.0] - 2026-08-17 (The doctor who requested the test)
+
+### Added
+* `patient_visits.referring_physician` / `referring_physician_prc` — the requesting doctor, and the PRC licence number that makes the name unambiguous. On the visit, not the patient: a referral belongs to one episode of care, not to the person forever.
+* `idx_patient_visits_referring_physician`, partial (`WHERE referring_physician IS NOT NULL`). Most visits have none, so a full index would be mostly dead weight; this answers "which visits did Dr. X send us", which is the question the data will actually be asked.
+* `appointments:reschedule` was seeded in [1.22.1]; no new permission here. Run `node src/scripts/setupRbac.js` if you are catching up.
+
+### Why
+* A diagnostic report is not addressed to the patient alone — it goes back to the doctor who ordered the test, and there was nowhere to record who that was. The report named the clinic and the clinician who produced it, and had no line for the person the findings were for.
+
+### The rule, and what it deliberately does not cover
+* **Required on an HMO claim.** The LOA is issued against the referring physician; a claim that cannot name one is difficult to reimburse, and the clinic discovers that weeks later while chasing a patient who has long since gone home. Enforced in `hmoService`, not only in the booking controller, because `POST /hmo/request` reaches the same rule and reception filing a claim against an existing walk-in is the ordinary case.
+* **Required for the `Private` patient type**, which at this clinic means "referred by a private physician" as opposed to a walk-in. Such a visit naming nobody is not a gap in the record; it is a record that contradicts itself.
+* **Not required for Self Pay** — and this is a decision, not an oversight. It leaves one case knowingly unenforced: a self-paying walk-in can be given an X-ray with no requesting physician on file. Diagnostic radiography is normally performed on a licensed physician's request, and that is a radiation-safety matter which does not care who is paying. If the clinic's DOH / BHDT licensing says a request is mandatory, this rule is the wrong shape — the fix is a `requires_referral` flag per `test_categories` row, because the requirement is then about the modality rather than the payer. Written down so it stays revisitable.
+* A claim filed later never overwrites a physician the visit already names. That name may already be on a released report, and two documents naming different doctors for one episode is worse than either.
+* A PRC number submitted without a name is discarded. On its own it identifies nobody, and storing it would read as though the name had been lost rather than never given.
+
+### Migration
+* `node src/scripts/migrateReferringPhysician.js` — additive, idempotent, one transaction.
+* Reversible: `node src/scripts/migrateReferringPhysician.js --rollback`.
+* Existing visits keep `NULL`. Back-filling a doctor nobody named would invent a referral.
+
+### Consequences for fixtures
+* Specs and `seedDemoScenario.js` used `Private` as a meaningless placeholder for fixture patients — often as the literal id `2`. That type means something now, so every such fixture began failing for naming no physician. All were switched to `Self Pay`, which is what an unpaid walk-in with no doctor and no coverage actually is, and resolved **by name** through `tests/e2e/helpers/patients.js` rather than by a seed-order id.
+
+---
+
 ## [1.22.0] - 2026-08-17 (Evidence for an HMO claim)
 
 Originally authored as `[1.13.0]` on a branch cut before [1.13.0]–[1.21.0] landed; renumbered on

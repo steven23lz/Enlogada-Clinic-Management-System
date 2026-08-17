@@ -149,6 +149,8 @@ test.describe('Booking atomicity (API)', () => {
     ids.forEach((id) => form.append('testIds[]', String(id)));
     form.append('hmo[providerId]', String(providerId));
     form.append('hmo[approvalCode]', 'LOA-E2E');
+    // Mandatory on an HMO claim since [1.23.0] — the LOA is issued against the requesting doctor.
+    form.append('referringPhysician', 'Dr. E2E Referrer');
     if (withCard) {
       form.append('hmoCard', new Blob([CARD_PNG], { type: 'image/png' }), 'card.png');
     }
@@ -210,6 +212,10 @@ test.describe('Booking atomicity (API)', () => {
       data: { hmoProviderId: providerId, visitTestIds }
     });
     expect(res.status()).toBe(400);
+    // Asserted on the message, not just the status: a claim now has two ways to be refused with
+    // 400 — no card, and no referring physician [1.23.0] — and a test that accepts either is no
+    // longer testing the rule in its own title.
+    expect((await res.json()).message).toMatch(/hmo card/i);
   });
 
   test('the Self-Pay sentinel is rejected rather than stored as a null provider', async () => {

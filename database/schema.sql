@@ -184,6 +184,13 @@ CREATE TABLE patient_visits (
     status VARCHAR(50) DEFAULT 'Pending',
     notes TEXT,
     queue_number VARCHAR(50), -- Tracks the physical queue number generated for receptionist/cashier flow
+    -- The doctor who requested the test. A diagnostic report goes back to them, so it needs a line
+    -- naming them; the PRC licence number is what makes "Dr. Santos" unambiguous and is what an HMO
+    -- asks for. Required on an HMO claim and for the 'Private' patient type (which means
+    -- physician-referred at this clinic); optional for Self Pay. See migrations.md [1.23.0] for
+    -- the case that rule deliberately leaves unenforced.
+    referring_physician VARCHAR(150),
+    referring_physician_prc VARCHAR(50),
     -- The discount ENTITLEMENT claimed for this visit. The amount actually deducted is
     -- snapshotted onto payments, so a receipt survives later catalogue edits.
     discount_type_id INT,

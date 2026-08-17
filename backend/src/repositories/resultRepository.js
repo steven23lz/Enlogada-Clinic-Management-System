@@ -19,6 +19,9 @@ class ResultRepository {
              -- waiting time at all, so a ticket could sit in a department indefinitely with
              -- nothing on screen saying so; the billing queue had this and the modalities did not.
              pv.created_at as visit_created_at,
+             -- Who asked for the test. A diagnostic report goes back to this doctor, so the
+             -- worklist and the report both need to be able to name them. [1.23.0]
+             pv.referring_physician, pv.referring_physician_prc,
              p.id as patient_id, p.first_name, p.last_name, p.birthdate, p.sex,
              (
                SELECT hrt.approval_status
@@ -302,6 +305,9 @@ class ResultRepository {
       SELECT vt.id as visit_test_id, vt.price_at_time, vt.status as test_status,
              t.name as test_name, tc.name as category_name,
              pv.created_at as visit_date, pv.queue_number,
+             -- The report names the doctor who asked for the test, because it is a document
+             -- addressed to them as much as to the patient. [1.23.0]
+             pv.referring_physician, pv.referring_physician_prc,
              tr.id as result_id, tr.findings, tr.remarks as result_remarks,
              tr.file_url, tr.file_path, tr.file_original_name, tr.released_at,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name

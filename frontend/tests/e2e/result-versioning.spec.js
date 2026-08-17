@@ -53,7 +53,9 @@ test.describe('Result versioning and critical values', () => {
     // demo dataset exactly as it found it.
     const types = (await (await apiContext.get(`${API}/patients/types`, { headers: auth(reception) })).json())
       .data.patientTypes;
-    const priv = types.find((t) => /private/i.test(t.name)) || types[0];
+    // Self Pay: this spec is about amendment history; the type is incidental. 'Private' now
+    // means physician-referred and would demand a doctor the spec never sets.
+    const priv = types.find((t) => /self.?pay/i.test(t.name)) || types[0];
 
     const patient = await (await apiContext.post(`${API}/patients`, {
       headers: auth(reception),

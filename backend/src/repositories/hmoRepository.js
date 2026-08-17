@@ -76,6 +76,21 @@ class HmoRepository {
     return result.rows;
   }
 
+  // The single visit a set of visit_tests belongs to, or null.
+  //
+  // Safe to treat as single because hmoService already refuses a claim spanning more than one
+  // visit — this is the read that the referral rule then hangs off, and it returns the lowest id
+  // so a legacy multi-visit row resolves deterministically rather than at the planner's whim.
+  async findVisitIdByVisitTestIds(visitTestIds) {
+    const queryText = `
+      SELECT MIN(vt.patient_visit_id)::int AS visit_id
+      FROM visit_tests vt
+      WHERE vt.id = ANY($1::int[])
+    `;
+    const result = await db.query(queryText, [visitTestIds]);
+    return result.rows[0]?.visit_id ?? null;
+  }
+
   // Everything the card route needs in one read: the file metadata, plus the accounts that own
   // the patients the claim was filed for, so ownership can be checked without a second query.
   //
@@ -104,12 +119,23 @@ class HmoRepository {
     return result.rows[0];
   }
 
+  // The referring physician is reached through the claim's tests, since hmo_requests has no
+  // patient_visit_id of its own. Admin reviewing a claim needs it on screen: it is the doctor the
+  // LOA is issued against, and a claim that cannot name one is the thing the HMO will send back.
+  // MIN for the same reason as findCardByRequestId — one visit per claim by rule, deterministic
+  // for the legacy rows that predate it.
   async findRequestById(id) {
     const queryText = `
-      SELECT hr.*, hp.name as provider_name
+      SELECT hr.*, hp.name as provider_name,
+             MIN(pv.referring_physician) AS referring_physician,
+             MIN(pv.referring_physician_prc) AS referring_physician_prc
       FROM hmo_requests hr
       JOIN hmo_providers hp ON hr.hmo_provider_id = hp.id
+      LEFT JOIN hmo_request_tests hrt ON hrt.hmo_request_id = hr.id
+      LEFT JOIN visit_tests vt ON hrt.visit_test_id = vt.id
+      LEFT JOIN patient_visits pv ON vt.patient_visit_id = pv.id
       WHERE hr.id = $1
+      GROUP BY hr.id, hp.name
     `;
     const result = await db.query(queryText, [id]);
     return result.rows[0];

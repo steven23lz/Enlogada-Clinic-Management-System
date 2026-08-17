@@ -19,6 +19,7 @@ import Pagination from '../components/ui/pagination';
 import BookingConfirmation from '../components/BookingConfirmation';
 import SlotPicker from '../components/booking/SlotPicker';
 import RescheduleDialog from '../components/booking/RescheduleDialog';
+import ReferringPhysicianFields from '../components/booking/ReferringPhysicianFields';
 import api from '../config/api';
 import { formatCurrency } from '../lib/currency';
 import { toastError } from '../lib/toast';
@@ -217,7 +218,9 @@ const ClientDashboard = ({ onNavigate }) => {
     notes: '',
     testIds: [],
     hmoProviderId: '',
-    hmoApprovalCode: ''
+    hmoApprovalCode: '',
+    referringPhysician: '',
+    referringPhysicianPrc: ''
   });
 
   // UI/UX Modernization Phase 10: holds the full confirmation payload (not just a success
@@ -524,7 +527,10 @@ const ClientDashboard = ({ onNavigate }) => {
     setBookingError('');
     setBookingConfirmation(null);
 
-    const { scheduledDate, scheduledTime, notes, testIds, hmoProviderId, hmoApprovalCode } = bookingData;
+    const {
+      scheduledDate, scheduledTime, notes, testIds, hmoProviderId, hmoApprovalCode,
+      referringPhysician, referringPhysicianPrc,
+    } = bookingData;
     if (!scheduledDate || !scheduledTime || testIds.length === 0) {
       setBookingError('Date, Time, and at least one diagnostic test are required.');
       return;
@@ -539,6 +545,11 @@ const ClientDashboard = ({ onNavigate }) => {
 
     if (hmo && !hmoCardFile) {
       setBookingError('Please attach a photo of your HMO card to claim HMO coverage.');
+      return;
+    }
+
+    if (hmo && !referringPhysician?.trim()) {
+      setBookingError("Please give the name of the doctor who requested these tests — your HMO needs it to approve coverage.");
       return;
     }
 
@@ -564,6 +575,8 @@ const ClientDashboard = ({ onNavigate }) => {
         testIds.forEach((id) => fd.append('testIds[]', String(parseInt(id, 10))));
         fd.append('hmo[providerId]', String(hmo.providerId));
         if (hmo.approvalCode) fd.append('hmo[approvalCode]', hmo.approvalCode);
+        fd.append('referringPhysician', referringPhysician.trim());
+        if (referringPhysicianPrc?.trim()) fd.append('referringPhysicianPrc', referringPhysicianPrc.trim());
         fd.append('hmoCard', hmoCardFile, hmoCardFile.name);
 
         // The header override is load-bearing, not decoration: the axios instance defaults to
@@ -598,7 +611,9 @@ const ClientDashboard = ({ onNavigate }) => {
         notes: '',
         testIds: [],
         hmoProviderId: '',
-        hmoApprovalCode: ''
+        hmoApprovalCode: '',
+        referringPhysician: '',
+        referringPhysicianPrc: ''
       });
       clearHmoCard();
       fetchHistory(selectedProfileId);
@@ -1177,6 +1192,20 @@ const ClientDashboard = ({ onNavigate }) => {
                               />
                             </div>
 
+                            {/* Mandatory on an HMO claim: the LOA runs through the requesting
+                                doctor, and a claim that cannot name one is hard to reimburse —
+                                which the clinic discovers weeks later, chasing a patient who has
+                                long since gone home. */}
+                            <ReferringPhysicianFields
+                              physician={bookingData.referringPhysician}
+                              prc={bookingData.referringPhysicianPrc}
+                              onPhysicianChange={(v) => setBookingData({ ...bookingData, referringPhysician: v })}
+                              onPrcChange={(v) => setBookingData({ ...bookingData, referringPhysicianPrc: v })}
+                              required
+                              reason="Your HMO needs the doctor who requested these tests in order to approve coverage."
+                              disabled={isBooking}
+                            />
+
                             <div className="space-y-1.5">
                               <label className="field-label">
                                 Photo of your HMO card <span className="text-rose-600">*</span>
@@ -1382,6 +1411,20 @@ const ClientDashboard = ({ onNavigate }) => {
                                 <span className="text-gray-400 font-bold text-meta uppercase block">Category</span>
                                 <span className="font-bold text-slate-900">{item.category_name}</span>
                               </div>
+                              {/* Only when there is one. A "Referred by: —" line on a self-pay
+                                  walk-in's report is noise: nobody referred them, and an empty
+                                  field invites the reader to wonder what is missing. */}
+                              {item.referring_physician && (
+                                <div>
+                                  <span className="text-gray-400 font-bold text-meta uppercase block">Referred By</span>
+                                  <span className="font-bold text-slate-900">{item.referring_physician}</span>
+                                  {item.referring_physician_prc && (
+                                    <span className="block text-meta text-slate-500">
+                                      PRC {item.referring_physician_prc}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
 
                             {/* Findings Body */}

@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { payAndReleaseWalkIn } from './helpers/ticketRelease.js';
+import { selfPayTypeId } from './helpers/patients.js';
 
 // Module 9 (Laboratory Staff) coverage. The worklist UI (start-processing, template-assisted
 // findings entry, confirm-before-release) was already built; the real gap found on inspection
@@ -35,7 +36,8 @@ async function loginAs(apiContext, creds) {
 async function createLabVisitTest(apiContext, recToken) {
   const patientRes = await apiContext.post(`${API}/patients`, {
     headers: { Authorization: `Bearer ${recToken}` },
-    data: { patientTypeId: 2, firstName: 'M9', lastName: uniqueName('Fixture'), birthdate: '1990-01-01', sex: 'Male', address: 'Addr', contactNumber: '09170000000', emergencyContact: '' },
+    // Self Pay by name — see the note in helpers/patients.js on why the old hardcoded `2` broke.
+    data: { patientTypeId: await selfPayTypeId(apiContext, API, recToken), firstName: 'M9', lastName: uniqueName('Fixture'), birthdate: '1990-01-01', sex: 'Male', address: 'Addr', contactNumber: '09170000000', emergencyContact: '' },
   });
   const patient = (await patientRes.json()).data.patient;
 

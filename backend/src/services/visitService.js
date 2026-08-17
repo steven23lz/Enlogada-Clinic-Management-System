@@ -1,5 +1,7 @@
 const visitRepository = require('../repositories/visitRepository');
 const notificationService = require('./notificationService');
+const patientRepository = require('../repositories/patientRepository');
+const { assertReferralIfRequired, normaliseReferral } = require('./referralService');
 const { staffRolesForCategories } = require('../constants/modality');
 
 const VALID_VISIT_STATUSES = ['Pending', 'Processing', 'Completed', 'Cancelled'];
@@ -15,7 +17,23 @@ const RELEASE_BLOCKED = {
 };
 
 class VisitService {
-  async registerVisit({ patientId, visitType, notes, createdBy }) {
+  async registerVisit({ patientId, visitType, notes, createdBy, referringPhysician, referringPhysicianPrc }) {
+    const referral = normaliseReferral({ referringPhysician, referringPhysicianPrc });
+
+    // A 'Private' patient is by definition one a physician referred, so the record has to say who.
+    // Checked before the queue number is drawn: daily_counters hands out a number that is never
+    // reused, so failing after it has been taken burns a ticket number the patient never saw.
+    //
+    // Straight to the repository rather than through patientService.getPatientById — this wants
+    // the patient's type, not a department-scoped read, and calling the scoped helper with no
+    // requesting user would look like the scoping had been considered and waived.
+    const patient = await patientRepository.findPatientById(patientId);
+    assertReferralIfRequired({
+      patientTypeName: patient?.patient_type_name,
+      hasHmoClaim: false,
+      referringPhysician: referral.referringPhysician,
+    });
+
     // Generate daily queue number
     const queueNumber = await visitRepository.getNextQueueNumber();
 
@@ -24,7 +42,8 @@ class VisitService {
       visitType,
       notes,
       queueNumber,
-      createdBy
+      createdBy,
+      ...referral
     });
 
     return visit;

@@ -100,8 +100,26 @@ async function main() {
   let personIndex = 0;
   const nextPerson = () => pick(PEOPLE, personIndex++);
 
-  /** Registers a walk-in and attaches one test from `category`. Returns the ids and price. */
-  const makeVisit = async ({ category, patientTypeName = 'Private', testIndex = 0 }) => {
+  // A handful of real-looking referrers, so the "Referred by" line on a report is populated on
+  // some visits and empty on others — which is the honest picture, and the one that shows the
+  // rule working rather than a field that is either always full or always blank.
+  const REFERRERS = [
+    ['Dr. Amelia R. Santos', '0142887'],
+    ['Dr. Benigno L. Cruz', '0098431'],
+    ['Dr. Corazon M. Villanueva', '0176520'],
+  ];
+
+  /**
+   * Registers a walk-in and attaches one test from `category`. Returns the ids and price.
+   *
+   * Defaults to Self Pay. It used to default to 'Private', which was a harmless label until
+   * [1.23.0] made 'Private' mean "a physician referred them" — at which point every seeded visit
+   * would have been refused for naming no doctor. Most of these are ordinary walk-ins, which is
+   * what Self Pay describes; pass `referrerIndex` for the ones that should carry a referral.
+   */
+  const makeVisit = async ({
+    category, patientTypeName = 'Self Pay', testIndex = 0, referrerIndex = null,
+  }) => {
     const [firstName, lastName, sex, birthdate] = nextPerson();
     const patient = (await call('/patients', {
       method: 'POST', token: tok.receptionist,
@@ -111,9 +129,15 @@ async function main() {
       },
     })).data.patient;
 
+    // 'Private' and HMO both require one, so those callers must supply an index.
+    const referrer = referrerIndex === null ? null : pick(REFERRERS, referrerIndex);
+
     const visit = (await call('/visits', {
       method: 'POST', token: tok.receptionist,
-      body: { patientId: patient.id, visitType: 'Walk in', notes: `${category} — walk-in` },
+      body: {
+        patientId: patient.id, visitType: 'Walk in', notes: `${category} — walk-in`,
+        referringPhysician: referrer?.[0], referringPhysicianPrc: referrer?.[1],
+      },
     })).data.visit;
 
     const test = pick(catalogue[category], testIndex);
@@ -278,7 +302,9 @@ async function main() {
 
   // 5. A CRITICAL result, released and awaiting callback — the escalation path.
   {
-    const v = await makeVisit({ category: 'Laboratory', testIndex: 3 });
+    // Names a referrer: a critical value is called back to the requesting physician, so this is
+    // the visit where that field most obviously has to be populated.
+    const v = await makeVisit({ category: 'Laboratory', testIndex: 3, referrerIndex: 1 });
     await payFor(v, 'Cash');
     await recordFindings(v, {
       findings: 'Potassium 7.1 mmol/L. CRITICALLY HIGH — repeat sample confirms. Urgent review required.',
@@ -291,7 +317,8 @@ async function main() {
 
   // 6. An AMENDED result — two versions, so the amendment history has something in it.
   {
-    const v = await makeVisit({ category: 'Xray', testIndex: 2 });
+    // An amendment is re-issued to whoever received the first version, so it needs a referrer.
+    const v = await makeVisit({ category: 'Xray', testIndex: 2, referrerIndex: 2 });
     await payFor(v, 'GCash');
     await recordFindings(v, { findings: 'No acute cardiopulmonary findings.' });
     const token = modalityToken[v.category];
@@ -318,7 +345,11 @@ async function main() {
 
   // 8. An HMO patient with a pending pre-authorisation, for the Service Requests screen.
   {
-    const v = await makeVisit({ category: 'Ultrasound', patientTypeName: 'HMO', testIndex: 2 });
+    // Carries a referring physician: an HMO claim requires one [1.23.0], and this is the visit
+    // the Service Requests screen opens, so it is also where Admin sees the field populated.
+    const v = await makeVisit({
+      category: 'Ultrasound', patientTypeName: 'HMO', testIndex: 2, referrerIndex: 0,
+    });
     const providers = (await call('/hmo/providers', { token: tok.receptionist })).data.providers;
     await call('/hmo/request', {
       method: 'POST', token: tok.receptionist,

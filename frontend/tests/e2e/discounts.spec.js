@@ -50,7 +50,9 @@ test.describe('Statutory discounts (Senior Citizen / PWD)', () => {
     // Own throwaway visit, so nothing here depends on demo data a purge may have removed.
     const types = (await (await apiContext.get(`${API}/patients/types`, { headers: auth(reception) })).json())
       .data.patientTypes;
-    const priv = types.find((t) => /private/i.test(t.name)) || types[0];
+    // Self Pay: this spec is about statutory discounts, and the patient type is incidental to
+    // that. 'Private' now means physician-referred and would demand a doctor the spec never sets.
+    const priv = types.find((t) => /self.?pay/i.test(t.name)) || types[0];
 
     const patient = await (await apiContext.post(`${API}/patients`, {
       headers: auth(reception),

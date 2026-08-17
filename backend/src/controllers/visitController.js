@@ -4,7 +4,7 @@ const patientService = require('../services/patientService');
 class VisitController {
   async registerVisit(req, res, next) {
     try {
-      const { patientId, visitType, notes } = req.body;
+      const { patientId, visitType, notes, referringPhysician, referringPhysicianPrc } = req.body;
       const createdBy = req.user.userId;
 
       if (!patientId || !visitType) {
@@ -18,7 +18,10 @@ class VisitController {
         patientId,
         visitType,
         notes,
-        createdBy
+        createdBy,
+        // Optional here; visitService decides whether this patient's type makes it mandatory.
+        referringPhysician,
+        referringPhysicianPrc
       });
 
       return res.status(201).json({

@@ -35,7 +35,9 @@ async function loginAs(apiContext, creds) {
   return (await res.json()).data.token;
 }
 
-async function registerClientWithPatient(apiContext, prefix, patientTypeName = 'Private') {
+// Default Self Pay: a payment fixture carries no coverage and no referral, and 'Private' now
+// means physician-referred, which would demand a doctor none of these tests are about.
+async function registerClientWithPatient(apiContext, prefix, patientTypeName = 'Self Pay') {
   const email = uniqueName(prefix) + '@enlogada-e2e.test';
   const password = 'TestPass123!';
   await apiContext.post(`${API}/auth/register`, { data: { firstName: 'E2E', lastName: prefix, email, password, contactNumber: '' } });
@@ -107,7 +109,12 @@ test.describe('HMO coverage requires real per-test approval (API)', () => {
 
     const hmoReqRes = await apiContext.post(`${API}/hmo/request`, {
       headers: { Authorization: `Bearer ${recToken}` },
-      data: { hmoProviderId: providerId, approvalCode: 'LOA-TEST', visitTestIds: [visitTests[0].id] },
+      // referringPhysician is mandatory on a claim since [1.23.0] — the LOA is issued against
+      // the requesting doctor, and this fixture's visit is a Self Pay walk-in that names none.
+      data: {
+        hmoProviderId: providerId, approvalCode: 'LOA-TEST', visitTestIds: [visitTests[0].id],
+        referringPhysician: 'Dr. E2E Referrer',
+      },
     });
     const hmoRequestTestId = (await hmoReqRes.json()).data.request.tests[0].id;
 
@@ -138,7 +145,12 @@ test.describe('HMO coverage requires real per-test approval (API)', () => {
     const providerId = (await providersRes.json()).data.providers[0].id;
     await apiContext.post(`${API}/hmo/request`, {
       headers: { Authorization: `Bearer ${recToken}` },
-      data: { hmoProviderId: providerId, approvalCode: 'LOA-REQ-ONLY', visitTestIds: [visitTests[0].id] },
+      // referringPhysician is mandatory on a claim since [1.23.0] — the LOA is issued against
+      // the requesting doctor, and this fixture's visit is a Self Pay walk-in that names none.
+      data: {
+        hmoProviderId: providerId, approvalCode: 'LOA-REQ-ONLY', visitTestIds: [visitTests[0].id],
+        referringPhysician: 'Dr. E2E Referrer',
+      },
     });
 
     const billRes = await apiContext.get(`${API}/payments/bill/${visit.id}`, { headers: { Authorization: `Bearer ${cashToken}` } });

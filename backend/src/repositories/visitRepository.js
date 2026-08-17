@@ -1,13 +1,45 @@
 const db = require('../config/database');
 
 class VisitRepository {
-  async createVisit({ patientId, visitType, notes, queueNumber, createdBy }, client = db) {
+  async createVisit(
+    { patientId, visitType, notes, queueNumber, createdBy, referringPhysician = null, referringPhysicianPrc = null },
+    client = db
+  ) {
     const queryText = `
-      INSERT INTO patient_visits (patient_id, visit_type, notes, queue_number, created_by)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO patient_visits (
+        patient_id, visit_type, notes, queue_number, created_by,
+        referring_physician, referring_physician_prc
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `;
-    const result = await client.query(queryText, [patientId, visitType, notes, queueNumber, createdBy]);
+    const result = await client.query(queryText, [
+      patientId, visitType, notes, queueNumber, createdBy,
+      referringPhysician || null, referringPhysicianPrc || null,
+    ]);
+    return result.rows[0];
+  }
+
+  /**
+   * Records the requesting doctor on a visit that already exists.
+   *
+   * Needed because the two are not always captured together: reception logs an HMO claim against
+   * a visit that may have been registered minutes earlier as a plain walk-in, and the claim is
+   * what makes the referral mandatory. Without this the only way to satisfy the rule would be to
+   * cancel the visit and re-register it.
+   */
+  async updateReferringPhysician(visitId, { referringPhysician, referringPhysicianPrc }) {
+    const queryText = `
+      UPDATE patient_visits
+      SET referring_physician = $1,
+          referring_physician_prc = $2,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING *
+    `;
+    const result = await db.query(queryText, [
+      referringPhysician || null, referringPhysicianPrc || null, visitId,
+    ]);
     return result.rows[0];
   }
 

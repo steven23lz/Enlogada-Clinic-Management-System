@@ -19,7 +19,18 @@ class HmoController {
       }
 
       const request = await hmoService.createRequest(
-        { hmoProviderId: Number(hmoProviderId), approvalCode, visitTestIds: ids.map(Number), cardFile: req.file || null },
+        {
+          hmoProviderId: Number(hmoProviderId),
+          approvalCode,
+          visitTestIds: ids.map(Number),
+          cardFile: req.file || null,
+          // Optional in the body: the visit may already name a physician, in which case nothing
+          // needs supplying. hmoService decides, and records this only when the visit has none.
+          referral: {
+            referringPhysician: req.body.referringPhysician,
+            referringPhysicianPrc: req.body.referringPhysicianPrc,
+          },
+        },
         req.user
       );
       return res.status(201).json({

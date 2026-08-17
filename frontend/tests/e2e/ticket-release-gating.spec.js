@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { payAndReleaseWalkIn, confirmAppointmentCheckIn } from './helpers/ticketRelease.js';
+import { selfPayTypeId } from './helpers/patients.js';
 
 // Ticket Release Gating.
 //
@@ -36,7 +37,11 @@ async function createUnreleasedWalkIn(apiContext, recToken) {
   const patientRes = await apiContext.post(`${API}/patients`, {
     headers: { Authorization: `Bearer ${recToken}` },
     data: {
-      patientTypeId: 2,
+      // Self Pay, resolved by name. This was `patientTypeId: 2` — 'Private' — chosen as a
+      // placeholder when the type was only a label. [1.23.0] made 'Private' mean "a physician
+      // referred them", so it now requires a referring physician and every fixture here failed.
+      // These are ordinary unpaid walk-ins with no doctor, which is what Self Pay describes.
+      patientTypeId: await selfPayTypeId(apiContext, API, recToken),
       firstName: 'Gate',
       lastName: uniqueName('Fixture'),
       birthdate: '1990-01-01',

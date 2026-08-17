@@ -5,6 +5,8 @@ const db = require('../config/database');
 const auditService = require('./auditService');
 const { HMO_CARD_UPLOAD_ROOT } = require('../config/upload');
 const { CLIENT_ROLE, isStaffUser } = require('../constants/roles');
+const visitRepository = require('../repositories/visitRepository');
+const { assertReferralIfRequired, normaliseReferral, isNamed } = require('./referralService');
 
 // Mirrors testService.js's assertClientOwnsVisit, which exists for the same reason: that endpoint
 // also authorizes the Client role for self-service booking and originally trusted whatever ids the
@@ -105,6 +107,36 @@ function resolveCardEvidence(requestingUser, cardFile) {
 
 class HmoService {
   /**
+   * Makes sure the visit behind a claim names the doctor who requested the tests, recording one
+   * from the caller if the visit does not have it yet.
+   *
+   * Runs inside the caller's transaction, so a claim and the referral it depends on either both
+   * land or neither does. A claim that committed while the physician write failed would sit in
+   * Admin's review queue looking complete and be refused by the HMO weeks later.
+   */
+  async assertVisitNamesReferrer(visitTestIds, referral) {
+    const visitId = await hmoRepository.findVisitIdByVisitTestIds(visitTestIds);
+    if (!visitId) return; // ownership/existence is assertClientOwnsVisitTests's job, not this one
+
+    const visit = await visitRepository.findVisitById(visitId);
+    const supplied = normaliseReferral(referral || {});
+    const already = isNamed(visit?.referring_physician);
+
+    assertReferralIfRequired({
+      patientTypeName: visit?.patient_type_name,
+      hasHmoClaim: true,
+      referringPhysician: already ? visit.referring_physician : supplied.referringPhysician,
+    });
+
+    // Only written when the visit had none. A claim filed later must not quietly rewrite the
+    // physician already recorded against the visit — that name may already be on a released
+    // report, and two documents naming different doctors for one episode is worse than either.
+    if (!already && supplied.referringPhysician) {
+      await visitRepository.updateReferringPhysician(visitId, supplied);
+    }
+  }
+
+  /**
    * Files an HMO claim: the request row, the tests it covers, and the evidence behind it.
    *
    * A request and the tests it covers are one submission to the HMO. Without a transaction, a
@@ -118,7 +150,7 @@ class HmoService {
    * there would be a redundant query issued while the slot's advisory lock is held.
    */
   async createRequest(
-    { hmoProviderId, approvalCode, visitTestIds, cardFile = null },
+    { hmoProviderId, approvalCode, visitTestIds, cardFile = null, referral = null },
     requestingUser,
     { ownershipAlreadyAsserted = false } = {}
   ) {
@@ -131,6 +163,13 @@ class HmoService {
     // Joins the caller's transaction when there is one (the booking flow), and opens its own when
     // there is not (POST /hmo/request) — see db.withTransaction's nesting rule.
     return await db.withTransaction(async () => {
+      // The referring physician, checked here rather than only in the booking controller — for
+      // the same reason the card rule lives in this service. POST /hmo/request reaches this too,
+      // and reception filing a claim at the desk against a walk-in registered ten minutes ago is
+      // the ordinary case: the visit exists and has no physician on it yet, because nothing
+      // required one until the claim was made.
+      await this.assertVisitNamesReferrer(visitTestIds, referral);
+
       const request = await hmoRepository.createRequestWithTests({
         hmoProviderId,
         approvalCode,
