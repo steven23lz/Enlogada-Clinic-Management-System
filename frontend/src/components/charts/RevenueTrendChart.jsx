@@ -13,7 +13,7 @@ const compactCurrency = (value) => (
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-[#e6ebf1] rounded-lg shadow-md px-3 py-2 text-xs">
+    <div className="bg-white border border-[#e6ebf1] rounded-lg shadow-float px-3 py-2 text-xs">
       <p className="font-bold text-slate-900 m-0">{formatDay(label)}</p>
       <p className="text-brand-600 font-semibold m-0">{formatCurrency(payload[0].value)}</p>
     </div>

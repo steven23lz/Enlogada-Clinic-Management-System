@@ -158,7 +158,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           <Button
             type="submit"
             disabled={submitting}
-            className="w-full bg-primary-hover hover:bg-primary-active text-white py-3 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-colors border-0 cursor-pointer shadow-md mt-2"
+            size="lg"
+            className="w-full mt-2"
           >
             <span>{submitting ? 'Creating Account...' : 'Create Account'}</span>
             <ArrowRight className="w-4 h-4" />

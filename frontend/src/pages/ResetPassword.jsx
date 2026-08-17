@@ -52,7 +52,7 @@ const ResetPassword = ({ token, onNavigate }) => {
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 flex items-center justify-center w-full">
         <div className="w-full max-w-md">
-          <Card className="border-[#e6ebf1] shadow-lg rounded-2xl border-t-4 border-t-[#769046] bg-white overflow-hidden">
+          <Card className="border-[#e6ebf1] rounded-2xl bg-white overflow-hidden">
             <CardHeader className="space-y-1.5 pt-6 pb-2 px-6">
               <div className="w-12 h-12 rounded-full border-2 border-brand-300 flex items-center justify-center bg-gray-50/30 mb-2">
                 <Logo className="w-8 h-8" />
@@ -116,7 +116,8 @@ const ResetPassword = ({ token, onNavigate }) => {
                       <Button
                         type="submit"
                         disabled={submitting}
-                        className="w-full bg-primary-hover hover:bg-primary-active text-white py-3 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-colors border-0 cursor-pointer shadow-md"
+                        size="lg"
+            className="w-full"
                       >
                         <span>{submitting ? 'Resetting...' : 'Reset Password'}</span>
                         <ArrowRight className="w-4 h-4" />

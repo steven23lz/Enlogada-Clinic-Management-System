@@ -85,7 +85,7 @@ const ServicesPage = ({ onNavigate }) => {
             <span className="text-sm font-semibold text-gray-500">Loading diagnostic services catalog...</span>
           </div>
         ) : categories.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-[#e6ebf1] shadow-sm max-w-md mx-auto space-y-2">
+          <div className="bg-white rounded-2xl p-12 text-center border border-[#e6ebf1] max-w-md mx-auto space-y-2">
             <h3 className="text-lg font-bold text-gray-800 m-0">No Active Services</h3>
             <p className="text-xs text-gray-500 m-0">Diagnostic services will appear here once added by clinic administration.</p>
           </div>
@@ -95,7 +95,7 @@ const ServicesPage = ({ onNavigate }) => {
               const meta = getCategoryMeta(cat.title);
               const Icon = meta.icon;
               return (
-                <Card key={idx} className="border-[#e6ebf1] shadow-sm rounded-2xl overflow-hidden bg-white hover:shadow-md transition-shadow">
+                <Card key={idx} className="border-[#e6ebf1] rounded-2xl overflow-hidden bg-white hover:shadow-raised transition-shadow">
                   <CardHeader className="py-5 px-6 border-b border-[#e6ebf1] flex flex-row items-center space-x-3 space-y-0">
                     <div className={`p-2.5 rounded-xl ${meta.bg}`}>
                       <Icon className="w-5 h-5" />

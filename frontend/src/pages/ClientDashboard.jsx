@@ -762,7 +762,7 @@ const ClientDashboard = ({ onNavigate }) => {
 
           <Dialog open={showAddProfile} onOpenChange={(open) => { setShowAddProfile(open); if (!open) setAddProfileError(''); }}>
             <DialogTrigger asChild>
-              <Button className="flex items-center space-x-2 rounded-xl font-bold text-xs shadow-sm cursor-pointer transition-all">
+              <Button className="flex items-center space-x-2 rounded-xl font-bold text-xs cursor-pointer transition-all">
                 <UserPlus className="w-4 h-4" />
                 <span>Add Dependent Profile</span>
               </Button>
@@ -1364,7 +1364,7 @@ const ClientDashboard = ({ onNavigate }) => {
             <div className="space-y-3">
               {filteredHistory.length > 0 ? (
                 filteredHistory.map(item => (
-                  <Card key={item.visit_test_id} className="border-[#e6ebf1] rounded-xl hover:shadow-md transition-all">
+                  <Card key={item.visit_test_id} className="border-[#e6ebf1] rounded-xl hover:shadow-raised transition-all">
                     <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div className="flex items-start space-x-3.5">
                         <div className="w-10 h-10 bg-gray-50 border border-gray-200/80 rounded-xl flex items-center justify-center flex-shrink-0 text-brand-600">
@@ -1816,7 +1816,7 @@ const ClientDashboard = ({ onNavigate }) => {
             )}
 
             {/* HMO Coverage Info Card */}
-            <Card className="border-[#e6ebf1] bg-rail text-white rounded-2xl overflow-hidden p-5 space-y-3 shadow-sm">
+            <Card className="border-[#e6ebf1] bg-rail text-white rounded-2xl overflow-hidden p-5 space-y-3">
               <div className="flex items-center space-x-2 text-brand-600">
                 <ShieldCheck className="w-5 h-5" />
                 <h3 className="font-bold text-sm text-white m-0">HMO Accreditation</h3>
