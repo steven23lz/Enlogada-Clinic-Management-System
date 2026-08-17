@@ -40,9 +40,11 @@ export const CLINIC_DEFAULTS = Object.freeze({
   email: 'enlogadaclinic2011@gmail.com',
 
   // Still honoured if someone does set them at build time, so nothing that worked before breaks.
-  tin: env.VITE_CLINIC_TIN || '',
-  businessPermit: env.VITE_CLINIC_PERMIT || '',
-  accreditation: env.VITE_CLINIC_ACCREDITATION || '',
+  // Trimmed here as well as on the server: an env value of "   " is otherwise truthy, and a run of
+  // spaces in the TIN would satisfy a presence check while printing nothing.
+  tin: (env.VITE_CLINIC_TIN || '').trim(),
+  businessPermit: (env.VITE_CLINIC_PERMIT || '').trim(),
+  accreditation: (env.VITE_CLINIC_ACCREDITATION || '').trim(),
 });
 
 let current = CLINIC_DEFAULTS;
@@ -81,12 +83,53 @@ export const useClinic = () => useSyncExternalStore(subscribe, getSnapshot, getS
 export const getClinic = () => current;
 
 /**
- * Whether enough statutory detail is present for this to read as an official receipt.
+ * Values that are obviously stand-ins: anything saying so in words, and anything whose digits are
+ * all zeros. A real TIN or permit number never looks like either.
+ *
+ * This exists so a sample configuration cannot quietly become a live one. Someone pastes the
+ * sample block in to see the receipt laid out with every field populated, and then the clinic
+ * opens — and without this the only thing standing between that and handing a patient a document
+ * bearing a made-up TIN is somebody remembering.
+ */
+const PLACEHOLDER_WORDS = /sample|placeholder|example|to-?be-?(provided|supplied)|tbd|xxx/i;
+const isPlaceholder = (value) => {
+  const v = (value || '').trim();
+  if (!v) return false;
+  if (PLACEHOLDER_WORDS.test(v)) return true;
+  const digits = v.replace(/\D/g, '');
+  return digits.length > 0 && /^0+$/.test(digits);
+};
+
+/**
+ * A field with something in it. Trimmed, because `Boolean('   ')` is `true` — and a bare
+ * truthiness check on these fields printed "Official Receipt" for a clinic whose TIN and permit
+ * were both a run of spaces. Found by testing the predicate rather than reading it.
+ */
+const isFilled = (value) => typeof value === 'string' && value.trim().length > 0;
+
+/** True when any statutory field is a stand-in, so the document must say so. */
+export const isSampleIdentity = (clinic = current) =>
+  isPlaceholder(clinic?.tin) || isPlaceholder(clinic?.businessPermit) || isPlaceholder(clinic?.accreditation);
+
+/**
+ * Whether this may print as a BIR Official Receipt.
+ *
+ * Gated on the **permit** — the Authority to Print, or the Permit to Use for a computerised
+ * system — and not on the TIN, which is the rule this used to apply and which was too generous. A
+ * TIN identifies the taxpayer; it does not authorise anybody to issue an official receipt. A
+ * clinic that is registered but has no ATP/PTU still cannot, so keying the wording to the TIN
+ * would have printed "Official Receipt" on a document that is not one — the same false-record
+ * problem the blank default was there to prevent, moved one step along.
+ *
+ * A placeholder in either field disqualifies it outright.
  *
  * Takes the identity rather than reading module state, so a component that got its copy from
  * useClinic cannot ask this question about a different snapshot than the one it is rendering.
  */
-export const hasStatutoryIdentity = (clinic = current) => Boolean(clinic?.tin);
+export const hasStatutoryIdentity = (clinic = current) =>
+  isFilled(clinic?.tin) &&
+  isFilled(clinic?.businessPermit) &&
+  !isSampleIdentity(clinic);
 
 /**
  * Backwards-compatible named export.

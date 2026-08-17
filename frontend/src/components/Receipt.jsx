@@ -1,5 +1,5 @@
 import React from 'react';
-import { useClinic, hasStatutoryIdentity } from '../lib/clinic';
+import { useClinic, hasStatutoryIdentity, isSampleIdentity } from '../lib/clinic';
 import { formatCurrency } from '../lib/currency';
 
 /**
@@ -21,10 +21,20 @@ import { formatCurrency } from '../lib/currency';
  *     applied had to do the subtraction themselves.
  *
  * ── Deliberately not claiming to be a BIR Official Receipt ────────────────────────────────────
- * It says "Payment Receipt" and, when the clinic's TIN is not configured, prints a line saying it
- * is not a BIR-registered Official Receipt. Fabricating a TIN or an OR series to make the
- * document look official would produce a false record that a patient might file for
- * reimbursement. Set VITE_CLINIC_TIN and the wording upgrades itself (see lib/clinic.js).
+ * It says "Payment Receipt", and prints a line saying it is not a BIR-registered Official
+ * Receipt, until the clinic is genuinely authorised to issue one. Fabricating a TIN or an OR
+ * series to make the document look official would produce a false record that a patient might
+ * file for reimbursement.
+ *
+ * The upgrade is keyed to the **permit** — the Authority to Print, or the Permit to Use for a
+ * computerised system — and NOT to the TIN. That distinction is the whole point: a TIN identifies
+ * the taxpayer, it does not authorise anyone to issue an official receipt, so a registered clinic
+ * with no ATP/PTU still cannot. Keying it to the TIN, as this once did, would print "Official
+ * Receipt" on a document that is not one.
+ *
+ * Set CLINIC_TIN and CLINIC_PERMIT in **backend/.env** (not the frontend — see lib/clinic.js for
+ * why that moved), restart the backend, and the wording upgrades itself. Placeholder values are
+ * detected and print a "sample configuration" band instead.
  *
  * ── Why 80mm ──────────────────────────────────────────────────────────────────────────────────
  * Clinic counters print to thermal roll, not A4. The @page rule in index.css sizes the sheet to
@@ -71,8 +81,26 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
   const gross = net + discount + vat;
   const isCash = payment.payment_method === 'Cash';
 
+  const sampleIdentity = isSampleIdentity(CLINIC);
+
   return (
     <div className="print-area mx-auto w-full max-w-[320px] bg-white p-4 font-sans text-slate-900">
+      {/* Sample configuration, said before anything else and impossible to miss.
+          The sample block exists so the layout can be reviewed with every field populated, which
+          means at some point a real receipt will be printed from a machine still carrying it. The
+          band is what makes that harmless: the document says what it is at the top, and prints
+          that way too — it is inside .print-area, not marked no-print. */}
+      {sampleIdentity && (
+        <div className="mb-2 border-2 border-dashed border-rose-400 px-2 py-1 text-center">
+          <p className="m-0 text-[10px] font-extrabold uppercase tracking-widest text-rose-600">
+            Sample configuration
+          </p>
+          <p className="m-0 text-[9px] leading-snug text-rose-600">
+            Placeholder TIN / permit. Not valid for issue to a patient.
+          </p>
+        </div>
+      )}
+
       <header className="text-center">
         <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wide">{CLINIC.shortName}</h2>
         <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
@@ -82,7 +110,16 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
         <p className="m-0 text-[10px] leading-snug text-slate-500">
           {CLINIC.phone} · {CLINIC.email}
         </p>
+        {/* Printed whenever set, independent of whether this qualifies as an Official Receipt —
+            the TIN identifies the taxpayer, and a patient claiming reimbursement wants to see it
+            either way. What it does NOT do on its own is authorise the wording below. */}
         {CLINIC.tin && <p className="m-0 text-[10px] font-semibold text-slate-600">TIN {CLINIC.tin}</p>}
+        {CLINIC.businessPermit && (
+          <p className="m-0 text-[10px] text-slate-600">ATP/PTU {CLINIC.businessPermit}</p>
+        )}
+        {CLINIC.accreditation && (
+          <p className="m-0 text-[10px] text-slate-600">PhilHealth {CLINIC.accreditation}</p>
+        )}
       </header>
 
       <Rule />
@@ -187,6 +224,10 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
         {!hasStatutoryIdentity(CLINIC) && (
           // Said plainly rather than dressed up. A document that looks like a BIR Official
           // Receipt but is not one is worse than one that admits what it is.
+          //
+          // Reached when the TIN is missing, when the ATP/PTU is missing, or when either is still
+          // a placeholder — a registered taxpayer without an authority to print cannot issue an
+          // Official Receipt, so a TIN alone is not enough to drop this line.
           <p className="m-0 text-[9px] leading-snug text-slate-400">
             This is a payment acknowledgement, not a BIR-registered Official Receipt.
           </p>
