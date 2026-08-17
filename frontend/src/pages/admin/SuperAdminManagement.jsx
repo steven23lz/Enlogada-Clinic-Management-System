@@ -596,7 +596,7 @@ const ElevatedAccounts = () => {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">Elevated Accounts (Admin / SuperAdmin)</h3>
-          <p className="m-0 mt-1 text-fine leading-relaxed text-slate-500">You cannot deactivate your own account, to prevent locking the clinic out of elevated administration.</p>
+          <p className="m-0 mt-1 text-fine leading-relaxed text-slate-500">Select a status chip to activate or deactivate an account — the same gesture as Staff Accounts. You cannot deactivate your own, to prevent locking the clinic out of elevated administration.</p>
         </div>
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogTrigger asChild>
@@ -687,7 +687,16 @@ const ElevatedAccounts = () => {
                         {a.first_name} {a.last_name} {isSelf && <span className="font-normal text-slate-400">(you)</span>}
                       </TableCell>
                       <TableCell className="text-slate-500">{a.email}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-slate-600">{a.roles?.[0]}</Badge></TableCell>
+                      {/* Every role, like the Staff Accounts table. An account holding both
+                          Admin and SuperAdmin would otherwise be listed under one of them, on the
+                          screen whose entire purpose is elevated-access oversight. */}
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {(a.roles || []).map((role) => (
+                            <Badge key={role} variant="outline" className="text-slate-600">{role}</Badge>
+                          ))}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {/* A real button, and genuinely disabled for your own row rather than
                             just dimmed — the previous version was a clickable <div> whose

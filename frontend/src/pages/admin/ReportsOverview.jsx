@@ -365,9 +365,16 @@ const RbacMatrixReport = () => {
                   <TableRow key={role.id} className="align-top">
                     <TableCell className="py-3 font-bold text-xs text-slate-900 whitespace-nowrap">{role.name}</TableCell>
                     <TableCell className="py-3">
+                      {/* Sorted, so the rows can be compared against each other — which is the
+                          only thing a matrix is for. They arrived in whatever order the join
+                          returned, so `patients:read_all_departments` sat last on SuperAdmin,
+                          first on Admin and last again on Cashier, and checking whether two roles
+                          differ meant reading every chip in both rows rather than scanning down a
+                          column. Sorting is by the resource before the colon and then the action,
+                          which is how the permission names are already built. */}
                       <div className="flex flex-wrap gap-1 max-w-2xl">
                         {(rolePermissions[role.name] || []).length > 0 ? (
-                          (rolePermissions[role.name] || []).map((permName) => (
+                          [...(rolePermissions[role.name] || [])].sort((a, b) => a.localeCompare(b)).map((permName) => (
                             <Badge key={permName} variant="outline" className="text-meta font-semibold border-gray-200">{permName}</Badge>
                           ))
                         ) : (
