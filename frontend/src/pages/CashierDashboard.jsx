@@ -20,7 +20,7 @@ import { SkeletonList, SkeletonRows } from '../components/ui/skeleton';
 import { Textarea } from '../components/ui/textarea';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
-import { todayStr } from '../lib/date';
+import { todayStr, formatDateTime } from '../lib/date';
 import { formatCurrency } from '../lib/currency';
 import { toastError } from '../lib/toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -1132,7 +1132,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         <TableCell>
                           <StatusBadge status={t.payment_status || 'Paid'} />
                         </TableCell>
-                        <TableCell className="text-right text-fine text-slate-500">{new Date(t.paid_at).toLocaleString()}</TableCell>
+                        <TableCell className="text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <Button type="button" variant="outline" size="xs" onClick={() => handleReprintReceipt(t)}>

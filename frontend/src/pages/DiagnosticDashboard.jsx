@@ -16,7 +16,7 @@ import { StatusBadge } from '../components/ui/status-badge';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
 import { toastSuccess, toastError, toastInfo } from '../lib/toast';
-import { ageFromBirthdate } from '../lib/date';
+import { ageFromBirthdate, formatDateTime } from '../lib/date';
 import WaitBadge from '../components/ui/wait-badge';
 import { SkeletonRows } from '../components/ui/skeleton';
 import { useAuth } from '../contexts/AuthContext';
@@ -797,7 +797,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                       </TableCell>
 
                       <TableCell className="py-3.5 text-xs text-gray-500">
-                        {test.released_at ? new Date(test.released_at).toLocaleString() : '—'}
+                        {test.released_at ? formatDateTime(test.released_at) : '—'}
                         {test.released_by_first_name && (
                           <span className="block text-meta text-gray-400">by {test.released_by_first_name} {test.released_by_last_name}</span>
                         )}
@@ -910,7 +910,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 </div>
               )}
               <div className="text-fine text-gray-400">
-                Released {viewingResult?.released_at ? new Date(viewingResult.released_at).toLocaleString() : '—'}
+                Released {viewingResult?.released_at ? formatDateTime(viewingResult.released_at) : '—'}
                 {viewingResult?.released_by_first_name && ` by ${viewingResult.released_by_first_name} ${viewingResult.released_by_last_name}`}
               </div>
             </div>
@@ -958,7 +958,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                     </div>
                   )}
                   <p className="text-fine text-gray-400 m-0 pt-2 border-t border-[#e6ebf1]">
-                    Released {new Date(justReleased.released_at).toLocaleString()}
+                    Released {formatDateTime(justReleased.released_at)}
                     {justReleased.released_by_first_name && ` by ${justReleased.released_by_first_name} ${justReleased.released_by_last_name}`}
                   </p>
                 </div>
@@ -1202,7 +1202,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                       {c.first_name} {c.last_name}
                     </p>
                     <p className="m-0 text-fine text-slate-600">
-                      {c.test_name} &bull; released {c.released_at ? new Date(c.released_at).toLocaleString() : '—'}
+                      {c.test_name} &bull; released {c.released_at ? formatDateTime(c.released_at) : '—'}
                     </p>
                   </div>
                   {/* The number is the point of the row: it is what the person acts on. */}

@@ -267,7 +267,7 @@ const ServiceRequests = () => {
               </TableBody>
             </Table>
           </PanelBody>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${requests.length} total`} />
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={requests.length} pageSize={PAGE_SIZE} />
         </Panel>
       </div>
 

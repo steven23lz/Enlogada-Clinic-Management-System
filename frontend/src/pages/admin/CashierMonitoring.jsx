@@ -11,7 +11,7 @@ import { Input } from '../../components/ui/input';
 import { SkeletonRows } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
-import { todayStr } from '../../lib/date';
+import { todayStr, formatDateTime } from '../../lib/date';
 import { formatCurrency } from '../../lib/currency';
 import { Receipt, RefreshCw, Banknote, Hash, UserCircle2 } from 'lucide-react';
 
@@ -136,7 +136,7 @@ const CashierMonitoring = () => {
                       <TableCell className="max-w-[160px] truncate font-medium text-slate-900" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
                       <TableCell><Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge></TableCell>
                       <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
-                      <TableCell className="text-right text-fine text-slate-500">{new Date(t.paid_at).toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
                     </TableRow>
                   ))
                 ) : (

@@ -64,3 +64,41 @@ export function ageFromBirthdate(value) {
 
   return age >= 0 && age < 130 ? age : null;
 }
+
+/**
+ * A date and time, written the way the rest of this app writes dates. [1.28.0]
+ *
+ * Ten screens rendered timestamps with a bare `toLocaleString()`, which returns whatever the
+ * browser is set to — "8/18/2026, 2:49:29 AM" on a US-locale machine, sitting on the same page
+ * as "Aug 18, 2026" from the tables that pass explicit options. Two formats for the same fact,
+ * decided by a setting nobody in the clinic knows they have.
+ *
+ * `undefined` for the locale is deliberate: the reader's own language and numerals still apply.
+ * What is pinned is the SHAPE — a written month, so 08/09 is never read as the ninth of August
+ * in one place and the eighth of September in another. The clinic is Philippine and its staff
+ * read both conventions; a written month is the one form that cannot be misread.
+ *
+ * Seconds are dropped. They were shown on every audit row and no one has ever needed them to the
+ * second; they made a column of timestamps harder to scan for no gain.
+ */
+export function formatDateTime(value, { seconds = false } = {}) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(seconds ? { second: '2-digit' } : {}),
+  });
+}
+
+/** Just the date, same shape: "Aug 18, 2026". */
+export function formatDate(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}

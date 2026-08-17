@@ -18,7 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
-import { todayStr } from '../lib/date';
+import { todayStr, formatDateTime } from '../lib/date';
 import { toastSuccess, toastError, toastInfo } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
@@ -1016,7 +1016,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                             <StatusBadge status={v.visit_status} />
                           </TableCell>
                           <TableCell className="text-right text-fine text-slate-500">
-                            {new Date(v.created_at).toLocaleString()}
+                            {formatDateTime(v.created_at)}
                           </TableCell>
                         </TableRow>
                       ))
@@ -1659,7 +1659,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 {ticketToPrint.first_name} {ticketToPrint.last_name}
               </div>
               <div style={{ fontSize: '10px', color: '#555', marginTop: '2px' }}>
-                {ticketToPrint.visit_type} · {new Date(ticketToPrint.created_at).toLocaleString()}
+                {ticketToPrint.visit_type} · {formatDateTime(ticketToPrint.created_at)}
               </div>
 
               {/* Where to go next. Without this the patient has a number and no idea which

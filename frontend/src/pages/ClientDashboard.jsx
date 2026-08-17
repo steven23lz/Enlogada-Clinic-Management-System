@@ -26,8 +26,9 @@ import { toastError } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import BookingPass from '../components/BookingPass';
 import ResultDocument from '../components/ResultDocument';
-import { 
-  Activity, 
+import { formatDateTime } from '../lib/date';
+import {
+  Activity,
   Calendar, 
   Clock, 
   FileText, 
@@ -1516,7 +1517,7 @@ const ClientDashboard = ({ onNavigate }) => {
 
                             {/* Footer Release Stamp */}
                             <div className="pt-4 border-t border-[#e6ebf1] text-fine">
-                              <span className="text-gray-400 font-medium">Released: {new Date(item.released_at).toLocaleString()}</span>
+                              <span className="text-gray-400 font-medium">Released: {formatDateTime(item.released_at)}</span>
                             </div>
                           </div>
 

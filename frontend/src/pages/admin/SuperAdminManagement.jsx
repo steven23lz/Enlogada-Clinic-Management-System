@@ -719,7 +719,7 @@ const ElevatedAccounts = () => {
             </TableBody>
           </Table>
         </PanelBody>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${accounts.length} total`} />
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={accounts.length} pageSize={PAGE_SIZE} />
       </Panel>
 
       <ConfirmDialog

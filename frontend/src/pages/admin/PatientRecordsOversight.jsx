@@ -233,7 +233,7 @@ const PatientRecordsOversight = () => {
             )}
           </PanelBody>
           {results.length > 0 && (
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${results.length} total`} />
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={results.length} pageSize={PAGE_SIZE} />
           )}
         </Panel>
         );
