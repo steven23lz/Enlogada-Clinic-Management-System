@@ -498,6 +498,14 @@ const ClientDashboard = ({ onNavigate }) => {
     if (hmoCardPreview) URL.revokeObjectURL(hmoCardPreview);
   }, [hmoCardPreview]);
 
+  // One predicate for the field's `required`, the pre-submit guard, and what the server enforces.
+  // Derived rather than duplicated: three copies of this rule is how the desk ends up demanding
+  // something the booking form never asked for.
+  const hmoSelected = Boolean(
+    bookingData.hmoProviderId && bookingData.hmoProviderId !== 'none'
+  );
+  const referralRequired = hmoSelected || selectedProfile?.patient_type_name === 'Private';
+
   const handleCardSelected = async (e) => {
     const picked = e.target.files?.[0];
     // Clearing the input lets the same file be re-picked after a rejection; the accepted file is
@@ -543,6 +551,15 @@ const ClientDashboard = ({ onNavigate }) => {
     const hmo = hmoProviderId && hmoProviderId !== 'none'
       ? { providerId: parseInt(hmoProviderId, 10), approvalCode: hmoApprovalCode || null }
       : null;
+
+    if (referralRequired && !bookingData.referringPhysician?.trim()) {
+      setBookingError(
+        hmo
+          ? 'Please give the referring physician — your HMO needs it to approve coverage.'
+          : 'Please give the referring physician — a Private patient is one a physician referred.'
+      );
+      return;
+    }
 
     if (hmo && !hmoCardFile) {
       setBookingError('Please attach a photo of your HMO card to claim HMO coverage.');
@@ -593,7 +610,12 @@ const ClientDashboard = ({ onNavigate }) => {
           scheduledTime,
           notes,
           testIds: testIds.map((id) => parseInt(id, 10)),
-          hmo: null
+          hmo: null,
+          // Sent on this branch too: a referred self-payer still belongs on the record, and the
+          // server requires it for a Private patient. The controller already read this field on
+          // both branches — only the client never supplied it here.
+          referringPhysician: bookingData.referringPhysician?.trim() || undefined,
+          referringPhysicianPrc: bookingData.referringPhysicianPrc?.trim() || undefined
         });
       }
 
@@ -1213,16 +1235,6 @@ const ClientDashboard = ({ onNavigate }) => {
                                 doctor, and a claim that cannot name one is hard to reimburse —
                                 which the clinic discovers weeks later, chasing a patient who has
                                 long since gone home. */}
-                            <ReferringPhysicianFields
-                              physician={bookingData.referringPhysician}
-                              prc={bookingData.referringPhysicianPrc}
-                              onPhysicianChange={(v) => setBookingData({ ...bookingData, referringPhysician: v })}
-                              onPrcChange={(v) => setBookingData({ ...bookingData, referringPhysicianPrc: v })}
-                              required
-                              reason="Your HMO needs the doctor who requested these tests in order to approve coverage."
-                              disabled={isBooking}
-                            />
-
                             <div className="space-y-1.5">
                               <label className="field-label">
                                 Photo of your HMO card <span className="text-rose-600">*</span>
@@ -1274,6 +1286,29 @@ const ClientDashboard = ({ onNavigate }) => {
                             </div>
                           </>
                         )}
+
+                        {/* Shown for every booking, because a self-paying patient who WAS referred
+                            still needs the doctor on the record — the report goes back to them.
+                            Required only when an HMO claim needs it for the LOA, or when the
+                            patient's type is Private, which at this clinic means a physician sent
+                            them. Mirrors ReceptionistDashboard so the same rule reads the same way
+                            at the desk and at home, and so the patient is not told at submit what
+                            could have been said while they were typing. */}
+                        <ReferringPhysicianFields
+                          physician={bookingData.referringPhysician}
+                          prc={bookingData.referringPhysicianPrc}
+                          onPhysicianChange={(v) => setBookingData({ ...bookingData, referringPhysician: v })}
+                          onPrcChange={(v) => setBookingData({ ...bookingData, referringPhysicianPrc: v })}
+                          required={referralRequired}
+                          reason={
+                            hmoSelected
+                              ? 'Your HMO needs the doctor who requested these tests in order to approve coverage.'
+                              : referralRequired
+                                ? 'A Private patient is one a physician referred, so the record needs to name them.'
+                                : null
+                          }
+                          disabled={isBooking}
+                        />
 
                         <div className="space-y-1.5">
                           <label className="field-label">Additional Clinical Notes</label>

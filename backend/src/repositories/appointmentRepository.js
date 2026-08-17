@@ -189,11 +189,26 @@ class AppointmentRepository {
   //
   // The old slot is released by this same UPDATE: capacity is counted from these two columns, so
   // there is no second write that could fail and leave the booking occupying two slots.
+  // `status = 'Pending'` is a compare-and-swap, not a redundant re-check of the service's guard.
+  // The service reads the row outside any transaction, and the advisory lock it then takes is
+  // keyed on the DESTINATION slot — so it serialises against competing bookings and against
+  // nothing at all that a check-in does. Without this predicate, a receptionist checking the
+  // patient in while a move is in flight had that check-in silently replaced with a future date,
+  // leaving status 'Confirmed' against a booking for next month. Zero rows means the status
+  // stopped being Pending; same idiom as visitRepository.releaseVisitToModalities.
+  //
+  // reminder_sent_at is cleared because the reminder that was sent described the old date. The
+  // sweep only considers rows where it is NULL, so a booking reminded for tomorrow and then moved
+  // was never reminded again — the exact no-show the reminder exists to prevent. Cleared
+  // unconditionally: a move that keeps the date and changes only the time still needs a new one.
   async updateSchedule(id, { scheduledDate, scheduledTime }) {
     const queryText = `
       UPDATE appointments
-      SET scheduled_date = $1, scheduled_time = $2, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3
+      SET scheduled_date = $1,
+          scheduled_time = $2,
+          reminder_sent_at = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3 AND status = 'Pending'
       RETURNING *
     `;
     const result = await db.query(queryText, [scheduledDate, scheduledTime, id]);

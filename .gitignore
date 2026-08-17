@@ -14,6 +14,10 @@ backend/uploads/
 
 # Environment and Local Config
 .env
+# Any hand-made copy of an env file. .env alone does not match a suffixed backup, and one of
+# those carries the same database password and secret key the real file does.
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local

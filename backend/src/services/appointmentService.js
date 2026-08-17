@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const appointmentRepository = require('../repositories/appointmentRepository');
+const patientRepository = require('../repositories/patientRepository');
 const visitRepository = require('../repositories/visitRepository');
 const scheduleRepository = require('../repositories/scheduleRepository');
 const testRepository = require('../repositories/testRepository');
@@ -12,7 +13,7 @@ const visitService = require('./visitService');
 const auditService = require('./auditService');
 const appointmentEmailService = require('./appointmentEmailService');
 const logger = require('../config/logger');
-const { normaliseReferral } = require('./referralService');
+const { assertReferralIfRequired, normaliseReferral } = require('./referralService');
 
 async function assertClientOwnsPatient(requestingUser, patientId) {
   if (!requestingUser?.roles?.includes('Client')) return; // staff roles are not ownership-restricted
@@ -38,6 +39,21 @@ function timeToMinutes(timeStr) {
  * either, but the API is reachable directly and the check is the only thing that makes the
  * availability screen more than a suggestion.
  */
+// One message for both places a reschedule can be refused: the pre-check, and the losing side of
+// the compare-and-swap in updateSchedule. A caller cannot tell — and should not need to — whether
+// the check-in landed a moment before their request or a moment after it.
+function refuseReschedule(status) {
+  const error = new Error(
+    status === 'Confirmed'
+      ? 'This appointment has already been checked in and cannot be rescheduled.'
+      : status
+        ? `A ${String(status).toLowerCase()} appointment cannot be rescheduled.`
+        : 'This appointment changed while you were rescheduling it. Please reload and try again.'
+  );
+  error.statusCode = 409;
+  return error;
+}
+
 async function assertSlotWithinOperatingHours(scheduledDate, scheduledTime) {
   const dayOfWeek = new Date(`${scheduledDate}T12:00:00Z`).getUTCDay();
   const hours = await scheduleRepository.findOperatingHoursForDay(dayOfWeek);
@@ -140,6 +156,24 @@ class AppointmentService {
       // Inside the try, though it runs before the transaction: multer has already written the card
       // by the time this method is entered, so a 403 here would otherwise leave it on disk forever.
       await assertClientOwnsPatient(requestingUser, patientId);
+
+      // The same rule the front desk applies when it registers a walk-in: a 'Private' patient is
+      // by definition one a physician referred, so the booking has to say who. It was enforced at
+      // the desk and on any HMO claim, but not on an online self-pay booking — so a patient could
+      // book from home in a state reception would have refused at the counter.
+      //
+      // Straight to the repository rather than patientService.getPatientById: this wants the
+      // patient's type, not a department-scoped read, and calling the scoped helper with no
+      // requesting user would look like the scoping had been considered and waived.
+      //
+      // Still ahead of the transaction, so a booking that cannot succeed never takes the slot's
+      // advisory lock, and inside the try so a rejection still discards the uploaded card.
+      const bookingPatient = await patientRepository.findPatientById(patientId);
+      assertReferralIfRequired({
+        patientTypeName: bookingPatient?.patient_type_name,
+        hasHmoClaim: Boolean(hmo),
+        referringPhysician: referral?.referringPhysician
+      });
 
       outcome = await db.withTransaction(async () => {
         // 1. Validate the requested slot against clinic operating hours
@@ -384,13 +418,7 @@ class AppointmentService {
     await assertClientOwnsPatient(requestingUser, appointment.patient_id);
 
     if (appointment.status !== 'Pending') {
-      const error = new Error(
-        appointment.status === 'Confirmed'
-          ? 'This appointment has already been checked in and cannot be rescheduled.'
-          : `A ${appointment.status.toLowerCase()} appointment cannot be rescheduled.`
-      );
-      error.statusCode = 409;
-      throw error;
+      throw refuseReschedule(appointment.status);
     }
 
     const previous = {
@@ -429,6 +457,16 @@ class AppointmentService {
       }
 
       const moved = await appointmentRepository.updateSchedule(id, { scheduledDate, scheduledTime });
+
+      // Compare-and-swap: no row means the status stopped being Pending between the read above and
+      // this write — the receptionist checked the patient in at the desk while the move was in
+      // flight. Checked before the audit entry on purpose: a log line attesting to a move that did
+      // not happen is worse than no line, and throwing here rolls the transaction back before the
+      // post-commit notification and reschedule email can go out.
+      if (!moved) {
+        const current = await appointmentRepository.findById(id);
+        throw refuseReschedule(current?.status);
+      }
 
       // Audited: a booking moving is a change to a commitment made to a patient, and when staff
       // do it on someone's behalf the record of who and when is the whole point. Low volume, so
