@@ -24,18 +24,26 @@ const PAGE_SIZE = 20;
 const CashierMonitoring = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed fetch used to reach console.error and stop there, so the screen rendered its
+  // EMPTY state — "No transactions yet" over a 500. That is the one thing empty-state.jsx's own
+  // docstring says must never happen: a quiet clinic and a broken server call for opposite
+  // responses, and one of them was being reported as the other.
+  const [loadError, setLoadError] = useState('');
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
   const [page, setPage] = useState(1);
 
   const fetchTransactions = useCallback(async (from, to) => {
     setLoading(true);
+    setLoadError('');
     setPage(1);
     try {
       const res = await api.get('/payments/transactions', { params: { startDate: from, endDate: to } });
       setTransactions(res.data.data.transactions || []);
     } catch (err) {
+      // Recorded, not just logged: a swallowed failure renders as an empty list.
       console.error('Failed to fetch transactions:', err);
+      setLoadError(err.response?.data?.message || 'The server did not respond. The list below may be out of date.');
     } finally {
       setLoading(false);
     }
@@ -92,6 +100,12 @@ const CashierMonitoring = () => {
               column with no card in it therefore rendered as a plain grey rectangle sitting where
               a figure should be. With one cashier on shift, which is the ordinary case for this
               clinic, a quarter of the strip was an empty box that read as a failed tile. */}
+          {/* Hidden when the fetch failed. These are all derived from `transactions`, which is
+              empty because the request errored — so the strip stated "Collections in range
+              PHP 0.00" directly above a panel saying the data could not be loaded. Two claims
+              that contradict each other is worse than either alone, and the peso figure is the
+              one a reader believes. */}
+          {!loadError && !loading && (
           <div className={`grid grid-cols-2 gap-px border-b border-[#e6ebf1] bg-[#e6ebf1] ${
             { 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' }[2 + cashierCards.length]
           }`}>
@@ -122,6 +136,7 @@ const CashierMonitoring = () => {
               />
             ))}
           </div>
+          )}
 
           <PanelBody flush>
             <Table>
@@ -136,7 +151,21 @@ const CashierMonitoring = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
+                {/* Error before empty. A failed fetch used to fall through to the empty branch,
+                    so a 500 rendered as "nothing here yet" — which is a false statement about the
+                    clinic's data, not merely an unhelpful one. */}
+                {loadError ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="p-0">
+                      <EmptyState
+                        tone="error"
+                        title="Could not load transactions"
+                        description={loadError}
+                        action={<Button variant="outline" size="sm" onClick={() => fetchTransactions(startDate, endDate)}>Try again</Button>}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : loading ? (
                   <SkeletonRows rows={6} columns={6} />
                 ) : pagedTransactions.length > 0 ? (
                   pagedTransactions.map(t => (
@@ -167,7 +196,7 @@ const CashierMonitoring = () => {
             page={page}
             totalPages={totalPages}
             onPageChange={setPage}
-            totalLabel={`${transactions.length} transaction${transactions.length === 1 ? '' : 's'}`}
+            totalLabel={(loadError || loading) ? '' : `${transactions.length} transaction${transactions.length === 1 ? '' : 's'}`}
           />
         </Panel>
       </div>

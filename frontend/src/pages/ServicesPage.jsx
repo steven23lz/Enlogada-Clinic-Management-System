@@ -6,10 +6,20 @@ import api from '../config/api';
 import { formatCurrency } from '../lib/currency';
 import { Activity, Stethoscope, FileText, Heart, Zap } from 'lucide-react';
 import { categoryKey, categoryTint } from '../lib/categories';
+import { useClinic } from '../lib/clinic';
 
 const ServicesPage = ({ onNavigate }) => {
+  // The live identity, not the frozen defaults — the clinic may have configured a different
+  // number, and the whole value of showing one here is that somebody can actually ring it.
+  const CLINIC = useClinic();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  // The public catalogue, on the page a prospective patient reads to decide whether to come at
+  // all. A failed fetch used to stop at console.error and fall through to "No Active Services" —
+  // telling a stranger this clinic offers nothing, which is the worst possible thing for the one
+  // page that has to win them over. It is also the only page with no account behind it, so
+  // nobody internal would ever see it fail.
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     const fetchServices = async () => {
@@ -36,6 +46,7 @@ const ServicesPage = ({ onNavigate }) => {
         setCategories(categoryList);
       } catch (err) {
         console.error('Failed to fetch services:', err);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -81,6 +92,24 @@ const ServicesPage = ({ onNavigate }) => {
           <div className="py-20 flex flex-col items-center justify-center space-y-3">
             <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
             <span className="text-sm font-semibold text-gray-500">Loading diagnostic services catalog...</span>
+          </div>
+        ) : loadError ? (
+          /* Deliberately says the list could not load and gives the clinic's phone number, rather
+             than reporting an empty catalogue. A visitor who cannot see the price list can still
+             ring up, which is the whole point of the page. */
+          <div className="bg-white rounded-2xl p-12 text-center border border-rose-200 max-w-md mx-auto space-y-2">
+            <h3 className="m-0 text-lg font-bold text-rose-800">Our service list is unavailable</h3>
+            <p className="m-0 text-xs text-rose-700">
+              This is a problem on our side, not a sign that we are closed. Please try again in a
+              moment, or call us on <strong>{CLINIC.phone}</strong>.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-2 cursor-pointer rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-50"
+            >
+              Try again
+            </button>
           </div>
         ) : categories.length === 0 ? (
           <div className="bg-white rounded-2xl p-12 text-center border border-[#e6ebf1] max-w-md mx-auto space-y-2">

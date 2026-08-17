@@ -41,9 +41,16 @@ const TodaySnapshot = () => {
   const [catalogCount, setCatalogCount] = useState(0);
   const [methodBreakdown, setMethodBreakdown] = useState({});
   const [loading, setLoading] = useState(true);
+  // The most dangerous silent failure in the app. Every figure here initialises to 0, so a
+  // failed fetch left the screen stating "Today's Revenue PHP 0.00, +0% vs yesterday" and
+  // "No payments yet today" — confident, specific and false. A manager reads that as the
+  // clinic having taken nothing, not as the server being down, and the two call for opposite
+  // responses. A blank panel would have been safer than this was.
+  const [snapshotError, setSnapshotError] = useState('');
 
   const fetchReportData = useCallback(async () => {
     setLoading(true);
+    setSnapshotError('');
     try {
       const today = todayStr();
       const yesterday = daysAgoStr(1);
@@ -70,6 +77,7 @@ const TodaySnapshot = () => {
       setMethodBreakdown(breakdown);
     } catch (err) {
       console.error('Failed to fetch report data:', err);
+      setSnapshotError(err.response?.data?.message || "Today's figures could not be loaded.");
     } finally {
       setLoading(false);
     }
@@ -83,6 +91,21 @@ const TodaySnapshot = () => {
     ? ((todayTotal - yesterdayTotal) / yesterdayTotal) * 100
     : (todayTotal > 0 ? 100 : 0);
   const isUp = percentChange >= 0;
+
+  // Nothing numeric is shown at all when the fetch failed. Showing the tiles with a caveat
+  // beside them would still put a wrong peso figure on screen, and the figure is what gets read.
+  if (snapshotError) {
+    return (
+      <Card className="border-[#e6ebf1] rounded-xl bg-white">
+        <EmptyState
+          tone="error"
+          title="Today's figures are unavailable"
+          description={snapshotError}
+          action={<Button variant="outline" size="sm" onClick={fetchReportData}>Try again</Button>}
+        />
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">

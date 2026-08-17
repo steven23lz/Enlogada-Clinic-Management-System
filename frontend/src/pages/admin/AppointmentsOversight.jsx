@@ -3,6 +3,7 @@ import { Panel, PanelBody } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
 import Toolbar, { SegmentedFilter } from '../../components/ui/toolbar';
 import EmptyState from '../../components/ui/empty-state';
+import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { StatusBadge } from '../../components/ui/status-badge';
 import { SkeletonRows } from '../../components/ui/skeleton';
@@ -23,18 +24,26 @@ const PAGE_SIZE = 15;
 const AppointmentsOversight = () => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed fetch used to reach console.error and stop there, so the screen rendered its
+  // EMPTY state — "No appointments yet" over a 500. That is the one thing empty-state.jsx's own
+  // docstring says must never happen: a quiet clinic and a broken server call for opposite
+  // responses, and one of them was being reported as the other.
+  const [loadError, setLoadError] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [page, setPage] = useState(1);
 
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const params = statusFilter !== 'All' ? { status: statusFilter } : {};
       const res = await api.get('/appointments', { params });
       setAppointments(res.data.data.appointments || []);
       setPage(1);
     } catch (err) {
+      // Recorded, not just logged: a swallowed failure renders as an empty list.
       console.error('Failed to fetch appointments:', err);
+      setLoadError(err.response?.data?.message || 'The server did not respond. The list below may be out of date.');
     } finally {
       setLoading(false);
     }
@@ -55,12 +64,12 @@ const AppointmentsOversight = () => {
         icon={CalendarClock}
         title="Appointments"
         description="Clinic-wide view of every booked appointment. Read-only — rescheduling and cancellation belong to Reception or the patient."
-        meta={
+        meta={(loadError || loading) ? undefined : (
           <span>
             <strong className="font-semibold text-slate-700">{appointments.length}</strong>{' '}
             {statusFilter === 'All' ? 'total' : statusFilter.toLowerCase()}
           </span>
-        }
+        )}
       />
 
       {/* Toolbar and table are one object, so they are wrapped in a bare div — the page's
@@ -88,7 +97,21 @@ const AppointmentsOversight = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {/* Error before empty. A failed fetch used to fall through to the empty branch,
+                  so a 500 rendered as "nothing here yet" — which is a false statement about the
+                  clinic's data, not merely an unhelpful one. */}
+              {loadError ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="p-0">
+                    <EmptyState
+                      tone="error"
+                      title="Could not load appointments"
+                      description={loadError}
+                      action={<Button variant="outline" size="sm" onClick={() => fetchAppointments()}>Try again</Button>}
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : loading ? (
                 <SkeletonRows rows={6} columns={5} />
               ) : pagedAppointments.length > 0 ? (
                 pagedAppointments.map(a => (
@@ -120,7 +143,7 @@ const AppointmentsOversight = () => {
             </TableBody>
           </Table>
           </PanelBody>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={appointments.length} pageSize={PAGE_SIZE} />
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={loadError ? 0 : appointments.length} pageSize={PAGE_SIZE} />
         </Panel>
       </div>
     </div>

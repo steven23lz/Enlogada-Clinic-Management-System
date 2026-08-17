@@ -29,6 +29,11 @@ const PAGE_SIZE = 15;
 const StaffAccounts = () => {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed fetch used to reach console.error and stop there, so the screen rendered its
+  // EMPTY state — "No staff accounts yet" over a 500. That is the one thing empty-state.jsx's own
+  // docstring says must never happen: a quiet clinic and a broken server call for opposite
+  // responses, and one of them was being reported as the other.
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
@@ -63,7 +68,9 @@ const StaffAccounts = () => {
       const res = await api.get('/admin/staff');
       setStaff(res.data.data.staff || []);
     } catch (err) {
+      // Recorded, not just logged: a swallowed failure renders as an empty list.
       console.error('Failed to fetch staff accounts:', err);
+      setLoadError(err.response?.data?.message || 'The server did not respond. The list below may be out of date.');
     } finally {
       setLoading(false);
     }
@@ -262,9 +269,13 @@ const StaffAccounts = () => {
       />
 
       <Panel>
+        {/* "0 staff accounts" beside a panel that says the request failed is the same false
+            claim in smaller type. The count is only stated when there is something to count. */}
         <PanelHeader
-          title={`${filteredStaff.length} staff account${filteredStaff.length === 1 ? '' : 's'}`}
-          description={search ? `filtered from ${staff.length} total` : 'Select a status chip to activate or deactivate an account'}
+          title={(loadError || loading) ? 'Staff accounts' : `${filteredStaff.length} staff account${filteredStaff.length === 1 ? '' : 's'}`}
+          description={loadError
+            ? 'The list below could not be loaded.'
+            : search ? `filtered from ${staff.length} total` : 'Select a status chip to activate or deactivate an account'}
           icon={Users}
           actions={
             <SearchInput
@@ -288,7 +299,21 @@ const StaffAccounts = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {/* Error before empty. A failed fetch used to fall through to the empty branch,
+                  so a 500 rendered as "nothing here yet" — which is a false statement about the
+                  clinic's data, not merely an unhelpful one. */}
+              {loadError ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="p-0">
+                    <EmptyState
+                      tone="error"
+                      title="Could not load staff accounts"
+                      description={loadError}
+                      action={<Button variant="outline" size="sm" onClick={() => fetchStaff()}>Try again</Button>}
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : loading ? (
                 <SkeletonRows rows={6} columns={6} />
               ) : pagedStaff.length > 0 ? (
                 pagedStaff.map(s => (
@@ -357,7 +382,7 @@ const StaffAccounts = () => {
             page={page}
             totalPages={totalPages}
             onPageChange={setPage}
-            total={filteredStaff.length} pageSize={PAGE_SIZE}
+            total={loadError ? 0 : filteredStaff.length} pageSize={PAGE_SIZE}
           />
         </PanelBody>
       </Panel>

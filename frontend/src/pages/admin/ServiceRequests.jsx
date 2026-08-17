@@ -29,6 +29,11 @@ const PAGE_SIZE = 15;
 const ServiceRequests = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed fetch used to reach console.error and stop there, so the screen rendered its
+  // EMPTY state — "No HMO requests yet" over a 500. That is the one thing empty-state.jsx's own
+  // docstring says must never happen: a quiet clinic and a broken server call for opposite
+  // responses, and one of them was being reported as the other.
+  const [loadError, setLoadError] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [page, setPage] = useState(1);
 
@@ -51,13 +56,16 @@ const ServiceRequests = () => {
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const params = statusFilter !== 'All' ? { status: statusFilter } : {};
       const res = await api.get('/hmo/requests', { params });
       setRequests(res.data.data.requests || []);
       setPage(1);
     } catch (err) {
+      // Recorded, not just logged: a swallowed failure renders as an empty list.
       console.error('Failed to fetch HMO requests:', err);
+      setLoadError(err.response?.data?.message || 'The server did not respond. The list below may be out of date.');
     } finally {
       setLoading(false);
     }
@@ -182,7 +190,9 @@ const ServiceRequests = () => {
         icon={ShieldCheck}
         title="Service & HMO Requests"
         description="Review and approve HMO pre-authorisation logged by Reception. Approval is Admin-only — Reception can log a request but not clear it."
-        meta={<span><strong className="font-semibold text-slate-700">{requests.length}</strong> request{requests.length === 1 ? '' : 's'}</span>}
+        meta={(loadError || loading)
+          ? undefined
+          : <span><strong className="font-semibold text-slate-700">{requests.length}</strong> request{requests.length === 1 ? '' : 's'}</span>}
       />
 
       <div>
@@ -213,7 +223,21 @@ const ServiceRequests = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
+                {/* Error before empty. A failed fetch used to fall through to the empty branch,
+                    so a 500 rendered as "nothing here yet" — which is a false statement about the
+                    clinic's data, not merely an unhelpful one. */}
+                {loadError ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="p-0">
+                      <EmptyState
+                        tone="error"
+                        title="Could not load the HMO requests"
+                        description={loadError}
+                        action={<Button variant="outline" size="sm" onClick={() => fetchRequests()}>Try again</Button>}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : loading ? (
                   <SkeletonRows rows={5} columns={5} />
                 ) : pagedRequests.length > 0 ? (
                   pagedRequests.map(r => (
@@ -267,7 +291,7 @@ const ServiceRequests = () => {
               </TableBody>
             </Table>
           </PanelBody>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={requests.length} pageSize={PAGE_SIZE} />
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={loadError ? 0 : requests.length} pageSize={PAGE_SIZE} />
         </Panel>
       </div>
 
