@@ -153,9 +153,11 @@ const MetricCard = ({
           cards and a counter ticking 9 -> 10 does not shift the layout under the reader. */}
       <div
         className={cn(
-          // mt-auto, not mt-2.5: the figure sits at the bottom of the card, so a wrapped
-          // two-line label in one card does not shunt its number below its neighbour's.
-          'mt-auto pt-2.5 text-stat font-extrabold leading-none tracking-tight tabular-nums break-words',
+          // The number hugs its label — that is the relationship the card exists to state, and
+          // pinning the number to the bottom instead opened a hole under every short label while
+          // still not aligning it with a neighbour that had a caption. It is the CAPTION that
+          // takes mt-auto below, so the cards agree along their bottom edge.
+          'mt-2.5 text-stat font-extrabold leading-none tracking-tight tabular-nums break-words',
           isDark ? 'text-white' : 'text-slate-900'
         )}
       >
@@ -165,7 +167,7 @@ const MetricCard = ({
       {trend && (
         <span
           className={cn(
-            'mt-2.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-fine font-semibold',
+            'mt-auto inline-flex items-center gap-1 self-start rounded-md px-1.5 py-0.5 pt-0 text-fine font-semibold',
             isDark ? 'bg-white/10 text-slate-200' : TREND_TONE[trend.direction]
           )}
         >
@@ -179,7 +181,8 @@ const MetricCard = ({
           className={cn(
             // Also wraps to two lines, for the same reason as the label: "Lab, X-Ray, Ultrasound
             // & more" is a sentence, and an ellipsis two words in tells the reader nothing.
-            'mt-1.5 block text-fine font-medium leading-snug [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden',
+            // mt-auto so a row of cards lines up along the bottom.
+            'mt-auto pt-1.5 block text-fine font-medium leading-snug [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden',
             isDark ? 'text-slate-400' : CAPTION_TONE[resolvedCaptionTone] || CAPTION_TONE.slate
           )}
         >

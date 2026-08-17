@@ -128,12 +128,19 @@ const TodaySnapshot = () => {
         </Card>
       </div>
 
-      <div className="bg-rail text-white rounded-2xl p-5 flex items-start space-x-3">
-        <Info className="w-5 h-5 text-brand-600 flex-shrink-0 mt-0.5" />
-        <p className="text-xs text-gray-300 m-0 leading-relaxed">
-          This is a live snapshot of today's activity only. For historical trends and a custom
-          date range, see the <strong className="text-white">Date-Range Reports</strong> tab.
-        </p>
+      {/* Two things were wrong with this. It pointed at a "Date-Range Reports" tab that does not
+          exist — the tab was renamed to Trends and this copy was not — so the one instruction on
+          the screen sent the reader looking for something they would never find.
+
+          And it was a full-width dark slab: on a tab whose content ends halfway down the
+          viewport, the single heaviest element on the page was a footnote. It is the same inline
+          alert every other advisory note in the app uses now. */}
+      <div role="note" className="alert alert-info">
+        <Info />
+        <span>
+          A live snapshot of today only. For historical trends and a custom date range, see the{' '}
+          <strong>Trends</strong> tab.
+        </span>
       </div>
     </div>
   );

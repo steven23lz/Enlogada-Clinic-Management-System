@@ -14,7 +14,7 @@ import { formatCurrency } from '../../lib/currency';
 import ResultDocument from '../../components/ResultDocument';
 import PatientEditDialog from '../../components/patients/PatientEditDialog';
 import { useAuth } from '../../contexts/AuthContext';
-import { Users, AlertCircle, ChevronRight, Printer, FolderSearch, FileX2, Eye, Paperclip, Building2, Pencil } from 'lucide-react';
+import { Users, AlertCircle, ChevronRight, Printer, FolderSearch, FileX2, Eye, Paperclip, Building2, Pencil, Search } from 'lucide-react';
 
 // UI/UX Modernization Phase 4: search results come back in one shot with no server-side
 // pagination, so a client-side page size is proportionate (VISUAL_IDENTITY.md §3a #11).
@@ -133,14 +133,6 @@ const PatientRecordsOversight = () => {
             </div>
           )}
 
-          {/* Search-first screens open on nothing, and nothing is indistinguishable from a
-              failed request unless it says otherwise. */}
-          {!results && !error && (
-            <p className="m-0 pt-1 text-fine text-slate-500">
-              Results appear here. Two characters is enough to start.
-            </p>
-          )}
-
           {departmentScope && (
             <p className="m-0 flex items-center gap-1.5 pt-1 text-fine text-slate-500">
               <Building2 className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
@@ -149,6 +141,23 @@ const PatientRecordsOversight = () => {
           )}
         </PanelBody>
       </Panel>
+
+      {/* Search-first screens open on nothing, and nothing is indistinguishable from a failed
+          request unless it says otherwise. This was a grey sentence tucked under the search box,
+          leaving the rest of the viewport genuinely blank — the screen looked broken rather than
+          waiting. It is the same EmptyState the no-matches case already used, so the two states
+          now read as members of one family instead of a footnote and a panel. */}
+      {!results && !error && (
+        <Panel>
+          <PanelBody flush>
+            <EmptyState
+              icon={Search}
+              title="Search for a patient to begin"
+              description="Two characters is enough. Opening a record is audited against your account."
+            />
+          </PanelBody>
+        </Panel>
+      )}
 
       {results && (() => {
         const totalPages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
