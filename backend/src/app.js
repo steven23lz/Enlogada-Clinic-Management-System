@@ -40,7 +40,24 @@ app.use(cors({
     // actually stops the browser handing the response to the calling page.
     return cb(null, false);
   },
-  credentials: true
+  credentials: true,
+
+  // ETag has to be readable by the frontend, and If-None-Match has to be allowed on the way in.
+  // [1.26.0]
+  //
+  // CORS exposes only a handful of response headers to JavaScript by default, and ETag is not
+  // among them. Express was already emitting one on every JSON response and already answering a
+  // matching If-None-Match with a 0-byte 304 — verified with a raw request — but the browser
+  // could not read the validator, so nothing ever sent one back and every poll re-downloaded a
+  // body the client already had. Two lines of configuration were the whole gap between that and
+  // ~500,000 requests a month carrying mostly unchanged bytes.
+  //
+  // No extra preflight cost: every request already carries Authorization, which is itself a
+  // non-simple header, so these endpoints were being preflighted regardless. maxAge lets the
+  // browser reuse that preflight rather than repeating it before each poll.
+  exposedHeaders: ['ETag'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'If-None-Match'],
+  maxAge: 600
 }));
 
 // 2. Parse Incoming JSON and URL-encoded requests

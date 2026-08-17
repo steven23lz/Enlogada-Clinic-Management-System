@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import api from '../config/api';
+import { clearRevalidationCache } from '../config/revalidationCache';
 
 const AuthContext = createContext(null);
 
@@ -146,6 +147,10 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    // The revalidation cache holds response bodies — queues, result histories, notifications
+    // naming patients. Signing out has to empty it, or the next person at this terminal can
+    // revalidate straight into the previous account's data. [1.26.0]
+    clearRevalidationCache();
     setUser(null);
   };
 
