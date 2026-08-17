@@ -38,10 +38,22 @@
   --color-primary-hover: #657c3a;
   --color-primary-active: #536630;
   --color-primary-foreground: #ffffff;
-  --color-primary-navy: #34466b;
-  --color-primary-navy-hover: #283652;
+  /* One dark, not two.
+   *
+   * These were #34466b — a blue navy — while the app chrome is the slate rail below. The two
+   * sat one click apart in the same journey: the public hero is navy, and clicking Sign In puts
+   * a near-black slate panel beside the form. AboutUs managed to carry both on a single page, a
+   * navy banner above a rail-gradient hero panel.
+   *
+   * The rail's own comment already says it is for "the sidebar rail and the hero panels", so the
+   * public banners were the outlier rather than the rule. Pointed at the same values, which
+   * unifies the six public pages and the footer in one place instead of editing seven files —
+   * and keeps the token name that those files already read.
+   */
+  --color-primary-navy: #16212e;
+  --color-primary-navy-hover: #1f2c3c;
   --color-primary-sage: #769046;
-  --color-secondary: #34466b;
+  --color-secondary: #16212e;
   --color-secondary-foreground: #ffffff;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
