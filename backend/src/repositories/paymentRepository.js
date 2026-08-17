@@ -105,7 +105,20 @@ class PaymentRepository {
                WHERE hrt.visit_test_id = vt.id
                ORDER BY hrt.created_at DESC
                LIMIT 1
-             ) as hmo_approval_status
+             ) as hmo_approval_status,
+             -- Why the HMO refused, carried onto the bill because that is where the question gets
+             -- asked. [1.27.0] The patient is told at the counter that a test they expected to be
+             -- covered is not, and the cashier is the one who has to say why. Same subquery shape,
+             -- and deliberately a second one rather than a lateral join: the cost is a second index
+             -- lookup on a handful of rows, and it keeps the "exactly one row per test" guarantee
+             -- above impossible to break by accident.
+             (
+               SELECT hrt.decision_reason
+               FROM hmo_request_tests hrt
+               WHERE hrt.visit_test_id = vt.id
+               ORDER BY hrt.created_at DESC
+               LIMIT 1
+             ) as hmo_decision_reason
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id

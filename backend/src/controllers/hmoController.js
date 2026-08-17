@@ -99,7 +99,7 @@ class HmoController {
   async updateTestApproval(req, res, next) {
     try {
       const { hmoRequestTestId } = req.params;
-      const { approvalStatus } = req.body;
+      const { approvalStatus, decisionReason } = req.body;
 
       if (!approvalStatus) {
         return res.status(400).json({
@@ -108,7 +108,12 @@ class HmoController {
         });
       }
 
-      const updated = await hmoService.updateTestApproval(hmoRequestTestId, approvalStatus, req.user);
+      const updated = await hmoService.updateTestApproval(
+        hmoRequestTestId,
+        approvalStatus,
+        req.user,
+        decisionReason
+      );
       return res.status(200).json({
         status: 'success',
         message: `Test approval status updated to ${approvalStatus}.`,

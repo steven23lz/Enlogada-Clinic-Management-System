@@ -1,5 +1,26 @@
 # Database Migration & Schema History
 
+## [1.27.0] - 2026-08-18 (Why the HMO said no)
+
+Run `node src/scripts/migrateHmoDecisionTrail.js` on any database created before this version
+(`--rollback` reverses it, destroying the reasons — it warns and counts first).
+
+### Added
+* `hmo_request_tests.decision_reason` (TEXT), `.decided_by` (FK → `users`), `.decided_at` — all nullable, nothing back-filled. A decision taken before today has no honest answer, and manufacturing one would put a false statement in the audit trail.
+* `idx_hmo_request_tests_pending`, partial (`WHERE approval_status = 'Pending'`) — the only set anything queries in bulk. Decided rows are the overwhelming majority and are read one claim at a time, by id.
+* `GET /payments/bill/:visitId` now reports `hmoPendingCount` / `hmoPendingAmount`, and each line item carries `hmoRejected` / `hmoDecisionReason`.
+
+### Changed
+* **A rejection now requires a reason**; an approval stores none. The refusal is the whole point of the record — an approval explains itself, a refusal is a conversation at the counter about money the patient was not expecting to pay. Until now that explanation lived only in whatever the coordinator remembered, so a dispute three days later had no answer.
+* **An unrecognised decision word is a 400 that names the alternatives, not a 500.** The value went straight to `chk_hmo_request_tests_status`, so `'Denied'` — the word the providers themselves use, and therefore the first one any caller reaches for — surfaced as an unexplained server error.
+* **A decision on a test that is not on the claim is a 404.** It returned 200 with an undefined body: the caller was told the decision had been recorded when no row had been touched.
+* **The cashier's bill shows the refusal reason on the line it applies to,** and warns when part of the bill is riding on an undecided claim. An undecided claim covers nothing, so those tests are charged at full price — take the payment and the approval lands tomorrow, and the clinic owes a refund. Reported rather than blocked: some providers take days, and the patient cannot wait at the counter for one.
+
+### Why
+* An HMO decision moves money between the patient and the insurer, and this was the only such action in the system that could not say who recorded it. A payment names the cashier, a released result names the authoriser, a permission change names the SuperAdmin.
+
+---
+
 ## [1.26.0] - 2026-08-17 (What happens after the money moves and the report goes out)
 
 No schema change — every fix here is a query, a guard or a status transition. Recorded because

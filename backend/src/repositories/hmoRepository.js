@@ -165,11 +165,15 @@ class HmoRepository {
 
   async findTestsByRequestId(hmoRequestId) {
     const queryText = `
-      SELECT hrt.*, vt.price_at_time, t.name as test_name, tc.name as category_name
+      SELECT hrt.*, vt.price_at_time, t.name as test_name, tc.name as category_name,
+             -- Who recorded the decision, so the screen can show a name rather than an id.
+             -- LEFT JOIN: rows decided before [1.27.0] have no answer, and NULL says so honestly.
+             d.first_name as decided_by_first_name, d.last_name as decided_by_last_name
       FROM hmo_request_tests hrt
       JOIN visit_tests vt ON hrt.visit_test_id = vt.id
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
+      LEFT JOIN users d ON d.id = hrt.decided_by
       WHERE hrt.hmo_request_id = $1
       ORDER BY tc.name, t.name
     `;
@@ -177,14 +181,19 @@ class HmoRepository {
     return result.rows;
   }
 
-  async updateTestApprovalStatus(hmoRequestTestId, approvalStatus) {
+  // decided_at is stamped from the database clock, not from JavaScript — the same reason every
+  // other "when did this happen" in this codebase is derived in SQL.
+  async updateTestApprovalStatus(hmoRequestTestId, approvalStatus, { decisionReason = null, decidedBy = null } = {}) {
     const queryText = `
       UPDATE hmo_request_tests
-      SET approval_status = $1
-      WHERE id = $2
+      SET approval_status = $1,
+          decision_reason = $2,
+          decided_by = $3,
+          decided_at = CURRENT_TIMESTAMP
+      WHERE id = $4
       RETURNING *
     `;
-    const result = await db.query(queryText, [approvalStatus, hmoRequestTestId]);
+    const result = await db.query(queryText, [approvalStatus, decisionReason, decidedBy, hmoRequestTestId]);
     return result.rows[0];
   }
 

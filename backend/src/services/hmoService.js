@@ -8,6 +8,12 @@ const { CLIENT_ROLE, isStaffUser } = require('../constants/roles');
 const visitRepository = require('../repositories/visitRepository');
 const { assertReferralIfRequired, normaliseReferral, isNamed } = require('./referralService');
 
+// The decisions an HMO claim's individual test can carry, mirroring chk_hmo_request_tests_status.
+// Kept here so a bad value is refused with a 400 that names the alternatives, rather than passed
+// through to Postgres and returned as an unexplained 500 — 'Denied' is the word the providers
+// themselves use, so it is the value a caller reaches for first, and it is not this one.
+const HMO_TEST_DECISIONS = ['Pending', 'Approved', 'Rejected'];
+
 // Mirrors testService.js's assertClientOwnsVisit, which exists for the same reason: that endpoint
 // also authorizes the Client role for self-service booking and originally trusted whatever ids the
 // caller sent. This endpoint opened to Clients when online booking needed it, and without this a
@@ -292,15 +298,56 @@ class HmoService {
     return { ...request, tests };
   }
 
-  async updateTestApproval(hmoRequestTestId, approvalStatus, requestingUser) {
-    const updated = await hmoRepository.updateTestApprovalStatus(hmoRequestTestId, approvalStatus);
+  /**
+   * Record the HMO's decision on one test of a claim. [1.27.0]
+   *
+   * Three things this did not do. It accepted any string and let the CHECK constraint refuse it,
+   * so a caller sending 'Denied' — the word the HMOs themselves use — got a 500 with no hint that
+   * the vocabulary here is 'Rejected'. It recorded neither who decided nor when, alone among the
+   * money-moving actions in this system. And it took a rejection with no reason, which is the
+   * only field the front desk actually needs: an approval explains itself, a rejection is a
+   * conversation at the counter about 1,500 pesos the patient was not expecting to pay.
+   */
+  async updateTestApproval(hmoRequestTestId, approvalStatus, requestingUser, decisionReason = null) {
+    if (!HMO_TEST_DECISIONS.includes(approvalStatus)) {
+      const error = new Error(
+        `'${approvalStatus}' is not a decision this system records. Use one of: ${HMO_TEST_DECISIONS.join(', ')}.`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const reason = String(decisionReason || '').trim();
+    if (approvalStatus === 'Rejected' && reason.length < 4) {
+      const error = new Error(
+        'Say why the HMO refused this test. The cashier has to explain the charge to the patient, ' +
+          'and the patient may query it days later.'
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const updated = await hmoRepository.updateTestApprovalStatus(hmoRequestTestId, approvalStatus, {
+      // A reason on an approval would read as a caveat on cover the HMO did not attach; the field
+      // is cleared so the column holds refusals only, which is what anyone reading it expects.
+      decisionReason: approvalStatus === 'Rejected' ? reason : null,
+      decidedBy: requestingUser?.userId ?? null,
+    });
+
+    if (!updated) {
+      const error = new Error('That test is not on this claim.');
+      error.statusCode = 404;
+      throw error;
+    }
 
     await auditService.log({
       actorId: requestingUser?.userId,
       action: approvalStatus === 'Approved' ? 'hmo_request_test.approved' : 'hmo_request_test.rejected',
       entityType: 'hmo_request_test',
       entityId: hmoRequestTestId,
-      description: `Set test approval status to ${approvalStatus} for HMO request test #${hmoRequestTestId}`
+      description:
+        `Set test approval status to ${approvalStatus} for HMO request test #${hmoRequestTestId}` +
+        (approvalStatus === 'Rejected' ? ` — ${reason}` : '')
     });
 
     return updated;

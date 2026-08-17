@@ -39,6 +39,12 @@ const ServiceRequests = () => {
   const [card, setCard] = useState({ url: '', kind: null });
   const [cardError, setCardError] = useState('');
   const [detailSubmitting, setDetailSubmitting] = useState(false);
+  // Which test is being refused, and the reason being typed for it. A refusal opens an inline row
+  // rather than a dialog: the coordinator is reading down a list of tests deciding each one, and
+  // a modal per refusal loses the list they are working from. Approving stays one click — it is
+  // the refusal that has to be explained at the counter later.
+  const [rejecting, setRejecting] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -98,10 +104,12 @@ const ServiceRequests = () => {
     }
   };
 
-  const handleSetTestApproval = async (hmoRequestTestId, approvalStatus) => {
+  const handleSetTestApproval = async (hmoRequestTestId, approvalStatus, decisionReason = null) => {
     setDetailError('');
     try {
-      await api.put(`/hmo/request-test/${hmoRequestTestId}`, { approvalStatus });
+      await api.put(`/hmo/request-test/${hmoRequestTestId}`, { approvalStatus, decisionReason });
+      setRejecting(null);
+      setRejectReason('');
       await refreshDetail(detailRequest.id);
     } catch (err) {
       setDetailError(err.response?.data?.message || 'Failed to update test approval.');
@@ -346,34 +354,88 @@ const ServiceRequests = () => {
                 <span className="field-label">Linked Tests</span>
                 <div className="max-h-64 space-y-1.5 overflow-y-auto">
                   {(detailRequest?.tests || []).map(t => (
-                    <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] p-2.5">
-                      <div className="min-w-0">
-                        <span className="block truncate text-[13px] font-semibold text-slate-900">{t.test_name}</span>
-                        <span className="text-fine text-slate-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
+                    <div key={t.id} className="rounded-lg border border-[#e6ebf1] p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="block truncate text-[13px] font-semibold text-slate-900">{t.test_name}</span>
+                          <span className="text-fine text-slate-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-1">
+                          <StatusBadge status={t.approval_status} />
+                          {t.approval_status !== 'Approved' && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetTestApproval(t.id, 'Approved')}
+                              aria-label={`Approve ${t.test_name}`}
+                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-emerald-600 hover:bg-emerald-50"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {t.approval_status !== 'Rejected' && (
+                            <button
+                              type="button"
+                              onClick={() => { setRejecting(t.id); setRejectReason(''); }}
+                              aria-label={`Reject ${t.test_name}`}
+                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-rose-600 hover:bg-rose-50"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex flex-shrink-0 items-center gap-1">
-                        <StatusBadge status={t.approval_status} />
-                        {t.approval_status !== 'Approved' && (
-                          <button
-                            type="button"
-                            onClick={() => handleSetTestApproval(t.id, 'Approved')}
-                            aria-label={`Approve ${t.test_name}`}
-                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-emerald-600 hover:bg-emerald-50"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        {t.approval_status !== 'Rejected' && (
-                          <button
-                            type="button"
-                            onClick={() => handleSetTestApproval(t.id, 'Rejected')}
-                            aria-label={`Reject ${t.test_name}`}
-                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-rose-600 hover:bg-rose-50"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
+
+                      {/* Why the HMO refused. Asked at the moment of refusal, because it is the
+                          one moment the coordinator still has the provider's response in front of
+                          them — an hour later it is a guess. */}
+                      {rejecting === t.id && (
+                        <div className="mt-2 space-y-1.5 border-t border-[#e6ebf1] pt-2">
+                          <label htmlFor={`reject-reason-${t.id}`} className="field-label">
+                            Why did the HMO refuse this? <span className="text-rose-600">*</span>
+                          </label>
+                          <Input
+                            id={`reject-reason-${t.id}`}
+                            autoFocus
+                            value={rejectReason}
+                            onChange={e => setRejectReason(e.target.value)}
+                            placeholder="e.g. Not covered under the member's plan"
+                            className="text-xs rounded-lg"
+                          />
+                          <p className="text-fine text-slate-500 m-0">
+                            The cashier sees this on the bill — the patient is charged for this test
+                            and will ask why.
+                          </p>
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              type="button" variant="outline" size="sm"
+                              onClick={() => { setRejecting(null); setRejectReason(''); }}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button" size="sm"
+                              disabled={rejectReason.trim().length < 4}
+                              onClick={() => handleSetTestApproval(t.id, 'Rejected', rejectReason.trim())}
+                            >
+                              Record refusal
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* What was recorded, once it has been. Shown on the row rather than behind a
+                          hover, because whoever opens this claim next is usually opening it to
+                          answer exactly this question. */}
+                      {t.approval_status === 'Rejected' && rejecting !== t.id && t.decision_reason && (
+                        <p className="mt-1.5 border-t border-[#e6ebf1] pt-1.5 text-fine text-slate-600 m-0">
+                          <span className="font-semibold text-slate-700">Refused:</span> {t.decision_reason}
+                          {t.decided_by_first_name && (
+                            <span className="text-slate-400">
+                              {' '}&bull; recorded by {t.decided_by_first_name} {t.decided_by_last_name}
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

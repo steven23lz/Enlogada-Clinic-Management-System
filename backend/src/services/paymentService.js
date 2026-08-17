@@ -48,8 +48,26 @@ class PaymentService {
       category: item.category_name,
       price: parseFloat(item.price_at_time).toFixed(2),
       status: item.status,
-      hmoApproved: item.hmo_approval_status === 'Approved'
+      hmoApproved: item.hmo_approval_status === 'Approved',
+      // Only meaningful on a refusal, and null everywhere else — including on claims decided
+      // before [1.27.0], which have no honest answer to give.
+      hmoRejected: item.hmo_approval_status === 'Rejected',
+      hmoDecisionReason: item.hmo_decision_reason || null
     }));
+
+    // Tests on this visit whose HMO claim has not been decided yet. [1.27.0]
+    //
+    // Charged at full price here, because an undecided claim covers nothing — which is arithmetic
+    // the cashier cannot see. The patient hands over the full amount for a test their HMO is
+    // about to cover, the approval lands the next day, and the clinic now owes a refund: a second
+    // counter visit, a reversal against the cashier's account, and a patient who was charged for
+    // something they had been told was covered.
+    //
+    // Reported, not blocked. Some providers take days to answer and the patient cannot be kept
+    // waiting at the counter for one — so this is the cashier's decision to make, and all the
+    // system owes them is the fact that it is a decision at all.
+    const undecided = items.filter((item) => item.hmo_approval_status === 'Pending');
+    const hmoPendingAmount = undecided.reduce((sum, item) => sum + parseFloat(item.price_at_time), 0);
 
     return {
       visitId,
@@ -62,6 +80,9 @@ class PaymentService {
       items: formattedItems,
       subtotal: subtotal.toFixed(2),
       hmoCoverage: hmoCoverage.toFixed(2),
+      // How much of this bill is riding on a claim nobody has answered yet.
+      hmoPendingCount: undecided.length,
+      hmoPendingAmount: hmoPendingAmount.toFixed(2),
       discountAmount: discountAmount.toFixed(2),
       // Zero unless a statutory discount applies at a VAT-registered clinic. The receipt has to
       // show it as its own line — BIR requires a VAT-exempt sale to be presented that way, and a

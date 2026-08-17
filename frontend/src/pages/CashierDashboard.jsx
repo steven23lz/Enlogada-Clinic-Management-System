@@ -711,7 +711,18 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                               site, in case the endpoint's shape ever changes. */}
                           {(billDetails.items ?? []).map((item, idx) => (
                             <TableRow key={idx}>
-                              <TableCell className="py-2.5 text-xs font-bold text-slate-900">{item.name}</TableCell>
+                              <TableCell className="py-2.5 text-xs font-bold text-slate-900">
+                                {item.name}
+                                {/* Why the HMO refused this one, on the line it applies to. The
+                                    cashier is the person the patient asks, and until [1.27.0] the
+                                    answer existed nowhere they could see — the charge simply
+                                    appeared, higher than the patient had been led to expect. */}
+                                {item.hmoRejected && item.hmoDecisionReason && (
+                                  <span className="mt-0.5 block text-fine font-normal text-rose-700">
+                                    HMO refused: {item.hmoDecisionReason}
+                                  </span>
+                                )}
+                              </TableCell>
                               <TableCell className="py-2.5 text-xs text-gray-500">{item.category}</TableCell>
                               <TableCell className="py-2.5 text-xs font-bold text-slate-900 text-right">{formatCurrency(item.price)}</TableCell>
                             </TableRow>
@@ -872,12 +883,38 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             {parseFloat(billDetails.hmoCoverage) >= parseFloat(billDetails.subtotal) ? ' (full coverage, ₱0.00 out of pocket).' : ' (partial coverage — remaining balance due).'}
                           </span>
                         </div>
-                      ) : (
+                      ) : (billDetails.hmoPendingCount ?? 0) === 0 && (
                         <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
                           <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                           <span><strong>HMO Partner Accredited</strong> — no approved coverage yet for this visit. Full amount is due unless Reception logs an approval first.</span>
                         </div>
                       )
+                    )}
+
+                    {/* A claim nobody has answered yet. [1.27.0] Shown whatever the patient type
+                        and whatever the coverage so far, because partial coverage is exactly the
+                        case the green badge above used to swallow: some tests approved, others
+                        still open, and the amount at stake invisible.
+
+                        It names the figure rather than saying "some tests", because the decision
+                        the cashier is making is whether that number is small enough to collect now
+                        and refund later, or large enough to be worth chasing the provider first.
+                        Not a block — some providers take days, and the patient cannot wait at the
+                        counter for one. */}
+                    {(billDetails?.hmoPendingCount ?? 0) > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 flex items-start space-x-2 text-xs">
+                        <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <span>
+                          <strong>
+                            {billDetails.hmoPendingCount} test{billDetails.hmoPendingCount > 1 ? 's' : ''} still
+                            awaiting an HMO decision — {formatCurrency(billDetails.hmoPendingAmount)}
+                          </strong>
+                          <span className="block font-normal mt-0.5">
+                            That amount is billed in full here. If the HMO approves it afterwards,
+                            the patient has to come back for a refund.
+                          </span>
+                        </span>
+                      </div>
                     )}
 
                     {paymentMethod === 'Cash' ? (

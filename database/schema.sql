@@ -334,12 +334,27 @@ CREATE TABLE hmo_request_tests (
     hmo_request_id INT NOT NULL,
     visit_test_id INT NOT NULL,
     approval_status VARCHAR(50) DEFAULT 'Pending',
+    -- Why the HMO refused, who recorded it, and when. [1.27.0] The reason is the field the front
+    -- desk actually needs: an approval explains itself, a refusal is a conversation at the counter
+    -- about money the patient was not expecting to pay, and it used to live only in whatever the
+    -- coordinator remembered. All nullable — a decision taken before this existed has no honest
+    -- answer, and manufacturing one would put a false statement in the audit trail.
+    decision_reason TEXT,
+    decided_by INT,
+    decided_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_hmo_request_tests_request FOREIGN KEY (hmo_request_id) REFERENCES hmo_requests(id),
     CONSTRAINT fk_hmo_request_tests_visit_test FOREIGN KEY (visit_test_id) REFERENCES visit_tests(id),
+    CONSTRAINT fk_hmo_request_tests_decided_by FOREIGN KEY (decided_by) REFERENCES users(id),
     CONSTRAINT chk_hmo_request_tests_status CHECK (approval_status IN ('Pending', 'Approved', 'Rejected')),
     CONSTRAINT uq_hmo_request_visit_test UNIQUE (hmo_request_id, visit_test_id)
 );
+
+-- Undecided rows only: the screen that reads these is "claims still waiting on a decision", and
+-- decided rows are the overwhelming majority, read one claim at a time by id.
+CREATE INDEX IF NOT EXISTS idx_hmo_request_tests_pending
+    ON hmo_request_tests(hmo_request_id)
+    WHERE approval_status = 'Pending';
 
 -- 6. Results and Releasing
 CREATE TABLE test_results (
