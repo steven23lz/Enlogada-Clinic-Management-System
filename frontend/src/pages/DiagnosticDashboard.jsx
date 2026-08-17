@@ -16,6 +16,7 @@ import { StatusBadge } from '../components/ui/status-badge';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
 import { toastSuccess, toastError, toastInfo } from '../lib/toast';
+import { ageFromBirthdate } from '../lib/date';
 import WaitBadge from '../components/ui/wait-badge';
 import { SkeletonRows } from '../components/ui/skeleton';
 import { useAuth } from '../contexts/AuthContext';
@@ -585,12 +586,30 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                               this screen gave no indication of age at all. */}
                           <WaitBadge since={test.visit_created_at} />
                         </div>
-                        <span className="block text-meta text-gray-400 font-normal">PT-{test.patient_id}</span>
+                        {/* Age and sex, on the screen where findings are recorded.
+                            Diagnostic reference ranges are banded by both — a haemoglobin that is
+                            normal for a 40-year-old man is anaemia in a child — and the tech had
+                            to open a second screen to find out which band applied. The query has
+                            returned birthdate and sex all along; nothing rendered them. */}
+                        <span className="block text-meta text-gray-400 font-normal">
+                          PT-{test.patient_id}
+                          {ageFromBirthdate(test.birthdate) !== null && (
+                            <> &middot; {ageFromBirthdate(test.birthdate)}y</>
+                          )}
+                          {test.sex && <> &middot; {test.sex}</>}
+                        </span>
                       </TableCell>
 
                       <TableCell className="py-3.5 text-xs font-bold text-gray-800">
                         {test.test_name}
                         <span className="block text-meta text-gray-400 font-normal">{test.category_name}</span>
+                        {/* Who asked for it [1.23.0]. The report goes back to this doctor, and a
+                            tech querying an odd result needs to know who to call. */}
+                        {test.referring_physician && (
+                          <span className="block text-meta font-normal text-brand-700">
+                            Ref: {test.referring_physician}
+                          </span>
+                        )}
                       </TableCell>
 
                       <TableCell className="py-3.5">

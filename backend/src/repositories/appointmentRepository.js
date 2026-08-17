@@ -89,7 +89,21 @@ class AppointmentRepository {
              EXISTS (
                SELECT 1 FROM payments pay
                WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
-             ) AS is_paid
+             ) AS is_paid,
+             -- What the patient has to do before this appointment. [1.24.0] put these in the
+             -- booking wizard and the confirmation email, and then the patient's own list of
+             -- bookings — the screen they open the day before to check the time — could not show
+             -- them. A correlated subquery rather than a join, so one row per booking survives
+             -- however many tests it carries.
+             (
+               SELECT COALESCE(
+                 ARRAY_AGG(t.preparation ORDER BY t.name) FILTER (WHERE t.preparation IS NOT NULL),
+                 '{}'
+               )
+               FROM visit_tests vt
+               JOIN tests t ON vt.test_id = t.id
+               WHERE vt.patient_visit_id = pv.id
+             ) AS preparation_notes
       FROM appointments a
       JOIN patient_visits pv ON a.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id

@@ -1623,6 +1623,25 @@ const ClientDashboard = ({ onNavigate }) => {
                           <span className="block font-mono text-micro text-slate-400">{appt.appointment_reference}</span>
                         )}
 
+                        {/* What to do before this appointment. [1.24.0] surfaced these while
+                            choosing tests and in the confirmation email, and then left them off
+                            the one screen a patient opens the day before to check the time. Only
+                            for bookings still ahead — a preparation note on a completed visit is
+                            an instruction for something that already happened. */}
+                        {isOpen && appt.preparation_notes?.length > 0 && (
+                          <div className="space-y-1 rounded-lg bg-amber-50 px-2.5 py-2 ring-1 ring-inset ring-amber-200">
+                            <p className="m-0 flex items-center gap-1.5 text-fine font-semibold text-amber-900">
+                              <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                              Before this appointment
+                            </p>
+                            <ul className="m-0 list-disc space-y-0.5 pl-5 text-fine leading-relaxed text-amber-800">
+                              {appt.preparation_notes.map((prep, i) => (
+                                <li key={i}>{prep}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
                         {showPayOptions && (
                           <div className="space-y-2 pt-1">
                             <p className="text-fine text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">

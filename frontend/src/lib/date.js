@@ -40,3 +40,27 @@ export function toDateInput(date) {
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+/**
+ * Whole years between a birthdate and today, or null when there is no usable date.
+ *
+ * Written out rather than done with a millisecond division: a year is not a fixed number of
+ * milliseconds, and dividing by 365.25 puts somebody one day either side of their birthday into
+ * the wrong year. That matters here because diagnostic reference ranges are banded by age, and
+ * the bands have hard edges — a paediatric range and an adult one are different documents.
+ *
+ * Local getters throughout, per the rule at the top of this file: the API serialises a DATE as a
+ * UTC instant, so a birthdate read with UTC getters is a day early everywhere east of Greenwich.
+ */
+export function ageFromBirthdate(value) {
+  if (!value) return null;
+  const dob = new Date(value);
+  if (Number.isNaN(dob.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDelta = today.getMonth() - dob.getMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < dob.getDate())) age -= 1;
+
+  return age >= 0 && age < 130 ? age : null;
+}
