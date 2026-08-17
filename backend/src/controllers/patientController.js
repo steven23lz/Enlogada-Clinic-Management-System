@@ -1,6 +1,35 @@
 const patientService = require('../services/patientService');
 const auditService = require('../services/auditService');
 
+/**
+ * A birthdate is a calendar date, and only a calendar date. [1.24.0]
+ *
+ * `patients.birthdate` is a DATE, but the API serialises it to JSON as a UTC instant — a patient
+ * born on 1990-01-01 in Philippine time comes back as "1989-12-31T16:00:00.000Z". Any caller that
+ * does the obvious thing, reading a record and writing it back, therefore re-submits the previous
+ * day, and the birthdate walks backwards once per save. Silently, with nothing to see.
+ *
+ * That is not a cosmetic bug. Diagnostic reference ranges are banded by age, so a birthdate that
+ * drifts changes how every result on the file is interpreted, and the drift is invisible until
+ * somebody notices a patient is a day younger than their own ID says.
+ *
+ * Refusing anything but YYYY-MM-DD makes the mistake loud at the first attempt rather than
+ * gradual. Every legitimate caller already sends this shape — an `<input type="date">` produces
+ * it, and so does the seed script — so nothing correct is being turned away.
+ */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+const rejectBadBirthdate = (birthdate, res) => {
+  if (DATE_ONLY.test(String(birthdate))) return false;
+  res.status(400).json({
+    status: 'error',
+    message:
+      'Birthdate must be a calendar date in YYYY-MM-DD form. A full timestamp is ambiguous ' +
+      'across time zones and would shift the stored date.',
+  });
+  return true;
+};
+
 class PatientController {
   async addProfile(req, res, next) {
     try {
@@ -15,6 +44,7 @@ class PatientController {
           message: 'Patient type, first name, last name, birthdate, and sex are required.'
         });
       }
+      if (rejectBadBirthdate(birthdate, res)) return undefined;
 
       const patient = await patientService.addPatientProfile(linkedUserId, {
         patientTypeId,
@@ -96,6 +126,7 @@ class PatientController {
           message: 'Patient type, first name, last name, birthdate, and sex are required.'
         });
       }
+      if (rejectBadBirthdate(birthdate, res)) return undefined;
 
       // Check ownership if user is client
       const patient = await patientService.getPatientById(id, req.user);

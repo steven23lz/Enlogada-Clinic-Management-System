@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
 import EmptyState from '../../components/ui/empty-state';
@@ -12,7 +12,9 @@ import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
 import ResultDocument from '../../components/ResultDocument';
-import { Users, AlertCircle, ChevronRight, Printer, FolderSearch, FileX2, Eye, Paperclip, Building2 } from 'lucide-react';
+import PatientEditDialog from '../../components/patients/PatientEditDialog';
+import { useAuth } from '../../contexts/AuthContext';
+import { Users, AlertCircle, ChevronRight, Printer, FolderSearch, FileX2, Eye, Paperclip, Building2, Pencil } from 'lucide-react';
 
 // UI/UX Modernization Phase 4: search results come back in one shot with no server-side
 // pagination, so a client-side page size is proportionate (VISUAL_IDENTITY.md §3a #11).
@@ -41,6 +43,29 @@ const PatientRecordsOversight = () => {
   // four patients where the receptionist finds twenty should be told why, not left to wonder
   // whether the search is broken.
   const [departmentScope, setDepartmentScope] = useState(null);
+
+  // Correcting a record. PUT /patients/:id has existed since the beginning with nothing on any
+  // staff screen calling it, so a misspelt name or a wrong birthdate could only be fixed in the
+  // database — and birthdate and sex are what diagnostic reference ranges are banded by.
+  const { hasPermission } = useAuth();
+  const canEditPatients = hasPermission('patients:update');
+  const [editingPatient, setEditingPatient] = useState(null);
+  const [patientTypes, setPatientTypes] = useState([]);
+
+  // Fetched once, and only for accounts that can actually edit — the dialog needs the type list
+  // and there is no reason to ask for it on behalf of a read-only account.
+  useEffect(() => {
+    if (!canEditPatients) return;
+    api.get('/patients/types')
+      .then((res) => setPatientTypes(res.data.data.patientTypes || []))
+      .catch(() => setPatientTypes([]));
+  }, [canEditPatients]);
+
+  /** Reflect a saved correction in the list without making the user search again. */
+  const applyEdit = (updated) => {
+    setResults((prev) => (prev || []).map((p) => (p.id === updated.id ? { ...p, ...updated } : p)));
+    setSelectedPatient((prev) => (prev && prev.id === updated.id ? { ...prev, ...updated } : prev));
+  };
 
   const handleViewHistory = async (patient) => {
     setSelectedPatient(patient);
@@ -145,11 +170,19 @@ const PatientRecordsOversight = () => {
             ) : (
               <ul className="m-0 list-none divide-y divide-[#eef2f6] p-0">
                 {pagedResults.map(patient => (
-                  <li key={patient.id}>
+                  // A row, not a single button. Opening the records and correcting the details are
+                  // two different actions and a button cannot be nested inside another button, so
+                  // the row is a flex container with the record-opening button as its left half.
+                  <li
+                    key={patient.id}
+                    data-testid="patient-row"
+                    data-patient-id={patient.id}
+                    className="group flex items-center gap-2 pr-4 transition-colors hover:bg-slate-50"
+                  >
                     <button
                       type="button"
                       onClick={() => handleViewHistory(patient)}
-                      className="group flex w-full cursor-pointer items-center justify-between gap-3 border-0 bg-transparent px-5 py-3 text-left transition-colors hover:bg-slate-50"
+                      className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 border-0 bg-transparent px-5 py-3 text-left"
                     >
                       <span className="min-w-0">
                         <span className="block text-[13px] font-semibold text-slate-900">
@@ -167,6 +200,24 @@ const PatientRecordsOversight = () => {
                         <ChevronRight className="h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600" />
                       </span>
                     </button>
+
+                    {/* Only for accounts that hold patients:update. Diagnostic roles hold
+                        patients:read and not the write — they may read whose result they are
+                        looking at, and must not be able to change a birthdate that decides how it
+                        is interpreted. The API enforces the same thing; this keeps the screen from
+                        offering a control the server would refuse. */}
+                    {canEditPatients && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => setEditingPatient(patient)}
+                        className="flex-shrink-0"
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Correct
+                      </Button>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -275,6 +326,14 @@ const PatientRecordsOversight = () => {
         testName={previewDoc?.testName}
         patientName={previewDoc?.patientName}
         fileName={previewDoc?.fileName}
+      />
+
+      <PatientEditDialog
+        open={Boolean(editingPatient)}
+        onOpenChange={(o) => { if (!o) setEditingPatient(null); }}
+        patient={editingPatient}
+        patientTypes={patientTypes}
+        onSaved={applyEdit}
       />
     </div>
   );
