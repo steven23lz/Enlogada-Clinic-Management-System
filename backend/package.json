@@ -6,9 +6,13 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "lint": "oxlint src",
+    "retention": "node src/scripts/retention.js",
+    "retention:apply": "node src/scripts/retention.js --confirm",
     "clean:e2e": "node src/scripts/cleanE2eData.js",
-    "clean:e2e:apply": "node src/scripts/cleanE2eData.js --apply --unlimited-slots",
-    "lint": "oxlint src"
+    "clean:e2e:apply": "node src/scripts/cleanE2eData.js --apply",
+    "slots:unlimited": "node src/scripts/cleanE2eData.js --apply --unlimited-slots",
+    "slots:restore": "node src/scripts/cleanE2eData.js --apply --restore-slots"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

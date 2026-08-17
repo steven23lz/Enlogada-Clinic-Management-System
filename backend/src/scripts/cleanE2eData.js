@@ -20,13 +20,27 @@
  *   node src/scripts/cleanE2eData.js                      # dry run — counts only
  *   node src/scripts/cleanE2eData.js --apply              # perform the purge
  *   node src/scripts/cleanE2eData.js --apply --unlimited-slots   # also lift the dev slot cap
+ *   node src/scripts/cleanE2eData.js --apply --restore-slots     # put the cap back to 1
+ *
+ * Lift the cap only while you need it, and put it back before demonstrating anything. At 9999 the
+ * availability screen reports every slot free no matter how many bookings it holds, so two
+ * patients can be given the same 08:00 — and nothing on any screen says why. The suite no longer
+ * needs the cap lifted: booking-atomicity.spec.js and ticket-release-gating.spec.js each claim
+ * their own slot, and the teardown purge releases them at the end of every run.
  */
 require('dotenv').config();
 const { Pool } = require('pg');
 
 const APPLY = process.argv.includes('--apply');
 const UNLIMITED_SLOTS = process.argv.includes('--unlimited-slots');
+// Puts the cap back. --unlimited-slots had no inverse, so the only way out of it was a hand-written
+// UPDATE that nobody would think to run — and a lifted cap is invisible until you notice the
+// booking page offering the same 08:00 to everybody, forever. Leaving a one-way door on a
+// destructive-ish dev switch is how a demo ends up double-booking a slot in front of a client.
+const RESTORE_SLOTS = process.argv.includes('--restore-slots');
 const DEV_SLOT_CAPACITY = 9999;
+// What schema.sql seeds. One patient per 30-minute slot is the clinic's actual rule.
+const REAL_SLOT_CAPACITY = 1;
 
 const E2E_EMAIL = `'%@enlogada-e2e.test'`;
 
@@ -132,12 +146,19 @@ async function main() {
       report.push({ step: `DELETE ${label}`, rows: r.rowCount });
     }
 
-    if (UNLIMITED_SLOTS) {
+    if (UNLIMITED_SLOTS && RESTORE_SLOTS) {
+      throw new Error('--unlimited-slots and --restore-slots are opposites; pass one.');
+    }
+    if (UNLIMITED_SLOTS || RESTORE_SLOTS) {
+      const capacity = RESTORE_SLOTS ? REAL_SLOT_CAPACITY : DEV_SLOT_CAPACITY;
       const r = await client.query(
         `UPDATE clinic_operating_hours SET max_concurrent_bookings = $1 WHERE is_open = true`,
-        [DEV_SLOT_CAPACITY]
+        [capacity]
       );
-      report.push({ step: `DEV slot capacity -> ${DEV_SLOT_CAPACITY}`, rows: r.rowCount });
+      report.push({
+        step: `${RESTORE_SLOTS ? 'REAL' : 'DEV'} slot capacity -> ${capacity}`,
+        rows: r.rowCount
+      });
     }
 
     console.table(report);
