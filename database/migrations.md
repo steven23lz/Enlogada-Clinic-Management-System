@@ -1,5 +1,25 @@
 # Database Migration & Schema History
 
+## [1.28.0] - 2026-08-18 (The claim gets decided, and somebody is told)
+
+Run `node src/scripts/migrateHmoClaimDecision.js` on any database created before this version
+(`--rollback` reverses it, destroying the reasons and member numbers — it warns and counts first).
+
+### Added
+* `hmo_requests.decision_reason` (TEXT), `.decided_by` (FK → `users`) — why a claim was turned down and who recorded it. No `decided_at`: `approved_date` already holds that fact, and two timestamps that must agree eventually will not.
+* `hmo_requests.member_number` (VARCHAR 100) — the patient's number with the provider. It had **nowhere to live**: the API accepted `memberNumber` and silently discarded it, so the number was legible only by opening the card photo — and `pruneHmoCards.js` deletes those after 180 days by design, while the claim itself is kept for seven years.
+* `idx_hmo_requests_pending`, partial (`WHERE status = 'Pending'`) — the set the approval worklist opens on.
+* `PUT /api/hmo/request/:id/reject` — same permission as approving. Saying no is the same authority as saying yes, and splitting them would let an account do one but not the other.
+
+### Changed
+* **A claim can now be turned down.** `chk_hmo_status` has allowed `'Rejected'` since [1.0.0] and no route could set it, so a claim the provider refused had two outcomes in practice: approve it anyway, or leave it Pending forever — at the top of a worklist that filters on Pending, being reopened by every coordinator who scanned it. A refusal requires a reason.
+* **Deciding a claim notifies the Cashier and Receptionist.** This was the missing step in the clinic's own workflow: reception raises, an Admin decides, the cashier bills what is left — and nothing connected the second to the third. Admins are not notified; they are the ones who just decided it. The message names the patient, not the claim id, because "Maria Santos — MediCard approved" is actionable at a counter and "HMO request #482" is a lookup.
+* **A claim is decided once** (409 otherwise). Approving an already-rejected claim silently overwrote the refusal and its reason — the only record of why the patient was charged.
+* **The approval worklist names the patient.** It carried provider, date and a count, so several claims from one provider on one day were identical rows and the only way to learn whose insurance you were approving was to open each in turn. It now also counts refusals, not just approvals: `1 / 2` could not distinguish a half-decided claim from one whose other half was refused.
+* **Reception collects the member number and the LOA code as separate fields.** One box labelled "Card / LOA Number" wrote both into `approval_code` — the column an Admin fills on approval — so a member number was filed as an approval code against a claim nobody had approved.
+
+---
+
 ## [1.27.0] - 2026-08-18 (Why the HMO said no)
 
 Run `node src/scripts/migrateHmoDecisionTrail.js` on any database created before this version

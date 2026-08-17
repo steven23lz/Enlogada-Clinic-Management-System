@@ -18,9 +18,14 @@ const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
           drags. */}
       <div className="flex min-w-0 items-center gap-2.5">
         <Logo className="h-9 w-9 flex-shrink-0" />
-        <div className="flex min-w-0 flex-col leading-tight">
+        {/* The wordmark is hidden below `sm`, not shrunk. Letting it compress is what stopped the
+            15px overflow, but the result at 390px was "ENL…" — a clipped wordmark is worse
+            branding than no wordmark, and it is the first thing a patient sees on their own
+            portal. The logo carries the identity on a phone; the patient knows what site they
+            signed in to. */}
+        <div className="hidden min-w-0 flex-col leading-tight sm:flex">
           <span className="truncate text-[15px] font-bold tracking-tight text-slate-900">ENLOGADA</span>
-          <span className="hidden truncate text-micro font-semibold uppercase tracking-[0.12em] text-slate-500 sm:block">
+          <span className="truncate text-micro font-semibold uppercase tracking-[0.12em] text-slate-500">
             Ultrasound &amp; Diagnostic Clinic
           </span>
         </div>

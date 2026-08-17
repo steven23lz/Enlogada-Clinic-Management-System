@@ -203,6 +203,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [activeVisitTest, setActiveVisitTest] = useState(null);
   const [hmoProviderId, setHmoProviderId] = useState('');
   const [hmoApprovalCode, setHmoApprovalCode] = useState('');
+  const [hmoMemberNumber, setHmoMemberNumber] = useState('');
   const [hmoError, setHmoError] = useState('');
 
   // UI/UX Modernization Phase 10: read-only visibility into pending HMO requests, shown on the
@@ -617,8 +618,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     e.preventDefault();
     setHmoError('');
 
+    // The message named a field this check never looked at, and the LOA code is genuinely
+    // optional — reception logs the claim, an Admin issues the code on approval.
     if (!activeVisitTest || !hmoProviderId) {
-      setHmoError('Provider and Approval Code are required.');
+      setHmoError('Choose the HMO provider before logging the claim.');
       return;
     }
 
@@ -626,11 +629,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       await api.post('/hmo/request', {
         hmoProviderId: parseInt(hmoProviderId, 10),
         approvalCode: hmoApprovalCode,
+        memberNumber: hmoMemberNumber,
         visitTestIds: [activeVisitTest.id]
       });
 
       toastSuccess('HMO Pre-authorization logged successfully!');
       setShowHmoModal(false);
+      setHmoMemberNumber('');
+      setHmoApprovalCode('');
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
       fetchPendingHmoRequests();
     } catch (err) {
@@ -698,12 +704,19 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   </p>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
+                  {/* The patient, then the provider. These chips read "1CoopHealth • 1/2
+                      approved" — five of them, identical, on a queue of five different people.
+                      A receptionist standing in front of a patient asking "has mine come back
+                      yet?" could not answer from this, which is the only question it is here
+                      to answer. */}
                   {pendingHmoRequests.slice(0, 6).map(r => (
                     <span
                       key={r.id}
                       className="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-0.5 text-fine font-medium leading-5 text-amber-900 ring-1 ring-inset ring-amber-200"
                     >
-                      <span className="font-semibold">{r.provider_name}</span>
+                      <span className="font-semibold">
+                        {r.patient_first_name ? `${r.patient_first_name} ${r.patient_last_name}` : r.provider_name}
+                      </span>
                       <span className="text-amber-500">&bull;</span>
                       <span className="tabular-nums">{r.approved_test_count}/{r.test_count} approved</span>
                     </span>
@@ -1514,10 +1527,38 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </Select>
               </div>
 
+              {/* Two fields, not one. This was a single box labelled "Card / LOA Number" writing
+                  into approval_code — but a member number and an LOA code are different things
+                  with different lifetimes. The member number is printed on the card and identifies
+                  the patient to the provider forever; the LOA code is issued per claim when the
+                  HMO approves it, and the Admin approval screen writes that same column. Typing a
+                  member number here therefore filed it as an approval code on an unapproved claim.
+
+                  The member number also had nowhere to live at all: it was legible only by opening
+                  the card photo, and pruneHmoCards deletes those after 180 days while the claim
+                  itself is kept for seven years. */}
               <div className="space-y-1.5">
-                <label className="field-label">Card / LOA Number (if shown by patient)</label>
+                <label htmlFor="hmo-member-number" className="field-label">
+                  Member number <span className="font-normal text-slate-400">(from the card)</span>
+                </label>
                 <Input
-                  placeholder="Enter the code shown on the HMO card or LOA"
+                  id="hmo-member-number"
+                  placeholder="The patient's number with this provider"
+                  value={hmoMemberNumber}
+                  onChange={e => setHmoMemberNumber(e.target.value)}
+                />
+                <p className="m-0 text-fine text-slate-500">
+                  What the provider looks the claim up by when you telephone them.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="hmo-loa-code" className="field-label">
+                  LOA code <span className="font-normal text-slate-400">(only if they already have one)</span>
+                </label>
+                <Input
+                  id="hmo-loa-code"
+                  placeholder="Leave blank — an Admin fills this in on approval"
                   value={hmoApprovalCode}
                   onChange={e => setHmoApprovalCode(e.target.value)}
                 />

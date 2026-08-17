@@ -999,11 +999,14 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block mb-3">
                       This shift so far
                     </span>
+                    {/* "Receipts issued" used to be the left half of this pair, showing
+                        `transactions.length` — the identical number to the Receipts Issued metric
+                        card 400px above it, under an identical label. Six zeros on one screen and
+                        two of them were the same zero. What replaces it is the figure the strip
+                        above genuinely does not carry: how much was given away in statutory
+                        discounts, which is the number a cashier reconciles against their senior
+                        and PWD booklet at the end of a shift. */}
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
-                        <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Receipts issued</span>
-                        <span className="text-lg font-extrabold text-slate-900 tabular-nums">{transactions.length}</span>
-                      </div>
                       <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
                         <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Average per receipt</span>
                         <span className="text-lg font-extrabold text-slate-900 tabular-nums">
@@ -1012,6 +1015,14 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                                 transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0) / transactions.length
                               )
                             : formatCurrency(0)}
+                        </span>
+                      </div>
+                      <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
+                        <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Statutory discounts</span>
+                        <span className="text-lg font-extrabold text-slate-900 tabular-nums">
+                          {formatCurrency(
+                            transactions.reduce((sum, t) => sum + parseFloat(t.discount_amount || 0), 0)
+                          )}
                         </span>
                       </div>
                     </div>

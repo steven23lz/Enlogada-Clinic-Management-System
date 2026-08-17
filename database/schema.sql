@@ -303,8 +303,22 @@ CREATE TABLE hmo_providers (
 CREATE TABLE hmo_requests (
     id SERIAL PRIMARY KEY,
     hmo_provider_id INT NOT NULL,
+    -- Two different identifiers, deliberately separate. [1.28.0] approval_code is the LOA the HMO
+    -- issues when it approves this particular claim; member_number is printed on the patient's
+    -- card and identifies them to the provider permanently. Reception used to type both into
+    -- approval_code through one box labelled "Card / LOA Number", so a member number was filed as
+    -- an approval code on a claim nobody had approved. member_number is also the only place that
+    -- number survives: it was previously legible only inside the card photo, and pruneHmoCards
+    -- deletes those after 180 days while the claim is kept for seven years.
     approval_code VARCHAR(100),
+    member_number VARCHAR(100),
     status VARCHAR(50) DEFAULT 'Pending',
+    -- Why a claim was turned down, and who recorded the decision. [1.28.0] `chk_hmo_status` has
+    -- allowed 'Rejected' since [1.0.0] with no route able to set it, so a refused claim could only
+    -- be approved anyway or left Pending forever. No decided_at column: approved_date above is the
+    -- same fact, and two timestamps that must agree eventually will not.
+    decision_reason TEXT,
+    decided_by INT,
     request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     approved_date TIMESTAMP,
     -- Evidence for the claim. A client booking online attaches a photo of their HMO card; a
@@ -322,12 +336,18 @@ CREATE TABLE hmo_requests (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_hmo_provider FOREIGN KEY (hmo_provider_id) REFERENCES hmo_providers(id),
+    CONSTRAINT fk_hmo_requests_decided_by FOREIGN KEY (decided_by) REFERENCES users(id),
     CONSTRAINT chk_hmo_status CHECK (status IN ('Pending', 'Approved', 'Rejected', 'Cancelled')),
     -- card_purged_at counts as evidence-of-evidence: retention removes the image but the row
     -- must remain valid, and a purged card stays distinguishable from one never provided.
     CONSTRAINT chk_hmo_request_card_evidence
         CHECK (card_file_path IS NOT NULL OR card_verified_by IS NOT NULL OR card_purged_at IS NOT NULL)
 );
+
+-- Undecided claims, newest first — which is exactly what the Admin approval worklist opens on.
+CREATE INDEX IF NOT EXISTS idx_hmo_requests_pending
+    ON hmo_requests(request_date DESC)
+    WHERE status = 'Pending';
 
 CREATE TABLE hmo_request_tests (
     id SERIAL PRIMARY KEY,

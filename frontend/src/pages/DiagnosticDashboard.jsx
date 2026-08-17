@@ -37,7 +37,9 @@ import {
   Pencil,
   Printer,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle,
+  PhoneCall
 } from 'lucide-react';
 
 // A ticket only reaches this console once the receptionist/cashier has released it, at which
@@ -97,6 +99,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
 
   // Result Upload Form State
   const [activeTest, setActiveTest] = useState(null);
+  // Released critical results still awaiting their phone call. Not department-scoped by the API
+  // on purpose — a potassium of 7.4 belongs to whoever can act on it, not to the room that
+  // produced it — so every diagnostic console shows the same list and whoever gets to it first
+  // records the call.
+  const [outstandingCriticals, setOutstandingCriticals] = useState([]);
+  const [showCriticals, setShowCriticals] = useState(false);
   const [findings, setFindings] = useState('');
   const [remarks, setRemarks] = useState('');
   // Phase B: a real uploaded file, replacing the old free-text URL field — see
@@ -210,11 +218,35 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   //
   // Suspended while a modal is open: refetching under an open findings dialog would swap the
   // underlying list while someone is typing into it.
+  // Released critical results still waiting on their phone call. Polled alongside the worklist
+  // rather than fetched once, because the whole point of the tile is that a panic value raised
+  // by another department, after this screen was opened, still reaches somebody. Failure is
+  // swallowed: an empty list is the honest fallback, and a red banner over a worklist because a
+  // secondary counter could not load would be worse than the counter being briefly stale.
+  const fetchOutstandingCriticals = useCallback(async () => {
+    try {
+      const res = await api.get('/results/critical/outstanding');
+      setOutstandingCriticals(res.data.data.outstanding || []);
+    } catch {
+      setOutstandingCriticals([]);
+    }
+  }, []);
+
   usePolling(
     () => (mode === 'history' ? fetchReleasedTests(category) : fetchPendingTests(category)),
     30000,
     { enabled: categoryResolved && !!category && !showUploadModal }
   );
+
+  // usePolling only sets an interval — it deliberately does not fire on mount, because every
+  // other caller here already has its own initial fetch. Without this the tile read "0 —
+  // nothing outstanding" for the first thirty seconds of every visit to the screen, which is
+  // the most confident possible way to be wrong about a panic value.
+  useEffect(() => {
+    if (mode === 'worklist') fetchOutstandingCriticals();
+  }, [mode, fetchOutstandingCriticals]);
+
+  usePolling(fetchOutstandingCriticals, 30000, { enabled: mode === 'worklist' && !showUploadModal });
 
   // Reset to page 1 whenever the filtered set could change shape, so a stale page number never
   // points past the end of a newly-filtered/newly-fetched list.
@@ -517,16 +549,34 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         <>
         {/* Department Modality Worklist Header Cards */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <MetricCard
-            label="Active Modality"
-            value={categoryLabel}
-            caption="Your department"
-            captionTone="slate"
-            icon={modalityIcon}
-            tone="green"
-          />
           <MetricCard label="Awaiting Exam" value={processingCount} caption="Paid and released to you" captionTone="slate" icon={Clock} tone="indigo" />
           <MetricCard label="Awaiting Release" value={awaitingReleaseCount} caption="Findings recorded, not authorised" captionTone="slate" icon={FileText} tone="amber" />
+          {/* The tile this replaced said "Active Modality: Laboratory — Your department", which
+              is the page title, the breadcrumb and the sidebar selection restated a fourth time
+              in a third of the metric strip. A metric strip is the most valuable space on an
+              operational screen and it was spending it on something the reader already knew.
+
+              What goes there instead is the one thing on this screen nobody could see: a released
+              critical result still waiting on its phone call. The escalation used to depend on the
+              technician who flagged it staying on the worklist — one raised near the end of a
+              shift had nobody watching it. Clicking opens the list. [1.28.0]
+
+              It stays visible at zero, deliberately: a counter that only appears when it is
+              non-zero teaches people not to look for it, and "0 outstanding" is the reassurance
+              the tile exists to give. */}
+          <MetricCard
+            label="Critical Callbacks"
+            value={outstandingCriticals.length}
+            caption={
+              outstandingCriticals.length
+                ? 'Patient still to be telephoned'
+                : 'Nothing outstanding'
+            }
+            captionTone={outstandingCriticals.length ? 'rose' : 'slate'}
+            icon={AlertTriangle}
+            tone={outstandingCriticals.length ? 'rose' : 'slate'}
+            onClick={outstandingCriticals.length ? () => setShowCriticals(true) : undefined}
+          />
         </div>
 
         <div>
@@ -1124,6 +1174,68 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         patientName={previewDoc?.patientName}
         fileName={previewDoc?.fileName}
       />
+
+      {/* Who still has to be telephoned. [1.28.0]
+          The endpoint existed with nothing reading it; before that, the only sign of a panic
+          value anywhere was a badge on one department's worklist row. Oldest first, because the
+          age of an un-made call is the whole severity of it — and the number is shown in the
+          open rather than behind a hover, since the reason this fails is people not looking. */}
+      <Dialog open={showCriticals} onOpenChange={setShowCriticals}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Critical results awaiting a callback</DialogTitle>
+            <DialogDescription>
+              Released with a panic value and not yet confirmed as communicated. Telephone the
+              patient, then record the call — whoever makes it, from any department.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+            {outstandingCriticals.map((c) => (
+              <div
+                key={c.visit_test_id}
+                className="rounded-xl border border-rose-200 bg-rose-50/60 p-3"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="m-0 text-[13px] font-bold text-slate-900">
+                      {c.first_name} {c.last_name}
+                    </p>
+                    <p className="m-0 text-fine text-slate-600">
+                      {c.test_name} &bull; released {c.released_at ? new Date(c.released_at).toLocaleString() : '—'}
+                    </p>
+                  </div>
+                  {/* The number is the point of the row: it is what the person acts on. */}
+                  {c.contact_number && (
+                    <a
+                      href={`tel:${c.contact_number}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-fine font-bold text-white no-underline hover:bg-rose-700"
+                    >
+                      <PhoneCall className="h-3.5 w-3.5" />
+                      {c.contact_number}
+                    </a>
+                  )}
+                </div>
+                {c.findings && (
+                  <p className="m-0 mt-1.5 line-clamp-2 text-fine text-slate-700">{c.findings}</p>
+                )}
+                {!c.contact_number && (
+                  <p className="m-0 mt-1.5 text-fine font-semibold text-rose-700">
+                    No contact number on file — check the visit record.
+                  </p>
+                )}
+              </div>
+            ))}
+            {outstandingCriticals.length === 0 && (
+              <EmptyState
+                icon={CheckCircle2}
+                title="Every critical result has been called through"
+                description="Nothing is waiting on a phone call."
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </SidebarLayout>
   );
 };

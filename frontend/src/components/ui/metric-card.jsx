@@ -87,7 +87,10 @@ const MetricCard = ({
       type={clickable ? 'button' : undefined}
       onClick={onClick}
       className={cn(
-        'group relative w-full overflow-hidden rounded-xl border p-4 text-left transition-all duration-200',
+        // flex column so the figure can be pushed to the bottom: see the label note below. A row
+        // of cards is a grid, and grid children stretch, so the cards are already equal height —
+        // this makes their numbers share a baseline even when one label wraps and another does not.
+        'group relative flex w-full flex-col overflow-hidden rounded-xl border p-3.5 text-left transition-all duration-200 sm:p-4',
         isDark
           ? 'border-white/10 bg-white/[0.06]'
           : 'border-[#e6ebf1] bg-white',
@@ -99,10 +102,15 @@ const MetricCard = ({
       )}
     >
       <div className="flex items-center gap-2">
+        {/* Hidden below `sm`. These strips are a two-column grid on a phone, so a card is about
+            145px wide; the icon and its gap take 36px of that, and what is left cannot hold an
+            uppercase label like "PENDING REQUESTS" even across two lines — it clipped to
+            "PENDING REQUES". The icon is the decoration and the label is the information, so at
+            the width where only one of them fits, it is not the icon. */}
         {Icon && (
           <span
             className={cn(
-              'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg',
+              'hidden h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg sm:flex',
               isDark ? DARK_ICON_TONE[tone] || DARK_ICON_TONE.slate : ICON_TONE[tone] || ICON_TONE.slate
             )}
           >
@@ -111,10 +119,20 @@ const MetricCard = ({
         )}
         {/* 11px rather than 10px, and tracking pulled back from `widest`. Uppercase text at 10px
             with 0.1em of letter-spacing is the single most common reason a dashboard label is
-            skipped rather than read. */}
+            skipped rather than read.
+
+            It WRAPS rather than truncating. This was `truncate`, and at phone width a row of
+            cards is a two-column grid — about 120px per label once the icon and gaps are taken
+            out, which is not enough for eleven uppercase letters with 0.1em of tracking. Every
+            console showed the same thing: "COLLECT…", "CASH CO…", "RECEIPTS…", "PENDI…",
+            "COMP…". The figure was legible and nothing said what it counted, which is worse than
+            a card that is merely tall. Two lines is the cap — past that the label is too long to
+            be a label. */}
         <span
           className={cn(
-            'min-w-0 truncate text-micro font-semibold uppercase tracking-[0.1em]',
+            // break-words as the backstop: a single word longer than the card would otherwise be
+            // clipped mid-letter with no ellipsis, which is the worst of both behaviours.
+            'min-w-0 break-words text-micro font-semibold uppercase leading-tight tracking-[0.04em] sm:tracking-[0.1em] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden',
             isDark ? 'text-slate-400' : 'text-slate-500'
           )}
         >
@@ -135,7 +153,9 @@ const MetricCard = ({
           cards and a counter ticking 9 -> 10 does not shift the layout under the reader. */}
       <div
         className={cn(
-          'mt-2.5 text-stat font-extrabold leading-none tracking-tight tabular-nums break-words',
+          // mt-auto, not mt-2.5: the figure sits at the bottom of the card, so a wrapped
+          // two-line label in one card does not shunt its number below its neighbour's.
+          'mt-auto pt-2.5 text-stat font-extrabold leading-none tracking-tight tabular-nums break-words',
           isDark ? 'text-white' : 'text-slate-900'
         )}
       >
@@ -157,7 +177,9 @@ const MetricCard = ({
       {caption && !trend && (
         <span
           className={cn(
-            'mt-1.5 block truncate text-fine font-medium',
+            // Also wraps to two lines, for the same reason as the label: "Lab, X-Ray, Ultrasound
+            // & more" is a sentence, and an ellipsis two words in tells the reader nothing.
+            'mt-1.5 block text-fine font-medium leading-snug [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden',
             isDark ? 'text-slate-400' : CAPTION_TONE[resolvedCaptionTone] || CAPTION_TONE.slate
           )}
         >

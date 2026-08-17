@@ -45,6 +45,9 @@ const ServiceRequests = () => {
   // the refusal that has to be explained at the counter later.
   const [rejecting, setRejecting] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  // The same pair for the claim as a whole, which is a separate decision from any one test.
+  const [rejectingClaim, setRejectingClaim] = useState(false);
+  const [claimReason, setClaimReason] = useState('');
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -99,6 +102,24 @@ const ServiceRequests = () => {
       await refreshDetail(detailRequest.id);
     } catch (err) {
       setDetailError(err.response?.data?.message || 'Failed to approve request.');
+    } finally {
+      setDetailSubmitting(false);
+    }
+  };
+
+  // Turning the whole claim down. [1.28.0] Until now the screen could only say yes, so a claim
+  // the provider refused was either approved anyway or left Pending forever.
+  const handleRejectRequest = async (e) => {
+    e.preventDefault();
+    setDetailSubmitting(true);
+    setDetailError('');
+    try {
+      await api.put(`/hmo/request/${detailRequest.id}/reject`, { decisionReason: claimReason.trim() });
+      setRejectingClaim(false);
+      setClaimReason('');
+      await refreshDetail(detailRequest.id);
+    } catch (err) {
+      setDetailError(err.response?.data?.message || 'Failed to record the refusal.');
     } finally {
       setDetailSubmitting(false);
     }
@@ -179,9 +200,14 @@ const ServiceRequests = () => {
             <Table>
               <TableHeader sticky>
                 <TableRow>
-                  <TableHead>Provider</TableHead>
+                  {/* Patient first. It is the only thing that distinguishes one row from the
+                      next — seven claims from the same provider on the same day were seven
+                      identical rows, and the only way to learn whose insurance you were about to
+                      approve was to open each one in turn. */}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Provider &amp; member</TableHead>
                   <TableHead>Requested</TableHead>
-                  <TableHead>Tests Approved</TableHead>
+                  <TableHead>Tests decided</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -192,9 +218,33 @@ const ServiceRequests = () => {
                 ) : pagedRequests.length > 0 ? (
                   pagedRequests.map(r => (
                     <TableRow key={r.id}>
-                      <TableCell className="font-semibold text-slate-900">{r.provider_name}</TableCell>
+                      <TableCell>
+                        <span className="block font-semibold text-slate-900">
+                          {r.patient_first_name ? `${r.patient_first_name} ${r.patient_last_name}` : 'Unlinked claim'}
+                        </span>
+                        {r.queue_number && (
+                          <span className="text-fine tabular-nums text-slate-500">Ticket {r.queue_number}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="block text-slate-700">{r.provider_name}</span>
+                        {r.member_number && (
+                          <span className="text-fine tabular-nums text-slate-500">{r.member_number}</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-slate-500">{new Date(r.request_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</TableCell>
-                      <TableCell className="font-medium tabular-nums">{r.approved_test_count} / {r.test_count}</TableCell>
+                      {/* Approved AND refused, not just approved. "1 / 2" left the reader unable to
+                          tell a claim half-decided from one where the other half was turned down. */}
+                      <TableCell className="font-medium tabular-nums">
+                        <span className="text-emerald-700">{r.approved_test_count}</span>
+                        {parseInt(r.rejected_test_count, 10) > 0 && (
+                          <>
+                            <span className="text-slate-300"> / </span>
+                            <span className="text-rose-700">{r.rejected_test_count} refused</span>
+                          </>
+                        )}
+                        <span className="text-slate-400"> of {r.test_count}</span>
+                      </TableCell>
                       <TableCell><StatusBadge status={r.status} /></TableCell>
                       <TableCell className="text-right">
                         <Button onClick={() => openDetail(r.id)} variant="outline" size="xs">
@@ -205,7 +255,7 @@ const ServiceRequests = () => {
                   ))
                 ) : (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={5} className="p-0">
+                    <TableCell colSpan={6} className="p-0">
                       <EmptyState
                         icon={ShieldCheck}
                         title={statusFilter === 'All' ? 'No HMO requests logged' : `Nothing is ${statusFilter.toLowerCase()}`}
@@ -225,7 +275,11 @@ const ServiceRequests = () => {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>HMO Request Review</DialogTitle>
-            <DialogDescription>{detailRequest?.provider_name}</DialogDescription>
+            <DialogDescription>
+              {detailRequest?.patient_first_name
+                ? `${detailRequest.patient_first_name} ${detailRequest.patient_last_name} — ${detailRequest.provider_name}`
+                : detailRequest?.provider_name}
+            </DialogDescription>
           </DialogHeader>
 
           {detailLoading ? (
@@ -333,21 +387,96 @@ const ServiceRequests = () => {
                 )}
               </div>
 
-              {detailRequest?.status !== 'Approved' && (
-                <form onSubmit={handleApproveRequest} className="space-y-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
-                  <label className="field-label">Approve Request — Approval / LOA Code</label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Enter approval code"
-                      value={approvalCode}
-                      onChange={e => setApprovalCode(e.target.value)}
-                      disabled={detailSubmitting}
-                    />
-                    <Button type="submit" disabled={detailSubmitting}>
-                      {detailSubmitting ? 'Approving…' : 'Approve'}
-                    </Button>
+              {/* The decision. [1.28.0] This used to be an approve-only form, and it appeared for
+                  any claim that was not already Approved — so a refused one still offered an
+                  Approve button and nothing else, which is how a refusal gets recorded as an
+                  approval. Undecided claims get both actions; decided ones get the record. */}
+              {detailRequest?.status === 'Pending' ? (
+                <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3 space-y-2.5">
+                  <div>
+                    <span className="field-label">Record the provider&apos;s decision</span>
+                    <p className="m-0 text-fine text-slate-500">
+                      The cashier is notified either way — they cannot settle this bill until you decide.
+                    </p>
                   </div>
-                </form>
+
+                  {!rejectingClaim ? (
+                    <>
+                      <form onSubmit={handleApproveRequest} className="space-y-1.5">
+                        <label htmlFor="loa-code" className="field-label">Approval / LOA code</label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="loa-code"
+                            placeholder="e.g. LOA-2026-00481"
+                            value={approvalCode}
+                            onChange={e => setApprovalCode(e.target.value)}
+                            disabled={detailSubmitting}
+                          />
+                          <Button type="submit" disabled={detailSubmitting || !approvalCode.trim()}>
+                            {detailSubmitting ? 'Approving…' : 'Approve'}
+                          </Button>
+                        </div>
+                      </form>
+                      <button
+                        type="button"
+                        onClick={() => { setRejectingClaim(true); setClaimReason(''); }}
+                        className="cursor-pointer border-0 bg-transparent p-0 text-fine font-semibold text-rose-700 underline underline-offset-2 hover:text-rose-800"
+                      >
+                        The provider turned this claim down
+                      </button>
+                    </>
+                  ) : (
+                    /* Secondary until chosen, then it owns the panel — a refusal is the rarer
+                       outcome, but once it is what happened it is the only thing being recorded. */
+                    <form onSubmit={handleRejectRequest} className="space-y-1.5">
+                      <label htmlFor="claim-reason" className="field-label">
+                        Why did they refuse it? <span className="text-rose-600">*</span>
+                      </label>
+                      <Input
+                        id="claim-reason"
+                        autoFocus
+                        placeholder="e.g. Member's policy lapsed on 01 Aug"
+                        value={claimReason}
+                        onChange={e => setClaimReason(e.target.value)}
+                        disabled={detailSubmitting}
+                      />
+                      <p className="m-0 text-fine text-slate-500">
+                        The patient pays in full. This reason is what the cashier tells them.
+                      </p>
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          type="button" variant="outline" size="sm"
+                          onClick={() => { setRejectingClaim(false); setClaimReason(''); }}
+                          disabled={detailSubmitting}
+                        >
+                          Back
+                        </Button>
+                        <Button type="submit" size="sm" disabled={detailSubmitting || claimReason.trim().length < 4}>
+                          {detailSubmitting ? 'Recording…' : 'Record refusal'}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              ) : (
+                <div
+                  className={`rounded-xl border p-3 text-xs ${
+                    detailRequest?.status === 'Approved'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                      : 'border-[#e6ebf1] bg-slate-50/80 text-slate-700'
+                  }`}
+                >
+                  <p className="m-0 font-semibold">
+                    {detailRequest?.status === 'Approved'
+                      ? `Approved${detailRequest?.approval_code ? ` — LOA ${detailRequest.approval_code}` : ''}`
+                      : `${detailRequest?.status}${detailRequest?.decision_reason ? ` — ${detailRequest.decision_reason}` : ''}`}
+                  </p>
+                  {detailRequest?.decided_by_first_name && (
+                    <p className="m-0 mt-0.5 text-fine opacity-80">
+                      Recorded by {detailRequest.decided_by_first_name} {detailRequest.decided_by_last_name}
+                    </p>
+                  )}
+                </div>
               )}
 
               <div className="space-y-1.5">

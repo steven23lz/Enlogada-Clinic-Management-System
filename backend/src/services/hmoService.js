@@ -3,6 +3,7 @@ const path = require('path');
 const hmoRepository = require('../repositories/hmoRepository');
 const db = require('../config/database');
 const auditService = require('./auditService');
+const notificationService = require('./notificationService');
 const { HMO_CARD_UPLOAD_ROOT } = require('../config/upload');
 const { CLIENT_ROLE, isStaffUser } = require('../constants/roles');
 const visitRepository = require('../repositories/visitRepository');
@@ -13,6 +14,51 @@ const { assertReferralIfRequired, normaliseReferral, isNamed } = require('./refe
 // through to Postgres and returned as an unexplained 500 — 'Denied' is the word the providers
 // themselves use, so it is the value a caller reaches for first, and it is not this one.
 const HMO_TEST_DECISIONS = ['Pending', 'Approved', 'Rejected'];
+
+/**
+ * A claim is decided once. [1.28.0]
+ *
+ * Without this, approving an already-rejected claim silently overwrote the refusal and its
+ * reason — the one record of why the patient was charged — and re-approving an approved one
+ * reissued the notification, so the cashier got told twice about a claim they had already
+ * settled. Re-deciding is a real need, but it is a reversal, and a reversal should be a
+ * deliberate act with its own trail rather than a second click that looks like the first.
+ */
+function assertUndecided(request) {
+  if (request.status === 'Pending') return;
+  const error = new Error(
+    `This claim was already ${request.status.toLowerCase()}. Reopen it before recording a different decision.`
+  );
+  error.statusCode = 409;
+  throw error;
+}
+
+/**
+ * Tell the counter a claim has been decided. [1.28.0]
+ *
+ * This is the step the workflow was missing. Reception raises the claim, an Admin decides it,
+ * and the cashier bills what is left — but nothing connected the second step to the third. The
+ * patient sat in the lobby while the cashier reloaded the bill on a hunch, or charged them in
+ * full because nothing said otherwise and the approval landed an hour later.
+ *
+ * Cashier and Receptionist both: the cashier collects, and the receptionist is the one standing
+ * with the patient explaining the wait. Admins are deliberately not notified — they are the ones
+ * who just did it.
+ *
+ * Named for the patient rather than the claim id, because "Maria Santos — MediCard approved" is
+ * actionable at a counter and "HMO request #482 approved" is a lookup somebody has to go and do.
+ *
+ * notifyRoles swallows its own errors, so a notification problem can never fail a decision that
+ * has already been written.
+ */
+async function handOffToCashier(request, { type, title, detail }) {
+  const patient = [request.patient_first_name, request.patient_last_name].filter(Boolean).join(' ');
+  await notificationService.notifyRoles(['Cashier', 'Receptionist'], {
+    title,
+    type,
+    message: patient ? `${patient} — ${detail}` : detail,
+  });
+}
 
 // Mirrors testService.js's assertClientOwnsVisit, which exists for the same reason: that endpoint
 // also authorizes the Client role for self-service booking and originally trusted whatever ids the
@@ -156,7 +202,7 @@ class HmoService {
    * there would be a redundant query issued while the slot's advisory lock is held.
    */
   async createRequest(
-    { hmoProviderId, approvalCode, visitTestIds, cardFile = null, referral = null },
+    { hmoProviderId, approvalCode, memberNumber = null, visitTestIds, cardFile = null, referral = null },
     requestingUser,
     { ownershipAlreadyAsserted = false } = {}
   ) {
@@ -179,6 +225,10 @@ class HmoService {
       const request = await hmoRepository.createRequestWithTests({
         hmoProviderId,
         approvalCode,
+        // Trimmed to null rather than stored as ''. An empty string reads as "we recorded a
+        // member number and it is blank", which is a different and untrue statement from "no
+        // number was given".
+        memberNumber: String(memberNumber || '').trim() || null,
         visitTestIds: [...new Set(visitTestIds)],
         card
       });
@@ -261,8 +311,12 @@ class HmoService {
       error.statusCode = 404;
       throw error;
     }
+    assertUndecided(request);
 
-    const approved = await hmoRepository.approveRequest(id, { approvalCode });
+    const approved = await hmoRepository.approveRequest(id, {
+      approvalCode,
+      decidedBy: requestingUser?.userId ?? null,
+    });
 
     await auditService.log({
       actorId: requestingUser?.userId,
@@ -272,7 +326,67 @@ class HmoService {
       description: `Approved HMO request for ${request.provider_name} (code: ${approvalCode})`
     });
 
+    await handOffToCashier(request, {
+      type: 'success',
+      title: 'HMO claim approved',
+      detail: `${request.provider_name} approved the claim (code ${approvalCode}). The bill is ready to settle.`,
+    });
+
     return approved;
+  }
+
+  /**
+   * Turn a whole claim down. [1.28.0]
+   *
+   * The workflow the clinic runs is: reception raises the claim, an Admin or SuperAdmin decides
+   * it, the cashier bills what is left. Only the first and third steps existed. `hmo:approve` is
+   * held by Admin and SuperAdmin alone — that part was already right — but the route could only
+   * ever say yes, so a claim the provider refused had two outcomes available in practice: approve
+   * it anyway, or leave it Pending forever at the top of a worklist that filters on Pending.
+   *
+   * The reason is required for the same purpose as the per-test one in [1.27.0]: the cashier is
+   * the person who has to tell the patient why they are paying, and it is the only field that
+   * answers them.
+   */
+  async rejectRequest(id, { decisionReason }, requestingUser) {
+    const request = await hmoRepository.findRequestById(id);
+    if (!request) {
+      const error = new Error('HMO request not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    assertUndecided(request);
+
+    const reason = String(decisionReason || '').trim();
+    if (reason.length < 4) {
+      const error = new Error(
+        'Say why the claim was turned down. The cashier has to explain the full charge to the ' +
+          'patient, who was expecting their HMO to cover it.'
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const rejected = await hmoRepository.rejectRequest(id, {
+      decisionReason: reason,
+      decidedBy: requestingUser?.userId ?? null,
+    });
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: 'hmo_request.rejected',
+      entityType: 'hmo_request',
+      entityId: id,
+      description: `Rejected HMO request for ${request.provider_name} — ${reason}`
+    });
+
+    await handOffToCashier(request, {
+      type: 'warning',
+      title: 'HMO claim turned down',
+      detail: `${request.provider_name} refused the claim — ${reason}. The patient pays in full.`,
+    });
+
+    return rejected;
   }
 
   async updateRequestStatus(id, status) {
