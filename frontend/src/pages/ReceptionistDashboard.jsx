@@ -20,14 +20,12 @@ import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import api from '../config/api';
 import { todayStr, formatDateTime } from '../lib/date';
 import { toastSuccess, toastError, toastInfo } from '../lib/toast';
-import { validatePatientProfile } from '../validations/patientValidation';
 import QrScanner from '../components/QrScanner';
 import RescheduleDialog from '../components/booking/RescheduleDialog';
-import ReferringPhysicianFields from '../components/booking/ReferringPhysicianFields';
 import TestPicker from '../components/booking/TestPicker';
 import useOperationsReport from '../hooks/useOperationsReport';
 import { ReceptionThroughputPanel } from '../components/reports/OperationsPanels';
-import { useScrollIntoViewOnSet } from '../hooks/useScrollIntoViewOnSet';
+import WalkInRegistration from '../components/reception/WalkInRegistration';
 import {
   ClipboardList,
   UserCheck,
@@ -101,12 +99,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [activeVisits, setActiveVisits] = useState([]);
   const [testCatalog, setTestCatalog] = useState([]);
   const [patientTypes, setPatientTypes] = useState([]);
-  // The requesting doctor, captured alongside the visit rather than the patient: a referral
-  // belongs to one episode of care, not to the person forever.
-  const [referringPhysician, setReferringPhysician] = useState('');
-  const [referringPhysicianPrc, setReferringPhysicianPrc] = useState('');
-  // Tests chosen during walk-in registration, attached in the same flow as the visit. [1.26.0]
-  const [walkInTestIds, setWalkInTestIds] = useState([]);
   const [hmoProviders, setHmoProviders] = useState([]);
   const [staticDataError, setStaticDataError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -189,31 +181,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [lookupCheckInSuccess, setLookupCheckInSuccess] = useState('');
 
   // Walk-in Registration State
-  const [newPatient, setNewPatient] = useState({
-    firstName: '',
-    lastName: '',
-    birthdate: '',
-    sex: 'Male',
-    address: '',
-    contactNumber: '',
-    emergencyContact: '',
-    patientTypeId: ''
-  });
-  const [visitNotes, setVisitNotes] = useState('');
-  const [registrationSuccess, setRegistrationSuccess] = useState('');
-  const [registrationError, setRegistrationError] = useState('');
-  // The alert renders at the top of this form and the Register button is at the bottom of it —
-  // further apart than a viewport once tests are ticked. Without this the form refuses and,
-  // from where the receptionist is looking, nothing happens at all.
-  const registrationErrorRef = useScrollIntoViewOnSet(registrationError);
-  const [isRegistering, setIsRegistering] = useState(false);
 
   // The form holds the patient type as an id; the referral rule is expressed in names. Resolved
   // here rather than comparing against a hardcoded id, which a reseed could renumber.
-  const selectedPatientTypeName = patientTypes.find(
-    (t) => String(t.id) === String(newPatient.patientTypeId)
-  )?.name;
-
   // Manual HMO logging State
   const [showHmoModal, setShowHmoModal] = useState(false);
   const [activeVisitTest, setActiveVisitTest] = useState(null);
@@ -436,16 +406,22 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         });
       } else {
         const patient = checkInTarget.data;
+        // No notes. [1.29.0] This read `visitNotes`, which is the "Visit Notes / Referral Reason"
+        // input belonging to the REGISTRATION form in the panel below — a form the receptionist
+        // is not using when they check in a patient they just found by search. So a half-typed
+        // registration note ended up attached to a returning patient's visit, silently and
+        // against a patient the note was never about.
+        //
+        // It also tied two independent flows to one piece of ambient state, which is what made
+        // this screen resist being split up. The coupling was the design pointing at the bug.
         const vRes = await api.post('/visits', {
           patientId: patient.id,
           visitType: 'Walk in',
-          notes: visitNotes
         });
         const visit = vRes.data.data.visit;
         setLookupCheckInSuccess(`${patient.first_name} ${patient.last_name} checked in! Physical Queue Ticket: ${visit.queue_number}`);
         setPatientSearchResults(null);
         setPatientSearchQuery('');
-        setVisitNotes('');
       }
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
       setCheckInTarget(null);
@@ -492,79 +468,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     }
   };
 
-  const handleWalkInRegister = async (e) => {
-    e.preventDefault();
-    setRegistrationSuccess('');
-    setRegistrationError('');
-
-    const validationError = validatePatientProfile(newPatient);
-    if (validationError) {
-      setRegistrationError(validationError);
-      return;
-    }
-
-    setIsRegistering(true);
-    try {
-      // 1. Create Patient Profile
-      const pRes = await api.post('/patients', newPatient);
-      const patient = pRes.data.data.patient;
-
-      // 2. Create Walk-in Visit with Generated Queue Ticket
-      const vRes = await api.post('/visits', {
-        patientId: patient.id,
-        visitType: 'Walk in',
-        notes: visitNotes,
-        referringPhysician,
-        referringPhysicianPrc
-      });
-
-      const visit = vRes.data.data.visit;
-
-      // Attach in the same flow. Deliberately after the visit exists and deliberately not fatal:
-      // the patient is registered and holds a queue number either way, so a failure here is
-      // "tests still to add", not "registration failed" — and telling them to queue again would
-      // be the worse outcome.
-      let attachedNote = '';
-      if (walkInTestIds.length > 0) {
-        try {
-          await api.post('/tests/visit-tests', {
-            patientVisitId: visit.id,
-            testIds: walkInTestIds.map((id) => parseInt(id, 10)),
-          });
-          attachedNote = ` ${walkInTestIds.length} test${walkInTestIds.length === 1 ? '' : 's'} attached.`;
-        } catch {
-          attachedNote = ' Tests could not be attached — add them from the Active Queue.';
-        }
-      }
-
-      setRegistrationSuccess(
-        `Walk-In registered successfully! Physical Queue Ticket: ${visit.queue_number}.${attachedNote}`
-      );
-
-      setNewPatient({
-        firstName: '',
-        lastName: '',
-        birthdate: '',
-        sex: 'Male',
-        address: '',
-        contactNumber: '',
-        emergencyContact: '',
-        patientTypeId: ''
-      });
-      setVisitNotes('');
-      // Cleared with the rest of the form. A referring physician left in state would follow the
-      // next patient registered, attaching a doctor to somebody they never saw.
-      setReferringPhysician('');
-      setReferringPhysicianPrc('');
-      // Cleared with the rest: a test list left in state would follow the next patient registered.
-      setWalkInTestIds([]);
-      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
-    } catch (err) {
-      setRegistrationError(err.response?.data?.message || 'Failed to register walk-in patient');
-    } finally {
-      setIsRegistering(false);
-    }
-  };
 
   const handlePatientSearch = async (e) => {
     e.preventDefault();
@@ -1155,190 +1058,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               )}
             </Panel>
 
-            <Panel className="max-w-3xl p-6">
-              <div className="border-b border-[#e6ebf1] pb-3 mb-4">
-                <h2 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
-                  <UserPlus className="h-4 w-4 text-brand-600" />
-                  <span>Register Walk-In Patient & Generate Physical Ticket</span>
-                </h2>
-              </div>
-
-              {registrationSuccess && (
-                <div className="mb-4 alert alert-success">
-                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                  <span>{registrationSuccess}</span>
-                </div>
-              )}
-
-              {registrationError && (
-                <div ref={registrationErrorRef} role="alert" className="mb-4 alert alert-error">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{registrationError}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleWalkInRegister} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="field-label" htmlFor="wi-first">First Name <span className="text-rose-600">*</span></label>
-                    <Input
-                      id="wi-first"
-                      placeholder="Juan"
-                      value={newPatient.firstName}
-                      onChange={e => setNewPatient({...newPatient, firstName: e.target.value})}
-                      disabled={isRegistering}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="field-label" htmlFor="wi-last">Last Name <span className="text-rose-600">*</span></label>
-                    <Input
-                      id="wi-last"
-                      placeholder="Dela Cruz"
-                      value={newPatient.lastName}
-                      onChange={e => setNewPatient({...newPatient, lastName: e.target.value})}
-                      disabled={isRegistering}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="space-y-1 sm:col-span-2">
-                    <label className="field-label" htmlFor="wi-birthdate">Birthdate <span className="text-rose-600">*</span></label>
-                    <Input
-                      id="wi-birthdate"
-                      type="date"
-                      value={newPatient.birthdate}
-                      onChange={e => setNewPatient({...newPatient, birthdate: e.target.value})}
-                      disabled={isRegistering}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="field-label" htmlFor="receptionistdashboard-sex">Sex <span className="text-rose-600">*</span></label>
-                    <Select
-                      value={newPatient.sex}
-                      onValueChange={val => setNewPatient({...newPatient, sex: val})}
-                      disabled={isRegistering}
-                    >
-                      <SelectTrigger className="rounded-xl" id="receptionistdashboard-sex">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Male">Male</SelectItem>
-                        <SelectItem value="Female">Female</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="field-label" htmlFor="wi-contact">Contact Number</label>
-                    <Input
-                      id="wi-contact"
-                      placeholder="09171234567"
-                      value={newPatient.contactNumber}
-                      onChange={e => setNewPatient({...newPatient, contactNumber: e.target.value})}
-                      disabled={isRegistering}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="field-label" htmlFor="receptionistdashboard-patient-type">Patient Type <span className="text-rose-600">*</span></label>
-                    <Select
-                      value={newPatient.patientTypeId}
-                      onValueChange={val => setNewPatient({...newPatient, patientTypeId: val})}
-                      disabled={isRegistering}
-                    >
-                      <SelectTrigger className="rounded-xl" id="receptionistdashboard-patient-type">
-                        <SelectValue placeholder="Select patient type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {patientTypes.map(t => (
-                          <SelectItem key={t.id} value={t.id.toString()}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Shown for every patient type, because a self-paying patient who was referred
-                    still needs the doctor on the record — the report goes back to them. Only
-                    'Private' makes it mandatory, since at this clinic that type means "a physician
-                    sent them". The server enforces the same rule; this mirrors it so the
-                    receptionist is not told at submit what could have been said while typing. */}
-                {/* Tests, chosen here rather than on a second screen. [1.26.0]
-                    Reception used to register the patient, then find them again in the queue to
-                    attach anything — two screens for one interaction at the busiest point of the
-                    day, and a visit whose second half never happened reaches the cashier as a
-                    zero bill. The picker also totals the selection, so the price can be quoted
-                    across the desk, and shows any preparation while the patient is still
-                    standing there. */}
-                <div className="space-y-1.5">
-                  <label className="field-label">
-                    Tests Requested
-                    <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">
-                      (optional — can be added later from the queue)
-                    </span>
-                  </label>
-                  <TestPicker
-                    tests={testCatalog}
-                    selectedIds={walkInTestIds}
-                    onToggle={(id) => setWalkInTestIds((prev) => (
-                      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-                    ))}
-                    disabled={isRegistering}
-                    maxHeight="max-h-44"
-                  />
-                </div>
-
-                <ReferringPhysicianFields
-                  idPrefix="wi-ref"
-                  physician={referringPhysician}
-                  prc={referringPhysicianPrc}
-                  onPhysicianChange={setReferringPhysician}
-                  onPrcChange={setReferringPhysicianPrc}
-                  required={selectedPatientTypeName === 'Private'}
-                  reason={
-                    selectedPatientTypeName === 'Private'
-                      ? 'A Private patient is one a physician referred, so the record needs to name them.'
-                      : null
-                  }
-                  disabled={isRegistering}
-                />
-
-                <div className="space-y-1">
-                  <label className="field-label" htmlFor="wi-address">Home Address</label>
-                  <Input
-                    id="wi-address"
-                    placeholder="Barangay, City, Province"
-                    value={newPatient.address}
-                    onChange={e => setNewPatient({...newPatient, address: e.target.value})}
-                    disabled={isRegistering}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="field-label" htmlFor="wi-notes">Visit Notes / Referral Reason</label>
-                  <Input
-                    id="wi-notes"
-                    placeholder="Walk-in referral for Abdominal Ultrasound..."
-                    value={visitNotes}
-                    onChange={e => setVisitNotes(e.target.value)}
-                    disabled={isRegistering}
-                  />
-                </div>
-
-                <div className="flex justify-end pt-3">
-                  <Button type="submit" className="font-bold text-xs px-6 py-2 rounded-xl" disabled={isRegistering}>
-                    {isRegistering ? 'Registering...' : 'Register Walk-In & Issue Queue Ticket'}
-                  </Button>
-                </div>
-              </form>
-            </Panel>
+            <WalkInRegistration
+              patientTypes={patientTypes}
+              testCatalog={testCatalog}
+              onRegistered={() => fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter })}
+            />
           </div>
         )}
 
