@@ -102,3 +102,20 @@ export function formatDate(value) {
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
+
+/**
+ * An appointment's date, as the patient reads it. [1.29.0]
+ *
+ * Lifted out of ClientDashboard.jsx when the booking dialog was extracted — the page and the
+ * dialog both need it, so it belongs to neither.
+ *
+ * The API always sends `scheduled_date` as a full ISO instant (pg parses the SQL DATE column with
+ * the local-timezone constructor server-side, then JSON serialises that to UTC). `new Date(...)`
+ * parses the instant correctly and toLocaleDateString converts it back to the browser's local
+ * calendar date, so no manual timezone arithmetic is needed — and none should be added, which is
+ * the whole reason this note travels with the function.
+ */
+export function formatAppointmentDate(value) {
+  if (!value) return '';
+  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}

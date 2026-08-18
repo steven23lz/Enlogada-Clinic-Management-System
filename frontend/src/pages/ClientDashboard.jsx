@@ -16,23 +16,20 @@ import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { StatusBadge } from '../components/ui/status-badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import Pagination from '../components/ui/pagination';
-import BookingConfirmation from '../components/BookingConfirmation';
-import SlotPicker from '../components/booking/SlotPicker';
 import RescheduleDialog from '../components/booking/RescheduleDialog';
-import ReferringPhysicianFields from '../components/booking/ReferringPhysicianFields';
+import BookingDialog from '../components/booking/BookingDialog';
 import api from '../config/api';
 import { formatCurrency } from '../lib/currency';
-import { toastError } from '../lib/toast';
 import { validatePatientProfile } from '../validations/patientValidation';
 import BookingPass from '../components/BookingPass';
 import ResultDocument from '../components/ResultDocument';
-import { formatDateTime } from '../lib/date';
+import { formatDateTime, formatAppointmentDate } from '../lib/date';
+import { isSafeResultUrl, downloadResultFile } from '../lib/resultFile';
 import {
   Activity,
   Calendar, 
   Clock, 
   FileText, 
-  PlusCircle, 
   CheckCircle, 
   AlertCircle, 
   Info, 
@@ -70,99 +67,6 @@ const CATEGORY_ICONS = {
 // proportionate (VISUAL_IDENTITY.md §3a #11).
 const LIST_PAGE_SIZE = 8;
 
-// test_results.file_url is staff-entered free text with no format validation anywhere in the
-// upload pipeline (see backend/src/controllers/resultController.js uploadResult). Rendered
-// directly as an <a href>, an unvalidated value (e.g. a "javascript:" URI) would execute in the
-// client's session — only allow schemes/paths that can never execute script.
-const isSafeResultUrl = (url) => {
-  if (!url || typeof url !== 'string') return false;
-  const trimmed = url.trim();
-  if (trimmed.startsWith('/')) return true;
-  try {
-    const parsed = new URL(trimmed, window.location.origin);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-};
-
-// Phase B: a real uploaded file is served through an authenticated route, not a public URL — a
-// bare <a href> can't carry the Authorization header, so this fetches the file as a blob (the
-// `api` instance's request interceptor attaches the JWT) and opens it via a local object URL.
-const downloadResultFile = async (visitTestId, originalName) => {
-  try {
-    const res = await api.get(`/results/${visitTestId}/file`, { responseType: 'blob' });
-    const objectUrl = window.URL.createObjectURL(res.data);
-    const link = document.createElement('a');
-    link.href = objectUrl;
-    link.download = originalName || 'result';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(objectUrl);
-  } catch (err) {
-    console.error('Failed to download result file:', err);
-    toastError('Failed to download the attachment. Please try again.');
-  }
-};
-
-// A phone photo of an HMO card is 3-8MB and slow to send on clinic-grade mobile data, and the
-// booking is refused without it — so a failed upload is a failed booking. Downscaling in the
-// browser turns it into a few hundred KB.
-//
-// It also sidesteps iPhone HEIC: the canvas re-encodes to JPEG, so whatever Safari can decode
-// arrives in a format the clinic's staff browsers can open. Where a browser CANNOT decode the
-// source (Chrome and Firefox have no HEIC decoder), this rejects with a message that says so
-// rather than uploading something nobody can read.
-const CARD_MAX_EDGE = 1600;   // a member number stays legible even when the card is a third of the frame
-const CARD_JPEG_QUALITY = 0.82; // below ~0.7 the digit shapes start to mush, which is the failure that matters
-const CARD_MAX_INPUT_BYTES = 25 * 1024 * 1024; // guards the decode step on low-end phones
-
-async function prepareCardImage(file) {
-  if (file.size > CARD_MAX_INPUT_BYTES) {
-    throw new Error('That photo is too large for this device to process. Take a new photo with your camera instead.');
-  }
-
-  // PDFs are accepted by the server but cannot be drawn to a canvas, so they bypass the
-  // downscale entirely — check them against the server's own ceiling here rather than letting
-  // the whole upload complete before it is refused.
-  if (file.type === 'application/pdf') {
-    if (file.size > 8 * 1024 * 1024) {
-      throw new Error('That PDF is larger than 8MB. Attach a photo of the card instead, or a smaller scan.');
-    }
-    return file;
-  }
-
-  let bitmap;
-  try {
-    // from-image so a portrait phone photo is not uploaded sideways on engines that still
-    // default to ignoring EXIF orientation.
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-  } catch {
-    throw new Error(
-      "This browser can't open that image format. If it came from an iPhone, take a new photo here instead, or save it as a JPG first."
-    );
-  }
-
-  const scale = Math.min(1, CARD_MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-
-  const ctx = canvas.getContext('2d');
-  // White first: a transparent PNG would otherwise become a black rectangle once encoded as JPEG.
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close?.();
-
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', CARD_JPEG_QUALITY));
-  // toBlob is specified to be able to hand back null under memory pressure. Silently ignoring
-  // that would upload nothing and fail the booking with no explanation.
-  if (!blob) throw new Error('We could not prepare that photo. Please take a new one.');
-
-  return new File([blob], 'hmo-card.jpg', { type: 'image/jpeg' });
-}
 
 const ClientDashboard = ({ onNavigate }) => {
   const [profiles, setProfiles] = useState([]);
@@ -207,34 +111,6 @@ const ClientDashboard = ({ onNavigate }) => {
   const [editProfileError, setEditProfileError] = useState('');
 
   // Appointment Booking Wizard State
-  const [showBooking, setShowBooking] = useState(false);
-  const [bookingStep, setBookingStep] = useState(1);
-  const [isBooking, setIsBooking] = useState(false);
-  const [hmoCardFile, setHmoCardFile] = useState(null);
-  const [hmoCardPreview, setHmoCardPreview] = useState('');
-  const [hmoCardError, setHmoCardError] = useState('');
-  const [preparingCard, setPreparingCard] = useState(false);
-  const [bookingData, setBookingData] = useState({
-    scheduledDate: '',
-    scheduledTime: '',
-    notes: '',
-    testIds: [],
-    hmoProviderId: '',
-    hmoApprovalCode: '',
-    referringPhysician: '',
-    referringPhysicianPrc: ''
-  });
-
-  // UI/UX Modernization Phase 10: holds the full confirmation payload (not just a success
-  // string) so BookingConfirmation.jsx can render a durable QR/reference/queue-ticket card
-  // instead of the old plain-text message that auto-closed after 4 seconds.
-  const [bookingConfirmation, setBookingConfirmation] = useState(null);
-  const [bookingError, setBookingError] = useState('');
-
-  // Slot availability lives in SlotPicker, which fetches it itself. This counter is the one thing
-  // the page still needs to say about it: bump it to make the grid refetch after a 409, when the
-  // slot the patient chose turned out to have gone.
-  const [slotsRefreshKey, setSlotsRefreshKey] = useState(0);
 
   // My Appointments (Module 3: view/cancel own appointments)
   const [appointments, setAppointments] = useState([]);
@@ -476,173 +352,8 @@ const ClientDashboard = ({ onNavigate }) => {
     }
   };
 
-  // The card is identity evidence, so it must never outlive the context it was attached in.
-  // Left in state it would follow the patient selector: attach your own card, close the dialog,
-  // switch to your child's profile, and their claim is filed against your member number.
-  const clearHmoCard = useCallback(() => {
-    setHmoCardFile(null);
-    setHmoCardError('');
-    setHmoCardPreview((previous) => {
-      if (previous) URL.revokeObjectURL(previous);
-      return '';
-    });
-  }, []);
 
-  // Switching patient invalidates any card already chosen, for the same reason.
-  useEffect(() => {
-    clearHmoCard();
-  }, [selectedProfileId, clearHmoCard]);
 
-  // Nothing renders the object URL after unmount, so release it rather than leaking one per
-  // abandoned booking.
-  useEffect(() => () => {
-    if (hmoCardPreview) URL.revokeObjectURL(hmoCardPreview);
-  }, [hmoCardPreview]);
-
-  const handleCardSelected = async (e) => {
-    const picked = e.target.files?.[0];
-    // Clearing the input lets the same file be re-picked after a rejection; the accepted file is
-    // deliberately NOT cleared, so cancelling a re-pick keeps the photo already chosen.
-    e.target.value = '';
-    if (!picked) return;
-
-    setHmoCardError('');
-    setPreparingCard(true);
-    try {
-      const prepared = await prepareCardImage(picked);
-      setHmoCardFile(prepared);
-      setHmoCardPreview((previous) => {
-        if (previous) URL.revokeObjectURL(previous);
-        return URL.createObjectURL(prepared);
-      });
-    } catch (err) {
-      setHmoCardError(err.message);
-      setHmoCardFile(null);
-    } finally {
-      setPreparingCard(false);
-    }
-  };
-
-  const handleBookAppointment = async (e) => {
-    e.preventDefault();
-    if (isBooking) return; // a second submit while the first is still in flight books twice
-    setBookingError('');
-    setBookingConfirmation(null);
-
-    const {
-      scheduledDate, scheduledTime, notes, testIds, hmoProviderId, hmoApprovalCode,
-      referringPhysician, referringPhysicianPrc,
-    } = bookingData;
-    if (!scheduledDate || !scheduledTime || testIds.length === 0) {
-      setBookingError('Date, Time, and at least one diagnostic test are required.');
-      return;
-    }
-
-    // The Self-Pay option carries the string 'none' rather than an empty value, so a bare
-    // truthiness check treated self-pay as an HMO selection. The render guard below already
-    // tests for 'none'; these two must agree.
-    const hmo = hmoProviderId && hmoProviderId !== 'none'
-      ? { providerId: parseInt(hmoProviderId, 10), approvalCode: hmoApprovalCode || null }
-      : null;
-
-    if (hmo && !hmoCardFile) {
-      setBookingError('Please attach a photo of your HMO card to claim HMO coverage.');
-      return;
-    }
-
-    if (hmo && !referringPhysician?.trim()) {
-      setBookingError("Please give the name of the doctor who requested these tests — your HMO needs it to approve coverage.");
-      return;
-    }
-
-    setIsBooking(true);
-    try {
-      // One call. The appointment, its tests and any HMO claim are written in a single
-      // transaction server-side — previously these were three sequential requests, and a failure
-      // after the first left a booking the patient had been told did not happen, holding a slot
-      // their own retry was then refused.
-      //
-      // Self-pay stays JSON, byte-identical to what it has always sent. Only an HMO booking —
-      // which has a file to carry — switches to multipart, so the common path is code that did
-      // not change.
-      let response;
-      if (hmo) {
-        const fd = new FormData();
-        fd.append('patientId', String(parseInt(selectedProfileId, 10)));
-        fd.append('scheduledDate', scheduledDate);
-        fd.append('scheduledTime', scheduledTime);
-        fd.append('notes', notes || '');
-        // The [] suffix matters: it makes a single test arrive as a one-element array rather
-        // than a bare string, which a plain repeated field would not.
-        testIds.forEach((id) => fd.append('testIds[]', String(parseInt(id, 10))));
-        fd.append('hmo[providerId]', String(hmo.providerId));
-        if (hmo.approvalCode) fd.append('hmo[approvalCode]', hmo.approvalCode);
-        fd.append('referringPhysician', referringPhysician.trim());
-        if (referringPhysicianPrc?.trim()) fd.append('referringPhysicianPrc', referringPhysicianPrc.trim());
-        fd.append('hmoCard', hmoCardFile, hmoCardFile.name);
-
-        // The header override is load-bearing, not decoration: the axios instance defaults to
-        // application/json, and posting FormData under that header serialises the form to JSON
-        // and silently drops the file. AvatarUpload.jsx does the same for the same reason.
-        response = await api.post('/appointments', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-      } else {
-        response = await api.post('/appointments', {
-          patientId: parseInt(selectedProfileId, 10),
-          scheduledDate,
-          scheduledTime,
-          notes,
-          testIds: testIds.map((id) => parseInt(id, 10)),
-          hmo: null
-        });
-      }
-
-      const appt = response.data.data.appointment;
-
-      setBookingConfirmation({
-        referenceCode: appt.appointment_reference,
-        queueNumber: appt.queue_number,
-        patientName: selectedProfile ? `${selectedProfile.first_name} ${selectedProfile.last_name}` : '',
-        scheduledDate: formatAppointmentDate(bookingData.scheduledDate),
-        scheduledTime: bookingData.scheduledTime
-      });
-      setBookingData({
-        scheduledDate: '',
-        scheduledTime: '',
-        notes: '',
-        testIds: [],
-        hmoProviderId: '',
-        hmoApprovalCode: '',
-        referringPhysician: '',
-        referringPhysicianPrc: ''
-      });
-      clearHmoCard();
-      fetchHistory(selectedProfileId);
-      fetchAppointments();
-    } catch (err) {
-      setBookingError(err.response?.data?.message || 'Failed to book appointment');
-      if (err.response?.status === 409 && bookingData.scheduledDate) {
-        setSlotsRefreshKey((k) => k + 1);
-      }
-      // The booking either happened completely or not at all, but a request that failed after
-      // the server committed (dropped connection) still leaves the client unaware of it —
-      // refreshing the list means a booking that does exist shows up rather than being retried.
-      fetchAppointments();
-    } finally {
-      setIsBooking(false);
-    }
-  };
-
-  // The API always sends scheduled_date as a full ISO instant string (e.g.
-  // "2026-08-10T16:00:00.000Z" — pg parses the SQL DATE column using the local-timezone
-  // constructor server-side, then JSON serializes it to that UTC instant). new Date(...)
-  // parses that instant correctly, and toLocaleDateString() converts it back to the
-  // browser's local calendar date — no manual timezone arithmetic needed.
-  const formatAppointmentDate = (value) => {
-    if (!value) return '';
-    return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  };
 
   const handleRequestCancelAppointment = (appointment) => {
     setCancelError('');
@@ -664,22 +375,6 @@ const ClientDashboard = ({ onNavigate }) => {
     }
   };
 
-  const handleTestSelection = (testId) => {
-    const isSelected = bookingData.testIds.includes(testId);
-    setBookingData({
-      ...bookingData,
-      testIds: isSelected 
-        ? bookingData.testIds.filter(id => id !== testId) 
-        : [...bookingData.testIds, testId]
-    });
-  };
-
-  const calculateTotalPrice = () => {
-    return bookingData.testIds.reduce((total, id) => {
-      const found = testCatalog.find(t => t.id.toString() === id);
-      return total + (found ? parseFloat(found.price) : 0);
-    }, 0);
-  };
 
   const filteredHistory = history.filter(item => {
     const matchesCategory = filterCategory === 'All' || item.category_name === filterCategory;
@@ -1044,262 +739,13 @@ const ClientDashboard = ({ onNavigate }) => {
               </div>
 
               {/* Action Button */}
-              <Dialog open={showBooking} onOpenChange={(open) => {
-                setShowBooking(open);
-                if (!open) {
-                  setBookingStep(1);
-                  setBookingError('');
-                  setBookingConfirmation(null);
-                  clearHmoCard();
-                }
-              }}>
-                <DialogTrigger asChild>
-                  <Button size="lg" disabled={!selectedProfileId}>
-                    <PlusCircle className="h-4 w-4" />
-                    Book Schedule
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-xl">
-                  {bookingConfirmation ? (
-                    <BookingConfirmation
-                      {...bookingConfirmation}
-                      onClose={() => setShowBooking(false)}
-                    />
-                  ) : (
-                    <>
-                  <DialogHeader>
-                    <DialogTitle className="text-lg font-bold text-slate-900">
-                      Book Diagnostic Appointment
-                    </DialogTitle>
-                    <DialogDescription>
-                      Schedule a diagnostic test for <strong>{selectedProfile?.first_name} {selectedProfile?.last_name}</strong>.
-                    </DialogDescription>
-
-                    {/* Visual Step Progress Bar */}
-                    <div className="flex items-center justify-between pt-3 pb-1 border-b border-slate-100 my-2">
-                      <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 1 ? 'text-brand-600' : 'text-slate-400'}`}>
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-meta ${bookingStep === 1 ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'}`}>1</span>
-                        <span>Select Tests</span>
-                      </div>
-                      <div className="h-[2px] flex-1 mx-3 bg-slate-200" />
-                      <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 2 ? 'text-brand-600' : 'text-slate-400'}`}>
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-meta ${bookingStep === 2 ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'}`}>2</span>
-                        <span>Schedule & HMO</span>
-                      </div>
-                    </div>
-                  </DialogHeader>
-
-                  <form onSubmit={handleBookAppointment} className="space-y-4 pt-2">
-                    {bookingError && (
-                      <div role="alert" className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
-                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                        <span>{bookingError}</span>
-                      </div>
-                    )}
-
-                    {/* Step Indicators */}
-                    <div className="flex items-center justify-between border-b border-[#e6ebf1] pb-3">
-                      <button 
-                        type="button"
-                        onClick={() => setBookingStep(1)}
-                        className={`text-xs font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${bookingStep === 1 ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}
-                      >
-                        1. Schedule & Services
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={() => setBookingStep(2)}
-                        className={`text-xs font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${bookingStep === 2 ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}
-                      >
-                        2. HMO / Payment Note
-                      </button>
-                    </div>
-
-                    {bookingStep === 1 && (
-                      <div className="space-y-4">
-                        {/* Same control the reschedule dialog uses. It owns its own availability
-                            fetch, so the two cannot disagree about which slots are free. */}
-                        <SlotPicker
-                          date={bookingData.scheduledDate}
-                          time={bookingData.scheduledTime}
-                          onDateChange={(d) => setBookingData({ ...bookingData, scheduledDate: d, scheduledTime: '' })}
-                          onTimeChange={(t) => setBookingData({ ...bookingData, scheduledTime: t })}
-                          refreshKey={slotsRefreshKey}
-                        />
-
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between items-center">
-                            <label className="field-label">Select Diagnostic Tests</label>
-                            <span className="text-xs font-extrabold text-brand-600">Total: {formatCurrency(calculateTotalPrice())}</span>
-                          </div>
-                          <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-xl p-2.5 space-y-2 bg-slate-50/70">
-                            {testCatalog.map(test => {
-                              const selected = bookingData.testIds.includes(test.id.toString());
-                              return (
-                                <label key={test.id} className="flex items-start space-x-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors border border-transparent hover:border-[#e6ebf1]">
-                                  <input
-                                    type="checkbox"
-                                    checked={selected}
-                                    onChange={() => handleTestSelection(test.id.toString())}
-                                    className="mt-0.5 rounded text-brand-600 focus:ring-brand-500"
-                                  />
-                                  <div className="min-w-0 flex-1 text-xs">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="font-bold text-gray-800">{test.name} <span className="text-meta text-gray-400 font-medium">({test.category_name})</span></span>
-                                      <span className="flex-shrink-0 font-extrabold text-slate-900">{formatCurrency(test.price)}</span>
-                                    </div>
-                                    {/* [1.24.0] Shown only once the test is actually chosen. A
-                                        preparation note against every line in a scrolling list is
-                                        wallpaper; against the two you picked it is an instruction.
-                                        It is repeated in the confirmation email, which is what
-                                        they will still have on the morning. */}
-                                    {selected && test.preparation && (
-                                      <p className="m-0 mt-1 flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-fine leading-relaxed text-amber-800 ring-1 ring-inset ring-amber-200">
-                                        <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
-                                        <span>{test.preparation}</span>
-                                      </p>
-                                    )}
-                                  </div>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div className="flex justify-end pt-2">
-                          <Button type="button"  onClick={() => setBookingStep(2)}>
-                            Next: HMO & Notes &rarr;
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {bookingStep === 2 && (
-                      <div className="space-y-4">
-                        <div className="space-y-1.5">
-                          <label className="field-label">HMO Provider (Optional)</label>
-                          <p className="m-0 text-fine text-slate-500">
-                            Claiming HMO coverage requires a photo of your card. Choose Self-Pay to pay for this visit yourself.
-                          </p>
-                          <Select
-                            value={bookingData.hmoProviderId}
-                            onValueChange={val => setBookingData({...bookingData, hmoProviderId: val})}
-                          >
-                            <SelectTrigger className="rounded-xl">
-                              <SelectValue placeholder="Select HMO Provider if applicable" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Self-Pay / None</SelectItem>
-                              {hmoProviders.map(hmo => (
-                                <SelectItem key={hmo.id} value={hmo.id.toString()}>
-                                  {hmo.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {bookingData.hmoProviderId && bookingData.hmoProviderId !== 'none' && (
-                          <>
-                            <div className="space-y-1.5">
-                              <label htmlFor="clientdashboard-hmo-authorization-loa-code" className="field-label">HMO Authorization / LOA Code</label>
-                              <Input id="clientdashboard-hmo-authorization-loa-code"
-                                placeholder="Enter approval or card LOA number"
-                                value={bookingData.hmoApprovalCode}
-                                onChange={e => setBookingData({...bookingData, hmoApprovalCode: e.target.value})}
-                              />
-                            </div>
-
-                            {/* Mandatory on an HMO claim: the LOA runs through the requesting
-                                doctor, and a claim that cannot name one is hard to reimburse —
-                                which the clinic discovers weeks later, chasing a patient who has
-                                long since gone home. */}
-                            <ReferringPhysicianFields
-                              physician={bookingData.referringPhysician}
-                              prc={bookingData.referringPhysicianPrc}
-                              onPhysicianChange={(v) => setBookingData({ ...bookingData, referringPhysician: v })}
-                              onPrcChange={(v) => setBookingData({ ...bookingData, referringPhysicianPrc: v })}
-                              required
-                              reason="Your HMO needs the doctor who requested these tests in order to approve coverage."
-                              disabled={isBooking}
-                            />
-
-                            <div className="space-y-1.5">
-                              <label className="field-label">
-                                Photo of your HMO card <span className="text-rose-600">*</span>
-                              </label>
-                              <p className="m-0 text-fine text-slate-500">
-                                Take a photo of the front of your card, or choose one you already have.
-                                Make sure the member number is readable.
-                              </p>
-                              <input
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp,application/pdf"
-                                onChange={handleCardSelected}
-                                disabled={preparingCard || isBooking}
-                                className="block w-full text-fine text-slate-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-2 file:text-fine file:font-semibold file:text-white hover:file:bg-brand-700"
-                              />
-
-                              {preparingCard && (
-                                <p className="m-0 text-fine text-slate-500" aria-live="polite">Preparing your photo…</p>
-                              )}
-
-                              {hmoCardError && (
-                                <div role="alert" className="alert alert-error">
-                                  {hmoCardError}
-                                </div>
-                              )}
-
-                              {hmoCardFile && !hmoCardError && hmoCardFile.type === 'application/pdf' && (
-                                <p className="m-0 text-fine text-slate-600">
-                                  Attached: {hmoCardFile.name}. Check it shows the front of your card
-                                  with the member number readable.
-                                </p>
-                              )}
-
-                              {hmoCardPreview && !hmoCardError && hmoCardFile?.type !== 'application/pdf' && (
-                                <div className="space-y-1.5">
-                                  {/* Shown large enough to actually read. No API detects blur, glare, a
-                                      thumb over the number or the wrong side of the card — asking the
-                                      patient to confirm they can read it is the only check that does. */}
-                                  <img
-                                    src={hmoCardPreview}
-                                    alt="The HMO card photo you attached"
-                                    className="max-h-64 w-full rounded-xl border border-[#e6ebf1] bg-sunken object-contain"
-                                  />
-                                  <p className="m-0 text-fine text-slate-600">
-                                    Can you read your member number in this photo? If not, take another.
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </>
-                        )}
-
-                        <div className="space-y-1.5">
-                          <label htmlFor="clientdashboard-additional-clinical-notes" className="field-label">Additional Clinical Notes</label>
-                          <Input id="clientdashboard-additional-clinical-notes"
-                            placeholder="Physician referral notes or symptoms..."
-                            value={bookingData.notes}
-                            onChange={e => setBookingData({...bookingData, notes: e.target.value})}
-                          />
-                        </div>
-
-                        <div className="flex justify-between pt-2 border-t border-[#e6ebf1]">
-                          <Button type="button" variant="outline" onClick={() => setBookingStep(1)}>
-                            &larr; Back
-                          </Button>
-                          <Button type="submit" disabled={isBooking} className="font-bold">
-                            {isBooking ? 'Submitting…' : 'Submit Schedule Request'}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </form>
-                    </>
-                  )}
-                </DialogContent>
-              </Dialog>
+              <BookingDialog
+                selectedProfileId={selectedProfileId}
+                selectedProfile={selectedProfile}
+                testCatalog={testCatalog}
+                hmoProviders={hmoProviders}
+                onBooked={() => { fetchHistory(selectedProfileId); fetchAppointments(); }}
+              />
             </div>
 
             {/* Quick Metrics Bar inside Hero */}
