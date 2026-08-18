@@ -237,7 +237,9 @@ class HmoRepository {
   // No "list requests" capability existed before — approval was only reachable if you already
   // knew a specific request ID, making the approval half of the HMO flow practically
   // undiscoverable through any UI.
-  async findAllRequests({ status } = {}) {
+  // Paged at the database. [1.29.0] The Admin approval worklist showed fifteen of these and the
+  // endpoint returned every claim the clinic has ever filed.
+  async findAllRequests({ status, limit = null, offset = 0 } = {}) {
     const params = [];
     let whereClause = '';
     if (status) {
@@ -272,8 +274,26 @@ class HmoRepository {
       GROUP BY hr.id, hp.name
       ORDER BY hr.request_date DESC
     `;
-    const result = await db.query(queryText, params);
-    return result.rows;
+
+    // COUNT over hmo_requests alone: the list GROUPs BY hr.id, so one row out is one claim, and
+    // counting the grouped set would mean wrapping the whole aggregate in a subquery for the
+    // same answer.
+    const countRes = await db.query(
+      `SELECT COUNT(*)::int AS total FROM hmo_requests hr ${whereClause}`,
+      params
+    );
+    const total = countRes.rows[0].total;
+
+    const listParams = [...params];
+    let listQuery = queryText;
+    if (limit != null) {
+      listParams.push(limit);
+      listQuery += ` LIMIT $${listParams.length}`;
+      listParams.push(offset);
+      listQuery += ` OFFSET $${listParams.length}`;
+    }
+    const result = await db.query(listQuery, listParams);
+    return Object.assign(result.rows, { total });
   }
 
   async findAllProviders() {

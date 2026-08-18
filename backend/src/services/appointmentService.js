@@ -279,8 +279,26 @@ class AppointmentService {
     return await appointmentRepository.findByPatientUserId(userId);
   }
 
-  async getAllAppointments(filters) {
-    return await appointmentRepository.findAll(filters);
+  async getAllAppointments({ status, dateFrom, dateTo, page, limit } = {}) {
+    const limitNum = limit ? Math.min(Math.max(parseInt(limit, 10) || 0, 1), 100) : null;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+
+    const rows = await appointmentRepository.findAll({
+      status,
+      dateFrom,
+      dateTo,
+      limit: limitNum,
+      offset: limitNum ? (pageNum - 1) * limitNum : 0,
+    });
+
+    if (!limitNum) return rows;
+    return {
+      appointments: Array.from(rows),
+      total: rows.total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.max(1, Math.ceil(rows.total / limitNum)),
+    };
   }
 
   async cancelAppointment(id, requestingUser) {

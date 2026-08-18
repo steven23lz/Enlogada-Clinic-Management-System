@@ -150,11 +150,13 @@ class AppointmentController {
 
   async getAll(req, res, next) {
     try {
-      const { status, dateFrom, dateTo } = req.query;
-      const appointments = await appointmentService.getAllAppointments({ status, dateFrom, dateTo });
+      const { status, dateFrom, dateTo, page, limit } = req.query;
+      const result = await appointmentService.getAllAppointments({ status, dateFrom, dateTo, page, limit });
       return res.status(200).json({
         status: 'success',
-        data: { appointments }
+        data: Array.isArray(result)
+          ? { appointments: result, total: result.total ?? result.length }
+          : result,
       });
     } catch (err) {
       next(err);

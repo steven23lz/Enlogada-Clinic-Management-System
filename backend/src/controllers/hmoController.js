@@ -143,11 +143,13 @@ class HmoController {
 
   async getAllRequests(req, res, next) {
     try {
-      const { status } = req.query;
-      const requests = await hmoService.getAllRequests({ status });
+      const { status, page, limit } = req.query;
+      const result = await hmoService.getAllRequests({ status, page, limit });
       return res.status(200).json({
         status: 'success',
-        data: { requests }
+        data: Array.isArray(result)
+          ? { requests: result, total: result.total ?? result.length }
+          : result,
       });
     } catch (err) {
       next(err);

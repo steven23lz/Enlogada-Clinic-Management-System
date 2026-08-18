@@ -17,9 +17,7 @@ import { ShieldCheck, AlertCircle, Check, X } from 'lucide-react';
 
 const STATUS_FILTERS = ['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'];
 
-// UI/UX Modernization Phase 4: GET /hmo/requests has no server-side pagination, so a client-side
-// page size over the already-fetched, status-filtered array is proportionate (VISUAL_IDENTITY.md
-// §3a #11).
+// Sent to the server as `limit` — GET /hmo/requests pages at the database now [1.29.0].
 const PAGE_SIZE = 15;
 
 // Module 15 (Test and Service Request): the approval half of the HMO request/approval flow.
@@ -36,6 +34,8 @@ const ServiceRequests = () => {
   const [loadError, setLoadError] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [detailRequest, setDetailRequest] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -54,14 +54,20 @@ const ServiceRequests = () => {
   const [rejectingClaim, setRejectingClaim] = useState(false);
   const [claimReason, setClaimReason] = useState('');
 
-  const fetchRequests = useCallback(async () => {
+  // Paged at the server. [1.29.0] The approval worklist showed fifteen and this fetched every
+  // claim the clinic has ever filed.
+  const fetchRequests = useCallback(async (nextPage = 1) => {
     setLoading(true);
     setLoadError('');
     try {
-      const params = statusFilter !== 'All' ? { status: statusFilter } : {};
+      const params = { page: nextPage, limit: PAGE_SIZE };
+      if (statusFilter !== 'All') params.status = statusFilter;
       const res = await api.get('/hmo/requests', { params });
-      setRequests(res.data.data.requests || []);
-      setPage(1);
+      const { requests: rows, total: count, totalPages: pages } = res.data.data;
+      setRequests(rows || []);
+      setTotal(count ?? (rows || []).length);
+      setTotalPages(pages || 1);
+      setPage(nextPage);
     } catch (err) {
       // Recorded, not just logged: a swallowed failure renders as an empty list.
       console.error('Failed to fetch HMO requests:', err);
@@ -145,8 +151,8 @@ const ServiceRequests = () => {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(requests.length / PAGE_SIZE));
-  const pagedRequests = requests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // `requests` IS the page — the server sent exactly these rows.
+  const pagedRequests = requests;
 
   // The card image behind the claim. Fetched as a blob rather than pointed at with an <img src>,
   // because the route requires a bearer token that a plain browser image request cannot send —
@@ -192,7 +198,7 @@ const ServiceRequests = () => {
         description="Review and approve HMO pre-authorisation logged by Reception. Approval is Admin-only — Reception can log a request but not clear it."
         meta={(loadError || loading)
           ? undefined
-          : <span><strong className="font-semibold text-slate-700">{requests.length}</strong> request{requests.length === 1 ? '' : 's'}</span>}
+          : <span><strong className="font-semibold text-slate-700">{total}</strong> request{total === 1 ? '' : 's'}</span>}
       />
 
       <div>
@@ -291,7 +297,7 @@ const ServiceRequests = () => {
               </TableBody>
             </Table>
           </PanelBody>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={loadError ? 0 : requests.length} pageSize={PAGE_SIZE} />
+          <Pagination page={page} totalPages={totalPages} onPageChange={fetchRequests} total={loadError ? 0 : total} pageSize={PAGE_SIZE} />
         </Panel>
       </div>
 

@@ -114,7 +114,10 @@ class AppointmentRepository {
     return result.rows;
   }
 
-  async findAll({ status, dateFrom, dateTo } = {}) {
+  // Paged at the database. [1.29.0] Same shape as visits/history and payments/transactions:
+  // this returned every appointment ever booked and the screen showed fifteen. `limit` is
+  // optional so any caller that genuinely wants the whole set is unaffected.
+  async findAll({ status, dateFrom, dateTo, limit = null, offset = 0 } = {}) {
     const conditions = [];
     const params = [];
 
@@ -133,17 +136,32 @@ class AppointmentRepository {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    const queryText = `
-      SELECT a.*, pv.patient_id, pv.visit_type, pv.status as visit_status, pv.queue_number,
-             p.first_name, p.last_name
+    // Shared by the list and the count, so the two can never disagree about which rows they mean.
+    const fromClause = `
       FROM appointments a
       JOIN patient_visits pv ON a.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
       ${whereClause}
+    `;
+
+    const countRes = await db.query(`SELECT COUNT(*)::int AS total ${fromClause}`, params);
+    const total = countRes.rows[0].total;
+
+    let queryText = `
+      SELECT a.*, pv.patient_id, pv.visit_type, pv.status as visit_status, pv.queue_number,
+             p.first_name, p.last_name
+      ${fromClause}
       ORDER BY a.scheduled_date DESC, a.scheduled_time DESC
     `;
-    const result = await db.query(queryText, params);
-    return result.rows;
+    const listParams = [...params];
+    if (limit != null) {
+      listParams.push(limit);
+      queryText += ` LIMIT $${listParams.length}`;
+      listParams.push(offset);
+      queryText += ` OFFSET $${listParams.length}`;
+    }
+    const result = await db.query(queryText, listParams);
+    return Object.assign(result.rows, { total });
   }
 
   async updateAppointmentStatus(id, status) {
