@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import SidebarLayout from '../components/SidebarLayout';
-import { Panel, PanelHeader, PanelBody } from '../components/ui/panel';
-import PageHeader from '../components/ui/page-header';
-import Toolbar, { ToolbarSpacer } from '../components/ui/toolbar';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Badge } from '../components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { ConfirmDialog } from '../components/ui/confirm-dialog';
-import api from '../config/api';
-import { formatCurrency } from '../lib/currency';
+import SidebarLayout from '../../components/SidebarLayout';
+import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import Toolbar, { ToolbarSpacer } from '../../components/ui/toolbar';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Badge } from '../../components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { ConfirmDialog } from '../../components/ui/confirm-dialog';
+import api from '../../config/api';
+import { formatCurrency } from '../../lib/currency';
 import { Plus, Edit2, CheckCircle2, AlertCircle, RefreshCw, Layers, ShieldPlus, Info } from 'lucide-react';
-import EmptyState from '../components/ui/empty-state';
+import EmptyState from '../../components/ui/empty-state';
 
 const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
   const [tests, setTests] = useState([]);

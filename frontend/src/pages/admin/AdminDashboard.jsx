@@ -1,28 +1,28 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import SidebarLayout from '../components/SidebarLayout';
-import MetricCard from '../components/ui/metric-card';
-import PageHeader from '../components/ui/page-header';
-import { Panel, PanelHeader, PanelBody } from '../components/ui/panel';
-import EmptyState from '../components/ui/empty-state';
-import { StatusBadge } from '../components/ui/status-badge';
-import { SkeletonList } from '../components/ui/skeleton';
-import RevenueTrendChart from '../components/charts/RevenueTrendChart';
+import SidebarLayout from '../../components/SidebarLayout';
+import MetricCard from '../../components/ui/metric-card';
+import PageHeader from '../../components/ui/page-header';
+import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
+import EmptyState from '../../components/ui/empty-state';
+import { StatusBadge } from '../../components/ui/status-badge';
+import { SkeletonList } from '../../components/ui/skeleton';
+import RevenueTrendChart from '../../components/charts/RevenueTrendChart';
 import {
   DollarSign, Shield, FileText, UserCheck, Users, CreditCard, BarChart3, ClipboardList,
   ArrowRight, LayoutDashboard, TrendingUp, History, WifiOff, CalendarClock
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import api from '../config/api';
-import { todayStr, daysAgoStr } from '../lib/date';
-import { formatCurrency } from '../lib/currency';
-import StaffAccounts from './admin/StaffAccounts';
-import ServiceRequests from './admin/ServiceRequests';
-import CashierMonitoring from './admin/CashierMonitoring';
-import AppointmentsOversight from './admin/AppointmentsOversight';
-import PatientRecordsOversight from './admin/PatientRecordsOversight';
-import ReportsOverview from './admin/ReportsOverview';
-import SuperAdminManagement from './admin/SuperAdminManagement';
-import ActivityLog from './admin/ActivityLog';
+import { useAuth } from '../../contexts/AuthContext';
+import api from '../../config/api';
+import { todayStr, daysAgoStr } from '../../lib/date';
+import { formatCurrency } from '../../lib/currency';
+import StaffAccounts from './StaffAccounts';
+import ServiceRequests from './ServiceRequests';
+import CashierMonitoring from './CashierMonitoring';
+import AppointmentsOversight from './AppointmentsOversight';
+import PatientRecordsOversight from './PatientRecordsOversight';
+import ReportsOverview from './ReportsOverview';
+import SuperAdminManagement from './SuperAdminManagement';
+import ActivityLog from './ActivityLog';
 
 const NAV_TITLES = {
   dashboard: 'Management Console',

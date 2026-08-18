@@ -1,9 +1,9 @@
 import React from 'react';
-import PublicHeader from '../components/PublicHeader';
-import PublicFooter from '../components/PublicFooter';
-import PageShell from '../components/ui/page-shell';
-import Logo from '../components/Logo';
-import { Button } from '../components/ui/button';
+import PublicHeader from '../../components/PublicHeader';
+import PublicFooter from '../../components/PublicFooter';
+import PageShell from '../../components/ui/page-shell';
+import Logo from '../../components/Logo';
+import { Button } from '../../components/ui/button';
 import { ShieldCheck, Clock, Award, ChevronRight, Stethoscope, FlaskConical, Scan, HeartPulse, Activity } from 'lucide-react';
 
 // Mirrors the 5 seeded test_categories rows exactly (database/schema.sql), same icon mapping

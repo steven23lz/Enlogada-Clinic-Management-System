@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { Button } from '../components/ui/button';
-import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import Logo from '../components/Logo';
-import PublicHeader from '../components/PublicHeader';
-import PublicFooter from '../components/PublicFooter';
+import { useAuth } from '../../contexts/AuthContext';
+import { Button } from '../../components/ui/button';
+import { Card, CardHeader, CardContent, CardFooter, CardTitle, CardDescription } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
+import Logo from '../../components/Logo';
+import PublicHeader from '../../components/PublicHeader';
+import PublicFooter from '../../components/PublicFooter';
 import { AlertCircle, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-react';
 
 const ForgotPassword = ({ onNavigate }) => {

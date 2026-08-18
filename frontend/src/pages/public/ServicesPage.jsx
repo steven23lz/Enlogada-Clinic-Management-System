@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import PublicHeader from '../components/PublicHeader';
-import PublicFooter from '../components/PublicFooter';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import api from '../config/api';
-import { formatCurrency } from '../lib/currency';
+import PublicHeader from '../../components/PublicHeader';
+import PublicFooter from '../../components/PublicFooter';
+import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import api from '../../config/api';
+import { formatCurrency } from '../../lib/currency';
 import { Activity, Stethoscope, FileText, Heart, Zap } from 'lucide-react';
-import { categoryKey, categoryTint } from '../lib/categories';
-import { useClinic } from '../lib/clinic';
+import { categoryKey, categoryTint } from '../../lib/categories';
+import { useClinic } from '../../lib/clinic';
 
 const ServicesPage = ({ onNavigate }) => {
   // The live identity, not the frozen defaults — the clinic may have configured a different

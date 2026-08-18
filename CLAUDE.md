@@ -139,6 +139,33 @@ This layering is enforced convention in this codebase (checked by the "Project A
 - Google OAuth: `POST /api/auth/google` verifies an ID token via `google-auth-library`, then logs in or auto-creates a Client user.
 - Frontend session handling: `frontend/src/config/api.js` (Axios) fires a global `auth:unauthorized` window event on HTTP 401; `AuthContext.jsx` listens for it to clear user state without breaking SPA navigation — follow this pattern rather than throwing/catching 401s locally in components.
 
+### Where a file goes
+
+`pages/` and `components/` are grouped **by feature, not by file type** — "package by feature",
+what React's own docs call grouping by feature or route. The test is that the folder names say
+what the clinic does, not what React is:
+
+```
+pages/public/     Home, Services, About, Privacy, Terms      — no account needed
+pages/auth/       sign in, forgot password, reset
+pages/portal/     ClientDashboard, ClientProfile             — the patient's own screens
+pages/clinic/     Receptionist / Cashier / Diagnostic        — the three operational consoles
+pages/admin/      oversight, reports, RBAC, the catalogue
+pages/StaffAccountSettings.jsx                               — any staff, belongs to no console
+components/       ui, booking, patients, reception, reports, charts, auth
+```
+
+**Grouped by feature, deliberately not by role.** Role looks like the obvious axis and does not
+survive contact with this app: `DiagnosticDashboard` is one file serving Laboratory, Xray *and*
+Ultrasound; `pages/admin/` serves Admin *and* SuperAdmin (`ADMINS` in `navigation.js`), with only
+`SuperAdminManagement` restricted further; and `multirole@enlogada.com` holds two roles at once.
+A role-shaped tree would have to file one dashboard in three places, and would then disagree with
+the permission matrix the moment a permission is delegated — which is the same mistake as the
+hardcoded role lists that [1.20.0] removed from 45 routes.
+
+Who may open a screen is decided by `config/navigation.js` and the API's permission checks, never
+by which folder the file sits in.
+
 ### Frontend routing model
 
 There is no router library — `frontend/src/App.jsx` does manual, role-based conditional rendering based on `user.roles` from `AuthContext` plus local `currentTab`/`activeNav` state. When adding a new page/dashboard, wire it into the role-branching logic in `App.jsx` rather than introducing a routing library.

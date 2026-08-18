@@ -1,10 +1,10 @@
 import React from 'react';
-import DashboardLayout from '../components/DashboardLayout';
-import AccountSettingsForm from '../components/AccountSettingsForm';
-import { Button } from '../components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
-import { useAuth } from '../contexts/AuthContext';
+import DashboardLayout from '../../components/DashboardLayout';
+import AccountSettingsForm from '../../components/AccountSettingsForm';
+import { Button } from '../../components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 
 // Module 5: Profile — a client's own account settings (contact info, password,

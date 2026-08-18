@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import PublicHeader from '../components/PublicHeader';
-import Logo from '../components/Logo';
-import LoginForm from '../components/auth/LoginForm';
-import RegisterForm from '../components/auth/RegisterForm';
-import { useClinic } from '../lib/clinic';
+import PublicHeader from '../../components/PublicHeader';
+import Logo from '../../components/Logo';
+import LoginForm from '../../components/auth/LoginForm';
+import RegisterForm from '../../components/auth/RegisterForm';
+import { useClinic } from '../../lib/clinic';
 import { ShieldCheck, Clock, HeartHandshake } from 'lucide-react';
 
 // UI/UX Modernization Phase 6: merges Login.jsx and Register.jsx into one page that owns its own
