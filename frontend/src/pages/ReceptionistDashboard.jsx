@@ -79,6 +79,7 @@ const PAGE_BLURBS = {
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 const QUEUE_PAGE_SIZE = 25;
+const HISTORY_PAGE_SIZE = 25;
 
 // scheduled_date arrives as a full ISO instant (pg parses the DATE column with the local-time
 // constructor, then JSON serialises it to UTC). Formatting it back to a local calendar date is
@@ -126,6 +127,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
   // Visit History state (new nav destination, UI/UX Phase 2)
   const [historyVisits, setHistoryVisits] = useState([]);
+  // Paged at the server. [1.29.0] This screen fetched every visit in the range and rendered all
+  // of them — no slice, no footer, the whole list straight into the DOM. Measured at 664 bytes a
+  // visit, a year-wide range is a 3.6 MB response and roughly 5,700 table rows.
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [historySearch, setHistorySearch] = useState('');
@@ -249,14 +256,18 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchVisitHistory = useCallback(async (startDate, endDate, search) => {
+  const fetchVisitHistory = useCallback(async (startDate, endDate, search, page = 1) => {
     setHistoryLoading(true);
     setHistoryError('');
     try {
       const response = await api.get('/visits/history', {
-        params: { startDate, endDate, search: search || undefined }
+        params: { startDate, endDate, search: search || undefined, page, limit: HISTORY_PAGE_SIZE }
       });
-      setHistoryVisits(response.data.data.visits || []);
+      const { visits, total, totalPages } = response.data.data;
+      setHistoryVisits(visits || []);
+      setHistoryTotal(total ?? (visits || []).length);
+      setHistoryTotalPages(totalPages || 1);
+      setHistoryPage(page);
     } catch (err) {
       console.error('Failed to fetch visit history:', err);
       setHistoryError('Could not load visit history. Please try again.');
@@ -965,7 +976,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               </Button>
               <ToolbarSpacer />
               <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
-                {historyVisits.length} visit{historyVisits.length === 1 ? '' : 's'}
+                {historyTotal} visit{historyTotal === 1 ? '' : 's'}
               </span>
             </Toolbar>
 
@@ -1043,6 +1054,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   </TableBody>
                 </Table>
               </PanelBody>
+              {/* The screen had no footer at all, because it rendered every row it fetched. */}
+              <Pagination
+                page={historyPage}
+                totalPages={historyTotalPages}
+                onPageChange={(next) => fetchVisitHistory(historyStartDate, historyEndDate, historySearch, next)}
+                total={historyTotal}
+                pageSize={HISTORY_PAGE_SIZE}
+              />
             </Panel>
 
             {/* How the desk is performing, not just what it did. The queue KPIs count who is

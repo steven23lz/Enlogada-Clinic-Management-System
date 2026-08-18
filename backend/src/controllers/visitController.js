@@ -49,11 +49,17 @@ class VisitController {
 
   async getVisitsByDateRange(req, res, next) {
     try {
-      const { startDate, endDate, search } = req.query;
-      const visits = await visitService.getVisitHistoryByDateRange({ startDate, endDate, search });
+      const { startDate, endDate, search, page, limit } = req.query;
+      const result = await visitService.getVisitHistoryByDateRange({ startDate, endDate, search, page, limit });
       return res.status(200).json({
         status: 'success',
-        data: { visits }
+        // `visits` stays the key it always was so nothing that reads it has to change; the paging
+        // fields ride alongside and are simply absent when the caller did not ask for a page.
+        data: {
+          visits: result.visits,
+          total: result.total,
+          ...(result.page ? { page: result.page, limit: result.limit, totalPages: result.totalPages } : {}),
+        }
       });
     } catch (err) {
       next(err);

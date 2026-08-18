@@ -269,8 +269,28 @@ class PaymentService {
     return updated;
   }
 
-  async getTransactions({ startDate, endDate }) {
-    return await paymentRepository.findTransactions({ startDate, endDate });
+  // `limit` is optional and absent by default, so the callers that need the whole set — the
+  // cashier's own daily collections total, the metric strip, the sales-by-service report — keep
+  // getting it. Only the screens that show a page ask for one.
+  async getTransactions({ startDate, endDate, page, limit }) {
+    const limitNum = limit ? Math.min(Math.max(parseInt(limit, 10) || 0, 1), 100) : null;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+
+    const rows = await paymentRepository.findTransactions({
+      startDate,
+      endDate,
+      limit: limitNum,
+      offset: limitNum ? (pageNum - 1) * limitNum : 0,
+    });
+
+    if (!limitNum) return rows;
+    return {
+      transactions: Array.from(rows),
+      total: rows.total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.max(1, Math.ceil(rows.total / limitNum)),
+    };
   }
 
   async getPaymentsForVisit(visitId) {

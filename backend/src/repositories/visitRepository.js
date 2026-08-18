@@ -136,8 +136,19 @@ class VisitRepository {
   // Any-status, date-ranged visit lookup for Receptionist's Visit History view — distinct from
   // findActiveVisits (today-only, Pending/Processing only). Defaults are applied by the service
   // layer, not here, matching paymentRepository.findTransactions' convention.
-  async findVisitsByDateRange({ startDate, endDate, search }) {
-    const filters = [`pv.created_at >= $1::date`, `pv.created_at < ($2::date + 1)`];
+  // Paged at the database. [1.29.0] This returned every visit in the range and the screen sliced
+  // fifteen out of it in JavaScript. Measured at 664 bytes a visit, so a year-wide range is a
+  // 3.6 MB response to fill a fifteen-row table — down the wire, parsed, and held in memory, on
+  // every page load and on a screen that polls. The row count comes back separately so the
+  // pagination footer can still say how many there are without shipping them.
+  async findVisitsByDateRange({ startDate, endDate, search, limit = null, offset = 0 }) {
+    // COALESCE to CURRENT_DATE rather than defaulting in JavaScript: the server's local date is
+    // what every other date filter in this file compares against, and a JS default would have to
+    // agree with it — which is exactly the disagreement the toISOString bug was.
+    const filters = [
+      `pv.created_at >= COALESCE($1::date, CURRENT_DATE)`,
+      `pv.created_at < (COALESCE($2::date, CURRENT_DATE) + 1)`,
+    ];
     const params = [startDate, endDate];
 
     if (search) {
@@ -147,7 +158,16 @@ class VisitRepository {
     }
     const whereClause = filters.join(' AND ');
 
-    const listQuery = `
+    const countRes = await db.query(
+      `SELECT COUNT(*)::int AS total
+         FROM patient_visits pv
+         JOIN patients p ON pv.patient_id = p.id
+        WHERE ${whereClause}`,
+      params
+    );
+    const total = countRes.rows[0].total;
+
+    let listQuery = `
       SELECT pv.*, p.first_name, p.last_name, p.contact_number,
              pt.name as patient_type_name,
              pv.status as visit_status
@@ -157,7 +177,14 @@ class VisitRepository {
       WHERE ${whereClause}
       ORDER BY pv.created_at DESC
     `;
-    const result = await db.query(listQuery, params);
+    const listParams = [...params];
+    if (limit != null) {
+      listParams.push(limit);
+      listQuery += ` LIMIT $${listParams.length}`;
+      listParams.push(offset);
+      listQuery += ` OFFSET $${listParams.length}`;
+    }
+    const result = await db.query(listQuery, listParams);
     const visits = result.rows;
 
     if (visits.length > 0) {
@@ -179,7 +206,7 @@ class VisitRepository {
       }
     }
 
-    return visits;
+    return { visits, total };
   }
 
   async findVisitById(id) {

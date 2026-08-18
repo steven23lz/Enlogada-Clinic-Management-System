@@ -69,11 +69,14 @@ class PaymentController {
 
   async getTransactions(req, res, next) {
     try {
-      const { startDate, endDate } = req.query;
-      const transactions = await paymentService.getTransactions({ startDate, endDate });
+      const { startDate, endDate, page, limit } = req.query;
+      const result = await paymentService.getTransactions({ startDate, endDate, page, limit });
+      // Unpaged callers still get a bare array under `transactions`, exactly as before.
       return res.status(200).json({
         status: 'success',
-        data: { transactions }
+        data: Array.isArray(result)
+          ? { transactions: result, total: result.total ?? result.length }
+          : result,
       });
     } catch (err) {
       next(err);

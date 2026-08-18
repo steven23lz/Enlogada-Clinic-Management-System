@@ -28,6 +28,13 @@ at volume rather than on the seeded data.
 Both sat on growing tables, so each was charging a write on every audit entry and every payment to
 serve reads another index already covered.
 
+### Changed — two list endpoints now page at the database
+* `GET /visits/history` and `GET /payments/transactions` accept `page` and `limit` and return `total` / `totalPages`. Both returned **every row in the range**; Visit History then rendered all of them with no footer at all, and Transaction History sliced fifteen out in JavaScript. Measured at 664 bytes a visit and 570 a payment, a year-wide range is a **3.6 MB** and a **2.0 MB** response respectively — to fill a fifteen-row table, on screens that poll. Page one now stays ~16 KB and ~8 KB whatever the range.
+* `limit` is optional on both, so the callers that legitimately need the whole set — today's collections total, the cashier's metric strip, the sales-by-service report — are unchanged.
+
+### Fixed
+* `visitService.getVisitHistoryByDateRange` defaulted its dates with `new Date().toISOString().slice(0, 10)` — the **UTC** date, which in Philippine time is *yesterday* between midnight and 08:00. Opening Visit History early in the morning showed the previous day's visits and called them today's. The default is now `COALESCE($1::date, CURRENT_DATE)` in SQL, which is the server's local date and what every other date filter here compares against. CLAUDE.md records this bug shipping twice before; this was the third place.
+
 ### Deliberately NOT indexed
 `user_roles.assigned_by`, `role_permissions.permission_id`, `user_permissions.*`,
 `user_departments.*`. These are bounded by the number of staff and the number of permissions — a

@@ -60,9 +60,8 @@ const PAGE_BLURBS = {
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 
-// UI/UX Modernization Phase 4: Transaction History has no server-side pagination endpoint, so a
-// client-side page size over the already-fetched, date-range-filtered array is proportionate —
-// same pattern as StaffAccounts.jsx (VISUAL_IDENTITY.md §3a #11).
+// Sent to the server as `limit` — Transaction History pages at the database now [1.29.0], rather
+// than fetching the whole date range and slicing it here.
 const HISTORY_PAGE_SIZE = 15;
 
 const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
@@ -98,6 +97,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [historyEndDate, setHistoryEndDate] = useState(todayStr());
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
 
   // Feature Gap Plan Phase A: payment_status has always allowed 'Refunded'/'Cancelled', but
   // nothing in the app ever set them — a duplicate or disputed charge had no reversal path.
@@ -237,13 +238,21 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     fetchPatientTypes();
   };
 
-  const fetchTransactionHistory = useCallback(async (startDate, endDate) => {
+  // Paged at the server. [1.29.0] This pulled every settled payment in the range and sliced
+  // fifteen out of it here. Measured at 570 bytes a payment, a year-wide range is a 2.0 MB
+  // response to fill a fifteen-row table — on the screen a cashier opens for the daily cash-up.
+  const fetchTransactionHistory = useCallback(async (startDate, endDate, page = 1) => {
     setHistoryLoading(true);
     setHistoryError('');
     try {
-      const response = await api.get('/payments/transactions', { params: { startDate, endDate } });
-      setHistoryTransactions(response.data.data.transactions || []);
-      setHistoryPage(1);
+      const response = await api.get('/payments/transactions', {
+        params: { startDate, endDate, page, limit: HISTORY_PAGE_SIZE },
+      });
+      const { transactions, total, totalPages } = response.data.data;
+      setHistoryTransactions(transactions || []);
+      setHistoryTotal(total ?? (transactions || []).length);
+      setHistoryTotalPages(totalPages || 1);
+      setHistoryPage(page);
     } catch (err) {
       console.error('Failed to fetch transaction history:', err);
       setHistoryError('Could not load transaction history. Please try again.');
@@ -1069,11 +1078,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         )}
 
         {view === 'cashier-history' && (() => {
-          const historyTotalPages = Math.max(1, Math.ceil(historyTransactions.length / HISTORY_PAGE_SIZE));
-          const pagedHistoryTransactions = historyTransactions.slice(
-            (historyPage - 1) * HISTORY_PAGE_SIZE,
-            historyPage * HISTORY_PAGE_SIZE
-          );
+          // `historyTransactions` IS the page now — the server sent exactly these rows.
+          const pagedHistoryTransactions = historyTransactions;
           return (
         <div>
           <Toolbar attached>
@@ -1184,8 +1190,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
             <Pagination
               page={historyPage}
               totalPages={historyTotalPages}
-              onPageChange={setHistoryPage}
-              totalLabel={`${historyTransactions.length} total`}
+              onPageChange={(next) => fetchTransactionHistory(historyStartDate, historyEndDate, next)}
+              total={historyTotal}
+              pageSize={HISTORY_PAGE_SIZE}
             />
           </Panel>
 
