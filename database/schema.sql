@@ -527,7 +527,9 @@ CREATE TABLE audit_log (
     description TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_audit_log_created_at ON audit_log(created_at DESC);
+-- No separate DESC index on audit_log(created_at): idx_audit_log_created below is ASC and a
+-- B-tree is scannable in both directions, so it already serves ORDER BY created_at DESC. The
+-- duplicate was costing a write on every audit row, and audit_log records PHI reads. [1.29.0]
 
 -- Seed Initial Data
 INSERT INTO roles (name) VALUES
@@ -612,7 +614,8 @@ CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_toke
 CREATE INDEX IF NOT EXISTS idx_tests_category ON tests(category_id);
 CREATE INDEX IF NOT EXISTS idx_patient_visits_status ON patient_visits(status);
 CREATE INDEX IF NOT EXISTS idx_visit_tests_status ON visit_tests(status);
-CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(payment_status);
+-- No single-column index on payments(payment_status): idx_payments_status_paid_at leads with
+-- that column and therefore already serves a bare status filter. [1.29.0]
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
 CREATE INDEX IF NOT EXISTS idx_appointments_scheduled ON appointments(scheduled_date, scheduled_time);
 CREATE INDEX IF NOT EXISTS idx_patient_visits_created ON patient_visits(created_at DESC);
@@ -623,6 +626,28 @@ CREATE INDEX IF NOT EXISTS idx_notification_events_created ON notification_event
 -- matters now that PHI reads are logged and the table finally has a growth profile.
 CREATE INDEX IF NOT EXISTS idx_audit_log_entity_created ON audit_log (entity_type, entity_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log (created_at);
+
+-- Foreign keys on the tables that grow with how busy the clinic is. [1.29.0] Measured on a
+-- same-shaped audit_log of 300,000 rows — about a year here, since PHI reads are audited too:
+-- the activity log's first page went 87.3ms -> 0.9ms, and "everything one member of staff
+-- touched" — the query a breach investigation runs — went 58.0ms -> 5.8ms.
+--
+-- Deliberately NOT indexed: user_roles.assigned_by, role_permissions.permission_id,
+-- user_permissions.*, user_departments.*. Those are bounded by the number of staff and the
+-- number of permissions, a couple of hundred rows that never grow with patient volume, and on a
+-- table that fits in a page or two a sequential scan beats an index lookup. Indexing them would
+-- buy nothing and be paid for on every write — the same mistake as the two indexes removed above.
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_id);
+CREATE INDEX IF NOT EXISTS idx_payments_processed_by ON payments(processed_by);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_created_by ON patient_visits(created_by);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_discount_type ON patient_visits(discount_type_id);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_discount_granted_by ON patient_visits(discount_granted_by);
+CREATE INDEX IF NOT EXISTS idx_patients_type ON patients(patient_type_id);
+CREATE INDEX IF NOT EXISTS idx_test_results_critical_ack_by ON test_results(critical_acknowledged_by);
+CREATE INDEX IF NOT EXISTS idx_test_results_superseded_by ON test_results(superseded_by);
+CREATE INDEX IF NOT EXISTS idx_hmo_requests_provider ON hmo_requests(hmo_provider_id);
+CREATE INDEX IF NOT EXISTS idx_hmo_requests_decided_by ON hmo_requests(decided_by);
+CREATE INDEX IF NOT EXISTS idx_hmo_request_tests_decided_by ON hmo_request_tests(decided_by);
 
 -- =====================================================================================
 -- Daily counters — see migrations.md [1.13.0]

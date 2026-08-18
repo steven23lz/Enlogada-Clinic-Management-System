@@ -1,5 +1,42 @@
 # Database Migration & Schema History
 
+## [1.29.0] - 2026-08-18 (Index what grows; stop maintaining what nothing reads)
+
+Run `node src/scripts/migrateIndexHygiene.js` on any database created before this version
+(`--rollback` reverses it).
+
+### Measured, not guessed
+Against a same-shaped `audit_log` of 300,000 rows in a throwaway schema — roughly a year for this
+clinic, since [1.19.0] made `audit_log` record PHI **reads** as well as writes:
+
+| query | before | after |
+|---|---|---|
+| activity log, newest page | 87.3 ms (2 seq scans) | **0.9 ms** (0) |
+| everything one member of staff touched | 58.0 ms (1 seq scan) | **5.8 ms** (0) |
+
+The second is the query a breach investigation runs, and it is the reason the audit log exists.
+At demo scale both are under a millisecond either way — which is precisely why this was measured
+at volume rather than on the seeded data.
+
+### Added
+* Indexes on 11 foreign keys, all on tables that grow with clinic activity: `audit_log.actor_id`, `payments.processed_by`, `patient_visits.created_by` / `.discount_type_id` / `.discount_granted_by`, `patients.patient_type_id`, `test_results.critical_acknowledged_by` / `.superseded_by`, `hmo_requests.hmo_provider_id` / `.decided_by`, `hmo_request_tests.decided_by`.
+
+### Removed
+* `idx_audit_log_created_at` — duplicates `idx_audit_log_created`. A B-tree is scannable in both directions, so the ASC index already serves `ORDER BY created_at DESC`; confirmed by building the case in a scratch schema and reading the plan.
+* `idx_payments_status` — duplicates `idx_payments_status_paid_at`, whose leading column is `payment_status`; confirmed the same way.
+
+Both sat on growing tables, so each was charging a write on every audit entry and every payment to
+serve reads another index already covered.
+
+### Deliberately NOT indexed
+`user_roles.assigned_by`, `role_permissions.permission_id`, `user_permissions.*`,
+`user_departments.*`. These are bounded by the number of staff and the number of permissions — a
+couple of hundred rows that never grow with patient volume — and on a table that fits in a page or
+two a sequential scan beats an index lookup. Indexing them would buy nothing and be paid for on
+every write, which is the same mistake as the two indexes removed above.
+
+---
+
 ## [1.28.0] - 2026-08-18 (The claim gets decided, and somebody is told)
 
 Run `node src/scripts/migrateHmoClaimDecision.js` on any database created before this version

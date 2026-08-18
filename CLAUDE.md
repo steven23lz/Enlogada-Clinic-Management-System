@@ -31,7 +31,7 @@ node src/scripts/testRbacEndpoints.js  # manual RBAC endpoint smoke test
 node src/scripts/verifyRbacWiring.js  # asserts every permission-gated route matches the seeded matrix
 
 # Additive migrations for an EXISTING database (migrateDb.js is destructive and cannot be used on
-# a live one). Each is safe to re-run; run them in order on any database created before [1.28.0].
+# a live one). Each is safe to re-run; run them in order on any database created before [1.29.0].
 node src/scripts/migrateIndexes.js           # [1.11.0] foreign-key and lookup indexes
 node src/scripts/migrateResultAttribution.js # [1.12.0] recorded_by vs released_by
 node src/scripts/migrateDataIntegrity.js     # [1.13.0] daily_counters + queue/receipt/payment uniqueness
@@ -48,6 +48,7 @@ node src/scripts/migrateTestPreparation.js    # [1.24.0] patient preparation per
 node src/scripts/migrateAppointmentReminders.js # [1.25.0] day-before reminder tracking (--rollback reverses it)
 node src/scripts/migrateHmoDecisionTrail.js    # [1.27.0] why an HMO refused a test, and who recorded it (--rollback reverses it)
 node src/scripts/migrateHmoClaimDecision.js    # [1.28.0] turning a whole claim down, + member number (--rollback reverses it)
+node src/scripts/migrateIndexHygiene.js       # [1.29.0] index the growing FKs, drop two redundant indexes (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
