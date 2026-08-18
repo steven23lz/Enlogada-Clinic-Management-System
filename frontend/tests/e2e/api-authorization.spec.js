@@ -135,8 +135,11 @@ test.describe('API authorization — ownership and role boundaries', () => {
     const res = await apiContext.get(`${API}/results/history/999999999`, {
       headers: { Authorization: `Bearer ${clientA.token}` },
     });
-    // Client-owned-record check runs first and 404s on a patient id that doesn't exist.
-    expect(res.status()).toBe(404);
+    // 403, not 404. [1.29.0] This used to assert 404 — and that was the leak: a Client could tell
+    // "no such patient" from "not your patient" and enumerate the clinic's id space from it. A
+    // caller who may not see the record does not get to learn whether it exists. Staff still get
+    // a genuine 404, because they are entitled to know.
+    expect(res.status()).toBe(403);
   });
 });
 
@@ -386,5 +389,70 @@ test.describe('Cross-role PHI boundaries', () => {
     // data to hide — if there was nothing to filter, this proved nothing.
     test.skip(!sawForeignCategory, 'no cross-department results in this database to filter');
     expect(sawForeignCategory).toBeTruthy();
+  });
+});
+
+// A caller who may not see a record must not learn whether it exists. [1.29.0]
+//
+// The permission matrix is verified on every commit by verifyRbacWiring, which proves the ROUTES
+// are gated. It says nothing about whether a caller who legitimately reaches a route is confined
+// to their own rows, and nothing at all about what a REFUSAL discloses.
+//
+// Two routes answered 403 for "exists but not yours" and 404 for "no such record", so a signed-in
+// patient could walk the id space, count the 403s, and learn how many patients the clinic has and
+// exactly which ids are real. That is the reconnaissance step that turns any future ownership
+// slip into a usable one. /visits/:id and /payments/bill/:id already answered 403 to both, so the
+// fix brought two routes into line with the pattern the codebase had already settled on.
+//
+// The message is asserted as well as the status: two different wordings for the two cases is the
+// same oracle one layer down.
+test.describe('A refusal must not reveal whether the record exists', () => {
+  const ABSENT_ID = 99999999;
+  // Every seeded account shares this; SUPERADMIN_PASSWORD above is the same string under a
+  // name that would read as a mistake here.
+  const SEEDED_PASSWORD = SUPERADMIN_PASSWORD;
+
+  test('a client cannot tell a stranger\'s record from one that does not exist', async ({ request: ctx }) => {
+    const asClient = async () => {
+      const res = await ctx.post(`${API}/auth/login`, { data: { email: 'client@enlogada.com', password: SEEDED_PASSWORD } });
+      return (await res.json()).data.token;
+    };
+    const asReception = async () => {
+      const res = await ctx.post(`${API}/auth/login`, { data: { email: 'receptionist@enlogada.com', password: SEEDED_PASSWORD } });
+      return (await res.json()).data.token;
+    };
+    const client = await asClient();
+    const reception = await asReception();
+    const auth = (t) => ({ Authorization: `Bearer ${t}` });
+
+    // A real patient that is emphatically not the client's — a walk-in with no web account.
+    const types = (await (await ctx.get(`${API}/patients/types`, { headers: auth(reception) })).json()).data.patientTypes;
+    const made = await (await ctx.post(`${API}/patients`, {
+      headers: auth(reception),
+      data: {
+        patientTypeId: types[0].id, firstName: 'E2E', lastName: 'OracleProbe',
+        birthdate: '1975-02-02', sex: 'Male',
+      },
+    })).json();
+    const strangerId = made.data.patient.id;
+
+    for (const path of ['/patients', '/results/history']) {
+      const exists = await ctx.get(`${API}${path}/${strangerId}`, { headers: auth(client) });
+      const absent = await ctx.get(`${API}${path}/${ABSENT_ID}`, { headers: auth(client) });
+      expect(exists.status(), `${path} leaked existence by status`).toBe(absent.status());
+      expect(exists.status()).toBe(403);
+    }
+
+    // The write path too, with a complete body so validation cannot be what answers.
+    const body = {
+      patientTypeId: types[0].id, firstName: 'X', lastName: 'Y',
+      birthdate: '1990-01-01', sex: 'Female', contactNumber: '09999999999',
+    };
+    const putExists = await ctx.put(`${API}/patients/${strangerId}`, { headers: auth(client), data: body });
+    const putAbsent = await ctx.put(`${API}/patients/${ABSENT_ID}`, { headers: auth(client), data: body });
+    expect(putExists.status()).toBe(403);
+    expect(putAbsent.status()).toBe(403);
+    // Same wording, or the body becomes the oracle instead of the status line.
+    expect((await putExists.json()).message).toBe((await putAbsent.json()).message);
   });
 });
