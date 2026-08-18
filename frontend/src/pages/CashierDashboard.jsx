@@ -563,7 +563,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                 <div className="flex items-center gap-2">
                   <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger className="flex-1">
+                    <SelectTrigger className="flex-1" aria-label="Filter the billing queue by patient type">
                       <SelectValue placeholder="Patient Type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -815,7 +815,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     ) : (
                       <div className="flex flex-col sm:flex-row gap-2">
                         <Select value={discountTypeId} onValueChange={setDiscountTypeId}>
-                          <SelectTrigger className="text-xs sm:w-44"><SelectValue placeholder="No discount" /></SelectTrigger>
+                          <SelectTrigger className="text-xs sm:w-44" aria-label="Statutory or other discount"><SelectValue placeholder="No discount" /></SelectTrigger>
                           <SelectContent>
                             {discountCatalogue.map(d => (
                               <SelectItem key={d.id} value={String(d.id)}>
@@ -927,8 +927,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       <div className="space-y-2 bg-white p-3 rounded-xl border border-gray-200">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="field-label">Cash tendered</label>
-                            <Input
+                            <label htmlFor="cashierdashboard-cash-tendered" className="field-label">Cash tendered</label>
+                            <Input id="cashierdashboard-cash-tendered"
                               type="number"
                               step="0.01"
                               placeholder="0.00"
@@ -968,8 +968,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       </div>
                     ) : (
                       <div className="space-y-1">
-                        <label className="field-label">Transaction reference</label>
-                        <Input
+                        <label htmlFor="cashierdashboard-transaction-reference" className="field-label">Transaction reference</label>
+                        <Input id="cashierdashboard-transaction-reference"
                           placeholder={`Enter ${paymentMethod} reference code`}
                           value={referenceNumber}
                           onChange={e => setReferenceNumber(e.target.value)}
@@ -1222,8 +1222,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
             )}
 
             <div className="space-y-1">
-              <label className="field-label">Reason <span className="text-red-600">*</span></label>
-              <Textarea
+              <label htmlFor="cashierdashboard-reason" className="field-label">Reason <span className="text-red-600">*</span></label>
+              <Textarea id="cashierdashboard-reason"
                 value={refundReason}
                 onChange={e => setRefundReason(e.target.value)}
                 placeholder="e.g. Duplicate charge, patient dispute..."

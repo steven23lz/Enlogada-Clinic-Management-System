@@ -1050,8 +1050,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               )}
 
               <div className="space-y-1.5">
-                <label className="field-label">Findings & Impression (Required)</label>
-                <textarea
+                <label htmlFor="diagnosticdashboard-findings-impression-required" className="field-label">Findings & Impression (Required)</label>
+                <textarea id="diagnosticdashboard-findings-impression-required"
                   rows={6}
                   placeholder="Enter detailed laboratory/imaging findings, measurements, and impression..."
                   value={findings}
@@ -1062,8 +1062,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="field-label">Remarks / Recommendations (Optional)</label>
-                <Input
+                <label htmlFor="diagnosticdashboard-remarks-recommendations-optional" className="field-label">Remarks / Recommendations (Optional)</label>
+                <Input id="diagnosticdashboard-remarks-recommendations-optional"
                   placeholder="e.g. Clinical correlation recommended..."
                   value={remarks}
                   onChange={e => setRemarks(e.target.value)}
@@ -1072,8 +1072,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="field-label">Attach Report File (Optional)</label>
-                <input
+                <label htmlFor="diagnosticdashboard-attach-report-file-optional" className="field-label">Attach Report File (Optional)</label>
+                <input id="diagnosticdashboard-attach-report-file-optional"
                   type="file"
                   accept="application/pdf,image/jpeg,image/png"
                   onChange={handleFileChange}

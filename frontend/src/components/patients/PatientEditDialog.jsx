@@ -124,8 +124,8 @@ const PatientEditDialog = ({ open, onOpenChange, patient, patientTypes = [], onS
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <label className="field-label">Birthdate <span className="text-rose-600">*</span></label>
-                <Input
+                <label htmlFor="patienteditdialog-birthdate" className="field-label">Birthdate <span className="text-rose-600">*</span></label>
+                <Input id="patienteditdialog-birthdate"
                   type="date"
                   value={form.birthdate}
                   disabled={saving}
@@ -134,9 +134,9 @@ const PatientEditDialog = ({ open, onOpenChange, patient, patientTypes = [], onS
                 />
               </div>
               <div className="space-y-1">
-                <label className="field-label">Sex <span className="text-rose-600">*</span></label>
+                <label className="field-label" htmlFor="patienteditdialog-sex">Sex <span className="text-rose-600">*</span></label>
                 <Select value={form.sex} onValueChange={set('sex')} disabled={saving}>
-                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectTrigger className="rounded-xl" id="patienteditdialog-sex"><SelectValue placeholder="Select" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Male">Male</SelectItem>
                     <SelectItem value="Female">Female</SelectItem>
@@ -159,19 +159,19 @@ const PatientEditDialog = ({ open, onOpenChange, patient, patientTypes = [], onS
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className="field-label">First Name <span className="text-rose-600">*</span></label>
-              <Input value={form.firstName} disabled={saving} onChange={(e) => set('firstName')(e.target.value)} required />
+              <label htmlFor="patienteditdialog-first-name" className="field-label">First Name <span className="text-rose-600">*</span></label>
+              <Input id="patienteditdialog-first-name" value={form.firstName} disabled={saving} onChange={(e) => set('firstName')(e.target.value)} required />
             </div>
             <div className="space-y-1">
-              <label className="field-label">Last Name <span className="text-rose-600">*</span></label>
-              <Input value={form.lastName} disabled={saving} onChange={(e) => set('lastName')(e.target.value)} required />
+              <label htmlFor="patienteditdialog-last-name" className="field-label">Last Name <span className="text-rose-600">*</span></label>
+              <Input id="patienteditdialog-last-name" value={form.lastName} disabled={saving} onChange={(e) => set('lastName')(e.target.value)} required />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="field-label">Patient Type <span className="text-rose-600">*</span></label>
+            <label className="field-label" htmlFor="patienteditdialog-patient-type">Patient Type <span className="text-rose-600">*</span></label>
             <Select value={form.patientTypeId} onValueChange={set('patientTypeId')} disabled={saving}>
-              <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select patient type" /></SelectTrigger>
+              <SelectTrigger className="rounded-xl" id="patienteditdialog-patient-type"><SelectValue placeholder="Select patient type" /></SelectTrigger>
               <SelectContent>
                 {patientTypes.map((t) => (
                   <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
@@ -181,18 +181,18 @@ const PatientEditDialog = ({ open, onOpenChange, patient, patientTypes = [], onS
           </div>
 
           <div className="space-y-1">
-            <label className="field-label">Contact Number</label>
-            <Input value={form.contactNumber} disabled={saving} onChange={(e) => set('contactNumber')(e.target.value)} placeholder="09171234567" />
+            <label htmlFor="patienteditdialog-contact-number" className="field-label">Contact Number</label>
+            <Input id="patienteditdialog-contact-number" value={form.contactNumber} disabled={saving} onChange={(e) => set('contactNumber')(e.target.value)} placeholder="09171234567" />
           </div>
 
           <div className="space-y-1">
-            <label className="field-label">Home Address</label>
-            <Input value={form.address} disabled={saving} onChange={(e) => set('address')(e.target.value)} placeholder="Barangay, City, Province" />
+            <label htmlFor="patienteditdialog-home-address" className="field-label">Home Address</label>
+            <Input id="patienteditdialog-home-address" value={form.address} disabled={saving} onChange={(e) => set('address')(e.target.value)} placeholder="Barangay, City, Province" />
           </div>
 
           <div className="space-y-1">
-            <label className="field-label">Emergency Contact</label>
-            <Input value={form.emergencyContact} disabled={saving} onChange={(e) => set('emergencyContact')(e.target.value)} />
+            <label htmlFor="patienteditdialog-emergency-contact" className="field-label">Emergency Contact</label>
+            <Input id="patienteditdialog-emergency-contact" value={form.emergencyContact} disabled={saving} onChange={(e) => set('emergencyContact')(e.target.value)} />
           </div>
 
           {error && (

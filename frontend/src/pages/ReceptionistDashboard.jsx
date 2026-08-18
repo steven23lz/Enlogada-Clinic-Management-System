@@ -27,6 +27,7 @@ import ReferringPhysicianFields from '../components/booking/ReferringPhysicianFi
 import TestPicker from '../components/booking/TestPicker';
 import useOperationsReport from '../hooks/useOperationsReport';
 import { ReceptionThroughputPanel } from '../components/reports/OperationsPanels';
+import { useScrollIntoViewOnSet } from '../hooks/useScrollIntoViewOnSet';
 import {
   ClipboardList,
   UserCheck,
@@ -194,6 +195,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [visitNotes, setVisitNotes] = useState('');
   const [registrationSuccess, setRegistrationSuccess] = useState('');
   const [registrationError, setRegistrationError] = useState('');
+  // The alert renders at the top of this form and the Register button is at the bottom of it —
+  // further apart than a viewport once tests are ticked. Without this the form refuses and,
+  // from where the receptionist is looking, nothing happens at all.
+  const registrationErrorRef = useScrollIntoViewOnSet(registrationError);
   const [isRegistering, setIsRegistering] = useState(false);
 
   // The form holds the patient type as an id; the referral rule is expressed in names. Resolved
@@ -1147,7 +1152,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               )}
 
               {registrationError && (
-                <div role="alert" className="mb-4 alert alert-error">
+                <div ref={registrationErrorRef} role="alert" className="mb-4 alert alert-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{registrationError}</span>
                 </div>
@@ -1192,13 +1197,13 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="field-label">Sex <span className="text-rose-600">*</span></label>
+                    <label className="field-label" htmlFor="receptionistdashboard-sex">Sex <span className="text-rose-600">*</span></label>
                     <Select
                       value={newPatient.sex}
                       onValueChange={val => setNewPatient({...newPatient, sex: val})}
                       disabled={isRegistering}
                     >
-                      <SelectTrigger className="rounded-xl">
+                      <SelectTrigger className="rounded-xl" id="receptionistdashboard-sex">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1221,13 +1226,13 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="field-label">Patient Type <span className="text-rose-600">*</span></label>
+                    <label className="field-label" htmlFor="receptionistdashboard-patient-type">Patient Type <span className="text-rose-600">*</span></label>
                     <Select
                       value={newPatient.patientTypeId}
                       onValueChange={val => setNewPatient({...newPatient, patientTypeId: val})}
                       disabled={isRegistering}
                     >
-                      <SelectTrigger className="rounded-xl">
+                      <SelectTrigger className="rounded-xl" id="receptionistdashboard-patient-type">
                         <SelectValue placeholder="Select patient type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1516,9 +1521,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </div>
               )}
               <div className="space-y-1.5">
-                <label className="field-label">HMO Provider <span className="text-rose-600">*</span></label>
+                <label className="field-label" htmlFor="receptionistdashboard-hmo-provider">HMO Provider <span className="text-rose-600">*</span></label>
                 <Select value={hmoProviderId} onValueChange={setHmoProviderId}>
-                  <SelectTrigger className="rounded-xl">
+                  <SelectTrigger className="rounded-xl" id="receptionistdashboard-hmo-provider">
                     <SelectValue placeholder="Select HMO provider" />
                   </SelectTrigger>
                   <SelectContent>

@@ -744,7 +744,7 @@ const ClientDashboard = ({ onNavigate }) => {
               <span className="field-label">Active Profile</span>
               {profiles.length > 0 ? (
                 <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
-                  <SelectTrigger className="w-64 border-0 p-0 font-bold text-slate-800 focus:ring-0 focus:outline-none bg-transparent">
+                  <SelectTrigger className="w-64 border-0 p-0 font-bold text-slate-800 focus:ring-0 focus:outline-none bg-transparent" aria-label="Active patient profile">
                     <SelectValue placeholder="Select patient profile" />
                   </SelectTrigger>
                   <SelectContent>
@@ -784,8 +784,8 @@ const ClientDashboard = ({ onNavigate }) => {
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
-                    <Input
+                    <label htmlFor="clientdashboard-first-name" className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
+                    <Input id="clientdashboard-first-name"
                       placeholder="Juan"
                       value={newProfileData.firstName}
                       onChange={e => setNewProfileData({...newProfileData, firstName: e.target.value})}
@@ -794,8 +794,8 @@ const ClientDashboard = ({ onNavigate }) => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
-                    <Input
+                    <label htmlFor="clientdashboard-last-name" className="text-xs font-semibold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
+                    <Input id="clientdashboard-last-name"
                       placeholder="Dela Cruz"
                       value={newProfileData.lastName}
                       onChange={e => setNewProfileData({...newProfileData, lastName: e.target.value})}
@@ -807,8 +807,8 @@ const ClientDashboard = ({ onNavigate }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1.5 sm:col-span-2">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
-                    <Input
+                    <label htmlFor="clientdashboard-birthdate" className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
+                    <Input id="clientdashboard-birthdate"
                       type="date"
                       value={newProfileData.birthdate}
                       onChange={e => setNewProfileData({...newProfileData, birthdate: e.target.value})}
@@ -817,13 +817,13 @@ const ClientDashboard = ({ onNavigate }) => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Sex <span className="text-rose-600">*</span></label>
+                    <label className="text-xs font-semibold text-gray-600 uppercase" htmlFor="clientdashboard-sex">Sex <span className="text-rose-600">*</span></label>
                     <Select
                       value={newProfileData.sex}
                       onValueChange={val => setNewProfileData({...newProfileData, sex: val})}
                       disabled={isAddingProfile}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="clientdashboard-sex">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -836,8 +836,8 @@ const ClientDashboard = ({ onNavigate }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Contact Number</label>
-                    <Input
+                    <label htmlFor="clientdashboard-contact-number" className="text-xs font-semibold text-gray-600 uppercase">Contact Number</label>
+                    <Input id="clientdashboard-contact-number"
                       placeholder="09171234567"
                       value={newProfileData.contactNumber}
                       onChange={e => setNewProfileData({...newProfileData, contactNumber: e.target.value})}
@@ -845,13 +845,13 @@ const ClientDashboard = ({ onNavigate }) => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Patient Billing Category <span className="text-rose-600">*</span></label>
+                    <label className="text-xs font-semibold text-gray-600 uppercase" htmlFor="clientdashboard-patient-billing-category">Patient Billing Category <span className="text-rose-600">*</span></label>
                     <Select
                       value={newProfileData.patientTypeId}
                       onValueChange={val => setNewProfileData({...newProfileData, patientTypeId: val})}
                       disabled={isAddingProfile}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="clientdashboard-patient-billing-category">
                         <SelectValue placeholder="Category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -866,8 +866,8 @@ const ClientDashboard = ({ onNavigate }) => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-600 uppercase">Address</label>
-                  <Input
+                  <label htmlFor="clientdashboard-address" className="text-xs font-semibold text-gray-600 uppercase">Address</label>
+                  <Input id="clientdashboard-address"
                     placeholder="Barangay, City, Province"
                     value={newProfileData.address}
                     onChange={e => setNewProfileData({...newProfileData, address: e.target.value})}
@@ -876,8 +876,8 @@ const ClientDashboard = ({ onNavigate }) => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-600 uppercase">Emergency Contact</label>
-                  <Input
+                  <label htmlFor="clientdashboard-emergency-contact" className="text-xs font-semibold text-gray-600 uppercase">Emergency Contact</label>
+                  <Input id="clientdashboard-emergency-contact"
                     placeholder="Name & Contact Number"
                     value={newProfileData.emergencyContact}
                     onChange={e => setNewProfileData({...newProfileData, emergencyContact: e.target.value})}
@@ -913,8 +913,8 @@ const ClientDashboard = ({ onNavigate }) => {
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
-                    <Input
+                    <label htmlFor="clientdashboard-first-name" className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
+                    <Input id="clientdashboard-first-name"
                       placeholder="Juan"
                       value={editProfileData.firstName}
                       onChange={e => setEditProfileData({...editProfileData, firstName: e.target.value})}
@@ -923,8 +923,8 @@ const ClientDashboard = ({ onNavigate }) => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
-                    <Input
+                    <label htmlFor="clientdashboard-last-name" className="text-xs font-semibold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
+                    <Input id="clientdashboard-last-name"
                       placeholder="Dela Cruz"
                       value={editProfileData.lastName}
                       onChange={e => setEditProfileData({...editProfileData, lastName: e.target.value})}
@@ -936,8 +936,8 @@ const ClientDashboard = ({ onNavigate }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1.5 sm:col-span-2">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
-                    <Input
+                    <label htmlFor="clientdashboard-birthdate" className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
+                    <Input id="clientdashboard-birthdate"
                       type="date"
                       value={editProfileData.birthdate}
                       onChange={e => setEditProfileData({...editProfileData, birthdate: e.target.value})}
@@ -946,13 +946,13 @@ const ClientDashboard = ({ onNavigate }) => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Sex <span className="text-rose-600">*</span></label>
+                    <label className="text-xs font-semibold text-gray-600 uppercase" htmlFor="clientdashboard-sex-2">Sex <span className="text-rose-600">*</span></label>
                     <Select
                       value={editProfileData.sex}
                       onValueChange={val => setEditProfileData({...editProfileData, sex: val})}
                       disabled={isEditingProfile}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="clientdashboard-sex-2">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -965,8 +965,8 @@ const ClientDashboard = ({ onNavigate }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Contact Number</label>
-                    <Input
+                    <label htmlFor="clientdashboard-contact-number" className="text-xs font-semibold text-gray-600 uppercase">Contact Number</label>
+                    <Input id="clientdashboard-contact-number"
                       placeholder="09171234567"
                       value={editProfileData.contactNumber}
                       onChange={e => setEditProfileData({...editProfileData, contactNumber: e.target.value})}
@@ -974,13 +974,13 @@ const ClientDashboard = ({ onNavigate }) => {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-600 uppercase">Patient Billing Category <span className="text-rose-600">*</span></label>
+                    <label className="text-xs font-semibold text-gray-600 uppercase" htmlFor="clientdashboard-patient-billing-category-3">Patient Billing Category <span className="text-rose-600">*</span></label>
                     <Select
                       value={editProfileData.patientTypeId}
                       onValueChange={val => setEditProfileData({...editProfileData, patientTypeId: val})}
                       disabled={isEditingProfile}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="clientdashboard-patient-billing-category-3">
                         <SelectValue placeholder="Category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -995,8 +995,8 @@ const ClientDashboard = ({ onNavigate }) => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-600 uppercase">Address</label>
-                  <Input
+                  <label htmlFor="clientdashboard-address" className="text-xs font-semibold text-gray-600 uppercase">Address</label>
+                  <Input id="clientdashboard-address"
                     placeholder="Barangay, City, Province"
                     value={editProfileData.address}
                     onChange={e => setEditProfileData({...editProfileData, address: e.target.value})}
@@ -1005,8 +1005,8 @@ const ClientDashboard = ({ onNavigate }) => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-600 uppercase">Emergency Contact</label>
-                  <Input
+                  <label htmlFor="clientdashboard-emergency-contact" className="text-xs font-semibold text-gray-600 uppercase">Emergency Contact</label>
+                  <Input id="clientdashboard-emergency-contact"
                     placeholder="Name & Contact Number"
                     value={editProfileData.emergencyContact}
                     onChange={e => setEditProfileData({...editProfileData, emergencyContact: e.target.value})}
@@ -1202,8 +1202,8 @@ const ClientDashboard = ({ onNavigate }) => {
                         {bookingData.hmoProviderId && bookingData.hmoProviderId !== 'none' && (
                           <>
                             <div className="space-y-1.5">
-                              <label className="field-label">HMO Authorization / LOA Code</label>
-                              <Input
+                              <label htmlFor="clientdashboard-hmo-authorization-loa-code" className="field-label">HMO Authorization / LOA Code</label>
+                              <Input id="clientdashboard-hmo-authorization-loa-code"
                                 placeholder="Enter approval or card LOA number"
                                 value={bookingData.hmoApprovalCode}
                                 onChange={e => setBookingData({...bookingData, hmoApprovalCode: e.target.value})}
@@ -1277,8 +1277,8 @@ const ClientDashboard = ({ onNavigate }) => {
                         )}
 
                         <div className="space-y-1.5">
-                          <label className="field-label">Additional Clinical Notes</label>
-                          <Input
+                          <label htmlFor="clientdashboard-additional-clinical-notes" className="field-label">Additional Clinical Notes</label>
+                          <Input id="clientdashboard-additional-clinical-notes"
                             placeholder="Physician referral notes or symptoms..."
                             value={bookingData.notes}
                             onChange={e => setBookingData({...bookingData, notes: e.target.value})}

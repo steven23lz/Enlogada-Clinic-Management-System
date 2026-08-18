@@ -222,31 +222,31 @@ const StaffAccounts = () => {
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="field-label">First Name</label>
-                  <Input value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} disabled={submitting} required />
+                  <label htmlFor="staffaccounts-first-name" className="field-label">First Name</label>
+                  <Input id="staffaccounts-first-name" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} disabled={submitting} required />
                 </div>
                 <div className="space-y-1">
-                  <label className="field-label">Last Name</label>
-                  <Input value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} disabled={submitting} required />
+                  <label htmlFor="staffaccounts-last-name" className="field-label">Last Name</label>
+                  <Input id="staffaccounts-last-name" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} disabled={submitting} required />
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="field-label">Email</label>
-                <Input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={submitting} required />
+                <label htmlFor="staffaccounts-email" className="field-label">Email</label>
+                <Input id="staffaccounts-email" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={submitting} required />
               </div>
               <div className="space-y-1">
-                <label className="field-label">Contact Number</label>
-                <Input value={formData.contactNumber} onChange={e => setFormData({ ...formData, contactNumber: e.target.value })} disabled={submitting} />
+                <label htmlFor="staffaccounts-contact-number" className="field-label">Contact Number</label>
+                <Input id="staffaccounts-contact-number" value={formData.contactNumber} onChange={e => setFormData({ ...formData, contactNumber: e.target.value })} disabled={submitting} />
               </div>
               <div className="space-y-1">
-                <label className="field-label">Temporary Password</label>
-                <Input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} disabled={submitting} required />
+                <label htmlFor="staffaccounts-temporary-password" className="field-label">Temporary Password</label>
+                <Input id="staffaccounts-temporary-password" type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} disabled={submitting} required />
                 <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <div className="space-y-1">
-                <label className="field-label">Role</label>
+                <label className="field-label" htmlFor="staffaccounts-role">Role</label>
                 <Select value={formData.role} onValueChange={val => setFormData({ ...formData, role: val })}>
-                  <SelectTrigger className="rounded-xl">
+                  <SelectTrigger className="rounded-xl" id="staffaccounts-role">
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
                   <SelectContent>
@@ -415,8 +415,8 @@ const StaffAccounts = () => {
                 </div>
               )}
               <div className="space-y-1">
-                <label className="field-label">New Temporary Password</label>
-                <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={resettingPwd} required autoFocus />
+                <label htmlFor="staffaccounts-new-temporary-password" className="field-label">New Temporary Password</label>
+                <Input id="staffaccounts-new-temporary-password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={resettingPwd} required autoFocus />
                 <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <DialogFooter>
@@ -447,21 +447,21 @@ const StaffAccounts = () => {
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="field-label">First Name</label>
-                <Input value={editData.firstName} onChange={e => setEditData({ ...editData, firstName: e.target.value })} disabled={savingEdit} required />
+                <label htmlFor="staffaccounts-first-name" className="field-label">First Name</label>
+                <Input id="staffaccounts-first-name" value={editData.firstName} onChange={e => setEditData({ ...editData, firstName: e.target.value })} disabled={savingEdit} required />
               </div>
               <div className="space-y-1">
-                <label className="field-label">Last Name</label>
-                <Input value={editData.lastName} onChange={e => setEditData({ ...editData, lastName: e.target.value })} disabled={savingEdit} required />
+                <label htmlFor="staffaccounts-last-name" className="field-label">Last Name</label>
+                <Input id="staffaccounts-last-name" value={editData.lastName} onChange={e => setEditData({ ...editData, lastName: e.target.value })} disabled={savingEdit} required />
               </div>
             </div>
             <div className="space-y-1">
-              <label className="field-label">Email</label>
-              <Input type="email" value={editData.email} onChange={e => setEditData({ ...editData, email: e.target.value })} disabled={savingEdit} required />
+              <label htmlFor="staffaccounts-email" className="field-label">Email</label>
+              <Input id="staffaccounts-email" type="email" value={editData.email} onChange={e => setEditData({ ...editData, email: e.target.value })} disabled={savingEdit} required />
             </div>
             <div className="space-y-1">
-              <label className="field-label">Contact Number</label>
-              <Input value={editData.contactNumber} onChange={e => setEditData({ ...editData, contactNumber: e.target.value })} disabled={savingEdit} />
+              <label htmlFor="staffaccounts-contact-number" className="field-label">Contact Number</label>
+              <Input id="staffaccounts-contact-number" value={editData.contactNumber} onChange={e => setEditData({ ...editData, contactNumber: e.target.value })} disabled={savingEdit} />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>Cancel</Button>

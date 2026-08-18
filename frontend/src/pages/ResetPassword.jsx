@@ -90,8 +90,8 @@ const ResetPassword = ({ token, onNavigate }) => {
                   {!success && (
                     <>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-700">New Password</label>
-                        <Input
+                        <label htmlFor="resetpassword-new-password" className="text-xs font-semibold text-gray-700">New Password</label>
+                        <Input id="resetpassword-new-password"
                           type="password"
                           placeholder="At least 8 characters"
                           value={password}
@@ -102,8 +102,8 @@ const ResetPassword = ({ token, onNavigate }) => {
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-700">Confirm New Password</label>
-                        <Input
+                        <label htmlFor="resetpassword-confirm-new-password" className="text-xs font-semibold text-gray-700">Confirm New Password</label>
+                        <Input id="resetpassword-confirm-new-password"
                           type="password"
                           placeholder="Re-enter your new password"
                           value={confirmPassword}

@@ -72,8 +72,8 @@ const ForgotPassword = ({ onNavigate }) => {
                 {!success && (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-gray-700">Email Address</label>
-                      <Input
+                      <label htmlFor="forgotpassword-email-address" className="text-xs font-semibold text-gray-700">Email Address</label>
+                      <Input id="forgotpassword-email-address"
                         type="email"
                         placeholder="Enter your email"
                         value={email}

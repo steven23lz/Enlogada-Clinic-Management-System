@@ -510,8 +510,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                 </div>
               )}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700">Provider Name</label>
-                <Input
+                <label htmlFor="servicescatalog-provider-name" className="text-xs font-semibold text-gray-700">Provider Name</label>
+                <Input id="servicescatalog-provider-name"
                   type="text"
                   placeholder="e.g. Maxicare"
                   value={providerName}
@@ -575,12 +575,12 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
               )}
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700">Diagnostic Category</label>
+                <label className="text-xs font-semibold text-gray-700" htmlFor="servicescatalog-diagnostic-category">Diagnostic Category</label>
                 <Select
                   value={formData.categoryId}
                   onValueChange={val => setFormData({...formData, categoryId: val})}
                 >
-                  <SelectTrigger className="rounded-xl">
+                  <SelectTrigger className="rounded-xl" id="servicescatalog-diagnostic-category">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -592,8 +592,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700">Service Name</label>
-                <Input
+                <label htmlFor="servicescatalog-service-name" className="text-xs font-semibold text-gray-700">Service Name</label>
+                <Input id="servicescatalog-service-name"
                   type="text"
                   placeholder="e.g. Abdominal Ultrasound"
                   value={formData.name}
@@ -604,8 +604,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700">Price (PHP ₱)</label>
-                <Input
+                <label htmlFor="servicescatalog-price-php" className="text-xs font-semibold text-gray-700">Price (PHP ₱)</label>
+                <Input id="servicescatalog-price-php"
                   type="number"
                   step="0.01"
                   placeholder="e.g. 1500.00"
@@ -620,11 +620,11 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                   booking confirmation email and while they are choosing tests, so it is written
                   to them directly — "Nothing to eat…", not "Patient must fast". */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700">
+                <label htmlFor="servicescatalog-patient-preparation-optional" className="text-xs font-semibold text-gray-700">
                   Patient Preparation
                   <span className="ml-1 font-normal text-slate-400">(optional)</span>
                 </label>
-                <textarea
+                <textarea id="servicescatalog-patient-preparation-optional"
                   rows={2}
                   placeholder="e.g. Nothing to eat or drink except water for 8 hours before your appointment."
                   value={formData.preparation}

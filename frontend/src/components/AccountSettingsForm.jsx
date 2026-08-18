@@ -107,8 +107,8 @@ const AccountSettingsForm = ({ className = '' }) => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
-                <Input
+                <label htmlFor="accountsettingsform-first-name" className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
+                <Input id="accountsettingsform-first-name"
                   value={accountData.firstName}
                   onChange={e => setAccountData({ ...accountData, firstName: e.target.value })}
                   disabled={isSavingAccount}
@@ -116,8 +116,8 @@ const AccountSettingsForm = ({ className = '' }) => {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
-                <Input
+                <label htmlFor="accountsettingsform-last-name" className="text-xs font-semibold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
+                <Input id="accountsettingsform-last-name"
                   value={accountData.lastName}
                   onChange={e => setAccountData({ ...accountData, lastName: e.target.value })}
                   disabled={isSavingAccount}
@@ -127,20 +127,20 @@ const AccountSettingsForm = ({ className = '' }) => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-600 uppercase flex items-center space-x-1.5">
+              <label htmlFor="accountsettingsform-email-address" className="text-xs font-semibold text-gray-600 uppercase flex items-center space-x-1.5">
                 <Mail className="w-3.5 h-3.5" />
                 <span>Email Address</span>
               </label>
-              <Input value={user?.email || ''} disabled className="bg-gray-50 text-gray-500" />
+              <Input id="accountsettingsform-email-address" value={user?.email || ''} disabled className="bg-gray-50 text-gray-500" />
               <p className="text-fine text-gray-400 m-0">Your email is your login and cannot be changed here.</p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-600 uppercase flex items-center space-x-1.5">
+              <label htmlFor="accountsettingsform-contact-number" className="text-xs font-semibold text-gray-600 uppercase flex items-center space-x-1.5">
                 <Phone className="w-3.5 h-3.5" />
                 <span>Contact Number</span>
               </label>
-              <Input
+              <Input id="accountsettingsform-contact-number"
                 placeholder="09171234567"
                 value={accountData.contactNumber}
                 onChange={e => setAccountData({ ...accountData, contactNumber: e.target.value })}
@@ -176,8 +176,8 @@ const AccountSettingsForm = ({ className = '' }) => {
             )}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-600 uppercase">Current Password <span className="text-rose-600">*</span></label>
-              <PasswordInput
+              <label htmlFor="accountsettingsform-current-password" className="text-xs font-semibold text-gray-600 uppercase">Current Password <span className="text-rose-600">*</span></label>
+              <PasswordInput id="accountsettingsform-current-password"
                 value={passwordData.currentPassword}
                 onChange={e => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
                 disabled={isSavingPassword}
@@ -187,8 +187,8 @@ const AccountSettingsForm = ({ className = '' }) => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-600 uppercase">New Password <span className="text-rose-600">*</span></label>
-                <PasswordInput
+                <label htmlFor="accountsettingsform-new-password" className="text-xs font-semibold text-gray-600 uppercase">New Password <span className="text-rose-600">*</span></label>
+                <PasswordInput id="accountsettingsform-new-password"
                   value={passwordData.newPassword}
                   onChange={e => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                   disabled={isSavingPassword}
@@ -196,8 +196,8 @@ const AccountSettingsForm = ({ className = '' }) => {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-600 uppercase">Confirm New Password <span className="text-rose-600">*</span></label>
-                <PasswordInput
+                <label htmlFor="accountsettingsform-confirm-new-password" className="text-xs font-semibold text-gray-600 uppercase">Confirm New Password <span className="text-rose-600">*</span></label>
+                <PasswordInput id="accountsettingsform-confirm-new-password"
                   value={passwordData.confirmNewPassword}
                   onChange={e => setPasswordData({ ...passwordData, confirmNewPassword: e.target.value })}
                   disabled={isSavingPassword}
