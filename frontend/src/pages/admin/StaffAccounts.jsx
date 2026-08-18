@@ -287,7 +287,7 @@ const StaffAccounts = () => {
           }
         />
         <PanelBody flush>
-          <Table>
+          <Table stack>
             <TableHeader sticky>
               <TableRow>
                 <TableHead>Name</TableHead>
@@ -318,14 +318,14 @@ const StaffAccounts = () => {
               ) : pagedStaff.length > 0 ? (
                 pagedStaff.map(s => (
                   <TableRow key={s.id}>
-                    <TableCell className="max-w-[180px] truncate font-semibold text-slate-900" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
-                    <TableCell className="max-w-[220px] truncate text-slate-500" title={s.email}>{s.email}</TableCell>
+                    <TableCell label="Name" className="max-w-[180px] truncate font-semibold text-slate-900" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
+                    <TableCell label="Email" className="max-w-[220px] truncate text-slate-500" title={s.email}>{s.email}</TableCell>
                     {/* Every role this account holds. This rendered `roles[0]` only, so the
                         combined Receptionist+Cashier account appeared in the staff list as a
                         plain Cashier — the screen that exists to tell an administrator what
                         access somebody has was understating it. Combined-role accounts are a
                         supported shape here, not an edge case. */}
-                    <TableCell>
+                    <TableCell label="Role">
                       <div className="flex flex-wrap gap-1">
                         {(s.roles || []).map((role) => (
                           <Badge key={role} variant="outline" className="text-slate-600">{role}</Badge>
@@ -333,8 +333,8 @@ const StaffAccounts = () => {
                         {(s.roles || []).length === 0 && <span className="text-fine text-slate-400">No role</span>}
                       </div>
                     </TableCell>
-                    <TableCell className="text-slate-500">{s.contact_number || '—'}</TableCell>
-                    <TableCell>
+                    <TableCell label="Contact" className="text-slate-500">{s.contact_number || '—'}</TableCell>
+                    <TableCell label="Status">
                       {/* A button, not a Badge with an onClick. It toggles an account's ability to
                           log in, so it must be reachable by keyboard and announce itself as
                           interactive — a clickable <div> did neither. */}

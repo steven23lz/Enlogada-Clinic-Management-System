@@ -24,11 +24,21 @@ const LAB = { email: 'lab@enlogada.com', password: PASSWORD };
 const dstr = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** A weekday far enough out that no other spec and no seeded demo booking competes for it. */
+/**
+ * A weekday far enough out that no other spec and no seeded demo booking competes for it.
+ *
+ * Saturday is skipped as well as Sunday, and that is the whole point of this comment. The clinic
+ * opens 08:00-17:00 Monday to Friday but only 08:00-12:00 on Saturday — 18 slots against 8. This
+ * function skipped Sunday alone, so whenever today+150 happened to land on a Saturday the spec
+ * quietly had less than half the capacity it needed, claimed its way through all 8 slots and
+ * failed the last test with "no unclaimed slot left". Nothing in the app had changed; the
+ * calendar had. A test that passes or fails on the day of the week is worse than one that always
+ * fails, because the morning goes on looking for a regression that is not there.
+ */
 function workingDay(offsetDays) {
   const d = new Date();
   d.setDate(d.getDate() + offsetDays);
-  if (d.getDay() === 0) d.setDate(d.getDate() + 1); // Sunday is closed in the seeded schedule
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
   return dstr(d);
 }
 

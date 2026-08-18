@@ -18,10 +18,28 @@ import { cn } from "../../lib/utils"
 // transaction log routinely run past a screen height, and a scrolled table with its header off
 // the top is a table you have to scroll back up to read.
 
-const Table = React.forwardRef(({ className, containerClassName, ...props }, ref) => (
+// `stack` makes a table become a list of cards below `sm`, and it is opt-in per table.
+//
+// A worklist is six or seven columns wide because a desk terminal has the room. A phone does not:
+// measured at 390px, the reception queue was 1070px of table inside a 346px scroller, so five of
+// its seven columns could only be reached by dragging sideways — on the screen the front desk
+// works from all day. Horizontal scrolling inside the panel kept the PAGE from overflowing, which
+// is the rule the layout notes actually state, and it did nothing for the person trying to read
+// a row.
+//
+// Stacked, each row becomes a bordered block and each cell puts its column name beside its value.
+// The label comes from a `label` prop on TableCell rather than being read off the header, because
+// a <td> cannot see its own <th> from CSS, and guessing by nth-child breaks the moment a column
+// is added. A cell with no label still renders — it simply shows the value, which is right for an
+// actions cell.
+//
+// Opt-in, because it is not always the better shape: a dense numeric table can be genuinely
+// easier to compare by scrolling than as a stack of cards.
+const Table = React.forwardRef(({ className, containerClassName, stack = false, ...props }, ref) => (
   <div className={cn("relative w-full overflow-auto", containerClassName)}>
     <table
       ref={ref}
+      data-stack={stack ? "true" : undefined}
       className={cn("w-full caption-bottom border-collapse text-[13px]", className)}
       {...props} />
   </div>
@@ -80,9 +98,12 @@ const TableHead = React.forwardRef(({ className, ...props }, ref) => (
 ))
 TableHead.displayName = "TableHead"
 
-const TableCell = React.forwardRef(({ className, ...props }, ref) => (
+// `label` is the column name, echoed beside the value when the table is stacked on a phone.
+// Ignored entirely at desk width, where the real <th> is doing that job.
+const TableCell = React.forwardRef(({ className, label, ...props }, ref) => (
   <td
     ref={ref}
+    data-label={label}
     className={cn("px-4 py-3 align-middle text-[13px] text-slate-700 [&:has([role=checkbox])]:pr-0", className)}
     {...props} />
 ))

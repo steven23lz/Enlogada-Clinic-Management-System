@@ -407,3 +407,99 @@ h1, h2, h3, h4 {
 body.printing-receipt {
   page: receipt;
 }
+
+/* ── A table that becomes a list of cards on a phone ─────────────────────────────────────────
+ *
+ * Opt in with <Table stack> and give each <TableCell> a `label`. Below `sm` the header is hidden,
+ * every row becomes a bordered block, and each cell shows its column name beside its value.
+ *
+ * Why this exists: measured at 390px, the reception queue was 1070px of table inside a 346px
+ * scroller — five of its seven columns reachable only by dragging sideways, on the screen the
+ * front desk works from all day. Scrolling inside the panel satisfies the "no horizontal page
+ * overflow" rule and does nothing for the person trying to read a row.
+ *
+ * Written as plain CSS on a data attribute rather than as Tailwind variants at forty call sites:
+ * the rule is one shape applied to a whole table, and expressing it per-cell would mean every
+ * future table remembering an incantation to look like the others.
+ */
+@media (max-width: 639px) {
+  table[data-stack='true'] thead {
+    /* Hidden from sight but not from a screen reader's table semantics. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  table[data-stack='true'],
+  table[data-stack='true'] tbody,
+  table[data-stack='true'] tr,
+  table[data-stack='true'] td {
+    display: block;
+    width: 100%;
+  }
+
+  table[data-stack='true'] tr {
+    border: 1px solid var(--color-line, #e6ebf1);
+    border-radius: 12px;
+    padding: 0.25rem 0;
+    margin-bottom: 0.625rem;
+    background: #fff;
+  }
+
+  /* The hover tint is a pointer affordance; on a card list it just looks like a selected row. */
+  table[data-stack='true'] tr:hover {
+    background: #fff;
+  }
+
+  /* flex-wrap so a value too wide to sit beside its label drops to its own line and gets the
+     full card width, rather than being squeezed into whatever is left. A queue row's test chips
+     are the case that needs it — "Complete Blood Count (CBC)" against a 45% label column is two
+     cramped lines otherwise. */
+  table[data-stack='true'] td {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.35rem 0.75rem;
+    padding: 0.4rem 0.85rem;
+    text-align: right;
+    border: 0;
+  }
+
+  /* The column name, on the left, quiet — the value is what is being read. */
+  table[data-stack='true'] td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    max-width: 45%;
+    text-align: left;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-slate-500, #64748b);
+  }
+
+  /* A cell with no label — the actions column — spans the card and sits at the end. */
+  table[data-stack='true'] td:not([data-label]) {
+    justify-content: flex-end;
+    padding-top: 0.5rem;
+  }
+
+  /* An empty-state or error row is a panel, not a card: it must not get the row chrome. */
+  table[data-stack='true'] tr:has(td[colspan]) {
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+  table[data-stack='true'] td[colspan] {
+    display: block;
+    text-align: center;
+    padding: 0;
+  }
+  table[data-stack='true'] td[colspan]::before {
+    content: none;
+  }
+}

@@ -600,7 +600,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         {/* Modality Worklist Data Table */}
         <Panel className="overflow-hidden rounded-t-none">
           <PanelBody flush>
-            <Table>
+            <Table stack>
               <TableHeader sticky>
                 <TableRow>
                   <TableHead>Queue Ticket</TableHead>
@@ -629,13 +629,13 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 ) : pagedTests.length > 0 ? (
                   pagedTests.map(test => (
                     <TableRow key={test.visit_test_id} className="hover:bg-slate-50/70 transition-colors">
-                      <TableCell className="py-3.5">
+                      <TableCell label="Queue Ticket" className="py-3.5">
                         <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
                           {test.queue_number || `VT-${test.visit_test_id}`}
                         </span>
                       </TableCell>
 
-                      <TableCell className="py-3.5 font-bold text-xs text-slate-900">
+                      <TableCell label="Patient" className="py-3.5 font-bold text-xs text-slate-900">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span>{test.first_name} {test.last_name}</span>
                           {/* The oldest ticket is usually the one to pick up next, and until now
@@ -656,7 +656,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                         </span>
                       </TableCell>
 
-                      <TableCell className="py-3.5 text-xs font-bold text-gray-800">
+                      <TableCell label="Examination" className="py-3.5 text-xs font-bold text-gray-800">
                         {test.test_name}
                         <span className="block text-meta text-gray-400 font-normal">{test.category_name}</span>
                         {/* Who asked for it [1.23.0]. The report goes back to this doctor, and a
@@ -668,7 +668,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                         )}
                       </TableCell>
 
-                      <TableCell className="py-3.5">
+                      <TableCell label="Status" className="py-3.5">
                         <div className="flex flex-col items-start gap-1">
                           <StatusBadge status={test.test_status} className="px-2.5 py-0.5" />
                           {/* Phase C finding 05: HMO-approval status wasn't surfaced anywhere on
@@ -752,7 +752,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         {/* Released Results Table (read-only) */}
         <Panel className="overflow-hidden rounded-t-none">
           <PanelBody flush>
-            <Table>
+            <Table stack>
               <TableHeader sticky>
                 <TableRow>
                   <TableHead>Queue Ticket</TableHead>
@@ -781,17 +781,17 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 ) : pagedReleased.length > 0 ? (
                   pagedReleased.map(test => (
                     <TableRow key={test.visit_test_id} className="hover:bg-slate-50/70 transition-colors">
-                      <TableCell className="py-3.5">
+                      <TableCell label="Queue Ticket" className="py-3.5">
                         <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
                           {test.queue_number || `VT-${test.visit_test_id}`}
                         </span>
                       </TableCell>
 
-                      <TableCell className="py-3.5 font-bold text-xs text-slate-900">
+                      <TableCell label="Patient" className="py-3.5 font-bold text-xs text-slate-900">
                         {test.first_name} {test.last_name}
                       </TableCell>
 
-                      <TableCell className="py-3.5 text-xs font-bold text-gray-800">
+                      <TableCell label="Examination" className="py-3.5 text-xs font-bold text-gray-800">
                         {test.test_name}
                         {/* A corrected report is not the same document as a first one, and this
                             screen's own description promises "including amended versions" while
@@ -808,7 +808,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                         <span className="block text-meta text-gray-400 font-normal">{test.category_name}</span>
                       </TableCell>
 
-                      <TableCell className="py-3.5 text-xs text-gray-500">
+                      <TableCell label="Released" className="py-3.5 text-xs text-gray-500">
                         {test.released_at ? formatDateTime(test.released_at) : '—'}
                         {test.released_by_first_name && (
                           <span className="block text-meta text-gray-400">by {test.released_by_first_name} {test.released_by_last_name}</span>

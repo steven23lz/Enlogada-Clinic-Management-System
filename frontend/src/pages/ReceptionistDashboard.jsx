@@ -778,7 +778,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             {/* Active Queue Table */}
             <Panel className="overflow-hidden rounded-t-none">
               <PanelBody flush>
-                <Table>
+                <Table stack>
                   <TableHeader sticky>
                     <TableRow>
                       <TableHead>Queue Ticket</TableHead>
@@ -816,7 +816,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     ) : activeVisits.length > 0 ? (
                       activeVisits.map(visit => (
                         <TableRow key={visit.id}>
-                          <TableCell>
+                          <TableCell label="Queue Ticket">
                             <div className="flex items-center gap-1">
                               {/* The ticket number is the thing a receptionist calls out and a
                                   patient reads back, so it is set larger than the row around it
@@ -846,22 +846,22 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                             </div>
                           </TableCell>
 
-                          <TableCell className="font-semibold text-slate-900">
+                          <TableCell label="Patient Name" className="font-semibold text-slate-900">
                             {visit.first_name} {visit.last_name}
                             <span className="block font-mono text-micro font-normal text-slate-400">PT-{visit.patient_id}</span>
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell label="Visit Type">
                             <Badge variant="outline" className="text-slate-600">
                               {visit.visit_type}
                             </Badge>
                           </TableCell>
 
-                          <TableCell className="text-slate-500">
+                          <TableCell label="Patient Category" className="text-slate-500">
                             {visit.patient_type_name}
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell label="Assigned Tests">
                             {visit.tests && visit.tests.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {visit.tests.map(t => (
@@ -887,7 +887,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                             )}
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell label="Status">
                             <StatusBadge status={visit.visit_status} />
                             {/* Where the ticket actually is, in the front desk's own terms.
                                 'Pending' alone doesn't say whether reception or the cashier is
@@ -982,7 +982,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
             <Panel className="overflow-hidden rounded-t-none">
               <PanelBody flush>
-                <Table>
+                <Table stack>
                   <TableHeader sticky>
                     <TableRow>
                       <TableHead>Queue Ticket</TableHead>
@@ -1015,27 +1015,27 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     ) : historyVisits.length > 0 ? (
                       historyVisits.map(v => (
                         <TableRow key={v.id}>
-                          <TableCell>
+                          <TableCell label="Queue Ticket">
                             <span className="rounded-md bg-slate-100 px-2 py-1 text-fine font-bold tabular-nums text-slate-700">
                               {v.queue_number || `V-${v.id}`}
                             </span>
                           </TableCell>
-                          <TableCell className="font-semibold text-slate-900">
+                          <TableCell label="Patient" className="font-semibold text-slate-900">
                             {v.first_name} {v.last_name}
                             <span className="block text-micro font-normal text-slate-400">{v.patient_type_name}</span>
                           </TableCell>
-                          <TableCell>
+                          <TableCell label="Visit Type">
                             <Badge variant="outline" className="text-slate-600">
                               {v.visit_type}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-slate-500">
+                          <TableCell label="Tests" className="text-slate-500">
                             {v.tests && v.tests.length > 0 ? v.tests.map(t => t.test_name).join(', ') : <span className="text-slate-400">No tests attached</span>}
                           </TableCell>
-                          <TableCell>
+                          <TableCell label="Status">
                             <StatusBadge status={v.visit_status} />
                           </TableCell>
-                          <TableCell className="text-right text-fine text-slate-500">
+                          <TableCell label="Date" className="text-right text-fine text-slate-500">
                             {formatDateTime(v.created_at)}
                           </TableCell>
                         </TableRow>

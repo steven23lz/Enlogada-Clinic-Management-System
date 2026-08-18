@@ -139,7 +139,7 @@ const CashierMonitoring = () => {
           )}
 
           <PanelBody flush>
-            <Table>
+            <Table stack>
               <TableHeader sticky>
                 <TableRow>
                   <TableHead>Receipt #</TableHead>
@@ -170,12 +170,12 @@ const CashierMonitoring = () => {
                 ) : pagedTransactions.length > 0 ? (
                   pagedTransactions.map(t => (
                     <TableRow key={t.id}>
-                      <TableCell className="font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
-                      <TableCell className="max-w-[160px] truncate" title={`${t.processed_by_first_name} ${t.processed_by_last_name}`}>{t.processed_by_first_name} {t.processed_by_last_name}</TableCell>
-                      <TableCell className="max-w-[160px] truncate font-medium text-slate-900" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge></TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
-                      <TableCell className="text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
+                      <TableCell label="Receipt #" className="font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
+                      <TableCell label="Cashier" className="max-w-[160px] truncate" title={`${t.processed_by_first_name} ${t.processed_by_last_name}`}>{t.processed_by_first_name} {t.processed_by_last_name}</TableCell>
+                      <TableCell label="Patient" className="max-w-[160px] truncate font-medium text-slate-900" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
+                      <TableCell label="Method"><Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge></TableCell>
+                      <TableCell label="Amount" className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
+                      <TableCell label="Paid at" className="text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
                     </TableRow>
                   ))
                 ) : (

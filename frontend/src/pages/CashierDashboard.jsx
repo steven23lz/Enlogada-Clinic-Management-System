@@ -1102,7 +1102,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 heading is how a text-based selector starts matching the wrong thing. */}
             <PanelHeader title="Completed Transactions" description="Receipts issued in this range" icon={History} />
             <PanelBody flush>
-              <Table>
+              <Table stack>
                 <TableHeader sticky>
                   <TableRow>
                     <TableHead>Receipt #</TableHead>
@@ -1138,19 +1138,19 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   ) : pagedHistoryTransactions.length > 0 ? (
                     pagedHistoryTransactions.map(t => (
                       <TableRow key={t.id}>
-                        <TableCell className="whitespace-nowrap font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
-                        <TableCell className="font-semibold text-slate-900">{t.patient_first_name} {t.patient_last_name}</TableCell>
-                        <TableCell>
+                        <TableCell label="Receipt #" className="whitespace-nowrap font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
+                        <TableCell label="Patient" className="font-semibold text-slate-900">{t.patient_first_name} {t.patient_last_name}</TableCell>
+                        <TableCell label="Method">
                           <Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge>
                           {t.reference_number && (
                             <span className="mt-0.5 block font-mono text-fine text-slate-500">{t.reference_number}</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
-                        <TableCell>
+                        <TableCell label="Amount" className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
+                        <TableCell label="Status">
                           <StatusBadge status={t.payment_status || 'Paid'} />
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
+                        <TableCell label="Paid at" className="whitespace-nowrap text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <Button type="button" variant="outline" size="xs" onClick={() => handleReprintReceipt(t)}>
