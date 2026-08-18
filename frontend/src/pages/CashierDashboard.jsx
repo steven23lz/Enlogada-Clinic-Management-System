@@ -20,7 +20,7 @@ import { SkeletonList, SkeletonRows } from '../components/ui/skeleton';
 import { Textarea } from '../components/ui/textarea';
 import Pagination from '../components/ui/pagination';
 import api from '../config/api';
-import { todayStr, formatDateTime } from '../lib/date';
+import { formatDateTime } from '../lib/date';
 import { formatCurrency } from '../lib/currency';
 import { toastError } from '../lib/toast';
 import { useAuth } from '../contexts/AuthContext';
@@ -28,6 +28,7 @@ import { useAuth } from '../contexts/AuthContext';
 import ReceiptDocument from '../components/Receipt';
 import useOperationsReport from '../hooks/useOperationsReport';
 import { BillingTotalsPanel, SalesByServicePanel } from '../components/reports/OperationsPanels';
+import { useTransactionHistory, HISTORY_PAGE_SIZE } from '../hooks/useTransactionHistory';
 import {
   Receipt,
   Wallet,
@@ -60,9 +61,6 @@ const PAGE_BLURBS = {
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 
-// Sent to the server as `limit` — Transaction History pages at the database now [1.29.0], rather
-// than fetching the whole date range and slicing it here.
-const HISTORY_PAGE_SIZE = 15;
 
 const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
@@ -86,19 +84,12 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [sortOrder, setSortOrder] = useState('oldest');
   const [patientTypes, setPatientTypes] = useState([]);
 
-  // Transaction History view state — deliberately separate from `transactions` above, which
-  // stays pinned to *today* (it also drives paidVisitIds and the queue's collections metrics).
-  // Reusing one state for both would mean picking a date range in History silently makes
-  // "Today's Collections" stop meaning today.
-  const [historyTransactions, setHistoryTransactions] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState('');
-  const [historyStartDate, setHistoryStartDate] = useState(todayStr());
-  const [historyEndDate, setHistoryEndDate] = useState(todayStr());
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyTotal, setHistoryTotal] = useState(0);
-  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  // Nine pieces of state, a fetch, a pagination handler and a lazy-load effect, behind one name.
+  //
+  // Deliberately separate from `transactions` above, which stays pinned to *today* — it also
+  // drives paidVisitIds and the queue's collections metrics. Sharing one list between the two
+  // would mean picking a date range in History silently changes what "Today's Collections" means.
+  const history = useTransactionHistory({ enabled: view === 'cashier-history' });
 
   // Feature Gap Plan Phase A: payment_status has always allowed 'Refunded'/'Cancelled', but
   // nothing in the app ever set them — a duplicate or disputed charge had no reversal path.
@@ -241,25 +232,6 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // Paged at the server. [1.29.0] This pulled every settled payment in the range and sliced
   // fifteen out of it here. Measured at 570 bytes a payment, a year-wide range is a 2.0 MB
   // response to fill a fifteen-row table — on the screen a cashier opens for the daily cash-up.
-  const fetchTransactionHistory = useCallback(async (startDate, endDate, page = 1) => {
-    setHistoryLoading(true);
-    setHistoryError('');
-    try {
-      const response = await api.get('/payments/transactions', {
-        params: { startDate, endDate, page, limit: HISTORY_PAGE_SIZE },
-      });
-      const { transactions, total, totalPages } = response.data.data;
-      setHistoryTransactions(transactions || []);
-      setHistoryTotal(total ?? (transactions || []).length);
-      setHistoryTotalPages(totalPages || 1);
-      setHistoryPage(page);
-    } catch (err) {
-      console.error('Failed to fetch transaction history:', err);
-      setHistoryError('Could not load transaction history. Please try again.');
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, []);
 
   // Phase D finding 03: Transaction History had no way to reopen a past receipt — the only
   // "Print Receipt" affordance was the modal shown immediately after processing a *new* payment.
@@ -329,7 +301,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     try {
       await api.patch(`/payments/${refundTarget.id}/status`, { status: 'Refunded', reason: refundReason.trim() });
       setRefundTarget(null);
-      fetchTransactionHistory(historyStartDate, historyEndDate);
+      history.reload();
     } catch (err) {
       setRefundError(err.response?.data?.message || 'Failed to refund this payment.');
     } finally {
@@ -358,14 +330,6 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     { enabled: view === 'cashier-queue' && !selectedVisit }
   );
 
-  // Lazy-load Transaction History only once that tab is actually opened.
-  useEffect(() => {
-    if (view === 'cashier-history' && !historyLoaded) {
-      setHistoryLoaded(true);
-      fetchTransactionHistory(historyStartDate, historyEndDate);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
 
   // GET /visits/active returns both 'Pending' and 'Processing' visits (Processing = already
   // checked in, which includes visits already paid today) — cross-reference against today's
@@ -1078,21 +1042,21 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         )}
 
         {view === 'cashier-history' && (() => {
-          // `historyTransactions` IS the page now — the server sent exactly these rows.
-          const pagedHistoryTransactions = historyTransactions;
+          // `history.transactions` IS the page now — the server sent exactly these rows.
+          const pagedHistoryTransactions = history.transactions;
           return (
         <div>
           <Toolbar attached>
-            <Input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
+            <Input type="date" value={history.startDate} onChange={e => history.setStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
             <span className="text-fine text-slate-400">to</span>
-            <Input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
-            <Button variant="outline" onClick={() => fetchTransactionHistory(historyStartDate, historyEndDate)}>
+            <Input type="date" value={history.endDate} onChange={e => history.setEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
+            <Button variant="outline" onClick={() => history.reload()}>
               <RefreshCw className="h-3.5 w-3.5" />
               Apply
             </Button>
             <ToolbarSpacer />
             <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
-              {historyTransactions.length} receipt{historyTransactions.length === 1 ? '' : 's'}
+              {history.transactions.length} receipt{history.transactions.length === 1 ? '' : 's'}
             </span>
           </Toolbar>
 
@@ -1120,20 +1084,20 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {historyError ? (
+                  {history.error ? (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-6 text-xs text-rose-600 font-semibold">
-                        {historyError}{' '}
+                        {history.error}{' '}
                         <button
                           type="button"
-                          onClick={() => fetchTransactionHistory(historyStartDate, historyEndDate)}
+                          onClick={() => history.reload()}
                           className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
                         >
                           Retry
                         </button>
                       </TableCell>
                     </TableRow>
-                  ) : historyLoading ? (
+                  ) : history.loading ? (
                     <SkeletonRows rows={6} columns={7} />
                   ) : pagedHistoryTransactions.length > 0 ? (
                     pagedHistoryTransactions.map(t => (
@@ -1188,10 +1152,10 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
               </Table>
             </PanelBody>
             <Pagination
-              page={historyPage}
-              totalPages={historyTotalPages}
-              onPageChange={(next) => fetchTransactionHistory(historyStartDate, historyEndDate, next)}
-              total={historyTotal}
+              page={history.page}
+              totalPages={history.totalPages}
+              onPageChange={(next) => history.goToPage(next)}
+              total={history.total}
               pageSize={HISTORY_PAGE_SIZE}
             />
           </Panel>
