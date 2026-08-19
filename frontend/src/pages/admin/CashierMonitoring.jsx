@@ -13,7 +13,8 @@ import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { todayStr, formatDateTime } from '../../lib/date';
 import { formatCurrency } from '../../lib/currency';
-import { Receipt, RefreshCw, Banknote, Hash, UserCircle2 } from 'lucide-react';
+import { settled } from '../../lib/collections';
+import { Receipt, RefreshCw, Banknote, Hash, UserCircle2, Undo2 } from 'lucide-react';
 
 // Visual Design Improvement Plan Phase V1 — see VISUAL_IDENTITY.md §3a #11.
 const PAGE_SIZE = 20;
@@ -23,6 +24,9 @@ const PAGE_SIZE = 20;
 // backend surface.
 const CashierMonitoring = () => {
   const [transactions, setTransactions] = useState([]);
+  // The peso figures, aggregated in SQL over settled rows only. The list beside them deliberately
+  // includes receipts that were later reversed, so it cannot be the source of a total.
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   // A failed fetch used to reach console.error and stop there, so the screen rendered its
   // EMPTY state — "No transactions yet" over a 500. That is the one thing empty-state.jsx's own
@@ -40,6 +44,7 @@ const CashierMonitoring = () => {
     try {
       const res = await api.get('/payments/transactions', { params: { startDate: from, endDate: to } });
       setTransactions(res.data.data.transactions || []);
+      setSummary(res.data.data.summary || null);
     } catch (err) {
       // Recorded, not just logged: a swallowed failure renders as an empty list.
       console.error('Failed to fetch transactions:', err);
@@ -54,15 +59,23 @@ const CashierMonitoring = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const total = transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
-  const byCashier = transactions.reduce((acc, t) => {
+  const collected = Number(summary?.collected || 0);
+  const receipts = Number(summary?.receipts || 0);
+  const reversals = Number(summary?.reversals || 0);
+  const reversed = Number(summary?.reversed || 0);
+
+  // Per-cashier is a breakdown the summary does not carry, so it is reduced here — over settled
+  // rows explicitly. This fetch is unpaged, so the rows in hand are the whole range.
+  const byCashier = settled(transactions).reduce((acc, t) => {
     const name = t.processed_by_first_name ? `${t.processed_by_first_name} ${t.processed_by_last_name}` : 'Unknown';
     acc[name] = (acc[name] || 0) + parseFloat(t.amount || 0);
     return acc;
   }, {});
-  // Capped at two: the strip has room for two per-cashier cards beside the two fixed ones, and
-  // the count also decides how many columns the grid draws so no empty cell is left over.
-  const cashierCards = Object.entries(byCashier).slice(0, 2);
+  // Capped so the strip never exceeds four cards: two fixed, a reversals card when there is
+  // something to report, and the rest per-cashier. The count also decides how many columns the
+  // grid draws, so an unfilled cell never renders as a grey box where a figure should be.
+  const cashierCards = Object.entries(byCashier).slice(0, reversals > 0 ? 1 : 2);
+  const cardCount = 2 + (reversals > 0 ? 1 : 0) + cashierCards.length;
   const totalPages = Math.max(1, Math.ceil(transactions.length / PAGE_SIZE));
   const pagedTransactions = transactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -107,22 +120,36 @@ const CashierMonitoring = () => {
               one a reader believes. */}
           {!loadError && !loading && (
           <div className={`grid grid-cols-2 gap-px border-b border-[#e6ebf1] bg-[#e6ebf1] ${
-            { 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' }[2 + cashierCards.length]
+            { 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' }[cardCount]
           }`}>
             <MetricCard
               className="rounded-none border-0"
               label="Collections in range"
-              value={formatCurrency(total)}
+              value={formatCurrency(collected)}
               icon={Banknote}
               tone="emerald"
             />
             <MetricCard
               className="rounded-none border-0"
-              label="Transactions"
-              value={transactions.length}
+              label="Receipts"
+              value={receipts}
               icon={Hash}
               tone="slate"
             />
+            {/* Reported beside the collections figure, never netted off it. A drawer short by a
+                refund needs the refund named — a single reconciled total hides that one
+                happened, which is the thing an oversight screen exists to surface. */}
+            {reversals > 0 && (
+              <MetricCard
+                className="rounded-none border-0"
+                label="Reversed"
+                value={formatCurrency(reversed)}
+                caption={`${reversals} receipt${reversals === 1 ? '' : 's'}, not in collections`}
+                captionTone="rose"
+                icon={Undo2}
+                tone="rose"
+              />
+            )}
             {cashierCards.map(([name, amt]) => (
               <MetricCard
                 key={name}
@@ -173,8 +200,26 @@ const CashierMonitoring = () => {
                       <TableCell label="Receipt #" className="font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
                       <TableCell label="Cashier" className="max-w-[160px] truncate" title={`${t.processed_by_first_name} ${t.processed_by_last_name}`}>{t.processed_by_first_name} {t.processed_by_last_name}</TableCell>
                       <TableCell label="Patient" className="max-w-[160px] truncate font-medium text-slate-900" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
-                      <TableCell label="Method"><Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge></TableCell>
-                      <TableCell label="Amount" className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
+                      <TableCell label="Method">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge>
+                          {/* A reversed receipt stays listed — that is the point of the log — so it
+                              has to be unmistakably not-money at a glance. Badge AND colour AND a
+                              struck figure: colour alone would leave it reading as revenue to
+                              anyone who cannot separate the two greens. */}
+                          {t.payment_status !== 'Paid' && (
+                            <Badge className="border-rose-200 bg-rose-50 text-rose-700">{t.payment_status}</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell
+                        label="Amount"
+                        className={`text-right font-semibold tabular-nums ${
+                          t.payment_status === 'Paid' ? 'text-emerald-700' : 'text-slate-400 line-through'
+                        }`}
+                      >
+                        {formatCurrency(t.amount)}
+                      </TableCell>
                       <TableCell label="Paid at" className="text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
                     </TableRow>
                   ))

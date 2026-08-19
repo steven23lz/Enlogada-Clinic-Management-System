@@ -24,6 +24,7 @@ import { formatCurrency } from '../../lib/currency';
 // were correct (built from local getters, not toISOString), but a second correct copy is still a
 // second place for the toISOString bug to come back — see the dates note in CLAUDE.md.
 import { todayStr, daysAgoStr } from '../../lib/date';
+import { settled } from '../../lib/collections';
 import { ClipboardList, FileText, Info, RefreshCw, ShieldCheck, DollarSign, Users, FlaskConical, Printer, BarChart3, TrendingUp } from 'lucide-react';
 
 const STATUS_COLORS = {
@@ -63,14 +64,17 @@ const TodaySnapshot = () => {
       ]);
 
       const todayTx = todayRes.data.data.transactions || [];
-      const yesterdayTx = yesterdayRes.data.data.transactions || [];
 
-      setTodayTotal(todayTx.reduce((s, t) => s + parseFloat(t.amount || 0), 0));
-      setYesterdayTotal(yesterdayTx.reduce((s, t) => s + parseFloat(t.amount || 0), 0));
+      // Both totals come from the endpoint's SQL summary. The lists below include receipts that
+      // were later reversed, so reducing them would count a refund as income.
+      setTodayTotal(Number(todayRes.data.data.summary?.collected || 0));
+      setYesterdayTotal(Number(yesterdayRes.data.data.summary?.collected || 0));
       setActiveQueueCount((visitsRes.data.data.visits || []).length);
       setCatalogCount((testsRes.data.data.tests || []).length);
 
-      const breakdown = todayTx.reduce((acc, t) => {
+      // Grouped by method, which the summary does not carry — so it is filtered explicitly.
+      // Safe to reduce here only because this fetch is unpaged.
+      const breakdown = settled(todayTx).reduce((acc, t) => {
         acc[t.payment_method] = (acc[t.payment_method] || 0) + parseFloat(t.amount || 0);
         return acc;
       }, {});

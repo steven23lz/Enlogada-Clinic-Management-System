@@ -74,7 +74,9 @@ const DashboardOverview = ({ onSelectNav }) => {
         api.get('/hmo/providers'),
       ]);
       setCatalogCount((testsRes.data.data.tests || []).length);
-      setTodayRevenue((txRes.data.data.transactions || []).reduce((s, t) => s + parseFloat(t.amount || 0), 0));
+      // From the endpoint's own summary, not a reduce over the rows: the list includes reversed
+      // receipts, so summing it would report refunded money as revenue.
+      setTodayRevenue(Number(txRes.data.data.summary?.collected || 0));
       setRoleCount((rbacRes.data.data.roles || []).length);
       setHmoPartnerCount((hmoRes.data.data.providers || []).filter(p => p.is_active).length);
       setPrimaryError(false);
