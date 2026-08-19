@@ -71,7 +71,10 @@ test.describe('HMO card evidence (UI)', () => {
 
     const when = new Date();
     when.setDate(when.getDate() + 120);
-    if (when.getDay() === 0) when.setDate(when.getDate() + 1);
+    // Saturday too, not just Sunday: the clinic is open 08:00-17:00 on weekdays but only
+    // 08:00-12:00 on a Saturday, so a booking spec that lands there has 8 slots instead of 18
+    // and starts failing on the day of the week rather than on anything in the app.
+    while (when.getDay() === 0 || when.getDay() === 6) when.setDate(when.getDate() + 1);
     const date = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
 
     await dialog.locator('input[type="date"]').fill(date);
@@ -108,7 +111,7 @@ test.describe('HMO card evidence (UI)', () => {
     // previous run — a repeat of the same patient/date/time returns the existing booking.
     const when = new Date();
     when.setDate(when.getDate() + 500 + (Date.now() % 40));
-    if (when.getDay() === 0) when.setDate(when.getDate() + 1);
+    while (when.getDay() === 0 || when.getDay() === 6) when.setDate(when.getDate() + 1);
     const date = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
     const slots = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth })).json())
       .data.slots.filter((s) => s.available);

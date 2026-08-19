@@ -1,5 +1,111 @@
 # Database Migration & Schema History
 
+## [1.29.0] - 2026-08-18 (Index what grows; stop maintaining what nothing reads)
+
+Run `node src/scripts/migrateIndexHygiene.js` on any database created before this version
+(`--rollback` reverses it).
+
+### Measured, not guessed
+Against a same-shaped `audit_log` of 300,000 rows in a throwaway schema — roughly a year for this
+clinic, since [1.19.0] made `audit_log` record PHI **reads** as well as writes:
+
+| query | before | after |
+|---|---|---|
+| activity log, newest page | 87.3 ms (2 seq scans) | **0.9 ms** (0) |
+| everything one member of staff touched | 58.0 ms (1 seq scan) | **5.8 ms** (0) |
+
+The second is the query a breach investigation runs, and it is the reason the audit log exists.
+At demo scale both are under a millisecond either way — which is precisely why this was measured
+at volume rather than on the seeded data.
+
+### Added
+* Indexes on 11 foreign keys, all on tables that grow with clinic activity: `audit_log.actor_id`, `payments.processed_by`, `patient_visits.created_by` / `.discount_type_id` / `.discount_granted_by`, `patients.patient_type_id`, `test_results.critical_acknowledged_by` / `.superseded_by`, `hmo_requests.hmo_provider_id` / `.decided_by`, `hmo_request_tests.decided_by`.
+
+### Removed
+* `idx_audit_log_created_at` — duplicates `idx_audit_log_created`. A B-tree is scannable in both directions, so the ASC index already serves `ORDER BY created_at DESC`; confirmed by building the case in a scratch schema and reading the plan.
+* `idx_payments_status` — duplicates `idx_payments_status_paid_at`, whose leading column is `payment_status`; confirmed the same way.
+
+Both sat on growing tables, so each was charging a write on every audit entry and every payment to
+serve reads another index already covered.
+
+### Changed — two list endpoints now page at the database
+* `GET /visits/history` and `GET /payments/transactions` accept `page` and `limit` and return `total` / `totalPages`. Both returned **every row in the range**; Visit History then rendered all of them with no footer at all, and Transaction History sliced fifteen out in JavaScript. Measured at 664 bytes a visit and 570 a payment, a year-wide range is a **3.6 MB** and a **2.0 MB** response respectively — to fill a fifteen-row table, on screens that poll. Page one now stays ~16 KB and ~8 KB whatever the range.
+* `limit` is optional on both, so the callers that legitimately need the whole set — today's collections total, the cashier's metric strip, the sales-by-service report — are unchanged.
+* `GET /appointments` and `GET /hmo/requests` page the same way — smaller (664 KB and 648 KB projected at a year) but the same shape: fetch everything, show fifteen.
+* **`/auth/me` was checked and deliberately left alone.** It is polled every 60s per signed-in user — 1.8M calls a year — but it already answers a matching `If-None-Match` with a 0-byte 304, so the bandwidth is nil after the first call. The remaining cost is ~2.9 ms of database time per call, about 87 minutes a year, and removing it would mean caching permissions server-side against the documented guarantee that a permission change reaches a signed-in user within a minute. Not a trade worth making.
+
+### Fixed
+* `visitService.getVisitHistoryByDateRange` defaulted its dates with `new Date().toISOString().slice(0, 10)` — the **UTC** date, which in Philippine time is *yesterday* between midnight and 08:00. Opening Visit History early in the morning showed the previous day's visits and called them today's. The default is now `COALESCE($1::date, CURRENT_DATE)` in SQL, which is the server's local date and what every other date filter here compares against. CLAUDE.md records this bug shipping twice before; this was the third place.
+
+### Deliberately NOT indexed
+`user_roles.assigned_by`, `role_permissions.permission_id`, `user_permissions.*`,
+`user_departments.*`. These are bounded by the number of staff and the number of permissions — a
+couple of hundred rows that never grow with patient volume — and on a table that fits in a page or
+two a sequential scan beats an index lookup. Indexing them would buy nothing and be paid for on
+every write, which is the same mistake as the two indexes removed above.
+
+---
+
+## [1.28.0] - 2026-08-18 (The claim gets decided, and somebody is told)
+
+Run `node src/scripts/migrateHmoClaimDecision.js` on any database created before this version
+(`--rollback` reverses it, destroying the reasons and member numbers — it warns and counts first).
+
+### Added
+* `hmo_requests.decision_reason` (TEXT), `.decided_by` (FK → `users`) — why a claim was turned down and who recorded it. No `decided_at`: `approved_date` already holds that fact, and two timestamps that must agree eventually will not.
+* `hmo_requests.member_number` (VARCHAR 100) — the patient's number with the provider. It had **nowhere to live**: the API accepted `memberNumber` and silently discarded it, so the number was legible only by opening the card photo — and `pruneHmoCards.js` deletes those after 180 days by design, while the claim itself is kept for seven years.
+* `idx_hmo_requests_pending`, partial (`WHERE status = 'Pending'`) — the set the approval worklist opens on.
+* `PUT /api/hmo/request/:id/reject` — same permission as approving. Saying no is the same authority as saying yes, and splitting them would let an account do one but not the other.
+
+### Changed
+* **A claim can now be turned down.** `chk_hmo_status` has allowed `'Rejected'` since [1.0.0] and no route could set it, so a claim the provider refused had two outcomes in practice: approve it anyway, or leave it Pending forever — at the top of a worklist that filters on Pending, being reopened by every coordinator who scanned it. A refusal requires a reason.
+* **Deciding a claim notifies the Cashier and Receptionist.** This was the missing step in the clinic's own workflow: reception raises, an Admin decides, the cashier bills what is left — and nothing connected the second to the third. Admins are not notified; they are the ones who just decided it. The message names the patient, not the claim id, because "Maria Santos — MediCard approved" is actionable at a counter and "HMO request #482" is a lookup.
+* **A claim is decided once** (409 otherwise). Approving an already-rejected claim silently overwrote the refusal and its reason — the only record of why the patient was charged.
+* **The approval worklist names the patient.** It carried provider, date and a count, so several claims from one provider on one day were identical rows and the only way to learn whose insurance you were approving was to open each in turn. It now also counts refusals, not just approvals: `1 / 2` could not distinguish a half-decided claim from one whose other half was refused.
+* **Reception collects the member number and the LOA code as separate fields.** One box labelled "Card / LOA Number" wrote both into `approval_code` — the column an Admin fills on approval — so a member number was filed as an approval code against a claim nobody had approved.
+
+---
+
+## [1.27.0] - 2026-08-18 (Why the HMO said no)
+
+Run `node src/scripts/migrateHmoDecisionTrail.js` on any database created before this version
+(`--rollback` reverses it, destroying the reasons — it warns and counts first).
+
+### Added
+* `hmo_request_tests.decision_reason` (TEXT), `.decided_by` (FK → `users`), `.decided_at` — all nullable, nothing back-filled. A decision taken before today has no honest answer, and manufacturing one would put a false statement in the audit trail.
+* `idx_hmo_request_tests_pending`, partial (`WHERE approval_status = 'Pending'`) — the only set anything queries in bulk. Decided rows are the overwhelming majority and are read one claim at a time, by id.
+* `GET /payments/bill/:visitId` now reports `hmoPendingCount` / `hmoPendingAmount`, and each line item carries `hmoRejected` / `hmoDecisionReason`.
+
+### Changed
+* **A rejection now requires a reason**; an approval stores none. The refusal is the whole point of the record — an approval explains itself, a refusal is a conversation at the counter about money the patient was not expecting to pay. Until now that explanation lived only in whatever the coordinator remembered, so a dispute three days later had no answer.
+* **An unrecognised decision word is a 400 that names the alternatives, not a 500.** The value went straight to `chk_hmo_request_tests_status`, so `'Denied'` — the word the providers themselves use, and therefore the first one any caller reaches for — surfaced as an unexplained server error.
+* **A decision on a test that is not on the claim is a 404.** It returned 200 with an undefined body: the caller was told the decision had been recorded when no row had been touched.
+* **The cashier's bill shows the refusal reason on the line it applies to,** and warns when part of the bill is riding on an undecided claim. An undecided claim covers nothing, so those tests are charged at full price — take the payment and the approval lands tomorrow, and the clinic owes a refund. Reported rather than blocked: some providers take days, and the patient cannot wait at the counter for one.
+
+### Why
+* An HMO decision moves money between the patient and the insurer, and this was the only such action in the system that could not say who recorded it. A payment names the cashier, a released result names the authoriser, a permission change names the SuperAdmin.
+
+---
+
+## [1.26.0] - 2026-08-17 (What happens after the money moves and the report goes out)
+
+No schema change — every fix here is a query, a guard or a status transition. Recorded because
+each one changes what the tables end up holding.
+
+### Changed
+* **A refund now recalls the visit from the modalities.** `visitRepository.recallVisitFromModalities` returns tests still in `Processing` to `Pending` and resets the visit — but only when no work has been done. A ticket already at `Waiting for Release` or `Completed` is left alone, because the work exists and the record of it must not be erased by a billing action.
+* **A refund now requires a reason** (≥4 characters), recorded against the operator's account.
+* **`findVisitReleaseStateByVisitTestId` also returns `vt.status`.** Two rules below need to distinguish "the report has gone out" from "the visit happens to be closed", and only the test's own status says that.
+* **The result read guard is now separate from the write guard.** `assertStaffMayReadVisitTest` checks department scope only; `assertStaffOwnsVisitTest` additionally requires the ticket to have been released. Both reads (`getResultByVisitTestId`, `getVersionHistory`) were using the write guard, so the technician who produced a report lost access to it and to its version history the instant the visit completed.
+* **The write guard accepts `Completed` as well as `Processing`.** A visit completes when its last result is released, so refusing writes from that moment made amending a released result impossible — which is the one thing result versioning [1.15.0] exists for, since a correction is nearly always found after the report has gone out. The alternative in practice was editing the row by hand, which keeps no history at all.
+* **An amendment reason is required once the report has been released,** and only then. Re-saving a ticket still at `Waiting for Release` is drafting; demanding a justification for fixing your own typo fills the reason box with "typo" until it means nothing. The audit entry for a released amendment could previously read "no reason given" against a corrected medical report.
+* **Amending a released result reopens the visit to `Processing`.** The ticket returns to `Waiting for Release`, but the modality worklist filters on `pv.status = 'Processing'` and the Released tab filters on `vt.status = 'Completed'` — so the amended ticket appeared on neither. The correction was accepted, shown as saved, and then reached nobody: the patient and the referring physician kept the wrong report. `releaseResult` closes the visit again once the corrected version goes out.
+
+### Added
+* `GET /api/results/critical/outstanding` — every released critical result still awaiting its callback. Deliberately **not** department-scoped: a potassium of 7.4 belongs to whoever can act on it, not to the room that produced it. Until now the only sign of a panic value was a badge on one department's worklist row, so one flagged near the end of a shift had nobody watching it.
+
+---
+
 ## [1.25.0] - 2026-08-17 (Reminding people to turn up)
 
 ### Added

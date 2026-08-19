@@ -94,7 +94,10 @@ test.describe('Booking communication and preparation', () => {
 
     const day = new Date();
     day.setDate(day.getDate() + 250 + (Date.now() % 40));
-    if (day.getDay() === 0) day.setDate(day.getDate() + 1);
+    // Saturday too, not just Sunday: the clinic is open 08:00-17:00 on weekdays but only
+    // 08:00-12:00 on a Saturday, so a booking spec that lands there has 8 slots instead of 18
+    // and starts failing on the day of the week rather than on anything in the app.
+    while (day.getDay() === 0 || day.getDay() === 6) day.setDate(day.getDate() + 1);
     const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
 
     const slots = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth(clientToken) })).json())
@@ -150,5 +153,32 @@ test('the booking wizard shows preparation for the test the patient picks', asyn
   }
 
   expect(shown, 'at least one seeded test should show its preparation once selected').toBe(true);
+  expect(errors, `page errors: ${errors.join(' | ')}`).toHaveLength(0);
+});
+
+// The public Services page — read while somebody is still deciding whether to book at all.
+//
+// [1.24.0] put preparation on the booking picker, the confirmation and the day-before reminder,
+// every one of which happens AFTER the decision. "Nothing to eat or drink except water for 8
+// hours" is exactly what decides whether you take a morning slot, and this page is the only one
+// a person reads beforehand. It is also the one page that needs no account, so nothing else in
+// this suite would notice it going quiet.
+test('the public services page tells you how to prepare, before you have an account', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Services', exact: true }).first().click();
+
+  // The catalogue is fetched live, so wait for a real service rather than a fixed delay.
+  await expect(page.getByText('Fasting Blood Sugar (FBS)').first()).toBeVisible({ timeout: 15000 });
+
+  // Signed out, no account, no booking started.
+  await expect(page.getByText(/water for 8 hours/i).first()).toBeVisible();
+  await expect(page.getByText(/do not empty your bladder/i).first()).toBeVisible();
+
+  // And the price is still there — the instruction must not have displaced it.
+  await expect(page.getByText('₱200.00').first()).toBeVisible();
+
   expect(errors, `page errors: ${errors.join(' | ')}`).toHaveLength(0);
 });

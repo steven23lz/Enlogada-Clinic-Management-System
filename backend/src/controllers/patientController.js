@@ -2,6 +2,33 @@ const patientService = require('../services/patientService');
 const auditService = require('../services/auditService');
 
 /**
+ * A caller who may not see a record must not learn whether it exists. [1.29.0]
+ *
+ * `getPatientById` throws 404 when there is no such row, and the ownership check that follows
+ * returns 403 when the row exists but belongs to somebody else. For a Client those two answers
+ * are distinguishable, so a signed-in patient could walk the id space and count the 403s —
+ * learning how many patients the clinic has and exactly which ids are real. That is the
+ * reconnaissance step that turns any future ownership slip into a usable one.
+ *
+ * `/visits/:id` and `/payments/bill/:id` already answer 403 to both, so this brings the other two
+ * into line with the pattern the codebase had already settled on rather than inventing one.
+ *
+ * Staff are deliberately unaffected: they are authorised to know a record does not exist, and a
+ * receptionist typing a wrong id needs to be told that rather than accused of overreach.
+ */
+const PROFILE_FORBIDDEN = 'Access forbidden. This profile does not belong to your account.';
+
+function denyWithoutDisclosing(err, requestingUser) {
+  if (requestingUser?.roles?.includes('Client') && err?.statusCode === 404) {
+    const masked = new Error(PROFILE_FORBIDDEN);
+    masked.statusCode = 403;
+    return masked;
+  }
+  return err;
+}
+
+
+/**
  * A birthdate is a calendar date, and only a calendar date. [1.24.0]
  *
  * `patients.birthdate` is a DATE, but the API serialises it to JSON as a UTC instant — a patient
@@ -84,13 +111,19 @@ class PatientController {
   async getProfileById(req, res, next) {
     try {
       const { id } = req.params;
-      const patient = await patientService.getPatientById(id, req.user);
+      let patient;
+      try {
+        patient = await patientService.getPatientById(id, req.user);
+      } catch (err) {
+        // A Client gets the same 403 whether the record is missing or simply not theirs.
+        throw denyWithoutDisclosing(err, req.user);
+      }
 
       // Security Check: If client, verify patient belongs to them
       if (req.user.roles.includes('Client') && patient.user_id !== req.user.userId) {
         return res.status(403).json({
           status: 'error',
-          message: 'Access forbidden. This profile does not belong to your account.'
+          message: PROFILE_FORBIDDEN
         });
       }
 
@@ -128,12 +161,19 @@ class PatientController {
       }
       if (rejectBadBirthdate(birthdate, res)) return undefined;
 
-      // Check ownership if user is client
-      const patient = await patientService.getPatientById(id, req.user);
+      // Check ownership if user is client. Same masking as the read path: a Client gets 403
+      // whether the record is absent or simply somebody else's, so the pair cannot be used to
+      // enumerate which ids are real.
+      let patient;
+      try {
+        patient = await patientService.getPatientById(id, req.user);
+      } catch (err) {
+        throw denyWithoutDisclosing(err, req.user);
+      }
       if (req.user.roles.includes('Client') && patient.user_id !== req.user.userId) {
         return res.status(403).json({
           status: 'error',
-          message: 'Access forbidden. You do not own this profile.'
+          message: PROFILE_FORBIDDEN
         });
       }
 

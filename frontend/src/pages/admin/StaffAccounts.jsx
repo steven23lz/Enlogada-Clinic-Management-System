@@ -29,6 +29,11 @@ const PAGE_SIZE = 15;
 const StaffAccounts = () => {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed fetch used to reach console.error and stop there, so the screen rendered its
+  // EMPTY state — "No staff accounts yet" over a 500. That is the one thing empty-state.jsx's own
+  // docstring says must never happen: a quiet clinic and a broken server call for opposite
+  // responses, and one of them was being reported as the other.
+  const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
@@ -63,7 +68,9 @@ const StaffAccounts = () => {
       const res = await api.get('/admin/staff');
       setStaff(res.data.data.staff || []);
     } catch (err) {
+      // Recorded, not just logged: a swallowed failure renders as an empty list.
       console.error('Failed to fetch staff accounts:', err);
+      setLoadError(err.response?.data?.message || 'The server did not respond. The list below may be out of date.');
     } finally {
       setLoading(false);
     }
@@ -178,7 +185,9 @@ const StaffAccounts = () => {
     return (
       `${s.first_name} ${s.last_name}`.toLowerCase().includes(q) ||
       s.email.toLowerCase().includes(q) ||
-      (s.roles?.[0] || '').toLowerCase().includes(q)
+      // Every role, not just the first. Searching "receptionist" used to miss the combined
+      // Receptionist+Cashier account entirely, because that account's first role is Cashier.
+      (s.roles || []).some((r) => (r || '').toLowerCase().includes(q))
     );
   });
   const totalPages = Math.max(1, Math.ceil(filteredStaff.length / PAGE_SIZE));
@@ -213,31 +222,31 @@ const StaffAccounts = () => {
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="field-label">First Name</label>
-                  <Input value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} disabled={submitting} required />
+                  <label htmlFor="staffaccounts-first-name" className="field-label">First Name</label>
+                  <Input id="staffaccounts-first-name" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} disabled={submitting} required />
                 </div>
                 <div className="space-y-1">
-                  <label className="field-label">Last Name</label>
-                  <Input value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} disabled={submitting} required />
+                  <label htmlFor="staffaccounts-last-name" className="field-label">Last Name</label>
+                  <Input id="staffaccounts-last-name" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} disabled={submitting} required />
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="field-label">Email</label>
-                <Input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={submitting} required />
+                <label htmlFor="staffaccounts-email" className="field-label">Email</label>
+                <Input id="staffaccounts-email" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={submitting} required />
               </div>
               <div className="space-y-1">
-                <label className="field-label">Contact Number</label>
-                <Input value={formData.contactNumber} onChange={e => setFormData({ ...formData, contactNumber: e.target.value })} disabled={submitting} />
+                <label htmlFor="staffaccounts-contact-number" className="field-label">Contact Number</label>
+                <Input id="staffaccounts-contact-number" value={formData.contactNumber} onChange={e => setFormData({ ...formData, contactNumber: e.target.value })} disabled={submitting} />
               </div>
               <div className="space-y-1">
-                <label className="field-label">Temporary Password</label>
-                <Input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} disabled={submitting} required />
+                <label htmlFor="staffaccounts-temporary-password" className="field-label">Temporary Password</label>
+                <Input id="staffaccounts-temporary-password" type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} disabled={submitting} required />
                 <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <div className="space-y-1">
-                <label className="field-label">Role</label>
+                <label className="field-label" htmlFor="staffaccounts-role">Role</label>
                 <Select value={formData.role} onValueChange={val => setFormData({ ...formData, role: val })}>
-                  <SelectTrigger className="rounded-xl">
+                  <SelectTrigger className="rounded-xl" id="staffaccounts-role">
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
                   <SelectContent>
@@ -260,9 +269,13 @@ const StaffAccounts = () => {
       />
 
       <Panel>
+        {/* "0 staff accounts" beside a panel that says the request failed is the same false
+            claim in smaller type. The count is only stated when there is something to count. */}
         <PanelHeader
-          title={`${filteredStaff.length} staff account${filteredStaff.length === 1 ? '' : 's'}`}
-          description={search ? `filtered from ${staff.length} total` : 'Select a status chip to activate or deactivate an account'}
+          title={(loadError || loading) ? 'Staff accounts' : `${filteredStaff.length} staff account${filteredStaff.length === 1 ? '' : 's'}`}
+          description={loadError
+            ? 'The list below could not be loaded.'
+            : search ? `filtered from ${staff.length} total` : 'Select a status chip to activate or deactivate an account'}
           icon={Users}
           actions={
             <SearchInput
@@ -274,7 +287,7 @@ const StaffAccounts = () => {
           }
         />
         <PanelBody flush>
-          <Table>
+          <Table stack>
             <TableHeader sticky>
               <TableRow>
                 <TableHead>Name</TableHead>
@@ -286,18 +299,42 @@ const StaffAccounts = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {/* Error before empty. A failed fetch used to fall through to the empty branch,
+                  so a 500 rendered as "nothing here yet" — which is a false statement about the
+                  clinic's data, not merely an unhelpful one. */}
+              {loadError ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="p-0">
+                    <EmptyState
+                      tone="error"
+                      title="Could not load staff accounts"
+                      description={loadError}
+                      action={<Button variant="outline" size="sm" onClick={() => fetchStaff()}>Try again</Button>}
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : loading ? (
                 <SkeletonRows rows={6} columns={6} />
               ) : pagedStaff.length > 0 ? (
                 pagedStaff.map(s => (
                   <TableRow key={s.id}>
-                    <TableCell className="max-w-[180px] truncate font-semibold text-slate-900" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
-                    <TableCell className="max-w-[220px] truncate text-slate-500" title={s.email}>{s.email}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-slate-600">{s.roles?.[0]}</Badge>
+                    <TableCell label="Name" className="max-w-[180px] truncate font-semibold text-slate-900" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
+                    <TableCell label="Email" className="max-w-[220px] truncate text-slate-500" title={s.email}>{s.email}</TableCell>
+                    {/* Every role this account holds. This rendered `roles[0]` only, so the
+                        combined Receptionist+Cashier account appeared in the staff list as a
+                        plain Cashier — the screen that exists to tell an administrator what
+                        access somebody has was understating it. Combined-role accounts are a
+                        supported shape here, not an edge case. */}
+                    <TableCell label="Role">
+                      <div className="flex flex-wrap gap-1">
+                        {(s.roles || []).map((role) => (
+                          <Badge key={role} variant="outline" className="text-slate-600">{role}</Badge>
+                        ))}
+                        {(s.roles || []).length === 0 && <span className="text-fine text-slate-400">No role</span>}
+                      </div>
                     </TableCell>
-                    <TableCell className="text-slate-500">{s.contact_number || '—'}</TableCell>
-                    <TableCell>
+                    <TableCell label="Contact" className="text-slate-500">{s.contact_number || '—'}</TableCell>
+                    <TableCell label="Status">
                       {/* A button, not a Badge with an onClick. It toggles an account's ability to
                           log in, so it must be reachable by keyboard and announce itself as
                           interactive — a clickable <div> did neither. */}
@@ -345,7 +382,7 @@ const StaffAccounts = () => {
             page={page}
             totalPages={totalPages}
             onPageChange={setPage}
-            totalLabel={`${filteredStaff.length} account${filteredStaff.length === 1 ? '' : 's'}`}
+            total={loadError ? 0 : filteredStaff.length} pageSize={PAGE_SIZE}
           />
         </PanelBody>
       </Panel>
@@ -378,8 +415,8 @@ const StaffAccounts = () => {
                 </div>
               )}
               <div className="space-y-1">
-                <label className="field-label">New Temporary Password</label>
-                <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={resettingPwd} required autoFocus />
+                <label htmlFor="staffaccounts-new-temporary-password" className="field-label">New Temporary Password</label>
+                <Input id="staffaccounts-new-temporary-password" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={resettingPwd} required autoFocus />
                 <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <DialogFooter>
@@ -410,21 +447,21 @@ const StaffAccounts = () => {
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="field-label">First Name</label>
-                <Input value={editData.firstName} onChange={e => setEditData({ ...editData, firstName: e.target.value })} disabled={savingEdit} required />
+                <label htmlFor="staffaccounts-first-name" className="field-label">First Name</label>
+                <Input id="staffaccounts-first-name" value={editData.firstName} onChange={e => setEditData({ ...editData, firstName: e.target.value })} disabled={savingEdit} required />
               </div>
               <div className="space-y-1">
-                <label className="field-label">Last Name</label>
-                <Input value={editData.lastName} onChange={e => setEditData({ ...editData, lastName: e.target.value })} disabled={savingEdit} required />
+                <label htmlFor="staffaccounts-last-name" className="field-label">Last Name</label>
+                <Input id="staffaccounts-last-name" value={editData.lastName} onChange={e => setEditData({ ...editData, lastName: e.target.value })} disabled={savingEdit} required />
               </div>
             </div>
             <div className="space-y-1">
-              <label className="field-label">Email</label>
-              <Input type="email" value={editData.email} onChange={e => setEditData({ ...editData, email: e.target.value })} disabled={savingEdit} required />
+              <label htmlFor="staffaccounts-email" className="field-label">Email</label>
+              <Input id="staffaccounts-email" type="email" value={editData.email} onChange={e => setEditData({ ...editData, email: e.target.value })} disabled={savingEdit} required />
             </div>
             <div className="space-y-1">
-              <label className="field-label">Contact Number</label>
-              <Input value={editData.contactNumber} onChange={e => setEditData({ ...editData, contactNumber: e.target.value })} disabled={savingEdit} />
+              <label htmlFor="staffaccounts-contact-number" className="field-label">Contact Number</label>
+              <Input id="staffaccounts-contact-number" value={editData.contactNumber} onChange={e => setEditData({ ...editData, contactNumber: e.target.value })} disabled={savingEdit} />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>Cancel</Button>

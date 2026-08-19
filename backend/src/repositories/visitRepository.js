@@ -136,8 +136,19 @@ class VisitRepository {
   // Any-status, date-ranged visit lookup for Receptionist's Visit History view — distinct from
   // findActiveVisits (today-only, Pending/Processing only). Defaults are applied by the service
   // layer, not here, matching paymentRepository.findTransactions' convention.
-  async findVisitsByDateRange({ startDate, endDate, search }) {
-    const filters = [`pv.created_at >= $1::date`, `pv.created_at < ($2::date + 1)`];
+  // Paged at the database. [1.29.0] This returned every visit in the range and the screen sliced
+  // fifteen out of it in JavaScript. Measured at 664 bytes a visit, so a year-wide range is a
+  // 3.6 MB response to fill a fifteen-row table — down the wire, parsed, and held in memory, on
+  // every page load and on a screen that polls. The row count comes back separately so the
+  // pagination footer can still say how many there are without shipping them.
+  async findVisitsByDateRange({ startDate, endDate, search, limit = null, offset = 0 }) {
+    // COALESCE to CURRENT_DATE rather than defaulting in JavaScript: the server's local date is
+    // what every other date filter in this file compares against, and a JS default would have to
+    // agree with it — which is exactly the disagreement the toISOString bug was.
+    const filters = [
+      `pv.created_at >= COALESCE($1::date, CURRENT_DATE)`,
+      `pv.created_at < (COALESCE($2::date, CURRENT_DATE) + 1)`,
+    ];
     const params = [startDate, endDate];
 
     if (search) {
@@ -147,7 +158,16 @@ class VisitRepository {
     }
     const whereClause = filters.join(' AND ');
 
-    const listQuery = `
+    const countRes = await db.query(
+      `SELECT COUNT(*)::int AS total
+         FROM patient_visits pv
+         JOIN patients p ON pv.patient_id = p.id
+        WHERE ${whereClause}`,
+      params
+    );
+    const total = countRes.rows[0].total;
+
+    let listQuery = `
       SELECT pv.*, p.first_name, p.last_name, p.contact_number,
              pt.name as patient_type_name,
              pv.status as visit_status
@@ -157,7 +177,14 @@ class VisitRepository {
       WHERE ${whereClause}
       ORDER BY pv.created_at DESC
     `;
-    const result = await db.query(listQuery, params);
+    const listParams = [...params];
+    if (limit != null) {
+      listParams.push(limit);
+      listQuery += ` LIMIT $${listParams.length}`;
+      listParams.push(offset);
+      listQuery += ` OFFSET $${listParams.length}`;
+    }
+    const result = await db.query(listQuery, listParams);
     const visits = result.rows;
 
     if (visits.length > 0) {
@@ -179,7 +206,7 @@ class VisitRepository {
       }
     }
 
-    return visits;
+    return { visits, total };
   }
 
   async findVisitById(id) {
@@ -294,6 +321,59 @@ class VisitRepository {
       );
 
       return visitRes.rows[0];
+    });
+  }
+
+  /**
+   * Pulls a visit back off the modality worklists when its payment is reversed. [1.26.0]
+   *
+   * The mirror image of releaseVisitToModalities, and it was missing: refunding a payment left
+   * the visit 'Processing' and its tickets sitting on the worklist, so the department carried on
+   * and did the work with nothing anywhere saying the money had gone back. That is the clinic
+   * paying twice — once in reagents and time, once in the refund.
+   *
+   * Only untouched tests are recalled. A test that is already 'Waiting for Release' or
+   * 'Completed' has had the work done, and dragging it back would misrepresent what happened in
+   * the laboratory — the refund is a commercial decision, not a reason to un-perform an assay.
+   * The visit itself is only recalled when NO test has progressed, since a visit with completed
+   * work on it is genuinely still in progress.
+   *
+   * Returns what it actually did, so the caller can say so rather than guess.
+   */
+  async recallVisitFromModalities(visitId) {
+    return await db.withTransaction(async () => {
+      const recalled = await db.query(
+        `UPDATE visit_tests
+         SET status = 'Pending', updated_at = CURRENT_TIMESTAMP
+         WHERE patient_visit_id = $1 AND status = 'Processing'
+         RETURNING id`,
+        [visitId]
+      );
+
+      // Anything past 'Processing' means work was done. Checked after the recall above so the
+      // two see the same snapshot inside one transaction.
+      const { rows } = await db.query(
+        `SELECT COUNT(*)::int AS started
+         FROM visit_tests
+         WHERE patient_visit_id = $1
+           AND status IN ('Waiting for Release', 'Completed')`,
+        [visitId]
+      );
+      const workAlreadyDone = rows[0].started > 0;
+
+      let visit;
+      if (!workAlreadyDone) {
+        const visitRes = await db.query(
+          `UPDATE patient_visits
+           SET status = 'Pending', updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1 AND status = 'Processing'
+           RETURNING *`,
+          [visitId]
+        );
+        visit = visitRes.rows[0];
+      }
+
+      return { testsRecalled: recalled.rows.length, workAlreadyDone, visit };
     });
   }
 

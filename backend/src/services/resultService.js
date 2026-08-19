@@ -60,6 +60,30 @@ function visibleCategoriesFor(requestingUser) {
 // hiding is not enforcing: a visit_test id is a small integer, and any diagnostic staff token
 // could previously act on one that the receptionist/cashier had not yet handed over. Both
 // checks run for every state-changing modality operation.
+/**
+ * May this member of staff LOOK at this visit_test? Department scope only. [1.26.0]
+ *
+ * Split out from assertStaffOwnsVisitTest, which additionally requires the visit to be
+ * 'Processing'. That release-state condition is right for a write — a technician must not record
+ * findings on a ticket the cashier has not released — and wrong for a read, because a visit turns
+ * 'Completed' the moment its last result goes out. Both reads were using the write guard, so the
+ * technician who produced a report could no longer open it or its version history the instant the
+ * visit finished: exactly when somebody rings up to query the result.
+ */
+async function assertStaffMayReadVisitTest(requestingUser, visitTestId) {
+  if (requestingUser.roles.includes('SuperAdmin') || requestingUser.roles.includes('Admin')) {
+    return;
+  }
+  const row = await resultRepository.findVisitReleaseStateByVisitTestId(visitTestId);
+  if (!row) {
+    const error = new Error('Visit test not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  assertStaffAllowedCategory(requestingUser, row.category_name);
+}
+
+/** May they WRITE to it? Department scope, plus the ticket-release gate. */
 async function assertStaffOwnsVisitTest(requestingUser, visitTestId) {
   if (requestingUser.roles.includes('SuperAdmin') || requestingUser.roles.includes('Admin')) {
     return;
@@ -72,7 +96,12 @@ async function assertStaffOwnsVisitTest(requestingUser, visitTestId) {
   }
   assertStaffAllowedCategory(requestingUser, row.category_name);
 
-  if (row.visit_status !== 'Processing') {
+  // 'Completed' is allowed as well as 'Processing'. A visit completes when its last result is
+  // released, and refusing writes from that moment made amending a released result impossible —
+  // which is the one thing result versioning [1.15.0] exists for, since a correction is nearly
+  // always discovered after the report has gone out. The alternative was somebody editing the
+  // database by hand, which keeps no history at all.
+  if (row.visit_status !== 'Processing' && row.visit_status !== 'Completed') {
     const error = new Error(
       'This ticket has not been released to your department yet. It is still with the front desk or cashier.'
     );
@@ -151,6 +180,27 @@ class ResultService {
     const existing = await resultRepository.findResultByVisitTestId(visitTestId);
     const isCorrection = !!existing;
 
+    // A reason is required once the report has actually gone out — and only then. [1.26.0]
+    //
+    // The distinction is 'Completed' vs 'Waiting for Release'. Before release the findings have
+    // been seen by nobody outside the department, so re-saving is drafting: demanding a
+    // justification for fixing your own typo is friction that buys nothing, and the reason box
+    // fills up with "typo" until it means nothing. After release a clinician may have acted on
+    // the old version, so "why did this change?" is the question the amendment history exists to
+    // answer — and it was optional, with the audit entry reduced to writing "no reason given"
+    // against a corrected medical report.
+    const releaseState = await resultRepository.findVisitReleaseStateByVisitTestId(visitTestId);
+    const releasedAlready = isCorrection && releaseState?.test_status === 'Completed';
+
+    if (releasedAlready && String(amendmentReason || '').trim().length < 4) {
+      const error = new Error(
+        'This result has already been released to the patient. Say why it is being amended — ' +
+          'the reason is kept with both versions, so anyone who acted on the earlier report can see what changed.'
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
     // Phase B: a real uploaded file (via multer) takes precedence over the legacy fileUrl text
     // field — both can't meaningfully apply at once, and the frontend only ever sends one or
     // the other.
@@ -187,6 +237,19 @@ class ResultService {
       // 'Waiting for Release' — visible as such to the front desk — until releaseResult below
       // authorises it and notifies the patient.
       await testRepository.updateVisitTestStatus(visitTestId, 'Waiting for Release');
+
+      // Amending a released result has to reopen the visit, or the amendment goes nowhere. [1.26.0]
+      //
+      // The visit closes when its last result is released. Amending afterwards puts the ticket
+      // back to 'Waiting for Release', but the modality worklist filters on
+      // `pv.status = 'Processing'` and the Released tab filters on `vt.status = 'Completed'` — so
+      // the amended ticket showed on neither. The technician saved the correction, saw it accepted,
+      // and it then existed only in the version history: never re-released, so the patient and the
+      // referring doctor kept the wrong report. Reopening puts it back where somebody will see it,
+      // and releaseResult closes the visit again once it goes out.
+      if (releasedAlready) {
+        await visitRepository.updateVisitStatus(releaseState.visit_id, 'Processing');
+      }
 
       const created = await resultRepository.createResult({
         visitTestId,
@@ -421,7 +484,7 @@ class ResultService {
   // Lets the modality re-open a ticket that is already 'Waiting for Release' and edit the
   // findings it recorded earlier, instead of overwriting them with a blank form.
   async getResultByVisitTestId(visitTestId, requestingUser) {
-    await assertStaffOwnsVisitTest(requestingUser, visitTestId);
+    await assertStaffMayReadVisitTest(requestingUser, visitTestId);
     return await resultRepository.findResultByVisitTestId(visitTestId);
   }
 
@@ -433,8 +496,21 @@ class ResultService {
    * result read, since a superseded version is every bit as much PHI as the current one.
    */
   async getVersionHistory(visitTestId, requestingUser) {
-    await assertStaffOwnsVisitTest(requestingUser, visitTestId);
+    await assertStaffMayReadVisitTest(requestingUser, visitTestId);
     return await resultRepository.findVersionHistoryByVisitTestId(visitTestId);
+  }
+
+  /**
+   * Every released critical result still waiting for its callback. [1.26.0]
+   *
+   * Deliberately not department-scoped, unlike the worklists. A panic value is a clinical
+   * emergency belonging to whoever can act on it, not to the room that produced it — scoping this
+   * would mean a Laboratory potassium of 7.4 is invisible to the receptionist standing next to
+   * the telephone. `results:acknowledge_critical` is what gates the route, and every staff role
+   * that could make the call already holds it.
+   */
+  async getOutstandingCriticals() {
+    return await resultRepository.findOutstandingCriticals();
   }
 
   /**

@@ -21,20 +21,21 @@ class HmoRepository {
   // no connection of its own, per the note in CLAUDE.md — a self-managed client inside an ambient
   // transaction is a second, independently-committing transaction, and with a bounded pool it
   // deadlocks once every connection is held by a transaction waiting for another connection.
-  async createRequestWithTests({ hmoProviderId, approvalCode = null, visitTestIds, card = null }) {
+  async createRequestWithTests({ hmoProviderId, approvalCode = null, memberNumber = null, visitTestIds, card = null }) {
     // card is either an uploaded image or a staff attestation; chk_hmo_request_card_evidence
     // requires one of them, so a caller that supplies neither is refused by the database.
     const requestResult = await db.query(
       `INSERT INTO hmo_requests (
-         hmo_provider_id, approval_code, status,
+         hmo_provider_id, approval_code, member_number, status,
          card_file_path, card_original_name, card_mime_type, card_size_bytes, card_uploaded_at,
          card_verified_by, card_verified_at
        )
-       VALUES ($1, $2, 'Pending', $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, 'Pending', $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         hmoProviderId,
         approvalCode,
+        memberNumber,
         card?.filePath ?? null,
         card?.originalName ?? null,
         card?.mimeType ?? null,
@@ -128,12 +129,24 @@ class HmoRepository {
     const queryText = `
       SELECT hr.*, hp.name as provider_name,
              MIN(pv.referring_physician) AS referring_physician,
-             MIN(pv.referring_physician_prc) AS referring_physician_prc
+             MIN(pv.referring_physician_prc) AS referring_physician_prc,
+             -- Who the claim is for and which visit it bills against. Needed by the handoff
+             -- notification [1.28.0]: "Maria Santos — MediCard approved" is actionable at the
+             -- cashier's counter, where "HMO request #482 approved" is a lookup they have to go
+             -- and do. MIN() because the GROUP BY is over one claim whose tests all belong to the
+             -- same visit; it picks the only value there is.
+             MIN(pv.id) AS patient_visit_id,
+             MIN(p.first_name) AS patient_first_name,
+             MIN(p.last_name) AS patient_last_name,
+             MIN(d.first_name) AS decided_by_first_name,
+             MIN(d.last_name) AS decided_by_last_name
       FROM hmo_requests hr
       JOIN hmo_providers hp ON hr.hmo_provider_id = hp.id
       LEFT JOIN hmo_request_tests hrt ON hrt.hmo_request_id = hr.id
       LEFT JOIN visit_tests vt ON hrt.visit_test_id = vt.id
       LEFT JOIN patient_visits pv ON vt.patient_visit_id = pv.id
+      LEFT JOIN patients p ON p.id = pv.patient_id
+      LEFT JOIN users d ON d.id = hr.decided_by
       WHERE hr.id = $1
       GROUP BY hr.id, hp.name
     `;
@@ -141,14 +154,38 @@ class HmoRepository {
     return result.rows[0];
   }
 
-  async approveRequest(id, { approvalCode }) {
+  async approveRequest(id, { approvalCode, decidedBy = null }) {
     const queryText = `
       UPDATE hmo_requests
-      SET status = 'Approved', approval_code = $1, approved_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
+      SET status = 'Approved', approval_code = $1, approved_date = CURRENT_TIMESTAMP,
+          decided_by = $2, decision_reason = NULL, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
       RETURNING *
     `;
-    const result = await db.query(queryText, [approvalCode, id]);
+    const result = await db.query(queryText, [approvalCode, decidedBy, id]);
+    return result.rows[0];
+  }
+
+  /**
+   * Turn a whole claim down. [1.28.0]
+   *
+   * `chk_hmo_status` has allowed 'Rejected' since [1.0.0] and nothing could set it, so a claim
+   * the provider refused stayed Pending forever — sitting at the top of a worklist that filters
+   * on exactly that, being reopened by every coordinator who scans it.
+   *
+   * approved_date is stamped here too, despite the name: it is the date the claim was decided,
+   * and leaving it NULL on a rejection would make "when did we hear back?" unanswerable for
+   * precisely the outcome somebody chases up.
+   */
+  async rejectRequest(id, { decisionReason, decidedBy = null }) {
+    const queryText = `
+      UPDATE hmo_requests
+      SET status = 'Rejected', decision_reason = $1, decided_by = $2,
+          approved_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING *
+    `;
+    const result = await db.query(queryText, [decisionReason, decidedBy, id]);
     return result.rows[0];
   }
 
@@ -165,11 +202,15 @@ class HmoRepository {
 
   async findTestsByRequestId(hmoRequestId) {
     const queryText = `
-      SELECT hrt.*, vt.price_at_time, t.name as test_name, tc.name as category_name
+      SELECT hrt.*, vt.price_at_time, t.name as test_name, tc.name as category_name,
+             -- Who recorded the decision, so the screen can show a name rather than an id.
+             -- LEFT JOIN: rows decided before [1.27.0] have no answer, and NULL says so honestly.
+             d.first_name as decided_by_first_name, d.last_name as decided_by_last_name
       FROM hmo_request_tests hrt
       JOIN visit_tests vt ON hrt.visit_test_id = vt.id
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
+      LEFT JOIN users d ON d.id = hrt.decided_by
       WHERE hrt.hmo_request_id = $1
       ORDER BY tc.name, t.name
     `;
@@ -177,21 +218,28 @@ class HmoRepository {
     return result.rows;
   }
 
-  async updateTestApprovalStatus(hmoRequestTestId, approvalStatus) {
+  // decided_at is stamped from the database clock, not from JavaScript — the same reason every
+  // other "when did this happen" in this codebase is derived in SQL.
+  async updateTestApprovalStatus(hmoRequestTestId, approvalStatus, { decisionReason = null, decidedBy = null } = {}) {
     const queryText = `
       UPDATE hmo_request_tests
-      SET approval_status = $1
-      WHERE id = $2
+      SET approval_status = $1,
+          decision_reason = $2,
+          decided_by = $3,
+          decided_at = CURRENT_TIMESTAMP
+      WHERE id = $4
       RETURNING *
     `;
-    const result = await db.query(queryText, [approvalStatus, hmoRequestTestId]);
+    const result = await db.query(queryText, [approvalStatus, decisionReason, decidedBy, hmoRequestTestId]);
     return result.rows[0];
   }
 
   // No "list requests" capability existed before — approval was only reachable if you already
   // knew a specific request ID, making the approval half of the HMO flow practically
   // undiscoverable through any UI.
-  async findAllRequests({ status } = {}) {
+  // Paged at the database. [1.29.0] The Admin approval worklist showed fifteen of these and the
+  // endpoint returned every claim the clinic has ever filed.
+  async findAllRequests({ status, limit = null, offset = 0 } = {}) {
     const params = [];
     let whereClause = '';
     if (status) {
@@ -199,19 +247,53 @@ class HmoRepository {
       whereClause = 'WHERE hr.status = $1';
     }
 
+    // Who the claim is FOR. [1.28.0] This list backs the Admin approval worklist and the front
+    // desk's pending strip, and it carried the provider, the date and a count — so seven claims
+    // from the same provider on the same day rendered as seven identical rows, and the only way
+    // to find out whose insurance you were approving was to open each one. An approval worklist
+    // that cannot tell you what you are approving is not a worklist.
+    //
+    // MIN() over the join chain: a claim's tests all belong to one visit, so it picks the only
+    // value there is, and it satisfies the GROUP BY without a second aggregate pass.
     const queryText = `
       SELECT hr.*, hp.name as provider_name,
              COUNT(hrt.id) as test_count,
-             COUNT(hrt.id) FILTER (WHERE hrt.approval_status = 'Approved') as approved_test_count
+             COUNT(hrt.id) FILTER (WHERE hrt.approval_status = 'Approved') as approved_test_count,
+             COUNT(hrt.id) FILTER (WHERE hrt.approval_status = 'Rejected') as rejected_test_count,
+             MIN(p.first_name) AS patient_first_name,
+             MIN(p.last_name) AS patient_last_name,
+             MIN(pv.queue_number) AS queue_number,
+             MIN(pv.id) AS patient_visit_id
       FROM hmo_requests hr
       JOIN hmo_providers hp ON hr.hmo_provider_id = hp.id
       LEFT JOIN hmo_request_tests hrt ON hrt.hmo_request_id = hr.id
+      LEFT JOIN visit_tests vt ON hrt.visit_test_id = vt.id
+      LEFT JOIN patient_visits pv ON vt.patient_visit_id = pv.id
+      LEFT JOIN patients p ON p.id = pv.patient_id
       ${whereClause}
       GROUP BY hr.id, hp.name
       ORDER BY hr.request_date DESC
     `;
-    const result = await db.query(queryText, params);
-    return result.rows;
+
+    // COUNT over hmo_requests alone: the list GROUPs BY hr.id, so one row out is one claim, and
+    // counting the grouped set would mean wrapping the whole aggregate in a subquery for the
+    // same answer.
+    const countRes = await db.query(
+      `SELECT COUNT(*)::int AS total FROM hmo_requests hr ${whereClause}`,
+      params
+    );
+    const total = countRes.rows[0].total;
+
+    const listParams = [...params];
+    let listQuery = queryText;
+    if (limit != null) {
+      listParams.push(limit);
+      listQuery += ` LIMIT $${listParams.length}`;
+      listParams.push(offset);
+      listQuery += ` OFFSET $${listParams.length}`;
+    }
+    const result = await db.query(listQuery, listParams);
+    return Object.assign(result.rows, { total });
   }
 
   async findAllProviders() {

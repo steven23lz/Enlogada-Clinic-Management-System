@@ -7,6 +7,10 @@ import { Button } from '../../components/ui/button';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { Activity as ActivityIcon, ScrollText } from 'lucide-react';
+import { formatDateTime } from '../../lib/date';
+
+// Server-side paged: the API takes this as `limit`, and the footer states the range it covers.
+const PAGE_SIZE = 25;
 
 // Feature Gap Plan Phase D: previously the only "who did what" visibility was per-row
 // attribution columns (processed_by, released_by, ...) — no queryable history of edits and no
@@ -42,7 +46,7 @@ const ActivityLog = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get('/admin/activity', { params: { page: pageNum, limit: 25 } });
+      const res = await api.get('/admin/activity', { params: { page: pageNum, limit: PAGE_SIZE } });
       setEntries(res.data.data.entries || []);
       setTotalPages(res.data.data.totalPages || 1);
       setTotal(res.data.data.total || 0);
@@ -100,7 +104,7 @@ const ActivityLog = () => {
                   <div className="min-w-0">
                     <p className="m-0 text-[13px] font-medium text-slate-800">{entry.description}</p>
                     <p className="m-0 mt-0.5 text-fine text-slate-500">
-                      {entry.actor_name} &middot; {new Date(entry.created_at).toLocaleString()}
+                      {entry.actor_name} &middot; {formatDateTime(entry.created_at)}
                     </p>
                   </div>
                   <span
@@ -113,7 +117,7 @@ const ActivityLog = () => {
             </ul>
           )}
         </PanelBody>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${total} total`} />
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={total} pageSize={PAGE_SIZE} />
       </Panel>
     </div>
   );

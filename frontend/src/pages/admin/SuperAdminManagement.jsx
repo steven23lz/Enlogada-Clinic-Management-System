@@ -596,7 +596,7 @@ const ElevatedAccounts = () => {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">Elevated Accounts (Admin / SuperAdmin)</h3>
-          <p className="m-0 mt-1 text-fine leading-relaxed text-slate-500">You cannot deactivate your own account, to prevent locking the clinic out of elevated administration.</p>
+          <p className="m-0 mt-1 text-fine leading-relaxed text-slate-500">Select a status chip to activate or deactivate an account — the same gesture as Staff Accounts. You cannot deactivate your own, to prevent locking the clinic out of elevated administration.</p>
         </div>
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogTrigger asChild>
@@ -619,31 +619,31 @@ const ElevatedAccounts = () => {
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="field-label">First Name</label>
-                  <Input value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} disabled={submitting} required />
+                  <label htmlFor="superadminmanagement-first-name" className="field-label">First Name</label>
+                  <Input id="superadminmanagement-first-name" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} disabled={submitting} required />
                 </div>
                 <div className="space-y-1">
-                  <label className="field-label">Last Name</label>
-                  <Input value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} disabled={submitting} required />
+                  <label htmlFor="superadminmanagement-last-name" className="field-label">Last Name</label>
+                  <Input id="superadminmanagement-last-name" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} disabled={submitting} required />
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="field-label">Email</label>
-                <Input type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={submitting} required />
+                <label htmlFor="superadminmanagement-email" className="field-label">Email</label>
+                <Input id="superadminmanagement-email" type="email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={submitting} required />
               </div>
               <div className="space-y-1">
-                <label className="field-label">Contact Number</label>
-                <Input value={formData.contactNumber} onChange={e => setFormData({ ...formData, contactNumber: e.target.value })} disabled={submitting} />
+                <label htmlFor="superadminmanagement-contact-number" className="field-label">Contact Number</label>
+                <Input id="superadminmanagement-contact-number" value={formData.contactNumber} onChange={e => setFormData({ ...formData, contactNumber: e.target.value })} disabled={submitting} />
               </div>
               <div className="space-y-1">
-                <label className="field-label">Temporary Password</label>
-                <Input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} disabled={submitting} required />
+                <label htmlFor="superadminmanagement-temporary-password" className="field-label">Temporary Password</label>
+                <Input id="superadminmanagement-temporary-password" type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} disabled={submitting} required />
                 <p className="text-fine text-gray-400 m-0">At least 8 characters.</p>
               </div>
               <div className="space-y-1">
-                <label className="field-label">Role</label>
+                <label className="field-label" htmlFor="superadminmanagement-role">Role</label>
                 <Select value={formData.role} onValueChange={val => setFormData({ ...formData, role: val })}>
-                  <SelectTrigger className="rounded-xl">
+                  <SelectTrigger className="rounded-xl" id="superadminmanagement-role">
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
                   <SelectContent>
@@ -687,7 +687,16 @@ const ElevatedAccounts = () => {
                         {a.first_name} {a.last_name} {isSelf && <span className="font-normal text-slate-400">(you)</span>}
                       </TableCell>
                       <TableCell className="text-slate-500">{a.email}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-slate-600">{a.roles?.[0]}</Badge></TableCell>
+                      {/* Every role, like the Staff Accounts table. An account holding both
+                          Admin and SuperAdmin would otherwise be listed under one of them, on the
+                          screen whose entire purpose is elevated-access oversight. */}
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {(a.roles || []).map((role) => (
+                            <Badge key={role} variant="outline" className="text-slate-600">{role}</Badge>
+                          ))}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         {/* A real button, and genuinely disabled for your own row rather than
                             just dimmed — the previous version was a clickable <div> whose
@@ -719,7 +728,7 @@ const ElevatedAccounts = () => {
             </TableBody>
           </Table>
         </PanelBody>
-        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${accounts.length} total`} />
+        <Pagination page={page} totalPages={totalPages} onPageChange={setPage} total={accounts.length} pageSize={PAGE_SIZE} />
       </Panel>
 
       <ConfirmDialog

@@ -1,8 +1,8 @@
 import React from 'react';
-import PublicHeader from '../components/PublicHeader';
-import PublicFooter from '../components/PublicFooter';
-import Logo from '../components/Logo';
-import { Button } from '../components/ui/button';
+import PublicHeader from '../../components/PublicHeader';
+import PublicFooter from '../../components/PublicFooter';
+import Logo from '../../components/Logo';
+import { Button } from '../../components/ui/button';
 import { ShieldCheck, Clock, HeartHandshake, Award, MapPin, Phone, Mail, ChevronRight } from 'lucide-react';
 
 const VALUES = [

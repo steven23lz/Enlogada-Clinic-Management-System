@@ -4,7 +4,7 @@ const { discardHmoCard } = require('../config/upload');
 class HmoController {
   async createRequest(req, res, next) {
     try {
-      const { hmoProviderId, approvalCode, visitTestIds } = req.body;
+      const { hmoProviderId, approvalCode, memberNumber, visitTestIds } = req.body;
 
       // Multipart sends visitTestIds[] as strings; JSON callers still send numbers.
       let ids = visitTestIds;
@@ -22,6 +22,7 @@ class HmoController {
         {
           hmoProviderId: Number(hmoProviderId),
           approvalCode,
+          memberNumber,
           visitTestIds: ids.map(Number),
           cardFile: req.file || null,
           // Optional in the body: the visit may already name a physician, in which case nothing
@@ -75,7 +76,23 @@ class HmoController {
       const request = await hmoService.approveRequest(id, { approvalCode }, req.user);
       return res.status(200).json({
         status: 'success',
-        message: 'HMO request approved.',
+        message: 'HMO request approved. The cashier has been notified.',
+        data: { request }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async rejectRequest(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { decisionReason } = req.body;
+
+      const request = await hmoService.rejectRequest(id, { decisionReason }, req.user);
+      return res.status(200).json({
+        status: 'success',
+        message: 'Claim recorded as refused. The cashier has been notified to bill in full.',
         data: { request }
       });
     } catch (err) {
@@ -99,7 +116,7 @@ class HmoController {
   async updateTestApproval(req, res, next) {
     try {
       const { hmoRequestTestId } = req.params;
-      const { approvalStatus } = req.body;
+      const { approvalStatus, decisionReason } = req.body;
 
       if (!approvalStatus) {
         return res.status(400).json({
@@ -108,7 +125,12 @@ class HmoController {
         });
       }
 
-      const updated = await hmoService.updateTestApproval(hmoRequestTestId, approvalStatus, req.user);
+      const updated = await hmoService.updateTestApproval(
+        hmoRequestTestId,
+        approvalStatus,
+        req.user,
+        decisionReason
+      );
       return res.status(200).json({
         status: 'success',
         message: `Test approval status updated to ${approvalStatus}.`,
@@ -121,11 +143,13 @@ class HmoController {
 
   async getAllRequests(req, res, next) {
     try {
-      const { status } = req.query;
-      const requests = await hmoService.getAllRequests({ status });
+      const { status, page, limit } = req.query;
+      const result = await hmoService.getAllRequests({ status, page, limit });
       return res.status(200).json({
         status: 'success',
-        data: { requests }
+        data: Array.isArray(result)
+          ? { requests: result, total: result.total ?? result.length }
+          : result,
       });
     } catch (err) {
       next(err);

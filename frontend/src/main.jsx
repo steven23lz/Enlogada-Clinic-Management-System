@@ -24,7 +24,7 @@ createRoot(document.getElementById('root')).render(
       position="top-right"
       toastOptions={{
         classNames: {
-          toast: 'rounded-xl border shadow-lg font-sans',
+          toast: 'rounded-xl border shadow-float font-sans',
           title: 'font-semibold text-sm',
           success: '!bg-white !border-brand-300 !text-[#192534] [&_[data-icon]]:!text-brand-600',
           error: '!bg-white !border-rose-200 !text-[#192534] [&_[data-icon]]:!text-rose-500',

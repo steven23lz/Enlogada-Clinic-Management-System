@@ -1,23 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import SidebarLayout from '../components/SidebarLayout';
-import { Panel, PanelHeader, PanelBody } from '../components/ui/panel';
-import PageHeader from '../components/ui/page-header';
-import Toolbar, { ToolbarSpacer } from '../components/ui/toolbar';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Badge } from '../components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { ConfirmDialog } from '../components/ui/confirm-dialog';
-import api from '../config/api';
-import { formatCurrency } from '../lib/currency';
-import { Plus, Edit2, CheckCircle2, AlertCircle, RefreshCw, Layers, ShieldPlus } from 'lucide-react';
+import SidebarLayout from '../../components/SidebarLayout';
+import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import Toolbar, { ToolbarSpacer } from '../../components/ui/toolbar';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Badge } from '../../components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { ConfirmDialog } from '../../components/ui/confirm-dialog';
+import api from '../../config/api';
+import { formatCurrency } from '../../lib/currency';
+import { Plus, Edit2, CheckCircle2, AlertCircle, RefreshCw, Layers, ShieldPlus, Info } from 'lucide-react';
+import EmptyState from '../../components/ui/empty-state';
 
 const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
   const [tests, setTests] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Both fetches used to end at console.error, so a 500 rendered the EMPTY branch: "No
+  // diagnostic services found in this category" over a failed request, on the screen that
+  // drives the public price list. An administrator could reasonably read that as the
+  // catalogue having been wiped.
+  const [catalogError, setCatalogError] = useState('');
+  const [providersError, setProvidersError] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
 
   // Add / Edit Modal State
@@ -57,6 +64,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
   const fetchCatalogData = useCallback(async () => {
     try {
       setLoading(true);
+      setCatalogError('');
       const [testsRes, catRes] = await Promise.all([
         api.get('/tests?includeInactive=true'),
         api.get('/tests/categories')
@@ -65,6 +73,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
       setCategories(catRes.data.data.categories || []);
     } catch (err) {
       console.error('Failed to fetch services catalog:', err);
+      setCatalogError(err.response?.data?.message || 'The catalogue could not be loaded.');
     } finally {
       setLoading(false);
     }
@@ -72,11 +81,13 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
 
   const fetchProviders = useCallback(async () => {
     setProvidersLoading(true);
+    setProvidersError('');
     try {
       const res = await api.get('/hmo/providers');
       setProviders(res.data.data.providers || []);
     } catch (err) {
       console.error('Failed to fetch HMO providers:', err);
+      setProvidersError(err.response?.data?.message || 'The provider list could not be loaded.');
     } finally {
       setProvidersLoading(false);
     }
@@ -308,13 +319,31 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
         {/* Services Table */}
         <Panel className="overflow-hidden rounded-t-none">
           <PanelBody flush>
-            {loading ? (
+            {catalogError ? (
+              <EmptyState
+                tone="error"
+                title="Could not load the services catalogue"
+                description={catalogError}
+                action={<Button variant="outline" size="sm" onClick={fetchCatalogData}>Try again</Button>}
+              />
+            ) : loading ? (
               <div className="py-16 flex flex-col items-center justify-center space-y-3">
                 <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
                 <span className="text-xs font-semibold text-gray-500">Loading catalog...</span>
               </div>
             ) : filteredTests.length === 0 ? (
-              <div className="py-12 text-center text-xs text-gray-500">No diagnostic services found in this category.</div>
+              /* The last two bare grey lines in the app — the exact "centred line of small italic
+                 grey text" that empty-state.jsx was written to replace, and it said "in this
+                 category" even when the filter was All. Filter-aware now, so a genuinely empty
+                 catalogue and a category nobody has added a service to read differently. */
+              <EmptyState
+                icon={Layers}
+                title={filterCategory === 'all' ? 'No services in the catalogue yet' : 'Nothing in this category yet'}
+                description={filterCategory === 'all'
+                  ? 'Add the first service — it appears on the public website and in the booking form immediately.'
+                  : 'Pick another category above, or add a service to this one.'}
+                action={<Button size="sm" onClick={handleOpenAddModal}><Plus className="h-3.5 w-3.5" />Add New Service</Button>}
+              />
             ) : (
               <Table>
                 <TableHeader className="bg-slate-50/70">
@@ -331,7 +360,25 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                   {filteredTests.map(test => (
                     <TableRow key={test.id}>
                       <TableCell className="font-bold text-xs text-slate-900">SRV-{test.id}</TableCell>
-                      <TableCell className="font-semibold text-xs text-slate-800">{test.name}</TableCell>
+                      {/* Whether this service tells the patient how to prepare. [1.24.0] added
+                          `tests.preparation` and every patient-facing screen reads it, but this
+                          screen — the one where it is written — gave no sign of which services
+                          had it. Finding the gaps meant opening all fifteen in turn, so in
+                          practice nobody did, and a Fasting Blood Sugar with no instruction looks
+                          exactly like one that needs none. Shown truncated: the point is to see
+                          at a glance which rows are blank. */}
+                      <TableCell className="font-semibold text-xs text-slate-800">
+                        {test.name}
+                        {test.preparation && (
+                          <span
+                            className="mt-0.5 flex items-start gap-1 text-fine font-normal text-slate-500"
+                            title={test.preparation}
+                          >
+                            <Info className="mt-px h-3 w-3 flex-shrink-0 text-brand-600" />
+                            <span className="line-clamp-1">{test.preparation}</span>
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs text-gray-600 font-medium">{test.category_name}</TableCell>
                       <TableCell className="font-bold text-xs text-slate-900">{formatCurrency(test.price)}</TableCell>
                       <TableCell>
@@ -380,12 +427,26 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
             }
           />
           <PanelBody flush>
-            {providersLoading ? (
+            {providersError ? (
+              <EmptyState
+                tone="error"
+                compact
+                title="Could not load HMO providers"
+                description={providersError}
+                action={<Button variant="outline" size="sm" onClick={fetchProviders}>Try again</Button>}
+              />
+            ) : providersLoading ? (
               <div className="py-10 flex flex-col items-center justify-center space-y-3">
                 <div className="w-6 h-6 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : providers.length === 0 ? (
-              <div className="py-10 text-center text-xs text-gray-500">No HMO providers added yet.</div>
+              <EmptyState
+                compact
+                icon={ShieldPlus}
+                title="No HMO providers yet"
+                description="Add the providers this clinic is accredited with; reception picks from this list when logging a claim."
+                action={<Button size="sm" variant="outline" onClick={handleOpenAddProvider}><Plus className="h-3.5 w-3.5" />Add Provider</Button>}
+              />
             ) : (
               <Table>
                 <TableHeader className="bg-slate-50/70">
@@ -449,8 +510,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                 </div>
               )}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700">Provider Name</label>
-                <Input
+                <label htmlFor="servicescatalog-provider-name" className="text-xs font-semibold text-gray-700">Provider Name</label>
+                <Input id="servicescatalog-provider-name"
                   type="text"
                   placeholder="e.g. Maxicare"
                   value={providerName}
@@ -514,12 +575,12 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
               )}
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700">Diagnostic Category</label>
+                <label className="text-xs font-semibold text-gray-700" htmlFor="servicescatalog-diagnostic-category">Diagnostic Category</label>
                 <Select
                   value={formData.categoryId}
                   onValueChange={val => setFormData({...formData, categoryId: val})}
                 >
-                  <SelectTrigger className="rounded-xl">
+                  <SelectTrigger className="rounded-xl" id="servicescatalog-diagnostic-category">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -531,8 +592,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700">Service Name</label>
-                <Input
+                <label htmlFor="servicescatalog-service-name" className="text-xs font-semibold text-gray-700">Service Name</label>
+                <Input id="servicescatalog-service-name"
                   type="text"
                   placeholder="e.g. Abdominal Ultrasound"
                   value={formData.name}
@@ -543,8 +604,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700">Price (PHP ₱)</label>
-                <Input
+                <label htmlFor="servicescatalog-price-php" className="text-xs font-semibold text-gray-700">Price (PHP ₱)</label>
+                <Input id="servicescatalog-price-php"
                   type="number"
                   step="0.01"
                   placeholder="e.g. 1500.00"
@@ -559,11 +620,11 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
                   booking confirmation email and while they are choosing tests, so it is written
                   to them directly — "Nothing to eat…", not "Patient must fast". */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700">
+                <label htmlFor="servicescatalog-patient-preparation-optional" className="text-xs font-semibold text-gray-700">
                   Patient Preparation
                   <span className="ml-1 font-normal text-slate-400">(optional)</span>
                 </label>
-                <textarea
+                <textarea id="servicescatalog-patient-preparation-optional"
                   rows={2}
                   placeholder="e.g. Nothing to eat or drink except water for 8 hours before your appointment."
                   value={formData.preparation}

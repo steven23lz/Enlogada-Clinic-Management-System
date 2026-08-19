@@ -26,10 +26,14 @@ const ReferringPhysicianFields = ({
   reason = null,
   disabled = false,
   compact = false,
+  // Both fields render on the walk-in form and in the booking wizard, so the ids have to be
+  // distinct per instance — two elements sharing an id makes htmlFor point at whichever the
+  // browser saw first, which is worse than no association at all.
+  idPrefix = 'referring',
 }) => (
   <div className={compact ? 'space-y-2' : 'space-y-3'}>
     <div className="space-y-1.5">
-      <label className="field-label">
+      <label className="field-label" htmlFor={`${idPrefix}-physician`}>
         Referring Physician {required && <span className="text-rose-600">*</span>}
         {!required && <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">(optional)</span>}
       </label>
@@ -40,6 +44,7 @@ const ReferringPhysicianFields = ({
         </p>
       )}
       <Input
+        id={`${idPrefix}-physician`}
         placeholder="Dr. Juan Dela Cruz"
         value={physician || ''}
         disabled={disabled}
@@ -53,11 +58,12 @@ const ReferringPhysicianFields = ({
         field whose contents will be discarded. */}
     {physician?.trim() && (
       <div className="space-y-1.5">
-        <label className="field-label">
+        <label className="field-label" htmlFor={`${idPrefix}-prc`}>
           PRC Licence No.
           <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">(optional)</span>
         </label>
         <Input
+          id={`${idPrefix}-prc`}
           placeholder="0123456"
           value={prc || ''}
           disabled={disabled}

@@ -85,8 +85,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="mb-1.5 block text-fine font-semibold text-slate-700">First Name</label>
-              <Input
+              <label htmlFor="registerform-first-name" className="mb-1.5 block text-fine font-semibold text-slate-700">First Name</label>
+              <Input id="registerform-first-name"
                 type="text"
                 placeholder="First name"
                 value={formData.firstName}
@@ -96,8 +96,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
               />
             </div>
             <div className="space-y-1">
-              <label className="mb-1.5 block text-fine font-semibold text-slate-700">Last Name</label>
-              <Input
+              <label htmlFor="registerform-last-name" className="mb-1.5 block text-fine font-semibold text-slate-700">Last Name</label>
+              <Input id="registerform-last-name"
                 type="text"
                 placeholder="Last name"
                 value={formData.lastName}
@@ -109,8 +109,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           </div>
 
           <div className="space-y-1">
-            <label className="mb-1.5 block text-fine font-semibold text-slate-700">Email Address</label>
-            <Input
+            <label htmlFor="registerform-email-address" className="mb-1.5 block text-fine font-semibold text-slate-700">Email Address</label>
+            <Input id="registerform-email-address"
               type="email"
               placeholder="Enter your email"
               value={formData.email}
@@ -121,8 +121,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           </div>
 
           <div className="space-y-1">
-            <label className="mb-1.5 block text-fine font-semibold text-slate-700">Contact Number</label>
-            <Input
+            <label htmlFor="registerform-contact-number" className="mb-1.5 block text-fine font-semibold text-slate-700">Contact Number</label>
+            <Input id="registerform-contact-number"
               type="text"
               placeholder="09171234567"
               value={formData.contactNumber}
@@ -134,8 +134,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="mb-1.5 block text-fine font-semibold text-slate-700">Password</label>
-              <PasswordInput
+              <label htmlFor="registerform-password" className="mb-1.5 block text-fine font-semibold text-slate-700">Password</label>
+              <PasswordInput id="registerform-password"
                 placeholder="Create a password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -144,8 +144,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
               />
             </div>
             <div className="space-y-1">
-              <label className="mb-1.5 block text-fine font-semibold text-slate-700">Confirm Password</label>
-              <PasswordInput
+              <label htmlFor="registerform-confirm-password" className="mb-1.5 block text-fine font-semibold text-slate-700">Confirm Password</label>
+              <PasswordInput id="registerform-confirm-password"
                 placeholder="Confirm your password"
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
@@ -158,7 +158,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           <Button
             type="submit"
             disabled={submitting}
-            className="w-full bg-primary-hover hover:bg-primary-active text-white py-3 rounded-xl flex items-center justify-center space-x-2 font-semibold text-sm transition-colors border-0 cursor-pointer shadow-md mt-2"
+            size="lg"
+            className="w-full mt-2"
           >
             <span>{submitting ? 'Creating Account...' : 'Create Account'}</span>
             <ArrowRight className="w-4 h-4" />

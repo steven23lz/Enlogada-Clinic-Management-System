@@ -307,8 +307,13 @@ async function main() {
   }
 
   // 3. Paid and released — live on the modality worklists.
-  for (const category of ['Laboratory', 'Xray', 'Ultrasound', 'ECG']) {
-    const v = await makeVisit({ category, testIndex: 1 });
+  //
+  // These carry a referring physician. They are the tickets a technician actually looks at, and
+  // the worklist now shows "Ref: Dr. …" beside the test — without one on any live ticket the
+  // column is permanently blank and the feature is invisible in a demo. Varied by index so the
+  // screen shows more than one name.
+  for (const [i, category] of ['Laboratory', 'Xray', 'Ultrasound', 'ECG'].entries()) {
+    const v = await makeVisit({ category, testIndex: 1, referrerIndex: i });
     await payFor(v, pick(['Cash', 'GCash', 'PayMaya', 'Bank'], today.length));
     today.push(v);
     stages.push(`${v.patient.first_name} ${v.patient.last_name} — paid, on the ${category} worklist`);
@@ -475,7 +480,12 @@ async function main() {
           method: 'POST', token: client,
           body: { patientId: profiles[0].id, scheduledDate: dateStr, scheduledTime: slots[i].time || slots[i], notes: 'Online booking' },
         })).data.appointment;
-        const labTest = catalogue.Laboratory[0];
+        // Deliberately a test that NEEDS preparation — a Fasting Blood Sugar if the catalogue has
+        // one. It was Laboratory[0], which is a CBC and needs nothing, so the seeded booking
+        // showed no preparation note anywhere and the feature was invisible in a demo. FBS is
+        // also the honest example: it is exactly the test somebody books online and then forgets
+        // to fast for.
+        const labTest = catalogue.Laboratory.find((t) => t.preparation) || catalogue.Laboratory[0];
         await call('/tests/visit-tests', {
           method: 'POST', token: client,
           body: { patientVisitId: booking.patient_visit_id, testIds: [labTest.id] },

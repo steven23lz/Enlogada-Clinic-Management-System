@@ -1,27 +1,28 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import SidebarLayout from '../components/SidebarLayout';
-import { usePolling } from '../hooks/usePolling';
-import { Button } from '../components/ui/button';
-import { Panel, PanelBody } from '../components/ui/panel';
-import PageHeader from '../components/ui/page-header';
-import Toolbar, { SegmentedFilter, ToolbarSpacer } from '../components/ui/toolbar';
-import EmptyState from '../components/ui/empty-state';
-import MetricCard from '../components/ui/metric-card';
-import { Input } from '../components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { ConfirmDialog } from '../components/ui/confirm-dialog';
-import { SearchInput } from '../components/ui/search-input';
-import { StatusBadge } from '../components/ui/status-badge';
-import Pagination from '../components/ui/pagination';
-import api from '../config/api';
-import { toastSuccess, toastError, toastInfo } from '../lib/toast';
-import WaitBadge from '../components/ui/wait-badge';
-import { SkeletonRows } from '../components/ui/skeleton';
-import { useAuth } from '../contexts/AuthContext';
-import ResultDocument from '../components/ResultDocument';
-import useOperationsReport from '../hooks/useOperationsReport';
-import { TurnaroundPanel } from '../components/reports/OperationsPanels';
+import SidebarLayout from '../../components/SidebarLayout';
+import { usePolling } from '../../hooks/usePolling';
+import { Button } from '../../components/ui/button';
+import { Panel, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import Toolbar, { SegmentedFilter, ToolbarSpacer } from '../../components/ui/toolbar';
+import EmptyState from '../../components/ui/empty-state';
+import MetricCard from '../../components/ui/metric-card';
+import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
+import { ConfirmDialog } from '../../components/ui/confirm-dialog';
+import { SearchInput } from '../../components/ui/search-input';
+import { StatusBadge } from '../../components/ui/status-badge';
+import Pagination from '../../components/ui/pagination';
+import api from '../../config/api';
+import { toastSuccess, toastError, toastInfo } from '../../lib/toast';
+import { ageFromBirthdate, formatDateTime } from '../../lib/date';
+import WaitBadge from '../../components/ui/wait-badge';
+import { SkeletonRows } from '../../components/ui/skeleton';
+import { useAuth } from '../../contexts/AuthContext';
+import ResultDocument from '../../components/ResultDocument';
+import useOperationsReport from '../../hooks/useOperationsReport';
+import { TurnaroundPanel } from '../../components/reports/OperationsPanels';
 import {
   Stethoscope,
   FlaskConical,
@@ -36,7 +37,9 @@ import {
   Pencil,
   Printer,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle,
+  PhoneCall
 } from 'lucide-react';
 
 // A ticket only reaches this console once the receptionist/cashier has released it, at which
@@ -96,6 +99,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
 
   // Result Upload Form State
   const [activeTest, setActiveTest] = useState(null);
+  // Released critical results still awaiting their phone call. Not department-scoped by the API
+  // on purpose — a potassium of 7.4 belongs to whoever can act on it, not to the room that
+  // produced it — so every diagnostic console shows the same list and whoever gets to it first
+  // records the call.
+  const [outstandingCriticals, setOutstandingCriticals] = useState([]);
+  const [showCriticals, setShowCriticals] = useState(false);
   const [findings, setFindings] = useState('');
   const [remarks, setRemarks] = useState('');
   // Phase B: a real uploaded file, replacing the old free-text URL field — see
@@ -113,6 +122,12 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   // Phase C finding 03: correcting an already-released result — reuses the same modal/upsert
   // path, just pre-filled and opened from the History table instead of the worklist.
   const [isEditingResult, setIsEditingResult] = useState(false);
+  // A reason is owed once the report has left the department, and only then. Re-saving a ticket
+  // that is still 'Waiting for Release' is drafting — the findings have been seen by nobody, so
+  // demanding a justification for fixing your own typo just fills the reason box with "typo"
+  // until it stops meaning anything. This mirrors the server rule in resultService.uploadResult;
+  // the server is the one that enforces it.
+  const isAmendingReleased = isEditingResult && activeTest?.test_status === 'Completed';
   // A panic value used to release with the same silent email as a routine result. Flagging it
   // here routes an urgent callback notification to the front desk on release.
   const [isCritical, setIsCritical] = useState(false);
@@ -203,11 +218,35 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   //
   // Suspended while a modal is open: refetching under an open findings dialog would swap the
   // underlying list while someone is typing into it.
+  // Released critical results still waiting on their phone call. Polled alongside the worklist
+  // rather than fetched once, because the whole point of the tile is that a panic value raised
+  // by another department, after this screen was opened, still reaches somebody. Failure is
+  // swallowed: an empty list is the honest fallback, and a red banner over a worklist because a
+  // secondary counter could not load would be worse than the counter being briefly stale.
+  const fetchOutstandingCriticals = useCallback(async () => {
+    try {
+      const res = await api.get('/results/critical/outstanding');
+      setOutstandingCriticals(res.data.data.outstanding || []);
+    } catch {
+      setOutstandingCriticals([]);
+    }
+  }, []);
+
   usePolling(
     () => (mode === 'history' ? fetchReleasedTests(category) : fetchPendingTests(category)),
     30000,
     { enabled: categoryResolved && !!category && !showUploadModal }
   );
+
+  // usePolling only sets an interval — it deliberately does not fire on mount, because every
+  // other caller here already has its own initial fetch. Without this the tile read "0 —
+  // nothing outstanding" for the first thirty seconds of every visit to the screen, which is
+  // the most confident possible way to be wrong about a panic value.
+  useEffect(() => {
+    if (mode === 'worklist') fetchOutstandingCriticals();
+  }, [mode, fetchOutstandingCriticals]);
+
+  usePolling(fetchOutstandingCriticals, 30000, { enabled: mode === 'worklist' && !showUploadModal });
 
   // Reset to page 1 whenever the filtered set could change shape, so a stale page number never
   // points past the end of a newly-filtered/newly-fetched list.
@@ -510,16 +549,34 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         <>
         {/* Department Modality Worklist Header Cards */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <MetricCard
-            label="Active Modality"
-            value={categoryLabel}
-            caption="Your department"
-            captionTone="slate"
-            icon={modalityIcon}
-            tone="green"
-          />
           <MetricCard label="Awaiting Exam" value={processingCount} caption="Paid and released to you" captionTone="slate" icon={Clock} tone="indigo" />
           <MetricCard label="Awaiting Release" value={awaitingReleaseCount} caption="Findings recorded, not authorised" captionTone="slate" icon={FileText} tone="amber" />
+          {/* The tile this replaced said "Active Modality: Laboratory — Your department", which
+              is the page title, the breadcrumb and the sidebar selection restated a fourth time
+              in a third of the metric strip. A metric strip is the most valuable space on an
+              operational screen and it was spending it on something the reader already knew.
+
+              What goes there instead is the one thing on this screen nobody could see: a released
+              critical result still waiting on its phone call. The escalation used to depend on the
+              technician who flagged it staying on the worklist — one raised near the end of a
+              shift had nobody watching it. Clicking opens the list. [1.28.0]
+
+              It stays visible at zero, deliberately: a counter that only appears when it is
+              non-zero teaches people not to look for it, and "0 outstanding" is the reassurance
+              the tile exists to give. */}
+          <MetricCard
+            label="Critical Callbacks"
+            value={outstandingCriticals.length}
+            caption={
+              outstandingCriticals.length
+                ? 'Patient still to be telephoned'
+                : 'Nothing outstanding'
+            }
+            captionTone={outstandingCriticals.length ? 'rose' : 'slate'}
+            icon={AlertTriangle}
+            tone={outstandingCriticals.length ? 'rose' : 'slate'}
+            onClick={outstandingCriticals.length ? () => setShowCriticals(true) : undefined}
+          />
         </div>
 
         <div>
@@ -543,7 +600,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         {/* Modality Worklist Data Table */}
         <Panel className="overflow-hidden rounded-t-none">
           <PanelBody flush>
-            <Table>
+            <Table stack>
               <TableHeader sticky>
                 <TableRow>
                   <TableHead>Queue Ticket</TableHead>
@@ -572,28 +629,46 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 ) : pagedTests.length > 0 ? (
                   pagedTests.map(test => (
                     <TableRow key={test.visit_test_id} className="hover:bg-slate-50/70 transition-colors">
-                      <TableCell className="py-3.5">
+                      <TableCell label="Queue Ticket" className="py-3.5">
                         <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
                           {test.queue_number || `VT-${test.visit_test_id}`}
                         </span>
                       </TableCell>
 
-                      <TableCell className="py-3.5 font-bold text-xs text-slate-900">
+                      <TableCell label="Patient" className="py-3.5 font-bold text-xs text-slate-900">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span>{test.first_name} {test.last_name}</span>
                           {/* The oldest ticket is usually the one to pick up next, and until now
                               this screen gave no indication of age at all. */}
                           <WaitBadge since={test.visit_created_at} />
                         </div>
-                        <span className="block text-meta text-gray-400 font-normal">PT-{test.patient_id}</span>
+                        {/* Age and sex, on the screen where findings are recorded.
+                            Diagnostic reference ranges are banded by both — a haemoglobin that is
+                            normal for a 40-year-old man is anaemia in a child — and the tech had
+                            to open a second screen to find out which band applied. The query has
+                            returned birthdate and sex all along; nothing rendered them. */}
+                        <span className="block text-meta text-gray-400 font-normal">
+                          PT-{test.patient_id}
+                          {ageFromBirthdate(test.birthdate) !== null && (
+                            <> &middot; {ageFromBirthdate(test.birthdate)}y</>
+                          )}
+                          {test.sex && <> &middot; {test.sex}</>}
+                        </span>
                       </TableCell>
 
-                      <TableCell className="py-3.5 text-xs font-bold text-gray-800">
+                      <TableCell label="Examination" className="py-3.5 text-xs font-bold text-gray-800">
                         {test.test_name}
                         <span className="block text-meta text-gray-400 font-normal">{test.category_name}</span>
+                        {/* Who asked for it [1.23.0]. The report goes back to this doctor, and a
+                            tech querying an odd result needs to know who to call. */}
+                        {test.referring_physician && (
+                          <span className="block text-meta font-normal text-brand-700">
+                            Ref: {test.referring_physician}
+                          </span>
+                        )}
                       </TableCell>
 
-                      <TableCell className="py-3.5">
+                      <TableCell label="Status" className="py-3.5">
                         <div className="flex flex-col items-start gap-1">
                           <StatusBadge status={test.test_status} className="px-2.5 py-0.5" />
                           {/* Phase C finding 05: HMO-approval status wasn't surfaced anywhere on
@@ -650,7 +725,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             page={worklistPage}
             totalPages={worklistTotalPages}
             onPageChange={setWorklistPage}
-            totalLabel={`${filteredTests.length} total`}
+            total={filteredTests.length} pageSize={PAGE_SIZE}
           />
         </Panel>
         </div>
@@ -677,7 +752,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         {/* Released Results Table (read-only) */}
         <Panel className="overflow-hidden rounded-t-none">
           <PanelBody flush>
-            <Table>
+            <Table stack>
               <TableHeader sticky>
                 <TableRow>
                   <TableHead>Queue Ticket</TableHead>
@@ -706,23 +781,35 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 ) : pagedReleased.length > 0 ? (
                   pagedReleased.map(test => (
                     <TableRow key={test.visit_test_id} className="hover:bg-slate-50/70 transition-colors">
-                      <TableCell className="py-3.5">
+                      <TableCell label="Queue Ticket" className="py-3.5">
                         <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
                           {test.queue_number || `VT-${test.visit_test_id}`}
                         </span>
                       </TableCell>
 
-                      <TableCell className="py-3.5 font-bold text-xs text-slate-900">
+                      <TableCell label="Patient" className="py-3.5 font-bold text-xs text-slate-900">
                         {test.first_name} {test.last_name}
                       </TableCell>
 
-                      <TableCell className="py-3.5 text-xs font-bold text-gray-800">
+                      <TableCell label="Examination" className="py-3.5 text-xs font-bold text-gray-800">
                         {test.test_name}
+                        {/* A corrected report is not the same document as a first one, and this
+                            screen's own description promises "including amended versions" while
+                            showing nothing that distinguished them. A v2 read exactly like a v1,
+                            so somebody scanning the history could not tell which reports had been
+                            re-issued — which is the first thing you want to know when a patient
+                            or a referring doctor rings up about one. `version` was already in the
+                            payload; nothing displayed it. */}
+                        {test.version > 1 && (
+                          <span className="ml-1.5 inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wide text-amber-800 ring-1 ring-inset ring-amber-200">
+                            Amended &middot; v{test.version}
+                          </span>
+                        )}
                         <span className="block text-meta text-gray-400 font-normal">{test.category_name}</span>
                       </TableCell>
 
-                      <TableCell className="py-3.5 text-xs text-gray-500">
-                        {test.released_at ? new Date(test.released_at).toLocaleString() : '—'}
+                      <TableCell label="Released" className="py-3.5 text-xs text-gray-500">
+                        {test.released_at ? formatDateTime(test.released_at) : '—'}
                         {test.released_by_first_name && (
                           <span className="block text-meta text-gray-400">by {test.released_by_first_name} {test.released_by_last_name}</span>
                         )}
@@ -772,7 +859,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
             page={historyPage}
             totalPages={historyTotalPages}
             onPageChange={setHistoryPage}
-            totalLabel={`${filteredReleased.length} total`}
+            total={filteredReleased.length} pageSize={PAGE_SIZE}
           />
         </Panel>
 
@@ -835,7 +922,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 </div>
               )}
               <div className="text-fine text-gray-400">
-                Released {viewingResult?.released_at ? new Date(viewingResult.released_at).toLocaleString() : '—'}
+                Released {viewingResult?.released_at ? formatDateTime(viewingResult.released_at) : '—'}
                 {viewingResult?.released_by_first_name && ` by ${viewingResult.released_by_first_name} ${viewingResult.released_by_last_name}`}
               </div>
             </div>
@@ -883,7 +970,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                     </div>
                   )}
                   <p className="text-fine text-gray-400 m-0 pt-2 border-t border-[#e6ebf1]">
-                    Released {new Date(justReleased.released_at).toLocaleString()}
+                    Released {formatDateTime(justReleased.released_at)}
                     {justReleased.released_by_first_name && ` by ${justReleased.released_by_first_name} ${justReleased.released_by_last_name}`}
                   </p>
                 </div>
@@ -963,8 +1050,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               )}
 
               <div className="space-y-1.5">
-                <label className="field-label">Findings & Impression (Required)</label>
-                <textarea
+                <label htmlFor="diagnosticdashboard-findings-impression-required" className="field-label">Findings & Impression (Required)</label>
+                <textarea id="diagnosticdashboard-findings-impression-required"
                   rows={6}
                   placeholder="Enter detailed laboratory/imaging findings, measurements, and impression..."
                   value={findings}
@@ -975,8 +1062,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="field-label">Remarks / Recommendations (Optional)</label>
-                <Input
+                <label htmlFor="diagnosticdashboard-remarks-recommendations-optional" className="field-label">Remarks / Recommendations (Optional)</label>
+                <Input id="diagnosticdashboard-remarks-recommendations-optional"
                   placeholder="e.g. Clinical correlation recommended..."
                   value={remarks}
                   onChange={e => setRemarks(e.target.value)}
@@ -985,8 +1072,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="field-label">Attach Report File (Optional)</label>
-                <input
+                <label htmlFor="diagnosticdashboard-attach-report-file-optional" className="field-label">Attach Report File (Optional)</label>
+                <input id="diagnosticdashboard-attach-report-file-optional"
                   type="file"
                   accept="application/pdf,image/jpeg,image/png"
                   onChange={handleFileChange}
@@ -1004,7 +1091,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               {/* Why a released report is being changed. Required on an amendment because the
                   audit entry is otherwise "something changed" and nothing more — the superseded
                   version is kept, but without a reason nobody can tell why it was replaced. */}
-              {isEditingResult && (
+              {isAmendingReleased && (
                 <div className="space-y-1.5">
                   <label htmlFor="amendment-reason" className="field-label">
                     Reason for Amendment <span className="text-rose-600">*</span>
@@ -1052,7 +1139,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 <Button type="button" variant="outline" onClick={() => setShowUploadModal(false)}>Cancel</Button>
                 <Button
                   type="submit"
-                  disabled={savingFindings || (isEditingResult && !amendmentReason.trim())}
+                  disabled={savingFindings || (isAmendingReleased && amendmentReason.trim().length < 4)}
                   variant="outline"
                   className="font-bold text-xs px-5 py-2 rounded-xl border-gray-200 flex items-center space-x-1.5"
                 >
@@ -1099,6 +1186,68 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
         patientName={previewDoc?.patientName}
         fileName={previewDoc?.fileName}
       />
+
+      {/* Who still has to be telephoned. [1.28.0]
+          The endpoint existed with nothing reading it; before that, the only sign of a panic
+          value anywhere was a badge on one department's worklist row. Oldest first, because the
+          age of an un-made call is the whole severity of it — and the number is shown in the
+          open rather than behind a hover, since the reason this fails is people not looking. */}
+      <Dialog open={showCriticals} onOpenChange={setShowCriticals}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Critical results awaiting a callback</DialogTitle>
+            <DialogDescription>
+              Released with a panic value and not yet confirmed as communicated. Telephone the
+              patient, then record the call — whoever makes it, from any department.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+            {outstandingCriticals.map((c) => (
+              <div
+                key={c.visit_test_id}
+                className="rounded-xl border border-rose-200 bg-rose-50/60 p-3"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="m-0 text-[13px] font-bold text-slate-900">
+                      {c.first_name} {c.last_name}
+                    </p>
+                    <p className="m-0 text-fine text-slate-600">
+                      {c.test_name} &bull; released {c.released_at ? formatDateTime(c.released_at) : '—'}
+                    </p>
+                  </div>
+                  {/* The number is the point of the row: it is what the person acts on. */}
+                  {c.contact_number && (
+                    <a
+                      href={`tel:${c.contact_number}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-fine font-bold text-white no-underline hover:bg-rose-700"
+                    >
+                      <PhoneCall className="h-3.5 w-3.5" />
+                      {c.contact_number}
+                    </a>
+                  )}
+                </div>
+                {c.findings && (
+                  <p className="m-0 mt-1.5 line-clamp-2 text-fine text-slate-700">{c.findings}</p>
+                )}
+                {!c.contact_number && (
+                  <p className="m-0 mt-1.5 text-fine font-semibold text-rose-700">
+                    No contact number on file — check the visit record.
+                  </p>
+                )}
+              </div>
+            ))}
+            {outstandingCriticals.length === 0 && (
+              <EmptyState
+                icon={CheckCircle2}
+                title="Every critical result has been called through"
+                description="Nothing is waiting on a phone call."
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </SidebarLayout>
   );
 };

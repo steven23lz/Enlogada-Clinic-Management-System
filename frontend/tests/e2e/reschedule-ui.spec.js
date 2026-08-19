@@ -37,7 +37,10 @@ test('a patient reschedules from their own booking list', async ({ page }) => {
 
   const day = new Date();
   day.setDate(day.getDate() + 300 + (Date.now() % 30));
-  if (day.getDay() === 0) day.setDate(day.getDate() + 1);
+  // Saturday too, not just Sunday: the clinic is open 08:00-17:00 on weekdays but only
+  // 08:00-12:00 on a Saturday, so a booking spec that lands there has 8 slots instead of 18
+  // and starts failing on the day of the week rather than on anything in the app.
+  while (day.getDay() === 0 || day.getDay() === 6) day.setDate(day.getDate() + 1);
   const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
 
   const free = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth })).json())

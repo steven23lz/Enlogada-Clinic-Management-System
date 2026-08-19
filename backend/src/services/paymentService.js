@@ -3,7 +3,9 @@ const discountService = require('./discountService');
 const db = require('../config/database');
 const notificationService = require('./notificationService');
 const visitService = require('./visitService');
+const visitRepository = require('../repositories/visitRepository');
 const auditService = require('./auditService');
+const logger = require('../config/logger');
 
 // Feature Gap Plan Phase A: payment_status's CHECK constraint has allowed 'Refunded'/'Cancelled'
 // since the schema baseline, but no endpoint ever set them — a duplicate or disputed charge had
@@ -46,8 +48,26 @@ class PaymentService {
       category: item.category_name,
       price: parseFloat(item.price_at_time).toFixed(2),
       status: item.status,
-      hmoApproved: item.hmo_approval_status === 'Approved'
+      hmoApproved: item.hmo_approval_status === 'Approved',
+      // Only meaningful on a refusal, and null everywhere else — including on claims decided
+      // before [1.27.0], which have no honest answer to give.
+      hmoRejected: item.hmo_approval_status === 'Rejected',
+      hmoDecisionReason: item.hmo_decision_reason || null
     }));
+
+    // Tests on this visit whose HMO claim has not been decided yet. [1.27.0]
+    //
+    // Charged at full price here, because an undecided claim covers nothing — which is arithmetic
+    // the cashier cannot see. The patient hands over the full amount for a test their HMO is
+    // about to cover, the approval lands the next day, and the clinic now owes a refund: a second
+    // counter visit, a reversal against the cashier's account, and a patient who was charged for
+    // something they had been told was covered.
+    //
+    // Reported, not blocked. Some providers take days to answer and the patient cannot be kept
+    // waiting at the counter for one — so this is the cashier's decision to make, and all the
+    // system owes them is the fact that it is a decision at all.
+    const undecided = items.filter((item) => item.hmo_approval_status === 'Pending');
+    const hmoPendingAmount = undecided.reduce((sum, item) => sum + parseFloat(item.price_at_time), 0);
 
     return {
       visitId,
@@ -60,6 +80,9 @@ class PaymentService {
       items: formattedItems,
       subtotal: subtotal.toFixed(2),
       hmoCoverage: hmoCoverage.toFixed(2),
+      // How much of this bill is riding on a claim nobody has answered yet.
+      hmoPendingCount: undecided.length,
+      hmoPendingAmount: hmoPendingAmount.toFixed(2),
       discountAmount: discountAmount.toFixed(2),
       // Zero unless a statutory discount applies at a VAT-registered clinic. The receipt has to
       // show it as its own line — BIR requires a VAT-exempt sale to be presented that way, and a
@@ -175,6 +198,21 @@ class PaymentService {
       throw error;
     }
 
+    // A reversal must say why. [1.26.0]
+    //
+    // `reason` was optional, so money could leave the till with the audit entry recording who and
+    // how much and nothing at all about why. That is the one field that makes the entry worth
+    // keeping: "Cashier refunded ₱1,200" answers nothing when somebody asks about it in three
+    // months, and the person who could have answered has gone home. Required, and required to be
+    // more than a keystroke.
+    if (!reason || String(reason).trim().length < 4) {
+      const error = new Error(
+        `Give a reason for the ${status.toLowerCase()} — it is recorded against your account and is what explains this to anyone reviewing the day's takings.`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
     const payment = await paymentRepository.findById(paymentId);
     if (!payment) {
       const error = new Error('Payment not found');
@@ -189,9 +227,34 @@ class PaymentService {
 
     const updated = await paymentRepository.updatePaymentStatus(paymentId, status, reason);
 
-    await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
+    // Take the visit back off the modality worklists. [1.26.0]
+    //
+    // Payment is half of the release rule, so reversing it removes the precondition — and until
+    // now nothing acted on that. A refunded visit stayed 'Processing' with its tickets in front
+    // of the department, which carried on and did the work: the clinic paying twice, once in
+    // reagents and time and once in the refund, with nothing on any screen connecting the two.
+    //
+    // Work already performed is left alone. A test that has reached 'Waiting for Release' or
+    // 'Completed' has been done, and a refund is a commercial decision rather than a reason to
+    // pretend an assay never ran.
+    let recall = { testsRecalled: 0, workAlreadyDone: false };
+    try {
+      recall = await visitRepository.recallVisitFromModalities(payment.patient_visit_id);
+    } catch (err) {
+      // The reversal itself is committed and correct; failing here must not undo it. Logged loudly
+      // because it leaves a ticket on a worklist that should not be there.
+      logger.error(`Refund recall failed for visit ${payment.patient_visit_id}: ${err.message}`);
+    }
+
+    await notificationService.notifyRoles(['Admin', 'SuperAdmin', 'Receptionist'], {
       title: `Payment ${status}`,
-      message: `Receipt #${payment.receipt_number} — ₱${parseFloat(payment.amount).toFixed(2)}${reason ? `: ${reason}` : ''}`,
+      message:
+        `Receipt #${payment.receipt_number} — ₱${parseFloat(payment.amount).toFixed(2)}: ${reason}` +
+        (recall.workAlreadyDone
+          ? ' — work already performed, tickets left with the department.'
+          : recall.testsRecalled
+            ? ` — ${recall.testsRecalled} ticket(s) pulled back off the worklist.`
+            : ''),
       type: 'warning'
     });
 
@@ -206,8 +269,28 @@ class PaymentService {
     return updated;
   }
 
-  async getTransactions({ startDate, endDate }) {
-    return await paymentRepository.findTransactions({ startDate, endDate });
+  // `limit` is optional and absent by default, so the callers that need the whole set — the
+  // cashier's own daily collections total, the metric strip, the sales-by-service report — keep
+  // getting it. Only the screens that show a page ask for one.
+  async getTransactions({ startDate, endDate, page, limit }) {
+    const limitNum = limit ? Math.min(Math.max(parseInt(limit, 10) || 0, 1), 100) : null;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+
+    const rows = await paymentRepository.findTransactions({
+      startDate,
+      endDate,
+      limit: limitNum,
+      offset: limitNum ? (pageNum - 1) * limitNum : 0,
+    });
+
+    if (!limitNum) return rows;
+    return {
+      transactions: Array.from(rows),
+      total: rows.total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.max(1, Math.ceil(rows.total / limitNum)),
+    };
   }
 
   async getPaymentsForVisit(visitId) {

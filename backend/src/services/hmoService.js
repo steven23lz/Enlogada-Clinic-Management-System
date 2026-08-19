@@ -3,10 +3,62 @@ const path = require('path');
 const hmoRepository = require('../repositories/hmoRepository');
 const db = require('../config/database');
 const auditService = require('./auditService');
+const notificationService = require('./notificationService');
 const { HMO_CARD_UPLOAD_ROOT } = require('../config/upload');
 const { CLIENT_ROLE, isStaffUser } = require('../constants/roles');
 const visitRepository = require('../repositories/visitRepository');
 const { assertReferralIfRequired, normaliseReferral, isNamed } = require('./referralService');
+
+// The decisions an HMO claim's individual test can carry, mirroring chk_hmo_request_tests_status.
+// Kept here so a bad value is refused with a 400 that names the alternatives, rather than passed
+// through to Postgres and returned as an unexplained 500 — 'Denied' is the word the providers
+// themselves use, so it is the value a caller reaches for first, and it is not this one.
+const HMO_TEST_DECISIONS = ['Pending', 'Approved', 'Rejected'];
+
+/**
+ * A claim is decided once. [1.28.0]
+ *
+ * Without this, approving an already-rejected claim silently overwrote the refusal and its
+ * reason — the one record of why the patient was charged — and re-approving an approved one
+ * reissued the notification, so the cashier got told twice about a claim they had already
+ * settled. Re-deciding is a real need, but it is a reversal, and a reversal should be a
+ * deliberate act with its own trail rather than a second click that looks like the first.
+ */
+function assertUndecided(request) {
+  if (request.status === 'Pending') return;
+  const error = new Error(
+    `This claim was already ${request.status.toLowerCase()}. Reopen it before recording a different decision.`
+  );
+  error.statusCode = 409;
+  throw error;
+}
+
+/**
+ * Tell the counter a claim has been decided. [1.28.0]
+ *
+ * This is the step the workflow was missing. Reception raises the claim, an Admin decides it,
+ * and the cashier bills what is left — but nothing connected the second step to the third. The
+ * patient sat in the lobby while the cashier reloaded the bill on a hunch, or charged them in
+ * full because nothing said otherwise and the approval landed an hour later.
+ *
+ * Cashier and Receptionist both: the cashier collects, and the receptionist is the one standing
+ * with the patient explaining the wait. Admins are deliberately not notified — they are the ones
+ * who just did it.
+ *
+ * Named for the patient rather than the claim id, because "Maria Santos — MediCard approved" is
+ * actionable at a counter and "HMO request #482 approved" is a lookup somebody has to go and do.
+ *
+ * notifyRoles swallows its own errors, so a notification problem can never fail a decision that
+ * has already been written.
+ */
+async function handOffToCashier(request, { type, title, detail }) {
+  const patient = [request.patient_first_name, request.patient_last_name].filter(Boolean).join(' ');
+  await notificationService.notifyRoles(['Cashier', 'Receptionist'], {
+    title,
+    type,
+    message: patient ? `${patient} — ${detail}` : detail,
+  });
+}
 
 // Mirrors testService.js's assertClientOwnsVisit, which exists for the same reason: that endpoint
 // also authorizes the Client role for self-service booking and originally trusted whatever ids the
@@ -150,7 +202,7 @@ class HmoService {
    * there would be a redundant query issued while the slot's advisory lock is held.
    */
   async createRequest(
-    { hmoProviderId, approvalCode, visitTestIds, cardFile = null, referral = null },
+    { hmoProviderId, approvalCode, memberNumber = null, visitTestIds, cardFile = null, referral = null },
     requestingUser,
     { ownershipAlreadyAsserted = false } = {}
   ) {
@@ -173,6 +225,10 @@ class HmoService {
       const request = await hmoRepository.createRequestWithTests({
         hmoProviderId,
         approvalCode,
+        // Trimmed to null rather than stored as ''. An empty string reads as "we recorded a
+        // member number and it is blank", which is a different and untrue statement from "no
+        // number was given".
+        memberNumber: String(memberNumber || '').trim() || null,
         visitTestIds: [...new Set(visitTestIds)],
         card
       });
@@ -255,8 +311,12 @@ class HmoService {
       error.statusCode = 404;
       throw error;
     }
+    assertUndecided(request);
 
-    const approved = await hmoRepository.approveRequest(id, { approvalCode });
+    const approved = await hmoRepository.approveRequest(id, {
+      approvalCode,
+      decidedBy: requestingUser?.userId ?? null,
+    });
 
     await auditService.log({
       actorId: requestingUser?.userId,
@@ -266,7 +326,67 @@ class HmoService {
       description: `Approved HMO request for ${request.provider_name} (code: ${approvalCode})`
     });
 
+    await handOffToCashier(request, {
+      type: 'success',
+      title: 'HMO claim approved',
+      detail: `${request.provider_name} approved the claim (code ${approvalCode}). The bill is ready to settle.`,
+    });
+
     return approved;
+  }
+
+  /**
+   * Turn a whole claim down. [1.28.0]
+   *
+   * The workflow the clinic runs is: reception raises the claim, an Admin or SuperAdmin decides
+   * it, the cashier bills what is left. Only the first and third steps existed. `hmo:approve` is
+   * held by Admin and SuperAdmin alone — that part was already right — but the route could only
+   * ever say yes, so a claim the provider refused had two outcomes available in practice: approve
+   * it anyway, or leave it Pending forever at the top of a worklist that filters on Pending.
+   *
+   * The reason is required for the same purpose as the per-test one in [1.27.0]: the cashier is
+   * the person who has to tell the patient why they are paying, and it is the only field that
+   * answers them.
+   */
+  async rejectRequest(id, { decisionReason }, requestingUser) {
+    const request = await hmoRepository.findRequestById(id);
+    if (!request) {
+      const error = new Error('HMO request not found');
+      error.statusCode = 404;
+      throw error;
+    }
+    assertUndecided(request);
+
+    const reason = String(decisionReason || '').trim();
+    if (reason.length < 4) {
+      const error = new Error(
+        'Say why the claim was turned down. The cashier has to explain the full charge to the ' +
+          'patient, who was expecting their HMO to cover it.'
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const rejected = await hmoRepository.rejectRequest(id, {
+      decisionReason: reason,
+      decidedBy: requestingUser?.userId ?? null,
+    });
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: 'hmo_request.rejected',
+      entityType: 'hmo_request',
+      entityId: id,
+      description: `Rejected HMO request for ${request.provider_name} — ${reason}`
+    });
+
+    await handOffToCashier(request, {
+      type: 'warning',
+      title: 'HMO claim turned down',
+      detail: `${request.provider_name} refused the claim — ${reason}. The patient pays in full.`,
+    });
+
+    return rejected;
   }
 
   async updateRequestStatus(id, status) {
@@ -292,22 +412,79 @@ class HmoService {
     return { ...request, tests };
   }
 
-  async updateTestApproval(hmoRequestTestId, approvalStatus, requestingUser) {
-    const updated = await hmoRepository.updateTestApprovalStatus(hmoRequestTestId, approvalStatus);
+  /**
+   * Record the HMO's decision on one test of a claim. [1.27.0]
+   *
+   * Three things this did not do. It accepted any string and let the CHECK constraint refuse it,
+   * so a caller sending 'Denied' — the word the HMOs themselves use — got a 500 with no hint that
+   * the vocabulary here is 'Rejected'. It recorded neither who decided nor when, alone among the
+   * money-moving actions in this system. And it took a rejection with no reason, which is the
+   * only field the front desk actually needs: an approval explains itself, a rejection is a
+   * conversation at the counter about 1,500 pesos the patient was not expecting to pay.
+   */
+  async updateTestApproval(hmoRequestTestId, approvalStatus, requestingUser, decisionReason = null) {
+    if (!HMO_TEST_DECISIONS.includes(approvalStatus)) {
+      const error = new Error(
+        `'${approvalStatus}' is not a decision this system records. Use one of: ${HMO_TEST_DECISIONS.join(', ')}.`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const reason = String(decisionReason || '').trim();
+    if (approvalStatus === 'Rejected' && reason.length < 4) {
+      const error = new Error(
+        'Say why the HMO refused this test. The cashier has to explain the charge to the patient, ' +
+          'and the patient may query it days later.'
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const updated = await hmoRepository.updateTestApprovalStatus(hmoRequestTestId, approvalStatus, {
+      // A reason on an approval would read as a caveat on cover the HMO did not attach; the field
+      // is cleared so the column holds refusals only, which is what anyone reading it expects.
+      decisionReason: approvalStatus === 'Rejected' ? reason : null,
+      decidedBy: requestingUser?.userId ?? null,
+    });
+
+    if (!updated) {
+      const error = new Error('That test is not on this claim.');
+      error.statusCode = 404;
+      throw error;
+    }
 
     await auditService.log({
       actorId: requestingUser?.userId,
       action: approvalStatus === 'Approved' ? 'hmo_request_test.approved' : 'hmo_request_test.rejected',
       entityType: 'hmo_request_test',
       entityId: hmoRequestTestId,
-      description: `Set test approval status to ${approvalStatus} for HMO request test #${hmoRequestTestId}`
+      description:
+        `Set test approval status to ${approvalStatus} for HMO request test #${hmoRequestTestId}` +
+        (approvalStatus === 'Rejected' ? ` — ${reason}` : '')
     });
 
     return updated;
   }
 
-  async getAllRequests(filters) {
-    return await hmoRepository.findAllRequests(filters);
+  async getAllRequests({ status, page, limit } = {}) {
+    const limitNum = limit ? Math.min(Math.max(parseInt(limit, 10) || 0, 1), 100) : null;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+
+    const rows = await hmoRepository.findAllRequests({
+      status,
+      limit: limitNum,
+      offset: limitNum ? (pageNum - 1) * limitNum : 0,
+    });
+
+    if (!limitNum) return rows;
+    return {
+      requests: Array.from(rows),
+      total: rows.total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.max(1, Math.ceil(rows.total / limitNum)),
+    };
   }
 
   async getProviders() {

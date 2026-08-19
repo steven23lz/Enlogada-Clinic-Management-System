@@ -17,9 +17,7 @@ import { ShieldCheck, AlertCircle, Check, X } from 'lucide-react';
 
 const STATUS_FILTERS = ['All', 'Pending', 'Approved', 'Rejected', 'Cancelled'];
 
-// UI/UX Modernization Phase 4: GET /hmo/requests has no server-side pagination, so a client-side
-// page size over the already-fetched, status-filtered array is proportionate (VISUAL_IDENTITY.md
-// §3a #11).
+// Sent to the server as `limit` — GET /hmo/requests pages at the database now [1.29.0].
 const PAGE_SIZE = 15;
 
 // Module 15 (Test and Service Request): the approval half of the HMO request/approval flow.
@@ -29,8 +27,15 @@ const PAGE_SIZE = 15;
 const ServiceRequests = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed fetch used to reach console.error and stop there, so the screen rendered its
+  // EMPTY state — "No HMO requests yet" over a 500. That is the one thing empty-state.jsx's own
+  // docstring says must never happen: a quiet clinic and a broken server call for opposite
+  // responses, and one of them was being reported as the other.
+  const [loadError, setLoadError] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [detailRequest, setDetailRequest] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -39,16 +44,34 @@ const ServiceRequests = () => {
   const [card, setCard] = useState({ url: '', kind: null });
   const [cardError, setCardError] = useState('');
   const [detailSubmitting, setDetailSubmitting] = useState(false);
+  // Which test is being refused, and the reason being typed for it. A refusal opens an inline row
+  // rather than a dialog: the coordinator is reading down a list of tests deciding each one, and
+  // a modal per refusal loses the list they are working from. Approving stays one click — it is
+  // the refusal that has to be explained at the counter later.
+  const [rejecting, setRejecting] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  // The same pair for the claim as a whole, which is a separate decision from any one test.
+  const [rejectingClaim, setRejectingClaim] = useState(false);
+  const [claimReason, setClaimReason] = useState('');
 
-  const fetchRequests = useCallback(async () => {
+  // Paged at the server. [1.29.0] The approval worklist showed fifteen and this fetched every
+  // claim the clinic has ever filed.
+  const fetchRequests = useCallback(async (nextPage = 1) => {
     setLoading(true);
+    setLoadError('');
     try {
-      const params = statusFilter !== 'All' ? { status: statusFilter } : {};
+      const params = { page: nextPage, limit: PAGE_SIZE };
+      if (statusFilter !== 'All') params.status = statusFilter;
       const res = await api.get('/hmo/requests', { params });
-      setRequests(res.data.data.requests || []);
-      setPage(1);
+      const { requests: rows, total: count, totalPages: pages } = res.data.data;
+      setRequests(rows || []);
+      setTotal(count ?? (rows || []).length);
+      setTotalPages(pages || 1);
+      setPage(nextPage);
     } catch (err) {
+      // Recorded, not just logged: a swallowed failure renders as an empty list.
       console.error('Failed to fetch HMO requests:', err);
+      setLoadError(err.response?.data?.message || 'The server did not respond. The list below may be out of date.');
     } finally {
       setLoading(false);
     }
@@ -98,18 +121,38 @@ const ServiceRequests = () => {
     }
   };
 
-  const handleSetTestApproval = async (hmoRequestTestId, approvalStatus) => {
+  // Turning the whole claim down. [1.28.0] Until now the screen could only say yes, so a claim
+  // the provider refused was either approved anyway or left Pending forever.
+  const handleRejectRequest = async (e) => {
+    e.preventDefault();
+    setDetailSubmitting(true);
     setDetailError('');
     try {
-      await api.put(`/hmo/request-test/${hmoRequestTestId}`, { approvalStatus });
+      await api.put(`/hmo/request/${detailRequest.id}/reject`, { decisionReason: claimReason.trim() });
+      setRejectingClaim(false);
+      setClaimReason('');
+      await refreshDetail(detailRequest.id);
+    } catch (err) {
+      setDetailError(err.response?.data?.message || 'Failed to record the refusal.');
+    } finally {
+      setDetailSubmitting(false);
+    }
+  };
+
+  const handleSetTestApproval = async (hmoRequestTestId, approvalStatus, decisionReason = null) => {
+    setDetailError('');
+    try {
+      await api.put(`/hmo/request-test/${hmoRequestTestId}`, { approvalStatus, decisionReason });
+      setRejecting(null);
+      setRejectReason('');
       await refreshDetail(detailRequest.id);
     } catch (err) {
       setDetailError(err.response?.data?.message || 'Failed to update test approval.');
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(requests.length / PAGE_SIZE));
-  const pagedRequests = requests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // `requests` IS the page — the server sent exactly these rows.
+  const pagedRequests = requests;
 
   // The card image behind the claim. Fetched as a blob rather than pointed at with an <img src>,
   // because the route requires a bearer token that a plain browser image request cannot send —
@@ -153,7 +196,9 @@ const ServiceRequests = () => {
         icon={ShieldCheck}
         title="Service & HMO Requests"
         description="Review and approve HMO pre-authorisation logged by Reception. Approval is Admin-only — Reception can log a request but not clear it."
-        meta={<span><strong className="font-semibold text-slate-700">{requests.length}</strong> request{requests.length === 1 ? '' : 's'}</span>}
+        meta={(loadError || loading)
+          ? undefined
+          : <span><strong className="font-semibold text-slate-700">{total}</strong> request{total === 1 ? '' : 's'}</span>}
       />
 
       <div>
@@ -171,22 +216,65 @@ const ServiceRequests = () => {
             <Table>
               <TableHeader sticky>
                 <TableRow>
-                  <TableHead>Provider</TableHead>
+                  {/* Patient first. It is the only thing that distinguishes one row from the
+                      next — seven claims from the same provider on the same day were seven
+                      identical rows, and the only way to learn whose insurance you were about to
+                      approve was to open each one in turn. */}
+                  <TableHead>Patient</TableHead>
+                  <TableHead>Provider &amp; member</TableHead>
                   <TableHead>Requested</TableHead>
-                  <TableHead>Tests Approved</TableHead>
+                  <TableHead>Tests decided</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
+                {/* Error before empty. A failed fetch used to fall through to the empty branch,
+                    so a 500 rendered as "nothing here yet" — which is a false statement about the
+                    clinic's data, not merely an unhelpful one. */}
+                {loadError ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="p-0">
+                      <EmptyState
+                        tone="error"
+                        title="Could not load the HMO requests"
+                        description={loadError}
+                        action={<Button variant="outline" size="sm" onClick={() => fetchRequests()}>Try again</Button>}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : loading ? (
                   <SkeletonRows rows={5} columns={5} />
                 ) : pagedRequests.length > 0 ? (
                   pagedRequests.map(r => (
                     <TableRow key={r.id}>
-                      <TableCell className="font-semibold text-slate-900">{r.provider_name}</TableCell>
+                      <TableCell>
+                        <span className="block font-semibold text-slate-900">
+                          {r.patient_first_name ? `${r.patient_first_name} ${r.patient_last_name}` : 'Unlinked claim'}
+                        </span>
+                        {r.queue_number && (
+                          <span className="text-fine tabular-nums text-slate-500">Ticket {r.queue_number}</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="block text-slate-700">{r.provider_name}</span>
+                        {r.member_number && (
+                          <span className="text-fine tabular-nums text-slate-500">{r.member_number}</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-slate-500">{new Date(r.request_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</TableCell>
-                      <TableCell className="font-medium tabular-nums">{r.approved_test_count} / {r.test_count}</TableCell>
+                      {/* Approved AND refused, not just approved. "1 / 2" left the reader unable to
+                          tell a claim half-decided from one where the other half was turned down. */}
+                      <TableCell className="font-medium tabular-nums">
+                        <span className="text-emerald-700">{r.approved_test_count}</span>
+                        {parseInt(r.rejected_test_count, 10) > 0 && (
+                          <>
+                            <span className="text-slate-300"> / </span>
+                            <span className="text-rose-700">{r.rejected_test_count} refused</span>
+                          </>
+                        )}
+                        <span className="text-slate-400"> of {r.test_count}</span>
+                      </TableCell>
                       <TableCell><StatusBadge status={r.status} /></TableCell>
                       <TableCell className="text-right">
                         <Button onClick={() => openDetail(r.id)} variant="outline" size="xs">
@@ -197,7 +285,7 @@ const ServiceRequests = () => {
                   ))
                 ) : (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={5} className="p-0">
+                    <TableCell colSpan={6} className="p-0">
                       <EmptyState
                         icon={ShieldCheck}
                         title={statusFilter === 'All' ? 'No HMO requests logged' : `Nothing is ${statusFilter.toLowerCase()}`}
@@ -209,7 +297,7 @@ const ServiceRequests = () => {
               </TableBody>
             </Table>
           </PanelBody>
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalLabel={`${requests.length} total`} />
+          <Pagination page={page} totalPages={totalPages} onPageChange={fetchRequests} total={loadError ? 0 : total} pageSize={PAGE_SIZE} />
         </Panel>
       </div>
 
@@ -217,7 +305,11 @@ const ServiceRequests = () => {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>HMO Request Review</DialogTitle>
-            <DialogDescription>{detailRequest?.provider_name}</DialogDescription>
+            <DialogDescription>
+              {detailRequest?.patient_first_name
+                ? `${detailRequest.patient_first_name} ${detailRequest.patient_last_name} — ${detailRequest.provider_name}`
+                : detailRequest?.provider_name}
+            </DialogDescription>
           </DialogHeader>
 
           {detailLoading ? (
@@ -325,55 +417,184 @@ const ServiceRequests = () => {
                 )}
               </div>
 
-              {detailRequest?.status !== 'Approved' && (
-                <form onSubmit={handleApproveRequest} className="space-y-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
-                  <label className="field-label">Approve Request — Approval / LOA Code</label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Enter approval code"
-                      value={approvalCode}
-                      onChange={e => setApprovalCode(e.target.value)}
-                      disabled={detailSubmitting}
-                    />
-                    <Button type="submit" disabled={detailSubmitting}>
-                      {detailSubmitting ? 'Approving…' : 'Approve'}
-                    </Button>
+              {/* The decision. [1.28.0] This used to be an approve-only form, and it appeared for
+                  any claim that was not already Approved — so a refused one still offered an
+                  Approve button and nothing else, which is how a refusal gets recorded as an
+                  approval. Undecided claims get both actions; decided ones get the record. */}
+              {detailRequest?.status === 'Pending' ? (
+                <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3 space-y-2.5">
+                  <div>
+                    <span className="field-label">Record the provider&apos;s decision</span>
+                    <p className="m-0 text-fine text-slate-500">
+                      The cashier is notified either way — they cannot settle this bill until you decide.
+                    </p>
                   </div>
-                </form>
+
+                  {!rejectingClaim ? (
+                    <>
+                      <form onSubmit={handleApproveRequest} className="space-y-1.5">
+                        <label htmlFor="loa-code" className="field-label">Approval / LOA code</label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="loa-code"
+                            placeholder="e.g. LOA-2026-00481"
+                            value={approvalCode}
+                            onChange={e => setApprovalCode(e.target.value)}
+                            disabled={detailSubmitting}
+                          />
+                          <Button type="submit" disabled={detailSubmitting || !approvalCode.trim()}>
+                            {detailSubmitting ? 'Approving…' : 'Approve'}
+                          </Button>
+                        </div>
+                      </form>
+                      <button
+                        type="button"
+                        onClick={() => { setRejectingClaim(true); setClaimReason(''); }}
+                        className="cursor-pointer border-0 bg-transparent p-0 text-fine font-semibold text-rose-700 underline underline-offset-2 hover:text-rose-800"
+                      >
+                        The provider turned this claim down
+                      </button>
+                    </>
+                  ) : (
+                    /* Secondary until chosen, then it owns the panel — a refusal is the rarer
+                       outcome, but once it is what happened it is the only thing being recorded. */
+                    <form onSubmit={handleRejectRequest} className="space-y-1.5">
+                      <label htmlFor="claim-reason" className="field-label">
+                        Why did they refuse it? <span className="text-rose-600">*</span>
+                      </label>
+                      <Input
+                        id="claim-reason"
+                        autoFocus
+                        placeholder="e.g. Member's policy lapsed on 01 Aug"
+                        value={claimReason}
+                        onChange={e => setClaimReason(e.target.value)}
+                        disabled={detailSubmitting}
+                      />
+                      <p className="m-0 text-fine text-slate-500">
+                        The patient pays in full. This reason is what the cashier tells them.
+                      </p>
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          type="button" variant="outline" size="sm"
+                          onClick={() => { setRejectingClaim(false); setClaimReason(''); }}
+                          disabled={detailSubmitting}
+                        >
+                          Back
+                        </Button>
+                        <Button type="submit" size="sm" disabled={detailSubmitting || claimReason.trim().length < 4}>
+                          {detailSubmitting ? 'Recording…' : 'Record refusal'}
+                        </Button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              ) : (
+                <div
+                  className={`rounded-xl border p-3 text-xs ${
+                    detailRequest?.status === 'Approved'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                      : 'border-[#e6ebf1] bg-slate-50/80 text-slate-700'
+                  }`}
+                >
+                  <p className="m-0 font-semibold">
+                    {detailRequest?.status === 'Approved'
+                      ? `Approved${detailRequest?.approval_code ? ` — LOA ${detailRequest.approval_code}` : ''}`
+                      : `${detailRequest?.status}${detailRequest?.decision_reason ? ` — ${detailRequest.decision_reason}` : ''}`}
+                  </p>
+                  {detailRequest?.decided_by_first_name && (
+                    <p className="m-0 mt-0.5 text-fine opacity-80">
+                      Recorded by {detailRequest.decided_by_first_name} {detailRequest.decided_by_last_name}
+                    </p>
+                  )}
+                </div>
               )}
 
               <div className="space-y-1.5">
                 <span className="field-label">Linked Tests</span>
                 <div className="max-h-64 space-y-1.5 overflow-y-auto">
                   {(detailRequest?.tests || []).map(t => (
-                    <div key={t.id} className="flex items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] p-2.5">
-                      <div className="min-w-0">
-                        <span className="block truncate text-[13px] font-semibold text-slate-900">{t.test_name}</span>
-                        <span className="text-fine text-slate-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
+                    <div key={t.id} className="rounded-lg border border-[#e6ebf1] p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="block truncate text-[13px] font-semibold text-slate-900">{t.test_name}</span>
+                          <span className="text-fine text-slate-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-1">
+                          <StatusBadge status={t.approval_status} />
+                          {t.approval_status !== 'Approved' && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetTestApproval(t.id, 'Approved')}
+                              aria-label={`Approve ${t.test_name}`}
+                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-emerald-600 hover:bg-emerald-50"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          {t.approval_status !== 'Rejected' && (
+                            <button
+                              type="button"
+                              onClick={() => { setRejecting(t.id); setRejectReason(''); }}
+                              aria-label={`Reject ${t.test_name}`}
+                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-rose-600 hover:bg-rose-50"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex flex-shrink-0 items-center gap-1">
-                        <StatusBadge status={t.approval_status} />
-                        {t.approval_status !== 'Approved' && (
-                          <button
-                            type="button"
-                            onClick={() => handleSetTestApproval(t.id, 'Approved')}
-                            aria-label={`Approve ${t.test_name}`}
-                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-emerald-600 hover:bg-emerald-50"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        {t.approval_status !== 'Rejected' && (
-                          <button
-                            type="button"
-                            onClick={() => handleSetTestApproval(t.id, 'Rejected')}
-                            aria-label={`Reject ${t.test_name}`}
-                            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-rose-600 hover:bg-rose-50"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
+
+                      {/* Why the HMO refused. Asked at the moment of refusal, because it is the
+                          one moment the coordinator still has the provider's response in front of
+                          them — an hour later it is a guess. */}
+                      {rejecting === t.id && (
+                        <div className="mt-2 space-y-1.5 border-t border-[#e6ebf1] pt-2">
+                          <label htmlFor={`reject-reason-${t.id}`} className="field-label">
+                            Why did the HMO refuse this? <span className="text-rose-600">*</span>
+                          </label>
+                          <Input
+                            id={`reject-reason-${t.id}`}
+                            autoFocus
+                            value={rejectReason}
+                            onChange={e => setRejectReason(e.target.value)}
+                            placeholder="e.g. Not covered under the member's plan"
+                            className="text-xs rounded-lg"
+                          />
+                          <p className="text-fine text-slate-500 m-0">
+                            The cashier sees this on the bill — the patient is charged for this test
+                            and will ask why.
+                          </p>
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              type="button" variant="outline" size="sm"
+                              onClick={() => { setRejecting(null); setRejectReason(''); }}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button" size="sm"
+                              disabled={rejectReason.trim().length < 4}
+                              onClick={() => handleSetTestApproval(t.id, 'Rejected', rejectReason.trim())}
+                            >
+                              Record refusal
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* What was recorded, once it has been. Shown on the row rather than behind a
+                          hover, because whoever opens this claim next is usually opening it to
+                          answer exactly this question. */}
+                      {t.approval_status === 'Rejected' && rejecting !== t.id && t.decision_reason && (
+                        <p className="mt-1.5 border-t border-[#e6ebf1] pt-1.5 text-fine text-slate-600 m-0">
+                          <span className="font-semibold text-slate-700">Refused:</span> {t.decision_reason}
+                          {t.decided_by_first_name && (
+                            <span className="text-slate-400">
+                              {' '}&bull; recorded by {t.decided_by_first_name} {t.decided_by_last_name}
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

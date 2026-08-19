@@ -31,7 +31,7 @@ node src/scripts/testRbacEndpoints.js  # manual RBAC endpoint smoke test
 node src/scripts/verifyRbacWiring.js  # asserts every permission-gated route matches the seeded matrix
 
 # Additive migrations for an EXISTING database (migrateDb.js is destructive and cannot be used on
-# a live one). Each is safe to re-run; run them in order on any database created before [1.25.0].
+# a live one). Each is safe to re-run; run them in order on any database created before [1.29.0].
 node src/scripts/migrateIndexes.js           # [1.11.0] foreign-key and lookup indexes
 node src/scripts/migrateResultAttribution.js # [1.12.0] recorded_by vs released_by
 node src/scripts/migrateDataIntegrity.js     # [1.13.0] daily_counters + queue/receipt/payment uniqueness
@@ -46,6 +46,9 @@ node src/scripts/migrateHmoCard.js           # [1.22.0] HMO card evidence column
 node src/scripts/migrateReferringPhysician.js # [1.23.0] referring physician on a visit (--rollback reverses it)
 node src/scripts/migrateTestPreparation.js    # [1.24.0] patient preparation per test (--rollback reverses it)
 node src/scripts/migrateAppointmentReminders.js # [1.25.0] day-before reminder tracking (--rollback reverses it)
+node src/scripts/migrateHmoDecisionTrail.js    # [1.27.0] why an HMO refused a test, and who recorded it (--rollback reverses it)
+node src/scripts/migrateHmoClaimDecision.js    # [1.28.0] turning a whole claim down, + member number (--rollback reverses it)
+node src/scripts/migrateIndexHygiene.js       # [1.29.0] index the growing FKs, drop two redundant indexes (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -93,9 +96,9 @@ The E2E suite creates a throwaway client, patient, visit and payment on every ru
 
 The worst of it is `notification_reads`, which is a **fan-out** table: `notifyRoles` writes one row per recipient per event, so its size is events × staff, not events. Because the suite also created staff and elevated accounts that were never cleaned up (137 Cashiers, 89 Admins, 45 SuperAdmins had accumulated), both factors grew at once and the table reached 255,540 rows across 4,309 events in five days — average fan-out 60, peak 181, with 99.4% never read by anyone. After a reset the same fan-out is 3. Production will not see the runaway staff count, but it has no retention either: 20 staff × 200 events/day is ~1.5M rows a year, growing forever. Schedule `pruneNotifications.js` (default: read 30d, unread 90d) in any environment that runs longer than a demo.
 
-There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 21 Playwright specs (128 tests, ~80s) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
+There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 27 Playwright specs (171 tests, ~220s) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
 
-The suite is a deliberately small demo-and-regression net, not exhaustive coverage: smoke, security boundaries (`api-authorization.spec.js` — Admin-vs-SuperAdmin separation of duties, combined-role access, and the cross-role PHI boundaries), ticket-release gating, payments, laboratory results, statutory discounts (`discounts.spec.js`), result amendment history and critical values (`result-versioning.spec.js`), password-change session revocation (`session-revocation.spec.js`), account lockout and PHI read auditing (`login-protection.spec.js`), permission-matrix enforcement (`rbac-enforcement.spec.js`), department-scoped patient records (`department-scoping.spec.js`), the per-department operations report (`operations-report.spec.js`), atomic online booking with its HMO card evidence rule (`booking-atomicity.spec.js`), the two dialogs that feature added (`hmo-card-review.spec.js` — because a card that uploads correctly and then renders as a broken image on the approval screen is a working feature failing at its job), moving a booking rather than cancelling it (`appointment-reschedule.spec.js`, plus `reschedule-ui.spec.js` for the dialog), when a visit must name the doctor who requested the test (`referring-physician.spec.js`), correcting a patient record (`patient-edit.spec.js` / `patient-edit-ui.spec.js`), what the patient is told about their own booking (`booking-communication.spec.js`), and that the ETag revalidation cache never hides a change (`revalidation.spec.js`). It was cut down from ~200 tests once the module-by-module build-out finished; the rest asserted UI copy that legitimately keeps changing. Prefer adding a focused spec over reviving deleted ones from git history.
+The suite is a deliberately small demo-and-regression net, not exhaustive coverage: smoke, security boundaries (`api-authorization.spec.js` — Admin-vs-SuperAdmin separation of duties, combined-role access, and the cross-role PHI boundaries), ticket-release gating, payments, laboratory results, statutory discounts (`discounts.spec.js`), result amendment history and critical values (`result-versioning.spec.js`), password-change session revocation (`session-revocation.spec.js`), account lockout and PHI read auditing (`login-protection.spec.js`), permission-matrix enforcement (`rbac-enforcement.spec.js`), department-scoped patient records (`department-scoping.spec.js`), the per-department operations report (`operations-report.spec.js`), atomic online booking with its HMO card evidence rule (`booking-atomicity.spec.js`), the two dialogs that feature added (`hmo-card-review.spec.js` — because a card that uploads correctly and then renders as a broken image on the approval screen is a working feature failing at its job), moving a booking rather than cancelling it (`appointment-reschedule.spec.js`, plus `reschedule-ui.spec.js` for the dialog), when a visit must name the doctor who requested the test (`referring-physician.spec.js`), correcting a patient record (`patient-edit.spec.js` / `patient-edit-ui.spec.js`), what the patient is told about their own booking (`booking-communication.spec.js`), that the ETag revalidation cache never hides a change (`revalidation.spec.js`), that each role can see what it needs on the screen where it acts (`workflow-context.spec.js`), registering a walk-in in one pass (`walkin-registration.spec.js`), the patient journey at phone width (`mobile-patient.spec.js`), what an HMO decision has to record before it counts as one (`hmo-decision-trail.spec.js` — a refusal that names no reason leaves the cashier explaining a charge nobody wrote down), the three-step claim workflow itself (`hmo-claim-handoff.spec.js` — reception raises it, an Admin decides it, and the cashier has to be TOLD), and that a failed request never renders as an empty one (`failure-states.spec.js` — six screens shipped without an error branch, so a 500 fell through to the empty state and the app stated "Today's Revenue ₱0.00" over a day that took ₱8,344). It was cut down from ~200 tests once the module-by-module build-out finished; the rest asserted UI copy that legitimately keeps changing. Prefer adding a focused spec over reviving deleted ones from git history.
 
 **A booking spec must claim its own slot.** `POST /appointments` returns the *existing* booking with 200 when the same patient re-submits the same date and time, so two tests that both take "the first available slot" silently share one visit — and `avail.slots.find(s => s.available)` will not stop them, because a dev database whose cap has been lifted (`cleanE2eData.js --apply --unlimited-slots`, which exists because 18 slots a day cannot absorb repeated runs) reports every slot as available however many bookings it holds. `booking-atomicity.spec.js` and `ticket-release-gating.spec.js` each keep a `claimed` set for this. Symptom when you get it wrong: a create test receives 200 instead of 201, or a test finds a visit some earlier test already checked in.
 
@@ -135,6 +138,33 @@ This layering is enforced convention in this codebase (checked by the "Project A
 - Roles/permissions are DB-driven (`roles`, `permissions`, `user_roles`, `user_permissions`, `user_departments`), seeded via `setupRbac.js`.
 - Google OAuth: `POST /api/auth/google` verifies an ID token via `google-auth-library`, then logs in or auto-creates a Client user.
 - Frontend session handling: `frontend/src/config/api.js` (Axios) fires a global `auth:unauthorized` window event on HTTP 401; `AuthContext.jsx` listens for it to clear user state without breaking SPA navigation — follow this pattern rather than throwing/catching 401s locally in components.
+
+### Where a file goes
+
+`pages/` and `components/` are grouped **by feature, not by file type** — "package by feature",
+what React's own docs call grouping by feature or route. The test is that the folder names say
+what the clinic does, not what React is:
+
+```
+pages/public/     Home, Services, About, Privacy, Terms      — no account needed
+pages/auth/       sign in, forgot password, reset
+pages/portal/     ClientDashboard, ClientProfile             — the patient's own screens
+pages/clinic/     Receptionist / Cashier / Diagnostic        — the three operational consoles
+pages/admin/      oversight, reports, RBAC, the catalogue
+pages/StaffAccountSettings.jsx                               — any staff, belongs to no console
+components/       ui, booking, patients, reception, reports, charts, auth
+```
+
+**Grouped by feature, deliberately not by role.** Role looks like the obvious axis and does not
+survive contact with this app: `DiagnosticDashboard` is one file serving Laboratory, Xray *and*
+Ultrasound; `pages/admin/` serves Admin *and* SuperAdmin (`ADMINS` in `navigation.js`), with only
+`SuperAdminManagement` restricted further; and `multirole@enlogada.com` holds two roles at once.
+A role-shaped tree would have to file one dashboard in three places, and would then disagree with
+the permission matrix the moment a permission is delegated — which is the same mistake as the
+hardcoded role lists that [1.20.0] removed from 45 routes.
+
+Who may open a screen is decided by `config/navigation.js` and the API's permission checks, never
+by which folder the file sits in.
 
 ### Frontend routing model
 

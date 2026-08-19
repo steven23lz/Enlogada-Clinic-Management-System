@@ -40,17 +40,28 @@ class PaymentRepository {
     return result.rows;
   }
 
-  async findTransactions({ startDate, endDate }) {
-    let queryText = `
-      SELECT pay.*, 
-             u.first_name as processed_by_first_name, u.last_name as processed_by_last_name,
-             p.first_name as patient_first_name, p.last_name as patient_last_name,
-             pv.queue_number
+  // Paged at the database. [1.29.0] This returned every settled payment in the range and the
+  // screen sliced fifteen out of it. Measured at 570 bytes a payment, a year-wide range is a
+  // 2.0 MB response — and this is the money screen, read on every cashier dashboard load and by
+  // Admin's monitoring view. `limit` is optional so the callers that legitimately need the whole
+  // set (today's collections total, the metric strip) are unchanged.
+  async findTransactions({ startDate, endDate, limit = null, offset = 0 }) {
+    // The FROM/JOIN chain is shared by the list and the count, so the two can never disagree
+    // about which rows they are talking about. Written out rather than derived from the list
+    // query by a regex: that would break silently the next time somebody edits the SELECT list.
+    const fromClause = `
       FROM payments pay
       LEFT JOIN users u ON pay.processed_by = u.id
       JOIN patient_visits pv ON pay.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
     `;
+    const selectList = `
+      SELECT pay.*,
+             u.first_name as processed_by_first_name, u.last_name as processed_by_last_name,
+             p.first_name as patient_first_name, p.last_name as patient_last_name,
+             pv.queue_number
+    `;
+    let whereText = '';
     const params = [];
 
     // Only settled money. Online GCash/Maya checkouts insert a 'Pending' row the moment the
@@ -61,15 +72,27 @@ class PaymentRepository {
       // Half-open range rather than a ::date cast: a B-tree index cannot serve a predicate on
       // an expression, so the cast turned every transaction lookup into a sequential scan of
       // payments — the table that grows fastest and is read on every cashier dashboard load.
-      queryText += " WHERE pay.payment_status = 'Paid' AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)";
+      whereText = " WHERE pay.payment_status = 'Paid' AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)";
       params.push(startDate, endDate);
     } else {
-      queryText += " WHERE pay.payment_status = 'Paid' AND pay.paid_at >= CURRENT_DATE AND pay.paid_at < (CURRENT_DATE + 1)";
+      whereText = " WHERE pay.payment_status = 'Paid' AND pay.paid_at >= CURRENT_DATE AND pay.paid_at < (CURRENT_DATE + 1)";
     }
 
-    queryText += ' ORDER BY pay.paid_at DESC';
-    const result = await db.query(queryText, params);
-    return result.rows;
+    const countRes = await db.query(`SELECT COUNT(*)::int AS total ${fromClause} ${whereText}`, params);
+    const total = countRes.rows[0].total;
+
+    let listQuery = `${selectList} ${fromClause} ${whereText} ORDER BY pay.paid_at DESC`;
+    const listParams = [...params];
+    if (limit != null) {
+      listParams.push(limit);
+      listQuery += ` LIMIT $${listParams.length}`;
+      listParams.push(offset);
+      listQuery += ` OFFSET $${listParams.length}`;
+    }
+    const result = await db.query(listQuery, listParams);
+    // An array with a `total` on it: every existing caller keeps treating this as the list it
+    // always was, and the paged callers read the count without a second round trip.
+    return Object.assign(result.rows, { total });
   }
 
   async getBillingSummary(patientVisitId) {
@@ -105,7 +128,20 @@ class PaymentRepository {
                WHERE hrt.visit_test_id = vt.id
                ORDER BY hrt.created_at DESC
                LIMIT 1
-             ) as hmo_approval_status
+             ) as hmo_approval_status,
+             -- Why the HMO refused, carried onto the bill because that is where the question gets
+             -- asked. [1.27.0] The patient is told at the counter that a test they expected to be
+             -- covered is not, and the cashier is the one who has to say why. Same subquery shape,
+             -- and deliberately a second one rather than a lateral join: the cost is a second index
+             -- lookup on a handful of rows, and it keeps the "exactly one row per test" guarantee
+             -- above impossible to break by accident.
+             (
+               SELECT hrt.decision_reason
+               FROM hmo_request_tests hrt
+               WHERE hrt.visit_test_id = vt.id
+               ORDER BY hrt.created_at DESC
+               LIMIT 1
+             ) as hmo_decision_reason
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id

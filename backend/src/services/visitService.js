@@ -69,13 +69,29 @@ class VisitService {
     return result;
   }
 
-  async getVisitHistoryByDateRange({ startDate, endDate, search }) {
-    const today = new Date().toISOString().slice(0, 10);
-    return await visitRepository.findVisitsByDateRange({
-      startDate: startDate || today,
-      endDate: endDate || today,
-      search
+  // The date default is derived in SQL, not here. [1.29.0]
+  //
+  // This read `new Date().toISOString().slice(0, 10)`, which is the UTC date — so between
+  // midnight and 08:00 Philippine time it is YESTERDAY, silently, with no error. Opening Visit
+  // History early in the morning showed the previous day's visits and called them today's.
+  // CLAUDE.md records this bug shipping twice already (four dashboard helpers, and the receipt
+  // number generator); this was the third place. `null` reaches the repository, which falls back
+  // to CURRENT_DATE — the database's own local date, which is what every other date filter here
+  // compares against.
+  async getVisitHistoryByDateRange({ startDate, endDate, search, page, limit }) {
+    const limitNum = limit ? Math.min(Math.max(parseInt(limit, 10) || 0, 1), 100) : null;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+
+    const result = await visitRepository.findVisitsByDateRange({
+      startDate: startDate || null,
+      endDate: endDate || null,
+      search,
+      limit: limitNum,
+      offset: limitNum ? (pageNum - 1) * limitNum : 0,
     });
+
+    if (!limitNum) return result;
+    return { ...result, page: pageNum, limit: limitNum, totalPages: Math.max(1, Math.ceil(result.total / limitNum)) };
   }
 
   async getVisitById(id) {

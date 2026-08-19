@@ -97,10 +97,19 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
             </div>
           )}
 
+          {/* htmlFor/id, so the visible label is the field's accessible name and clicking it
+              focuses the input. Both were decorative <label> elements with no association — on
+              the one screen every single user has to get through. */}
           <div className="space-y-1.5">
-            <label className="mb-1.5 block text-fine font-semibold text-slate-700">Email Address</label>
+            <label htmlFor="login-email" className="mb-1.5 block text-fine font-semibold text-slate-700">
+              Email Address
+            </label>
             <Input
+              id="login-email"
+              name="email"
               type="email"
+              // Lets a password manager and the browser offer the right value.
+              autoComplete="username"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -111,7 +120,9 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
 
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
-              <label className="mb-1.5 block text-fine font-semibold text-slate-700">Password</label>
+              <label htmlFor="login-password" className="mb-1.5 block text-fine font-semibold text-slate-700">
+                Password
+              </label>
               <button
                 type="button"
                 onClick={() => onNavigate('forgot-password')}
@@ -121,6 +132,9 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
               </button>
             </div>
             <PasswordInput
+              id="login-password"
+              name="password"
+              autoComplete="current-password"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

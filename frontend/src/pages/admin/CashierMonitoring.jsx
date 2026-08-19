@@ -11,7 +11,7 @@ import { Input } from '../../components/ui/input';
 import { SkeletonRows } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
-import { todayStr } from '../../lib/date';
+import { todayStr, formatDateTime } from '../../lib/date';
 import { formatCurrency } from '../../lib/currency';
 import { Receipt, RefreshCw, Banknote, Hash, UserCircle2 } from 'lucide-react';
 
@@ -24,18 +24,26 @@ const PAGE_SIZE = 20;
 const CashierMonitoring = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed fetch used to reach console.error and stop there, so the screen rendered its
+  // EMPTY state — "No transactions yet" over a 500. That is the one thing empty-state.jsx's own
+  // docstring says must never happen: a quiet clinic and a broken server call for opposite
+  // responses, and one of them was being reported as the other.
+  const [loadError, setLoadError] = useState('');
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
   const [page, setPage] = useState(1);
 
   const fetchTransactions = useCallback(async (from, to) => {
     setLoading(true);
+    setLoadError('');
     setPage(1);
     try {
       const res = await api.get('/payments/transactions', { params: { startDate: from, endDate: to } });
       setTransactions(res.data.data.transactions || []);
     } catch (err) {
+      // Recorded, not just logged: a swallowed failure renders as an empty list.
       console.error('Failed to fetch transactions:', err);
+      setLoadError(err.response?.data?.message || 'The server did not respond. The list below may be out of date.');
     } finally {
       setLoading(false);
     }
@@ -52,6 +60,9 @@ const CashierMonitoring = () => {
     acc[name] = (acc[name] || 0) + parseFloat(t.amount || 0);
     return acc;
   }, {});
+  // Capped at two: the strip has room for two per-cashier cards beside the two fixed ones, and
+  // the count also decides how many columns the grid draws so no empty cell is left over.
+  const cashierCards = Object.entries(byCashier).slice(0, 2);
   const totalPages = Math.max(1, Math.ceil(transactions.length / PAGE_SIZE));
   const pagedTransactions = transactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -84,7 +95,20 @@ const CashierMonitoring = () => {
           {/* The range summary sits inside the table's panel rather than in a separate KPI strip
               above the filters. These figures describe *this* result set — floating them away
               from the range that produced them was how they got read as clinic-wide totals. */}
-          <div className="grid grid-cols-2 gap-px border-b border-[#e6ebf1] bg-[#e6ebf1] lg:grid-cols-4">
+          {/* The column count follows the number of cards, rather than always being four.
+              The strip is `gap-px` over a tinted container, so the gaps ARE the dividers — and a
+              column with no card in it therefore rendered as a plain grey rectangle sitting where
+              a figure should be. With one cashier on shift, which is the ordinary case for this
+              clinic, a quarter of the strip was an empty box that read as a failed tile. */}
+          {/* Hidden when the fetch failed. These are all derived from `transactions`, which is
+              empty because the request errored — so the strip stated "Collections in range
+              PHP 0.00" directly above a panel saying the data could not be loaded. Two claims
+              that contradict each other is worse than either alone, and the peso figure is the
+              one a reader believes. */}
+          {!loadError && !loading && (
+          <div className={`grid grid-cols-2 gap-px border-b border-[#e6ebf1] bg-[#e6ebf1] ${
+            { 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' }[2 + cashierCards.length]
+          }`}>
             <MetricCard
               className="rounded-none border-0"
               label="Collections in range"
@@ -99,7 +123,7 @@ const CashierMonitoring = () => {
               icon={Hash}
               tone="slate"
             />
-            {Object.entries(byCashier).slice(0, 2).map(([name, amt]) => (
+            {cashierCards.map(([name, amt]) => (
               <MetricCard
                 key={name}
                 className="rounded-none border-0"
@@ -112,9 +136,10 @@ const CashierMonitoring = () => {
               />
             ))}
           </div>
+          )}
 
           <PanelBody flush>
-            <Table>
+            <Table stack>
               <TableHeader sticky>
                 <TableRow>
                   <TableHead>Receipt #</TableHead>
@@ -126,17 +151,31 @@ const CashierMonitoring = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading ? (
+                {/* Error before empty. A failed fetch used to fall through to the empty branch,
+                    so a 500 rendered as "nothing here yet" — which is a false statement about the
+                    clinic's data, not merely an unhelpful one. */}
+                {loadError ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={6} className="p-0">
+                      <EmptyState
+                        tone="error"
+                        title="Could not load transactions"
+                        description={loadError}
+                        action={<Button variant="outline" size="sm" onClick={() => fetchTransactions(startDate, endDate)}>Try again</Button>}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : loading ? (
                   <SkeletonRows rows={6} columns={6} />
                 ) : pagedTransactions.length > 0 ? (
                   pagedTransactions.map(t => (
                     <TableRow key={t.id}>
-                      <TableCell className="font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
-                      <TableCell className="max-w-[160px] truncate" title={`${t.processed_by_first_name} ${t.processed_by_last_name}`}>{t.processed_by_first_name} {t.processed_by_last_name}</TableCell>
-                      <TableCell className="max-w-[160px] truncate font-medium text-slate-900" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
-                      <TableCell><Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge></TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
-                      <TableCell className="text-right text-fine text-slate-500">{new Date(t.paid_at).toLocaleString()}</TableCell>
+                      <TableCell label="Receipt #" className="font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
+                      <TableCell label="Cashier" className="max-w-[160px] truncate" title={`${t.processed_by_first_name} ${t.processed_by_last_name}`}>{t.processed_by_first_name} {t.processed_by_last_name}</TableCell>
+                      <TableCell label="Patient" className="max-w-[160px] truncate font-medium text-slate-900" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
+                      <TableCell label="Method"><Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge></TableCell>
+                      <TableCell label="Amount" className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
+                      <TableCell label="Paid at" className="text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
                     </TableRow>
                   ))
                 ) : (
@@ -157,7 +196,7 @@ const CashierMonitoring = () => {
             page={page}
             totalPages={totalPages}
             onPageChange={setPage}
-            totalLabel={`${transactions.length} transaction${transactions.length === 1 ? '' : 's'}`}
+            totalLabel={(loadError || loading) ? '' : `${transactions.length} transaction${transactions.length === 1 ? '' : 's'}`}
           />
         </Panel>
       </div>

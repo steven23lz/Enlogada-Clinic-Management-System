@@ -22,7 +22,7 @@ const PublicFooter = ({ onNavigate }) => {
 
         {/* Our Services Quick Links */}
         <div className="space-y-3">
-          <h4 className="text-sm font-bold text-white uppercase tracking-wider">Our Services</h4>
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Our Services</h2>
           <ul className="space-y-2 text-xs text-gray-400 list-none p-0">
             <li className="hover:text-white cursor-pointer transition-colors" onClick={() => onNavigate && onNavigate('services')}>Ultrasound Services</li>
             <li className="hover:text-white cursor-pointer transition-colors" onClick={() => onNavigate && onNavigate('services')}>Laboratory Testing</li>
@@ -33,7 +33,9 @@ const PublicFooter = ({ onNavigate }) => {
 
         {/* Contact Info */}
         <div className="space-y-3">
-          <h4 className="text-sm font-bold text-white uppercase tracking-wider">Contact Info</h4>
+          {/* h2 like its sibling above. These are peer sections of the footer, so they take the
+              same level — one at h2 and one at h4 reads as a subsection of the other. */}
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Contact Info</h2>
           <div className="space-y-2.5 text-xs text-gray-400">
             <div className="flex items-center space-x-2.5">
               <Phone className="w-4 h-4 text-brand-600" />

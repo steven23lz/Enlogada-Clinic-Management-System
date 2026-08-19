@@ -41,9 +41,16 @@ const TodaySnapshot = () => {
   const [catalogCount, setCatalogCount] = useState(0);
   const [methodBreakdown, setMethodBreakdown] = useState({});
   const [loading, setLoading] = useState(true);
+  // The most dangerous silent failure in the app. Every figure here initialises to 0, so a
+  // failed fetch left the screen stating "Today's Revenue PHP 0.00, +0% vs yesterday" and
+  // "No payments yet today" — confident, specific and false. A manager reads that as the
+  // clinic having taken nothing, not as the server being down, and the two call for opposite
+  // responses. A blank panel would have been safer than this was.
+  const [snapshotError, setSnapshotError] = useState('');
 
   const fetchReportData = useCallback(async () => {
     setLoading(true);
+    setSnapshotError('');
     try {
       const today = todayStr();
       const yesterday = daysAgoStr(1);
@@ -70,6 +77,7 @@ const TodaySnapshot = () => {
       setMethodBreakdown(breakdown);
     } catch (err) {
       console.error('Failed to fetch report data:', err);
+      setSnapshotError(err.response?.data?.message || "Today's figures could not be loaded.");
     } finally {
       setLoading(false);
     }
@@ -83,6 +91,21 @@ const TodaySnapshot = () => {
     ? ((todayTotal - yesterdayTotal) / yesterdayTotal) * 100
     : (todayTotal > 0 ? 100 : 0);
   const isUp = percentChange >= 0;
+
+  // Nothing numeric is shown at all when the fetch failed. Showing the tiles with a caveat
+  // beside them would still put a wrong peso figure on screen, and the figure is what gets read.
+  if (snapshotError) {
+    return (
+      <Card className="border-[#e6ebf1] rounded-xl bg-white">
+        <EmptyState
+          tone="error"
+          title="Today's figures are unavailable"
+          description={snapshotError}
+          action={<Button variant="outline" size="sm" onClick={fetchReportData}>Try again</Button>}
+        />
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -128,12 +151,19 @@ const TodaySnapshot = () => {
         </Card>
       </div>
 
-      <div className="bg-rail text-white rounded-2xl p-5 flex items-start space-x-3">
-        <Info className="w-5 h-5 text-brand-600 flex-shrink-0 mt-0.5" />
-        <p className="text-xs text-gray-300 m-0 leading-relaxed">
-          This is a live snapshot of today's activity only. For historical trends and a custom
-          date range, see the <strong className="text-white">Date-Range Reports</strong> tab.
-        </p>
+      {/* Two things were wrong with this. It pointed at a "Date-Range Reports" tab that does not
+          exist — the tab was renamed to Trends and this copy was not — so the one instruction on
+          the screen sent the reader looking for something they would never find.
+
+          And it was a full-width dark slab: on a tab whose content ends halfway down the
+          viewport, the single heaviest element on the page was a footnote. It is the same inline
+          alert every other advisory note in the app uses now. */}
+      <div role="note" className="alert alert-info">
+        <Info />
+        <span>
+          A live snapshot of today only. For historical trends and a custom date range, see the{' '}
+          <strong>Trends</strong> tab.
+        </span>
       </div>
     </div>
   );
@@ -358,9 +388,16 @@ const RbacMatrixReport = () => {
                   <TableRow key={role.id} className="align-top">
                     <TableCell className="py-3 font-bold text-xs text-slate-900 whitespace-nowrap">{role.name}</TableCell>
                     <TableCell className="py-3">
+                      {/* Sorted, so the rows can be compared against each other — which is the
+                          only thing a matrix is for. They arrived in whatever order the join
+                          returned, so `patients:read_all_departments` sat last on SuperAdmin,
+                          first on Admin and last again on Cashier, and checking whether two roles
+                          differ meant reading every chip in both rows rather than scanning down a
+                          column. Sorting is by the resource before the colon and then the action,
+                          which is how the permission names are already built. */}
                       <div className="flex flex-wrap gap-1 max-w-2xl">
                         {(rolePermissions[role.name] || []).length > 0 ? (
-                          (rolePermissions[role.name] || []).map((permName) => (
+                          [...(rolePermissions[role.name] || [])].sort((a, b) => a.localeCompare(b)).map((permName) => (
                             <Badge key={permName} variant="outline" className="text-meta font-semibold border-gray-200">{permName}</Badge>
                           ))
                         ) : (

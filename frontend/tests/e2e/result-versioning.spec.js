@@ -188,3 +188,145 @@ test.describe('Result versioning and critical values', () => {
     expect(res.status()).toBe(403);
   });
 });
+
+// Amending a result AFTER it has been released. [1.26.0]
+//
+// Versioning shipped in [1.15.0] and then could not be used for the case it exists for. Three
+// faults compounded, each invisible from the screen:
+//
+//   The write guard required the visit to be 'Processing'. A visit turns 'Completed' the moment
+//   its last result goes out, so amendment became impossible exactly when a correction is
+//   normally discovered. The same guard sat on the two READ paths, so the technician who wrote a
+//   report could no longer open it or its history once the visit closed.
+//
+//   The amendment reason was optional, and the audit entry recorded the absence as "no reason
+//   given" against a corrected medical report.
+//
+//   Once amended, the ticket returned to 'Waiting for Release' while the visit stayed 'Completed'
+//   — and the worklist filters on `pv.status = 'Processing'` while the Released tab filters on
+//   `vt.status = 'Completed'`. The ticket appeared on neither. The correction was accepted, shown
+//   as saved, and then reached nobody: the patient and the referring doctor kept the wrong report.
+//
+// This walks the whole loop, because the failure mode throughout is silence, not an error.
+test.describe('Amending an already-released result', () => {
+  let apiContext;
+  let lab, reception, cashier;
+  let visitId, visitTestId;
+
+  const login = async (email) => {
+    const res = await apiContext.post(`${API}/auth/login`, { data: { email, password: PASSWORD } });
+    expect(res.ok()).toBeTruthy();
+    return (await res.json()).data.token;
+  };
+  const auth = (token) => ({ Authorization: `Bearer ${token}` });
+  const record = async (fields) => {
+    const res = await apiContext.post(`${API}/results/${visitTestId}`, {
+      headers: auth(lab),
+      multipart: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, String(v)])),
+    });
+    return res.status();
+  };
+  const visitStatus = async () => {
+    const res = await apiContext.get(`${API}/visits/${visitId}`, { headers: auth(reception) });
+    return (await res.json()).data.visit.status;
+  };
+
+  test.beforeAll(async () => {
+    apiContext = await request.newContext();
+    lab = await login('lab@enlogada.com');
+    reception = await login('receptionist@enlogada.com');
+    cashier = await login('cashier@enlogada.com');
+
+    const types = (await (await apiContext.get(`${API}/patients/types`, { headers: auth(reception) })).json())
+      .data.patientTypes;
+    const selfPay = types.find((t) => /self.?pay/i.test(t.name)) || types[0];
+
+    const patient = await (await apiContext.post(`${API}/patients`, {
+      headers: auth(reception),
+      data: {
+        patientTypeId: selfPay.id, firstName: 'E2E', lastName: 'AmendProbe',
+        birthdate: '1979-03-02', sex: 'Female',
+      },
+    })).json();
+    const visit = await (await apiContext.post(`${API}/visits`, {
+      headers: auth(reception),
+      data: { patientId: patient.data.patient.id, visitType: 'Walk in', notes: 'e2e amendment' },
+    })).json();
+    visitId = visit.data.visit.id;
+
+    const tests = (await (await apiContext.get(`${API}/tests`)).json()).data.tests;
+    const labTest = tests.find((t) => t.category_name === 'Laboratory' && parseFloat(t.price) > 0);
+    const attached = await (await apiContext.post(`${API}/tests/visit-tests`, {
+      headers: auth(reception),
+      data: { patientVisitId: visitId, testIds: [labTest.id] },
+    })).json();
+    visitTestId = attached.data.visitTests[0].id;
+
+    const bill = (await (await apiContext.get(`${API}/payments/bill/${visitId}`, { headers: auth(cashier) })).json())
+      .data.bill;
+    await apiContext.post(`${API}/payments`, {
+      headers: auth(cashier),
+      data: { patientVisitId: visitId, paymentMethod: 'Cash', amount: parseFloat(bill.totalAmount) },
+    });
+  });
+
+  test.afterAll(async () => {
+    await apiContext.dispose();
+  });
+
+  test('re-saving before release needs no reason — drafting is not amending', async () => {
+    expect(await record({ findings: 'Potassium 7.4 mmol/L.', remarks: '' })).toBe(201);
+    // Nobody outside the department has seen this yet. Demanding a justification for fixing your
+    // own typo is friction that buys nothing, and fills the reason box with "typo".
+    expect(await record({ findings: 'Potassium 4.1 mmol/L.', remarks: 'corrected before release' })).toBe(201);
+
+    const released = await apiContext.post(`${API}/results/${visitTestId}/release`, { headers: auth(lab) });
+    expect(released.status()).toBe(200);
+    expect(await visitStatus(), 'releasing the only test closes the visit').toBe('Completed');
+  });
+
+  test('the technician can still read the result and its history once the visit closes', async () => {
+    // Both of these were 403 — the write guard was doing duty as the read guard, so the moment a
+    // visit completed the author lost sight of their own report. Which is precisely when somebody
+    // telephones to query it.
+    const current = await apiContext.get(`${API}/results/${visitTestId}`, { headers: auth(lab) });
+    expect(current.status()).toBe(200);
+    const history = await apiContext.get(`${API}/results/${visitTestId}/versions`, { headers: auth(lab) });
+    expect(history.status()).toBe(200);
+  });
+
+  test('a released result cannot be amended without a stated reason', async () => {
+    expect(await record({ findings: 'Something else entirely.', remarks: '' })).toBe(400);
+    expect(await visitStatus(), 'a refused amendment must not disturb the visit').toBe('Completed');
+  });
+
+  test('with a reason it is accepted, and the ticket goes back where staff will see it', async () => {
+    expect(await record({
+      findings: 'Potassium 4.1 mmol/L. Within normal limits.',
+      remarks: '',
+      amendmentReason: 'Transcription error against the analyser printout.',
+    })).toBe(201);
+
+    // The visit reopens, or the amendment reaches no screen at all.
+    expect(await visitStatus()).toBe('Processing');
+
+    const worklist = await apiContext.get(`${API}/results/pending/Laboratory`, { headers: auth(lab) });
+    expect(worklist.status()).toBe(200);
+    const row = (await worklist.json()).data.pending.find((p) => p.visit_test_id === visitTestId);
+    expect(row, 'the amended ticket must be back on the worklist to be re-released').toBeTruthy();
+    expect(row.test_status).toBe('Waiting for Release');
+  });
+
+  test('re-releasing closes the visit again and every version is kept', async () => {
+    const released = await apiContext.post(`${API}/results/${visitTestId}/release`, { headers: auth(lab) });
+    expect(released.status()).toBe(200);
+    expect(await visitStatus()).toBe('Completed');
+
+    const history = await (await apiContext.get(`${API}/results/${visitTestId}/versions`, { headers: auth(lab) })).json();
+    // Three drafts/amendments: two before release, one after. None overwritten.
+    expect(history.data.versions.length).toBe(3);
+    const live = history.data.versions.filter((v) => v.is_current);
+    expect(live.length, 'exactly one version is ever live').toBe(1);
+    expect(live[0].findings).toContain('Within normal limits');
+  });
+});

@@ -10,6 +10,44 @@ class ResultRepository {
   // vt.status is correspondingly narrowed to the two states a released ticket can be in.
   // 'Pending'/'Approved' tests are by definition not released and belong to the front desk
   // and cashier only.
+  /**
+   * Critical results that have been released and not yet called back. [1.26.0]
+   *
+   * A panic value is the most time-critical thing this system holds, and the only place it
+   * appeared was a badge on one department's worklist row. Nothing anywhere answered "is there a
+   * patient we still have to telephone?" — so the escalation depended on the technician who
+   * flagged it staying at that screen, and a critical result flagged at the end of a shift had
+   * nobody watching it at all.
+   *
+   * Not department-scoped: whoever is free calls the patient, and a potassium of 7.4 is not the
+   * Laboratory's problem to solve alone. Ordered oldest first, because that is the order they
+   * become dangerous in, and it carries the contact number so the person acting on it does not
+   * have to go and look it up.
+   */
+  async findOutstandingCriticals() {
+    const queryText = `
+      SELECT tr.id AS result_id, tr.visit_test_id, tr.findings, tr.released_at,
+             t.name AS test_name, tc.name AS category_name,
+             p.id AS patient_id, p.first_name, p.last_name, p.contact_number,
+             pv.id AS visit_id, pv.queue_number,
+             u.first_name AS released_by_first_name, u.last_name AS released_by_last_name
+      FROM test_results tr
+      JOIN visit_tests vt ON tr.visit_test_id = vt.id
+      JOIN tests t ON vt.test_id = t.id
+      JOIN test_categories tc ON t.category_id = tc.id
+      JOIN patient_visits pv ON vt.patient_visit_id = pv.id
+      JOIN patients p ON pv.patient_id = p.id
+      LEFT JOIN users u ON tr.released_by = u.id
+      WHERE tr.is_current
+        AND tr.is_critical
+        AND tr.critical_acknowledged_at IS NULL
+        AND tr.released_at IS NOT NULL
+      ORDER BY tr.released_at ASC
+    `;
+    const result = await db.query(queryText);
+    return result.rows;
+  }
+
   async findPendingByCategory(categoryName) {
     const queryText = `
       SELECT vt.id as visit_test_id, vt.status as test_status, vt.price_at_time, vt.remarks,
@@ -49,7 +87,8 @@ class ResultRepository {
   // whether the UI ever showed it.
   async findVisitReleaseStateByVisitTestId(visitTestId) {
     const queryText = `
-      SELECT pv.id as visit_id, pv.status as visit_status, tc.name as category_name
+      SELECT pv.id as visit_id, pv.status as visit_status, tc.name as category_name,
+             vt.status as test_status
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id

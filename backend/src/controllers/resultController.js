@@ -116,6 +116,18 @@ class ResultController {
     }
   }
 
+  async getOutstandingCriticals(req, res, next) {
+    try {
+      const outstanding = await resultService.getOutstandingCriticals();
+      return res.status(200).json({
+        status: 'success',
+        data: { outstanding, count: outstanding.length },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async acknowledgeCritical(req, res, next) {
     try {
       const { visitTestId } = req.params;
@@ -195,14 +207,26 @@ class ResultController {
     try {
       const { patientId } = req.params;
 
-      // Security Check: If client, verify patient belongs to them
+      // Security Check: If client, verify patient belongs to them.
+      //
+      // The 404 that getPatientById throws for an unknown id is converted to the same 403 a
+      // Client gets for somebody else's record. Otherwise the pair is an existence oracle: walk
+      // the id space, count the 403s, and you know how many patients the clinic has and which
+      // ids are real. Staff still get a genuine 404 — they are entitled to know. [1.29.0]
       if (req.user.roles.includes('Client')) {
-        const patient = await patientService.getPatientById(patientId);
+        const forbidden = {
+          status: 'error',
+          message: 'Access forbidden. This patient record does not belong to your account.'
+        };
+        let patient;
+        try {
+          patient = await patientService.getPatientById(patientId);
+        } catch (err) {
+          if (err?.statusCode === 404) return res.status(403).json(forbidden);
+          throw err;
+        }
         if (patient.user_id !== req.user.userId) {
-          return res.status(403).json({
-            status: 'error',
-            message: 'Access forbidden. This patient record does not belong to your account.'
-          });
+          return res.status(403).json(forbidden);
         }
       }
 

@@ -56,11 +56,28 @@ class ReportRepository {
   // mirror that pattern server-side for Reception and Diagnostic, the two departments Admin had
   // no per-staff throughput view for at all.
   async getReceptionWorkload(startDate, endDate) {
+    // Staff only, and the report says so on its face — "Check-Ins by Staff".
+    //
+    // `patient_visits.created_by` is whoever opened the visit, and a client booking online opens
+    // their own. So every self-service booking put a PATIENT into a staffing report, listed
+    // beside the receptionist and counted as though they had worked a desk. On a report an
+    // administrator would use to see who is carrying the front desk, that is not a cosmetic
+    // problem: it invents throughput for someone who does not work here.
+    //
+    // The SQL mirrors isStaffUser in src/constants/roles.js — holds any role that is not
+    // 'Client' — because that is this system's one definition of staff and a report must not
+    // answer the question differently from the middleware.
     const queryText = `
       SELECT u.id as staff_id, u.first_name, u.last_name, COUNT(*) as visit_count
       FROM patient_visits pv
       JOIN users u ON pv.created_by = u.id
       WHERE pv.created_at >= $1::date AND pv.created_at < ($2::date + 1)
+        AND EXISTS (
+          SELECT 1
+          FROM user_roles ur
+          JOIN roles r ON r.id = ur.role_id
+          WHERE ur.user_id = u.id AND r.name <> 'Client'
+        )
       GROUP BY u.id, u.first_name, u.last_name
       ORDER BY visit_count DESC
     `;

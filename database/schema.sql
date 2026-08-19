@@ -303,8 +303,22 @@ CREATE TABLE hmo_providers (
 CREATE TABLE hmo_requests (
     id SERIAL PRIMARY KEY,
     hmo_provider_id INT NOT NULL,
+    -- Two different identifiers, deliberately separate. [1.28.0] approval_code is the LOA the HMO
+    -- issues when it approves this particular claim; member_number is printed on the patient's
+    -- card and identifies them to the provider permanently. Reception used to type both into
+    -- approval_code through one box labelled "Card / LOA Number", so a member number was filed as
+    -- an approval code on a claim nobody had approved. member_number is also the only place that
+    -- number survives: it was previously legible only inside the card photo, and pruneHmoCards
+    -- deletes those after 180 days while the claim is kept for seven years.
     approval_code VARCHAR(100),
+    member_number VARCHAR(100),
     status VARCHAR(50) DEFAULT 'Pending',
+    -- Why a claim was turned down, and who recorded the decision. [1.28.0] `chk_hmo_status` has
+    -- allowed 'Rejected' since [1.0.0] with no route able to set it, so a refused claim could only
+    -- be approved anyway or left Pending forever. No decided_at column: approved_date above is the
+    -- same fact, and two timestamps that must agree eventually will not.
+    decision_reason TEXT,
+    decided_by INT,
     request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     approved_date TIMESTAMP,
     -- Evidence for the claim. A client booking online attaches a photo of their HMO card; a
@@ -322,6 +336,7 @@ CREATE TABLE hmo_requests (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_hmo_provider FOREIGN KEY (hmo_provider_id) REFERENCES hmo_providers(id),
+    CONSTRAINT fk_hmo_requests_decided_by FOREIGN KEY (decided_by) REFERENCES users(id),
     CONSTRAINT chk_hmo_status CHECK (status IN ('Pending', 'Approved', 'Rejected', 'Cancelled')),
     -- card_purged_at counts as evidence-of-evidence: retention removes the image but the row
     -- must remain valid, and a purged card stays distinguishable from one never provided.
@@ -329,17 +344,37 @@ CREATE TABLE hmo_requests (
         CHECK (card_file_path IS NOT NULL OR card_verified_by IS NOT NULL OR card_purged_at IS NOT NULL)
 );
 
+-- Undecided claims, newest first — which is exactly what the Admin approval worklist opens on.
+CREATE INDEX IF NOT EXISTS idx_hmo_requests_pending
+    ON hmo_requests(request_date DESC)
+    WHERE status = 'Pending';
+
 CREATE TABLE hmo_request_tests (
     id SERIAL PRIMARY KEY,
     hmo_request_id INT NOT NULL,
     visit_test_id INT NOT NULL,
     approval_status VARCHAR(50) DEFAULT 'Pending',
+    -- Why the HMO refused, who recorded it, and when. [1.27.0] The reason is the field the front
+    -- desk actually needs: an approval explains itself, a refusal is a conversation at the counter
+    -- about money the patient was not expecting to pay, and it used to live only in whatever the
+    -- coordinator remembered. All nullable — a decision taken before this existed has no honest
+    -- answer, and manufacturing one would put a false statement in the audit trail.
+    decision_reason TEXT,
+    decided_by INT,
+    decided_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_hmo_request_tests_request FOREIGN KEY (hmo_request_id) REFERENCES hmo_requests(id),
     CONSTRAINT fk_hmo_request_tests_visit_test FOREIGN KEY (visit_test_id) REFERENCES visit_tests(id),
+    CONSTRAINT fk_hmo_request_tests_decided_by FOREIGN KEY (decided_by) REFERENCES users(id),
     CONSTRAINT chk_hmo_request_tests_status CHECK (approval_status IN ('Pending', 'Approved', 'Rejected')),
     CONSTRAINT uq_hmo_request_visit_test UNIQUE (hmo_request_id, visit_test_id)
 );
+
+-- Undecided rows only: the screen that reads these is "claims still waiting on a decision", and
+-- decided rows are the overwhelming majority, read one claim at a time by id.
+CREATE INDEX IF NOT EXISTS idx_hmo_request_tests_pending
+    ON hmo_request_tests(hmo_request_id)
+    WHERE approval_status = 'Pending';
 
 -- 6. Results and Releasing
 CREATE TABLE test_results (
@@ -492,7 +527,9 @@ CREATE TABLE audit_log (
     description TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_audit_log_created_at ON audit_log(created_at DESC);
+-- No separate DESC index on audit_log(created_at): idx_audit_log_created below is ASC and a
+-- B-tree is scannable in both directions, so it already serves ORDER BY created_at DESC. The
+-- duplicate was costing a write on every audit row, and audit_log records PHI reads. [1.29.0]
 
 -- Seed Initial Data
 INSERT INTO roles (name) VALUES
@@ -577,7 +614,8 @@ CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_toke
 CREATE INDEX IF NOT EXISTS idx_tests_category ON tests(category_id);
 CREATE INDEX IF NOT EXISTS idx_patient_visits_status ON patient_visits(status);
 CREATE INDEX IF NOT EXISTS idx_visit_tests_status ON visit_tests(status);
-CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(payment_status);
+-- No single-column index on payments(payment_status): idx_payments_status_paid_at leads with
+-- that column and therefore already serves a bare status filter. [1.29.0]
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
 CREATE INDEX IF NOT EXISTS idx_appointments_scheduled ON appointments(scheduled_date, scheduled_time);
 -- The reminder sweep's own access path. Partial, because it only ever looks for bookings that are
@@ -594,6 +632,28 @@ CREATE INDEX IF NOT EXISTS idx_notification_events_created ON notification_event
 -- matters now that PHI reads are logged and the table finally has a growth profile.
 CREATE INDEX IF NOT EXISTS idx_audit_log_entity_created ON audit_log (entity_type, entity_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log (created_at);
+
+-- Foreign keys on the tables that grow with how busy the clinic is. [1.29.0] Measured on a
+-- same-shaped audit_log of 300,000 rows — about a year here, since PHI reads are audited too:
+-- the activity log's first page went 87.3ms -> 0.9ms, and "everything one member of staff
+-- touched" — the query a breach investigation runs — went 58.0ms -> 5.8ms.
+--
+-- Deliberately NOT indexed: user_roles.assigned_by, role_permissions.permission_id,
+-- user_permissions.*, user_departments.*. Those are bounded by the number of staff and the
+-- number of permissions, a couple of hundred rows that never grow with patient volume, and on a
+-- table that fits in a page or two a sequential scan beats an index lookup. Indexing them would
+-- buy nothing and be paid for on every write — the same mistake as the two indexes removed above.
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_id);
+CREATE INDEX IF NOT EXISTS idx_payments_processed_by ON payments(processed_by);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_created_by ON patient_visits(created_by);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_discount_type ON patient_visits(discount_type_id);
+CREATE INDEX IF NOT EXISTS idx_patient_visits_discount_granted_by ON patient_visits(discount_granted_by);
+CREATE INDEX IF NOT EXISTS idx_patients_type ON patients(patient_type_id);
+CREATE INDEX IF NOT EXISTS idx_test_results_critical_ack_by ON test_results(critical_acknowledged_by);
+CREATE INDEX IF NOT EXISTS idx_test_results_superseded_by ON test_results(superseded_by);
+CREATE INDEX IF NOT EXISTS idx_hmo_requests_provider ON hmo_requests(hmo_provider_id);
+CREATE INDEX IF NOT EXISTS idx_hmo_requests_decided_by ON hmo_requests(decided_by);
+CREATE INDEX IF NOT EXISTS idx_hmo_request_tests_decided_by ON hmo_request_tests(decided_by);
 
 -- =====================================================================================
 -- Daily counters — see migrations.md [1.13.0]

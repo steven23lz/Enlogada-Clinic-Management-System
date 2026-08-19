@@ -43,6 +43,13 @@ router.get('/request/:id/card', verifyToken, authorizeRoles('SuperAdmin', 'Admin
 // existing Service Requests page (frontend/src/pages/admin/ServiceRequests.jsx), not a new one.
 router.put('/request/:id/approve', verifyToken, authorizeStaff, authorizePermissions('hmo:approve'), hmoController.approveRequest);
 
+// …and the other half of that decision. [1.28.0] `chk_hmo_status` has allowed 'Rejected' since
+// [1.0.0] and no route could set it, so a claim the provider turned down could only be approved
+// anyway or left Pending forever — at the top of a worklist that filters on Pending, being
+// reopened by every coordinator who scanned it. Same permission as approving: saying no is the
+// same authority as saying yes, and splitting them would let an account do one but not the other.
+router.put('/request/:id/reject', verifyToken, authorizeStaff, authorizePermissions('hmo:approve'), hmoController.rejectRequest);
+
 // Get HMO request details including linked tests
 router.get('/request/:id', verifyToken, authorizeStaff, authorizePermissions('hmo:read'), hmoController.getRequestDetails);
 

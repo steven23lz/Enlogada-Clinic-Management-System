@@ -1,33 +1,34 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import SidebarLayout from '../components/SidebarLayout';
-import { usePolling } from '../hooks/usePolling';
-import { Button } from '../components/ui/button';
-import { Panel, PanelHeader, PanelBody } from '../components/ui/panel';
-import PageHeader from '../components/ui/page-header';
-import Toolbar, { ToolbarSpacer } from '../components/ui/toolbar';
-import EmptyState from '../components/ui/empty-state';
-import MetricCard from '../components/ui/metric-card';
-import { Badge } from '../components/ui/badge';
-import { Input } from '../components/ui/input';
-import { SearchInput } from '../components/ui/search-input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
-import { ConfirmDialog } from '../components/ui/confirm-dialog';
-import { StatusBadge } from '../components/ui/status-badge';
-import WaitBadge from '../components/ui/wait-badge';
-import { SkeletonList, SkeletonRows } from '../components/ui/skeleton';
-import { Textarea } from '../components/ui/textarea';
-import Pagination from '../components/ui/pagination';
-import api from '../config/api';
-import { todayStr } from '../lib/date';
-import { formatCurrency } from '../lib/currency';
-import { toastError } from '../lib/toast';
-import { useAuth } from '../contexts/AuthContext';
+import SidebarLayout from '../../components/SidebarLayout';
+import { usePolling } from '../../hooks/usePolling';
+import { Button } from '../../components/ui/button';
+import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import Toolbar, { ToolbarSpacer } from '../../components/ui/toolbar';
+import EmptyState from '../../components/ui/empty-state';
+import MetricCard from '../../components/ui/metric-card';
+import { Badge } from '../../components/ui/badge';
+import { Input } from '../../components/ui/input';
+import { SearchInput } from '../../components/ui/search-input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../components/ui/dialog';
+import { ConfirmDialog } from '../../components/ui/confirm-dialog';
+import { StatusBadge } from '../../components/ui/status-badge';
+import WaitBadge from '../../components/ui/wait-badge';
+import { SkeletonList, SkeletonRows } from '../../components/ui/skeleton';
+import { Textarea } from '../../components/ui/textarea';
+import Pagination from '../../components/ui/pagination';
+import api from '../../config/api';
+import { formatDateTime } from '../../lib/date';
+import { formatCurrency } from '../../lib/currency';
+import { toastError } from '../../lib/toast';
+import { useAuth } from '../../contexts/AuthContext';
 // Aliased: `Receipt` is already taken by the lucide icon used in this file's headers.
-import ReceiptDocument from '../components/Receipt';
-import useOperationsReport from '../hooks/useOperationsReport';
-import { BillingTotalsPanel, SalesByServicePanel } from '../components/reports/OperationsPanels';
+import ReceiptDocument from '../../components/Receipt';
+import useOperationsReport from '../../hooks/useOperationsReport';
+import { BillingTotalsPanel, SalesByServicePanel } from '../../components/reports/OperationsPanels';
+import { useTransactionHistory, HISTORY_PAGE_SIZE } from '../../hooks/useTransactionHistory';
 import {
   Receipt,
   Wallet,
@@ -60,10 +61,6 @@ const PAGE_BLURBS = {
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 
-// UI/UX Modernization Phase 4: Transaction History has no server-side pagination endpoint, so a
-// client-side page size over the already-fetched, date-range-filtered array is proportionate —
-// same pattern as StaffAccounts.jsx (VISUAL_IDENTITY.md §3a #11).
-const HISTORY_PAGE_SIZE = 15;
 
 const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
@@ -87,17 +84,12 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [sortOrder, setSortOrder] = useState('oldest');
   const [patientTypes, setPatientTypes] = useState([]);
 
-  // Transaction History view state — deliberately separate from `transactions` above, which
-  // stays pinned to *today* (it also drives paidVisitIds and the queue's collections metrics).
-  // Reusing one state for both would mean picking a date range in History silently makes
-  // "Today's Collections" stop meaning today.
-  const [historyTransactions, setHistoryTransactions] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState('');
-  const [historyStartDate, setHistoryStartDate] = useState(todayStr());
-  const [historyEndDate, setHistoryEndDate] = useState(todayStr());
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [historyPage, setHistoryPage] = useState(1);
+  // Nine pieces of state, a fetch, a pagination handler and a lazy-load effect, behind one name.
+  //
+  // Deliberately separate from `transactions` above, which stays pinned to *today* — it also
+  // drives paidVisitIds and the queue's collections metrics. Sharing one list between the two
+  // would mean picking a date range in History silently changes what "Today's Collections" means.
+  const history = useTransactionHistory({ enabled: view === 'cashier-history' });
 
   // Feature Gap Plan Phase A: payment_status has always allowed 'Refunded'/'Cancelled', but
   // nothing in the app ever set them — a duplicate or disputed charge had no reversal path.
@@ -237,20 +229,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     fetchPatientTypes();
   };
 
-  const fetchTransactionHistory = useCallback(async (startDate, endDate) => {
-    setHistoryLoading(true);
-    setHistoryError('');
-    try {
-      const response = await api.get('/payments/transactions', { params: { startDate, endDate } });
-      setHistoryTransactions(response.data.data.transactions || []);
-      setHistoryPage(1);
-    } catch (err) {
-      console.error('Failed to fetch transaction history:', err);
-      setHistoryError('Could not load transaction history. Please try again.');
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, []);
+  // Paged at the server. [1.29.0] This pulled every settled payment in the range and sliced
+  // fifteen out of it here. Measured at 570 bytes a payment, a year-wide range is a 2.0 MB
+  // response to fill a fifteen-row table — on the screen a cashier opens for the daily cash-up.
 
   // Phase D finding 03: Transaction History had no way to reopen a past receipt — the only
   // "Print Receipt" affordance was the modal shown immediately after processing a *new* payment.
@@ -320,7 +301,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     try {
       await api.patch(`/payments/${refundTarget.id}/status`, { status: 'Refunded', reason: refundReason.trim() });
       setRefundTarget(null);
-      fetchTransactionHistory(historyStartDate, historyEndDate);
+      history.reload();
     } catch (err) {
       setRefundError(err.response?.data?.message || 'Failed to refund this payment.');
     } finally {
@@ -349,14 +330,6 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     { enabled: view === 'cashier-queue' && !selectedVisit }
   );
 
-  // Lazy-load Transaction History only once that tab is actually opened.
-  useEffect(() => {
-    if (view === 'cashier-history' && !historyLoaded) {
-      setHistoryLoaded(true);
-      fetchTransactionHistory(historyStartDate, historyEndDate);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
 
   // GET /visits/active returns both 'Pending' and 'Processing' visits (Processing = already
   // checked in, which includes visits already paid today) — cross-reference against today's
@@ -563,7 +536,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
                 <div className="flex items-center gap-2">
                   <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger className="flex-1">
+                    <SelectTrigger className="flex-1" aria-label="Filter the billing queue by patient type">
                       <SelectValue placeholder="Patient Type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -633,11 +606,17 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     );
                   })
                 ) : (
+                  /* "Nothing awaiting payment" is false when seven people are waiting and the
+                     search simply matched none of them — and it sends the cashier looking for
+                     Reception instead of clearing their own filter. The two situations get
+                     different words, as they do on every other queue in the app. */
                   <EmptyState
                     compact
                     icon={Inbox}
-                    title="Nothing awaiting payment"
-                    description="Visits appear here once Reception attaches tests to them."
+                    title={(searchQuery || typeFilter !== 'All') ? 'No tickets match this filter' : 'Nothing awaiting payment'}
+                    description={(searchQuery || typeFilter !== 'All')
+                      ? 'Clear the search or choose All Types to see the whole queue.'
+                      : 'Visits appear here once Reception attaches tests to them.'}
                   />
                 )}
               </div>
@@ -711,7 +690,18 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                               site, in case the endpoint's shape ever changes. */}
                           {(billDetails.items ?? []).map((item, idx) => (
                             <TableRow key={idx}>
-                              <TableCell className="py-2.5 text-xs font-bold text-slate-900">{item.name}</TableCell>
+                              <TableCell className="py-2.5 text-xs font-bold text-slate-900">
+                                {item.name}
+                                {/* Why the HMO refused this one, on the line it applies to. The
+                                    cashier is the person the patient asks, and until [1.27.0] the
+                                    answer existed nowhere they could see — the charge simply
+                                    appeared, higher than the patient had been led to expect. */}
+                                {item.hmoRejected && item.hmoDecisionReason && (
+                                  <span className="mt-0.5 block text-fine font-normal text-rose-700">
+                                    HMO refused: {item.hmoDecisionReason}
+                                  </span>
+                                )}
+                              </TableCell>
                               <TableCell className="py-2.5 text-xs text-gray-500">{item.category}</TableCell>
                               <TableCell className="py-2.5 text-xs font-bold text-slate-900 text-right">{formatCurrency(item.price)}</TableCell>
                             </TableRow>
@@ -798,7 +788,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     ) : (
                       <div className="flex flex-col sm:flex-row gap-2">
                         <Select value={discountTypeId} onValueChange={setDiscountTypeId}>
-                          <SelectTrigger className="text-xs sm:w-44"><SelectValue placeholder="No discount" /></SelectTrigger>
+                          <SelectTrigger className="text-xs sm:w-44" aria-label="Statutory or other discount"><SelectValue placeholder="No discount" /></SelectTrigger>
                           <SelectContent>
                             {discountCatalogue.map(d => (
                               <SelectItem key={d.id} value={String(d.id)}>
@@ -872,7 +862,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             {parseFloat(billDetails.hmoCoverage) >= parseFloat(billDetails.subtotal) ? ' (full coverage, ₱0.00 out of pocket).' : ' (partial coverage — remaining balance due).'}
                           </span>
                         </div>
-                      ) : (
+                      ) : (billDetails.hmoPendingCount ?? 0) === 0 && (
                         <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
                           <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                           <span><strong>HMO Partner Accredited</strong> — no approved coverage yet for this visit. Full amount is due unless Reception logs an approval first.</span>
@@ -880,12 +870,38 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       )
                     )}
 
+                    {/* A claim nobody has answered yet. [1.27.0] Shown whatever the patient type
+                        and whatever the coverage so far, because partial coverage is exactly the
+                        case the green badge above used to swallow: some tests approved, others
+                        still open, and the amount at stake invisible.
+
+                        It names the figure rather than saying "some tests", because the decision
+                        the cashier is making is whether that number is small enough to collect now
+                        and refund later, or large enough to be worth chasing the provider first.
+                        Not a block — some providers take days, and the patient cannot wait at the
+                        counter for one. */}
+                    {(billDetails?.hmoPendingCount ?? 0) > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 flex items-start space-x-2 text-xs">
+                        <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <span>
+                          <strong>
+                            {billDetails.hmoPendingCount} test{billDetails.hmoPendingCount > 1 ? 's' : ''} still
+                            awaiting an HMO decision — {formatCurrency(billDetails.hmoPendingAmount)}
+                          </strong>
+                          <span className="block font-normal mt-0.5">
+                            That amount is billed in full here. If the HMO approves it afterwards,
+                            the patient has to come back for a refund.
+                          </span>
+                        </span>
+                      </div>
+                    )}
+
                     {paymentMethod === 'Cash' ? (
                       <div className="space-y-2 bg-white p-3 rounded-xl border border-gray-200">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="field-label">Cash tendered</label>
-                            <Input
+                            <label htmlFor="cashierdashboard-cash-tendered" className="field-label">Cash tendered</label>
+                            <Input id="cashierdashboard-cash-tendered"
                               type="number"
                               step="0.01"
                               placeholder="0.00"
@@ -925,8 +941,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       </div>
                     ) : (
                       <div className="space-y-1">
-                        <label className="field-label">Transaction reference</label>
-                        <Input
+                        <label htmlFor="cashierdashboard-transaction-reference" className="field-label">Transaction reference</label>
+                        <Input id="cashierdashboard-transaction-reference"
                           placeholder={`Enter ${paymentMethod} reference code`}
                           value={referenceNumber}
                           onChange={e => setReferenceNumber(e.target.value)}
@@ -962,11 +978,14 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block mb-3">
                       This shift so far
                     </span>
+                    {/* "Receipts issued" used to be the left half of this pair, showing
+                        `transactions.length` — the identical number to the Receipts Issued metric
+                        card 400px above it, under an identical label. Six zeros on one screen and
+                        two of them were the same zero. What replaces it is the figure the strip
+                        above genuinely does not carry: how much was given away in statutory
+                        discounts, which is the number a cashier reconciles against their senior
+                        and PWD booklet at the end of a shift. */}
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
-                        <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Receipts issued</span>
-                        <span className="text-lg font-extrabold text-slate-900 tabular-nums">{transactions.length}</span>
-                      </div>
                       <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
                         <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Average per receipt</span>
                         <span className="text-lg font-extrabold text-slate-900 tabular-nums">
@@ -975,6 +994,14 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                                 transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0) / transactions.length
                               )
                             : formatCurrency(0)}
+                        </span>
+                      </div>
+                      <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
+                        <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Statutory discounts</span>
+                        <span className="text-lg font-extrabold text-slate-900 tabular-nums">
+                          {formatCurrency(
+                            transactions.reduce((sum, t) => sum + parseFloat(t.discount_amount || 0), 0)
+                          )}
                         </span>
                       </div>
                     </div>
@@ -1015,24 +1042,21 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         )}
 
         {view === 'cashier-history' && (() => {
-          const historyTotalPages = Math.max(1, Math.ceil(historyTransactions.length / HISTORY_PAGE_SIZE));
-          const pagedHistoryTransactions = historyTransactions.slice(
-            (historyPage - 1) * HISTORY_PAGE_SIZE,
-            historyPage * HISTORY_PAGE_SIZE
-          );
+          // `history.transactions` IS the page now — the server sent exactly these rows.
+          const pagedHistoryTransactions = history.transactions;
           return (
         <div>
           <Toolbar attached>
-            <Input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
+            <Input type="date" value={history.startDate} onChange={e => history.setStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
             <span className="text-fine text-slate-400">to</span>
-            <Input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
-            <Button variant="outline" onClick={() => fetchTransactionHistory(historyStartDate, historyEndDate)}>
+            <Input type="date" value={history.endDate} onChange={e => history.setEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
+            <Button variant="outline" onClick={() => history.reload()}>
               <RefreshCw className="h-3.5 w-3.5" />
               Apply
             </Button>
             <ToolbarSpacer />
             <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
-              {historyTransactions.length} receipt{historyTransactions.length === 1 ? '' : 's'}
+              {history.transactions.length} receipt{history.transactions.length === 1 ? '' : 's'}
             </span>
           </Toolbar>
 
@@ -1042,13 +1066,17 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 heading is how a text-based selector starts matching the wrong thing. */}
             <PanelHeader title="Completed Transactions" description="Receipts issued in this range" icon={History} />
             <PanelBody flush>
-              <Table>
+              <Table stack>
                 <TableHeader sticky>
                   <TableRow>
                     <TableHead>Receipt #</TableHead>
                     <TableHead>Patient Name</TableHead>
+                    {/* The reference number moved under the payment method it belongs to. As its
+                        own column it was empty on every cash row — which is most of them — so a
+                        whole column of dashes was taking the width that made the receipt number
+                        and the timestamp each wrap onto two lines. A GCash reference is a
+                        property of the GCash payment, not a separate fact about the receipt. */}
                     <TableHead>Payment Method</TableHead>
-                    <TableHead>Reference #</TableHead>
                     <TableHead className="text-right">Amount Paid</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Date & Time</TableHead>
@@ -1056,35 +1084,37 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {historyError ? (
+                  {history.error ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-6 text-xs text-rose-600 font-semibold">
-                        {historyError}{' '}
+                      <TableCell colSpan={7} className="text-center py-6 text-xs text-rose-600 font-semibold">
+                        {history.error}{' '}
                         <button
                           type="button"
-                          onClick={() => fetchTransactionHistory(historyStartDate, historyEndDate)}
+                          onClick={() => history.reload()}
                           className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
                         >
                           Retry
                         </button>
                       </TableCell>
                     </TableRow>
-                  ) : historyLoading ? (
-                    <SkeletonRows rows={6} columns={8} />
+                  ) : history.loading ? (
+                    <SkeletonRows rows={6} columns={7} />
                   ) : pagedHistoryTransactions.length > 0 ? (
                     pagedHistoryTransactions.map(t => (
                       <TableRow key={t.id}>
-                        <TableCell className="font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
-                        <TableCell className="font-semibold text-slate-900">{t.patient_first_name} {t.patient_last_name}</TableCell>
-                        <TableCell>
+                        <TableCell label="Receipt #" className="whitespace-nowrap font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
+                        <TableCell label="Patient" className="font-semibold text-slate-900">{t.patient_first_name} {t.patient_last_name}</TableCell>
+                        <TableCell label="Method">
                           <Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge>
+                          {t.reference_number && (
+                            <span className="mt-0.5 block font-mono text-fine text-slate-500">{t.reference_number}</span>
+                          )}
                         </TableCell>
-                        <TableCell className="font-mono text-fine text-slate-500">{t.reference_number || '—'}</TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
-                        <TableCell>
+                        <TableCell label="Amount" className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
+                        <TableCell label="Status">
                           <StatusBadge status={t.payment_status || 'Paid'} />
                         </TableCell>
-                        <TableCell className="text-right text-fine text-slate-500">{new Date(t.paid_at).toLocaleString()}</TableCell>
+                        <TableCell label="Paid at" className="whitespace-nowrap text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <Button type="button" variant="outline" size="xs" onClick={() => handleReprintReceipt(t)}>
@@ -1109,7 +1139,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     ))
                   ) : (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={8} className="p-0">
+                      <TableCell colSpan={7} className="p-0">
                         <EmptyState
                           icon={Receipt}
                           title="No payments in this date range"
@@ -1122,10 +1152,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
               </Table>
             </PanelBody>
             <Pagination
-              page={historyPage}
-              totalPages={historyTotalPages}
-              onPageChange={setHistoryPage}
-              totalLabel={`${historyTransactions.length} total`}
+              page={history.page}
+              totalPages={history.totalPages}
+              onPageChange={(next) => history.goToPage(next)}
+              total={history.total}
+              pageSize={HISTORY_PAGE_SIZE}
             />
           </Panel>
 
@@ -1162,8 +1193,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
             )}
 
             <div className="space-y-1">
-              <label className="field-label">Reason <span className="text-red-600">*</span></label>
-              <Textarea
+              <label htmlFor="cashierdashboard-reason" className="field-label">Reason <span className="text-red-600">*</span></label>
+              <Textarea id="cashierdashboard-reason"
                 value={refundReason}
                 onChange={e => setRefundReason(e.target.value)}
                 placeholder="e.g. Duplicate charge, patient dispute..."

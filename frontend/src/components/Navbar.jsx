@@ -9,12 +9,23 @@ const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
 
   return (
     <header className="sticky top-0 z-50 flex w-full items-center justify-between gap-2 border-b border-[#e6ebf1] bg-white/85 px-4 py-2.5 backdrop-blur-md sm:px-6">
-      {/* Clinic Identity (Logo + Name) */}
-      <div className="flex min-w-0 flex-shrink-0 items-center gap-2.5">
+      {/* Clinic Identity (Logo + Name).
+          Shrinkable on purpose. Both sides of this header were flex-shrink-0, so at 390px neither
+          would give and the bar overflowed by 15px — the patient's dashboard scrolled sideways on
+          a phone, which is the width most patients use it at. The name already has min-w-0 and
+          truncate, so letting it compress is the behaviour it was written for; the clinic's own
+          name is the least important thing on the screen when the alternative is a page that
+          drags. */}
+      <div className="flex min-w-0 items-center gap-2.5">
         <Logo className="h-9 w-9 flex-shrink-0" />
-        <div className="flex min-w-0 flex-col leading-tight">
+        {/* The wordmark is hidden below `sm`, not shrunk. Letting it compress is what stopped the
+            15px overflow, but the result at 390px was "ENL…" — a clipped wordmark is worse
+            branding than no wordmark, and it is the first thing a patient sees on their own
+            portal. The logo carries the identity on a phone; the patient knows what site they
+            signed in to. */}
+        <div className="hidden min-w-0 flex-col leading-tight sm:flex">
           <span className="truncate text-[15px] font-bold tracking-tight text-slate-900">ENLOGADA</span>
-          <span className="hidden truncate text-micro font-semibold uppercase tracking-[0.12em] text-slate-500 sm:block">
+          <span className="truncate text-micro font-semibold uppercase tracking-[0.12em] text-slate-500">
             Ultrasound &amp; Diagnostic Clinic
           </span>
         </div>

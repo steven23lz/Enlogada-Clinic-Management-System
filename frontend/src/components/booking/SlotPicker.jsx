@@ -80,8 +80,8 @@ const SlotPicker = ({
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <label className="field-label">{label}</label>
-        <Input
+        <label htmlFor="slotpicker-label" className="field-label">{label}</label>
+        <Input id="slotpicker-label"
           type="date"
           value={date || ''}
           min={minDate}

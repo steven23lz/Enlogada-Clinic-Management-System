@@ -1,10 +1,10 @@
 import React from 'react';
-import DashboardLayout from '../components/DashboardLayout';
-import AccountSettingsForm from '../components/AccountSettingsForm';
-import { Button } from '../components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
-import { useAuth } from '../contexts/AuthContext';
+import DashboardLayout from '../../components/DashboardLayout';
+import AccountSettingsForm from '../../components/AccountSettingsForm';
+import { Button } from '../../components/ui/button';
+import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 
 // Module 5: Profile — a client's own account settings (contact info, password,
@@ -74,7 +74,7 @@ const ClientProfile = ({ onNavigate }) => {
               </CardContent>
             </Card>
 
-            <Card className="border-[#e6ebf1] bg-rail text-white rounded-2xl overflow-hidden p-5 space-y-2 shadow-sm">
+            <Card className="border-[#e6ebf1] bg-rail text-white rounded-2xl overflow-hidden p-5 space-y-2">
               <div className="flex items-center space-x-2 text-brand-600">
                 <ShieldCheck className="w-5 h-5" />
                 <h3 className="font-bold text-sm text-white m-0">Account Security</h3>

@@ -1,6 +1,6 @@
 import React from 'react';
-import PublicHeader from '../components/PublicHeader';
-import PublicFooter from '../components/PublicFooter';
+import PublicHeader from '../../components/PublicHeader';
+import PublicFooter from '../../components/PublicFooter';
 import { Calendar, CreditCard, FileCheck, AlertCircle } from 'lucide-react';
 
 const SECTIONS = [

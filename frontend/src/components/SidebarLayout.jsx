@@ -396,17 +396,36 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
 
                 It also earns the space it takes: "Visit History" exists under Front Desk and,
                 near enough, under Diagnostics too, and only the department tells them apart. */}
+            {/* On a phone the two halves swap, rather than the group simply dropping out.
+                Hiding the group below `sm` left the bar showing the page title alone — the exact
+                words of the <h1> 40px underneath, which is the duplication the comment above
+                exists to prevent, reintroduced at the width where vertical space is scarcest.
+                And it dropped the half that carries the information: the group is what tells
+                Front Desk's "Visit History" from Diagnostics'.
+
+                So: phone shows the group, wider shows "Group / Screen". Screens with no group —
+                the Admin management ones — fall back to the title, because a breadcrumb with
+                nothing in it is worse than a repeated word. */}
             <nav aria-label="Breadcrumb" className="min-w-0">
               <ol className="m-0 flex list-none items-center gap-1.5 p-0">
-                {activeOpsItem && (
+                {activeOpsItem ? (
                   <>
-                    <li className="hidden whitespace-nowrap text-[13px] text-slate-400 sm:block">{activeOpsItem.groupLabel}</li>
+                    <li className="min-w-0 truncate text-[13px] font-semibold text-slate-800 sm:font-normal sm:text-slate-400">
+                      {activeOpsItem.groupLabel}
+                    </li>
                     <li aria-hidden="true" className="hidden text-slate-300 sm:block">/</li>
+                    <li
+                      className="hidden min-w-0 truncate text-[13px] font-semibold text-slate-800 sm:block"
+                      aria-current="page"
+                    >
+                      {title}
+                    </li>
                   </>
+                ) : (
+                  <li className="min-w-0 truncate text-[13px] font-semibold text-slate-800" aria-current="page">
+                    {title}
+                  </li>
                 )}
-                <li className="min-w-0 truncate text-[13px] font-semibold text-slate-800" aria-current="page">
-                  {title}
-                </li>
               </ol>
             </nav>
             {isActingOutsideOwnRole && (

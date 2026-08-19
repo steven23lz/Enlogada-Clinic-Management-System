@@ -1,32 +1,31 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import SidebarLayout from '../components/SidebarLayout';
-import { usePolling } from '../hooks/usePolling';
-import { Button } from '../components/ui/button';
-import { Panel, PanelBody } from '../components/ui/panel';
-import PageHeader from '../components/ui/page-header';
-import Toolbar, { ToolbarSpacer } from '../components/ui/toolbar';
-import EmptyState from '../components/ui/empty-state';
-import { SkeletonRows } from '../components/ui/skeleton';
-import MetricCard from '../components/ui/metric-card';
-import { Badge } from '../components/ui/badge';
-import { Input } from '../components/ui/input';
-import { SearchInput } from '../components/ui/search-input';
-import { StatusBadge } from '../components/ui/status-badge';
-import Pagination from '../components/ui/pagination';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { ConfirmDialog } from '../components/ui/confirm-dialog';
-import api from '../config/api';
-import { todayStr } from '../lib/date';
-import { formatCurrency } from '../lib/currency';
-import { toastSuccess, toastError, toastInfo } from '../lib/toast';
-import { validatePatientProfile } from '../validations/patientValidation';
-import QrScanner from '../components/QrScanner';
-import RescheduleDialog from '../components/booking/RescheduleDialog';
-import ReferringPhysicianFields from '../components/booking/ReferringPhysicianFields';
-import useOperationsReport from '../hooks/useOperationsReport';
-import { ReceptionThroughputPanel } from '../components/reports/OperationsPanels';
+import SidebarLayout from '../../components/SidebarLayout';
+import { usePolling } from '../../hooks/usePolling';
+import { Button } from '../../components/ui/button';
+import { Panel, PanelBody } from '../../components/ui/panel';
+import PageHeader from '../../components/ui/page-header';
+import Toolbar, { ToolbarSpacer } from '../../components/ui/toolbar';
+import EmptyState from '../../components/ui/empty-state';
+import { SkeletonRows } from '../../components/ui/skeleton';
+import MetricCard from '../../components/ui/metric-card';
+import { Badge } from '../../components/ui/badge';
+import { Input } from '../../components/ui/input';
+import { SearchInput } from '../../components/ui/search-input';
+import { StatusBadge } from '../../components/ui/status-badge';
+import Pagination from '../../components/ui/pagination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
+import { ConfirmDialog } from '../../components/ui/confirm-dialog';
+import api from '../../config/api';
+import { todayStr, formatDateTime } from '../../lib/date';
+import { toastSuccess, toastError, toastInfo } from '../../lib/toast';
+import QrScanner from '../../components/QrScanner';
+import RescheduleDialog from '../../components/booking/RescheduleDialog';
+import TestPicker from '../../components/booking/TestPicker';
+import useOperationsReport from '../../hooks/useOperationsReport';
+import { ReceptionThroughputPanel } from '../../components/reports/OperationsPanels';
+import WalkInRegistration from '../../components/reception/WalkInRegistration';
 import {
   ClipboardList,
   UserCheck,
@@ -70,10 +69,15 @@ const PAGE_BLURBS = {
   'reception-queue': "Everyone who has checked in today, in arrival order. Attach tests, print a ticket, or send a patient through to billing.",
   'reception-walkin': 'Register a patient who arrived without an appointment. Creates the patient record if they are new, then opens a visit.',
   'reception-checkin': 'Scan a booking pass or key in the reference code to turn a confirmed appointment into a live visit.',
-  'reception-history': 'Completed and cancelled visits for a chosen date range. Read-only.',
+  // Says what the screen does. It described itself as "Completed and cancelled visits" while
+  // showing Pending and Processing ones too — findVisitsByDateRange is deliberately any-status,
+  // so the copy was the half that was wrong. A receptionist looking a patient up does not know
+  // what state the visit reached, which is usually why they are looking.
+  'reception-history': 'Every visit in a chosen date range, whatever state it reached. Read-only.',
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 const QUEUE_PAGE_SIZE = 25;
+const HISTORY_PAGE_SIZE = 25;
 
 // scheduled_date arrives as a full ISO instant (pg parses the DATE column with the local-time
 // constructor, then JSON serialises it to UTC). Formatting it back to a local calendar date is
@@ -95,10 +99,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [activeVisits, setActiveVisits] = useState([]);
   const [testCatalog, setTestCatalog] = useState([]);
   const [patientTypes, setPatientTypes] = useState([]);
-  // The requesting doctor, captured alongside the visit rather than the patient: a referral
-  // belongs to one episode of care, not to the person forever.
-  const [referringPhysician, setReferringPhysician] = useState('');
-  const [referringPhysicianPrc, setReferringPhysicianPrc] = useState('');
   const [hmoProviders, setHmoProviders] = useState([]);
   const [staticDataError, setStaticDataError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -119,6 +119,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
   // Visit History state (new nav destination, UI/UX Phase 2)
   const [historyVisits, setHistoryVisits] = useState([]);
+  // Paged at the server. [1.29.0] This screen fetched every visit in the range and rendered all
+  // of them — no slice, no footer, the whole list straight into the DOM. Measured at 664 bytes a
+  // visit, a year-wide range is a 3.6 MB response and roughly 5,700 table rows.
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [historySearch, setHistorySearch] = useState('');
@@ -175,32 +181,15 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [lookupCheckInSuccess, setLookupCheckInSuccess] = useState('');
 
   // Walk-in Registration State
-  const [newPatient, setNewPatient] = useState({
-    firstName: '',
-    lastName: '',
-    birthdate: '',
-    sex: 'Male',
-    address: '',
-    contactNumber: '',
-    emergencyContact: '',
-    patientTypeId: ''
-  });
-  const [visitNotes, setVisitNotes] = useState('');
-  const [registrationSuccess, setRegistrationSuccess] = useState('');
-  const [registrationError, setRegistrationError] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
 
   // The form holds the patient type as an id; the referral rule is expressed in names. Resolved
   // here rather than comparing against a hardcoded id, which a reseed could renumber.
-  const selectedPatientTypeName = patientTypes.find(
-    (t) => String(t.id) === String(newPatient.patientTypeId)
-  )?.name;
-
   // Manual HMO logging State
   const [showHmoModal, setShowHmoModal] = useState(false);
   const [activeVisitTest, setActiveVisitTest] = useState(null);
   const [hmoProviderId, setHmoProviderId] = useState('');
   const [hmoApprovalCode, setHmoApprovalCode] = useState('');
+  const [hmoMemberNumber, setHmoMemberNumber] = useState('');
   const [hmoError, setHmoError] = useState('');
 
   // UI/UX Modernization Phase 10: read-only visibility into pending HMO requests, shown on the
@@ -237,14 +226,18 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchVisitHistory = useCallback(async (startDate, endDate, search) => {
+  const fetchVisitHistory = useCallback(async (startDate, endDate, search, page = 1) => {
     setHistoryLoading(true);
     setHistoryError('');
     try {
       const response = await api.get('/visits/history', {
-        params: { startDate, endDate, search: search || undefined }
+        params: { startDate, endDate, search: search || undefined, page, limit: HISTORY_PAGE_SIZE }
       });
-      setHistoryVisits(response.data.data.visits || []);
+      const { visits, total, totalPages } = response.data.data;
+      setHistoryVisits(visits || []);
+      setHistoryTotal(total ?? (visits || []).length);
+      setHistoryTotalPages(totalPages || 1);
+      setHistoryPage(page);
     } catch (err) {
       console.error('Failed to fetch visit history:', err);
       setHistoryError('Could not load visit history. Please try again.');
@@ -413,16 +406,22 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         });
       } else {
         const patient = checkInTarget.data;
+        // No notes. [1.29.0] This read `visitNotes`, which is the "Visit Notes / Referral Reason"
+        // input belonging to the REGISTRATION form in the panel below — a form the receptionist
+        // is not using when they check in a patient they just found by search. So a half-typed
+        // registration note ended up attached to a returning patient's visit, silently and
+        // against a patient the note was never about.
+        //
+        // It also tied two independent flows to one piece of ambient state, which is what made
+        // this screen resist being split up. The coupling was the design pointing at the bug.
         const vRes = await api.post('/visits', {
           patientId: patient.id,
           visitType: 'Walk in',
-          notes: visitNotes
         });
         const visit = vRes.data.data.visit;
         setLookupCheckInSuccess(`${patient.first_name} ${patient.last_name} checked in! Physical Queue Ticket: ${visit.queue_number}`);
         setPatientSearchResults(null);
         setPatientSearchQuery('');
-        setVisitNotes('');
       }
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
       setCheckInTarget(null);
@@ -469,57 +468,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     }
   };
 
-  const handleWalkInRegister = async (e) => {
-    e.preventDefault();
-    setRegistrationSuccess('');
-    setRegistrationError('');
-
-    const validationError = validatePatientProfile(newPatient);
-    if (validationError) {
-      setRegistrationError(validationError);
-      return;
-    }
-
-    setIsRegistering(true);
-    try {
-      // 1. Create Patient Profile
-      const pRes = await api.post('/patients', newPatient);
-      const patient = pRes.data.data.patient;
-
-      // 2. Create Walk-in Visit with Generated Queue Ticket
-      const vRes = await api.post('/visits', {
-        patientId: patient.id,
-        visitType: 'Walk in',
-        notes: visitNotes,
-        referringPhysician,
-        referringPhysicianPrc
-      });
-
-      const visit = vRes.data.data.visit;
-      setRegistrationSuccess(`Walk-In registered successfully! Physical Queue Ticket: ${visit.queue_number}`);
-
-      setNewPatient({
-        firstName: '',
-        lastName: '',
-        birthdate: '',
-        sex: 'Male',
-        address: '',
-        contactNumber: '',
-        emergencyContact: '',
-        patientTypeId: ''
-      });
-      setVisitNotes('');
-      // Cleared with the rest of the form. A referring physician left in state would follow the
-      // next patient registered, attaching a doctor to somebody they never saw.
-      setReferringPhysician('');
-      setReferringPhysicianPrc('');
-      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
-    } catch (err) {
-      setRegistrationError(err.response?.data?.message || 'Failed to register walk-in patient');
-    } finally {
-      setIsRegistering(false);
-    }
-  };
 
   const handlePatientSearch = async (e) => {
     e.preventDefault();
@@ -593,8 +541,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     e.preventDefault();
     setHmoError('');
 
+    // The message named a field this check never looked at, and the LOA code is genuinely
+    // optional — reception logs the claim, an Admin issues the code on approval.
     if (!activeVisitTest || !hmoProviderId) {
-      setHmoError('Provider and Approval Code are required.');
+      setHmoError('Choose the HMO provider before logging the claim.');
       return;
     }
 
@@ -602,11 +552,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       await api.post('/hmo/request', {
         hmoProviderId: parseInt(hmoProviderId, 10),
         approvalCode: hmoApprovalCode,
+        memberNumber: hmoMemberNumber,
         visitTestIds: [activeVisitTest.id]
       });
 
       toastSuccess('HMO Pre-authorization logged successfully!');
       setShowHmoModal(false);
+      setHmoMemberNumber('');
+      setHmoApprovalCode('');
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
       fetchPendingHmoRequests();
     } catch (err) {
@@ -666,17 +619,27 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               <Panel tone="notice" className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="h-4 w-4 flex-shrink-0 text-amber-700" />
-                  <h3 className="m-0 text-fine font-semibold text-amber-900">
+                  {/* A count in an alert banner is not a section heading — it was an <h3>, which
+                      put a heading between the page title and the queue's own and broke the
+                      outline for anyone navigating by heading. */}
+                  <p className="m-0 text-fine font-semibold text-amber-900">
                     {pendingHmoRequests.length} pending HMO request{pendingHmoRequests.length === 1 ? '' : 's'} awaiting Admin approval
-                  </h3>
+                  </p>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
+                  {/* The patient, then the provider. These chips read "1CoopHealth • 1/2
+                      approved" — five of them, identical, on a queue of five different people.
+                      A receptionist standing in front of a patient asking "has mine come back
+                      yet?" could not answer from this, which is the only question it is here
+                      to answer. */}
                   {pendingHmoRequests.slice(0, 6).map(r => (
                     <span
                       key={r.id}
                       className="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-0.5 text-fine font-medium leading-5 text-amber-900 ring-1 ring-inset ring-amber-200"
                     >
-                      <span className="font-semibold">{r.provider_name}</span>
+                      <span className="font-semibold">
+                        {r.patient_first_name ? `${r.patient_first_name} ${r.patient_last_name}` : r.provider_name}
+                      </span>
                       <span className="text-amber-500">&bull;</span>
                       <span className="tabular-nums">{r.approved_test_count}/{r.test_count} approved</span>
                     </span>
@@ -718,7 +681,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             {/* Active Queue Table */}
             <Panel className="overflow-hidden rounded-t-none">
               <PanelBody flush>
-                <Table>
+                <Table stack>
                   <TableHeader sticky>
                     <TableRow>
                       <TableHead>Queue Ticket</TableHead>
@@ -756,7 +719,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     ) : activeVisits.length > 0 ? (
                       activeVisits.map(visit => (
                         <TableRow key={visit.id}>
-                          <TableCell>
+                          <TableCell label="Queue Ticket">
                             <div className="flex items-center gap-1">
                               {/* The ticket number is the thing a receptionist calls out and a
                                   patient reads back, so it is set larger than the row around it
@@ -786,22 +749,22 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                             </div>
                           </TableCell>
 
-                          <TableCell className="font-semibold text-slate-900">
+                          <TableCell label="Patient Name" className="font-semibold text-slate-900">
                             {visit.first_name} {visit.last_name}
                             <span className="block font-mono text-micro font-normal text-slate-400">PT-{visit.patient_id}</span>
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell label="Visit Type">
                             <Badge variant="outline" className="text-slate-600">
                               {visit.visit_type}
                             </Badge>
                           </TableCell>
 
-                          <TableCell className="text-slate-500">
+                          <TableCell label="Patient Category" className="text-slate-500">
                             {visit.patient_type_name}
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell label="Assigned Tests">
                             {visit.tests && visit.tests.length > 0 ? (
                               <div className="flex flex-wrap gap-1">
                                 {visit.tests.map(t => (
@@ -827,7 +790,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                             )}
                           </TableCell>
 
-                          <TableCell>
+                          <TableCell label="Status">
                             <StatusBadge status={visit.visit_status} />
                             {/* Where the ticket actually is, in the front desk's own terms.
                                 'Pending' alone doesn't say whether reception or the cashier is
@@ -916,13 +879,13 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               </Button>
               <ToolbarSpacer />
               <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
-                {historyVisits.length} visit{historyVisits.length === 1 ? '' : 's'}
+                {historyTotal} visit{historyTotal === 1 ? '' : 's'}
               </span>
             </Toolbar>
 
             <Panel className="overflow-hidden rounded-t-none">
               <PanelBody flush>
-                <Table>
+                <Table stack>
                   <TableHeader sticky>
                     <TableRow>
                       <TableHead>Queue Ticket</TableHead>
@@ -955,28 +918,28 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     ) : historyVisits.length > 0 ? (
                       historyVisits.map(v => (
                         <TableRow key={v.id}>
-                          <TableCell>
+                          <TableCell label="Queue Ticket">
                             <span className="rounded-md bg-slate-100 px-2 py-1 text-fine font-bold tabular-nums text-slate-700">
                               {v.queue_number || `V-${v.id}`}
                             </span>
                           </TableCell>
-                          <TableCell className="font-semibold text-slate-900">
+                          <TableCell label="Patient" className="font-semibold text-slate-900">
                             {v.first_name} {v.last_name}
                             <span className="block text-micro font-normal text-slate-400">{v.patient_type_name}</span>
                           </TableCell>
-                          <TableCell>
+                          <TableCell label="Visit Type">
                             <Badge variant="outline" className="text-slate-600">
                               {v.visit_type}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-slate-500">
+                          <TableCell label="Tests" className="text-slate-500">
                             {v.tests && v.tests.length > 0 ? v.tests.map(t => t.test_name).join(', ') : <span className="text-slate-400">No tests attached</span>}
                           </TableCell>
-                          <TableCell>
+                          <TableCell label="Status">
                             <StatusBadge status={v.visit_status} />
                           </TableCell>
-                          <TableCell className="text-right text-fine text-slate-500">
-                            {new Date(v.created_at).toLocaleString()}
+                          <TableCell label="Date" className="text-right text-fine text-slate-500">
+                            {formatDateTime(v.created_at)}
                           </TableCell>
                         </TableRow>
                       ))
@@ -994,6 +957,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   </TableBody>
                 </Table>
               </PanelBody>
+              {/* The screen had no footer at all, because it rendered every row it fetched. */}
+              <Pagination
+                page={historyPage}
+                totalPages={historyTotalPages}
+                onPageChange={(next) => fetchVisitHistory(historyStartDate, historyEndDate, historySearch, next)}
+                total={historyTotal}
+                pageSize={HISTORY_PAGE_SIZE}
+              />
             </Panel>
 
             {/* How the desk is performing, not just what it did. The queue KPIs count who is
@@ -1013,10 +984,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             {/* Existing Patient Lookup (Module 7: patient record lookup) */}
             <Panel className="max-w-3xl p-6">
               <div className="border-b border-[#e6ebf1] pb-3 mb-4">
-                <h3 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
+                <h2 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
                   <Users className="h-4 w-4 text-brand-600" />
                   <span>Find Existing Patient</span>
-                </h3>
+                </h2>
                 <p className="mt-1 text-fine leading-relaxed text-slate-500">Search before registering — a returning patient should be checked in, not re-registered.</p>
               </div>
 
@@ -1035,6 +1006,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
               <form onSubmit={handlePatientSearch} className="flex space-x-2">
                 <Input
+                  aria-label="Search existing patients by name"
                   placeholder="Search by patient name..."
                   value={patientSearchQuery}
                   onChange={e => setPatientSearchQuery(e.target.value)}
@@ -1086,168 +1058,21 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               )}
             </Panel>
 
-            <Panel className="max-w-3xl p-6">
-              <div className="border-b border-[#e6ebf1] pb-3 mb-4">
-                <h3 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
-                  <UserPlus className="h-4 w-4 text-brand-600" />
-                  <span>Register Walk-In Patient & Generate Physical Ticket</span>
-                </h3>
-              </div>
-
-              {registrationSuccess && (
-                <div className="mb-4 alert alert-success">
-                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                  <span>{registrationSuccess}</span>
-                </div>
-              )}
-
-              {registrationError && (
-                <div role="alert" className="mb-4 alert alert-error">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{registrationError}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleWalkInRegister} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="field-label">First Name <span className="text-rose-600">*</span></label>
-                    <Input
-                      placeholder="Juan"
-                      value={newPatient.firstName}
-                      onChange={e => setNewPatient({...newPatient, firstName: e.target.value})}
-                      disabled={isRegistering}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="field-label">Last Name <span className="text-rose-600">*</span></label>
-                    <Input
-                      placeholder="Dela Cruz"
-                      value={newPatient.lastName}
-                      onChange={e => setNewPatient({...newPatient, lastName: e.target.value})}
-                      disabled={isRegistering}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="space-y-1 sm:col-span-2">
-                    <label className="field-label">Birthdate <span className="text-rose-600">*</span></label>
-                    <Input
-                      type="date"
-                      value={newPatient.birthdate}
-                      onChange={e => setNewPatient({...newPatient, birthdate: e.target.value})}
-                      disabled={isRegistering}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="field-label">Sex <span className="text-rose-600">*</span></label>
-                    <Select
-                      value={newPatient.sex}
-                      onValueChange={val => setNewPatient({...newPatient, sex: val})}
-                      disabled={isRegistering}
-                    >
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Male">Male</SelectItem>
-                        <SelectItem value="Female">Female</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="field-label">Contact Number</label>
-                    <Input
-                      placeholder="09171234567"
-                      value={newPatient.contactNumber}
-                      onChange={e => setNewPatient({...newPatient, contactNumber: e.target.value})}
-                      disabled={isRegistering}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="field-label">Patient Type <span className="text-rose-600">*</span></label>
-                    <Select
-                      value={newPatient.patientTypeId}
-                      onValueChange={val => setNewPatient({...newPatient, patientTypeId: val})}
-                      disabled={isRegistering}
-                    >
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue placeholder="Select patient type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {patientTypes.map(t => (
-                          <SelectItem key={t.id} value={t.id.toString()}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Shown for every patient type, because a self-paying patient who was referred
-                    still needs the doctor on the record — the report goes back to them. Only
-                    'Private' makes it mandatory, since at this clinic that type means "a physician
-                    sent them". The server enforces the same rule; this mirrors it so the
-                    receptionist is not told at submit what could have been said while typing. */}
-                <ReferringPhysicianFields
-                  physician={referringPhysician}
-                  prc={referringPhysicianPrc}
-                  onPhysicianChange={setReferringPhysician}
-                  onPrcChange={setReferringPhysicianPrc}
-                  required={selectedPatientTypeName === 'Private'}
-                  reason={
-                    selectedPatientTypeName === 'Private'
-                      ? 'A Private patient is one a physician referred, so the record needs to name them.'
-                      : null
-                  }
-                  disabled={isRegistering}
-                />
-
-                <div className="space-y-1">
-                  <label className="field-label">Home Address</label>
-                  <Input
-                    placeholder="Barangay, City, Province"
-                    value={newPatient.address}
-                    onChange={e => setNewPatient({...newPatient, address: e.target.value})}
-                    disabled={isRegistering}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="field-label">Visit Notes / Referral Reason</label>
-                  <Input
-                    placeholder="Walk-in referral for Abdominal Ultrasound..."
-                    value={visitNotes}
-                    onChange={e => setVisitNotes(e.target.value)}
-                    disabled={isRegistering}
-                  />
-                </div>
-
-                <div className="flex justify-end pt-3">
-                  <Button type="submit" className="font-bold text-xs px-6 py-2 rounded-xl" disabled={isRegistering}>
-                    {isRegistering ? 'Registering...' : 'Register Walk-In & Issue Queue Ticket'}
-                  </Button>
-                </div>
-              </form>
-            </Panel>
+            <WalkInRegistration
+              patientTypes={patientTypes}
+              testCatalog={testCatalog}
+              onRegistered={() => fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter })}
+            />
           </div>
         )}
 
         {view === 'reception-checkin' && (
           <Panel className="max-w-xl p-6">
             <div className="border-b border-[#e6ebf1] pb-3 mb-4">
-              <h3 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
+              <h2 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
                 <QrCode className="h-4 w-4 text-brand-600" />
                 <span>Verify Appointment Reference</span>
-              </h3>
+              </h2>
               <p className="mt-1 text-fine leading-relaxed text-slate-500">
                 Scan or enter the appointment reference code (e.g. <code>APPT-XXXXX</code>) to check a patient in.
               </p>
@@ -1273,6 +1098,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             <form onSubmit={handleVerifyReference} className="space-y-4 pt-2">
               <div className="flex space-x-2">
                 <Input
+                  aria-label="Appointment reference code"
                   placeholder="APPT-104928"
                   value={searchRef}
                   onChange={e => setSearchRef(e.target.value)}
@@ -1397,22 +1223,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             </DialogHeader>
 
             <form onSubmit={handleAssignTestsSubmit} className="space-y-4 pt-2">
-              <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-xl p-3 space-y-2 bg-slate-50/70">
-                {testCatalog.map(t => (
-                  <label key={t.id} className="flex items-center space-x-3 p-2 bg-white hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-[#e6ebf1] text-xs">
-                    <input
-                      type="checkbox"
-                      checked={selectedTestIds.includes(t.id.toString())}
-                      onChange={() => handleToggleTest(t.id.toString())}
-                      className="rounded text-brand-600 focus:ring-brand-500"
-                    />
-                    <div className="flex-1 flex justify-between items-center">
-                      <span className="font-bold text-gray-800">{t.name} <span className="text-meta text-gray-400 font-normal">({t.category_name})</span></span>
-                      <span className="font-extrabold text-slate-900">{formatCurrency(t.price)}</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
+              {/* Same control as the registration form below, so the two cannot drift on
+                  grouping, the running total, or the preparation warning. */}
+              <TestPicker
+                tests={testCatalog}
+                selectedIds={selectedTestIds}
+                onToggle={handleToggleTest}
+                disabled={isAttachingTests}
+              />
 
               <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
                 <Button type="button" variant="outline" onClick={() => setShowTestsModal(false)}>Cancel</Button>
@@ -1446,9 +1264,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </div>
               )}
               <div className="space-y-1.5">
-                <label className="field-label">HMO Provider <span className="text-rose-600">*</span></label>
+                <label className="field-label" htmlFor="receptionistdashboard-hmo-provider">HMO Provider <span className="text-rose-600">*</span></label>
                 <Select value={hmoProviderId} onValueChange={setHmoProviderId}>
-                  <SelectTrigger className="rounded-xl">
+                  <SelectTrigger className="rounded-xl" id="receptionistdashboard-hmo-provider">
                     <SelectValue placeholder="Select HMO provider" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1461,10 +1279,38 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </Select>
               </div>
 
+              {/* Two fields, not one. This was a single box labelled "Card / LOA Number" writing
+                  into approval_code — but a member number and an LOA code are different things
+                  with different lifetimes. The member number is printed on the card and identifies
+                  the patient to the provider forever; the LOA code is issued per claim when the
+                  HMO approves it, and the Admin approval screen writes that same column. Typing a
+                  member number here therefore filed it as an approval code on an unapproved claim.
+
+                  The member number also had nowhere to live at all: it was legible only by opening
+                  the card photo, and pruneHmoCards deletes those after 180 days while the claim
+                  itself is kept for seven years. */}
               <div className="space-y-1.5">
-                <label className="field-label">Card / LOA Number (if shown by patient)</label>
+                <label htmlFor="hmo-member-number" className="field-label">
+                  Member number <span className="font-normal text-slate-400">(from the card)</span>
+                </label>
                 <Input
-                  placeholder="Enter the code shown on the HMO card or LOA"
+                  id="hmo-member-number"
+                  placeholder="The patient's number with this provider"
+                  value={hmoMemberNumber}
+                  onChange={e => setHmoMemberNumber(e.target.value)}
+                />
+                <p className="m-0 text-fine text-slate-500">
+                  What the provider looks the claim up by when you telephone them.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label htmlFor="hmo-loa-code" className="field-label">
+                  LOA code <span className="font-normal text-slate-400">(only if they already have one)</span>
+                </label>
+                <Input
+                  id="hmo-loa-code"
+                  placeholder="Leave blank — an Admin fills this in on approval"
                   value={hmoApprovalCode}
                   onChange={e => setHmoApprovalCode(e.target.value)}
                 />
@@ -1565,7 +1411,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 {ticketToPrint.first_name} {ticketToPrint.last_name}
               </div>
               <div style={{ fontSize: '10px', color: '#555', marginTop: '2px' }}>
-                {ticketToPrint.visit_type} · {new Date(ticketToPrint.created_at).toLocaleString()}
+                {ticketToPrint.visit_type} · {formatDateTime(ticketToPrint.created_at)}
               </div>
 
               {/* Where to go next. Without this the patient has a number and no idea which
