@@ -46,13 +46,23 @@ export function useRefund({ onRefunded } = {}) {
     setSubmitting(true);
     try {
       await api.patch(`/payments/${target.id}/status`, { status: 'Refunded', reason: reason.trim() });
-      setTarget(null);
-      onRefunded?.();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to refund this payment.');
+      return;
     } finally {
       setSubmitting(false);
     }
+
+    // Past this line the reversal is recorded and cannot be un-recorded, so nothing here may
+    // report it as failed. Closing the dialog and refreshing the list behind it are follow-up:
+    // if `onRefunded` throws — today it reloads a list, tomorrow it could be anything — the
+    // cashier would otherwise be told "Failed to refund this payment" about a payment the
+    // server has already refunded, and would reasonably try again.
+    //
+    // Same rule as createAppointment in the backend: commit first, then do the after-work,
+    // with the after-work outside the block that decides whether the operation failed.
+    setTarget(null);
+    onRefunded?.();
   };
 
   return { target, reason, setReason, submitting, error, request, cancel, confirm };
