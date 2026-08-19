@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { selfPayProfile } from './helpers/patients.js';
 
 // The reschedule dialog, driven through the browser.
 //
@@ -32,8 +33,9 @@ test('a patient reschedules from their own booking list', async ({ page }) => {
   const token = (await login.json()).data.token;
   const auth = { Authorization: `Bearer ${token}` };
 
-  const patientId = (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth })).json())
-    .data.patients[0].id;
+  const patientId = selfPayProfile(
+    (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth })).json()).data.patients
+  ).id;
 
   const day = new Date();
   day.setDate(day.getDate() + 300 + (Date.now() % 30));

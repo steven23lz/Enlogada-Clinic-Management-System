@@ -83,9 +83,20 @@ function main() {
   // at their defaults.
   const overrides = process.argv.slice(2).filter((a) => a.startsWith('--') && a.includes('='));
   const known = new Set(PASSES.flatMap((p) => p.windowFlags || []));
-  const unknown = overrides.filter((a) => !known.has(a.slice(2).split('=')[0]));
+
+  // Every --flag is checked, not only the --flag=value form. `--days 800` parses as two separate
+  // arguments, so a check that only looked at args containing '=' saw no override and no unknown
+  // option — the runner said nothing and the pass silently used its default window. On the HMO
+  // card pass that means deleting every insurance document older than the default while the
+  // operator believed they had widened it.
+  const CONTROL_FLAGS = new Set(['--confirm', '--dry-run']);
+  const unknown = process.argv
+    .slice(2)
+    .filter((a) => a.startsWith('--') && !CONTROL_FLAGS.has(a))
+    .filter((a) => !known.has(a.slice(2).split('=')[0]) || !a.includes('='));
   if (unknown.length) {
-    logger.error(`Unrecognised option(s): ${unknown.join(', ')}`);
+    logger.error(`Unrecognised or malformed option(s): ${unknown.join(', ')}`);
+    logger.error('Windows take the form --flag=value; a space is not accepted.');
     logger.error(`Windows this runner understands: ${[...known].map((f) => '--' + f + '=N').join(', ')}`);
     process.exit(2);
   }

@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { loginAs } from './helpers/ticketRelease.js';
+import { selfPayProfile } from './helpers/patients.js';
 
 // Moving a booking instead of cancelling and rebooking it.
 //
@@ -93,7 +94,7 @@ test.describe('Appointment reschedule (API)', () => {
     recToken = await loginAs(ctx, API, RECEPTION);
     labToken = await loginAs(ctx, API, LAB);
     const profiles = await ctx.get(`${API}/patients/my-profiles`, { headers: auth(clientToken) });
-    patientId = (await profiles.json()).data.patients[0].id;
+    patientId = selfPayProfile((await profiles.json()).data.patients).id;
   });
 
   test.afterAll(async () => ctx.dispose());

@@ -57,9 +57,6 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, hmoPro
   const [slotsRefreshKey, setSlotsRefreshKey] = useState(0);
 
 
-  // The card is identity evidence, so it must never outlive the context it was attached in.
-  // Left in state it would follow the patient selector: attach your own card, close the dialog,
-  // switch to your child's profile, and their claim is filed against your member number.
   // One predicate for the field's `required`, the pre-submit guard, and what the server enforces.
   // Derived rather than duplicated: three copies of this rule is how the desk ends up demanding
   // something the booking form never asked for.
@@ -67,6 +64,10 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, hmoPro
     bookingData.hmoProviderId && bookingData.hmoProviderId !== 'none'
   );
   const referralRequired = hmoSelected || selectedProfile?.patient_type_name === 'Private';
+
+  // The card is identity evidence, so it must never outlive the context it was attached in.
+  // Left in state it would follow the patient selector: attach your own card, close the dialog,
+  // switch to your child's profile, and their claim is filed against your member number.
 
   const clearHmoCard = useCallback(() => {
     setHmoCardFile(null);
@@ -140,7 +141,14 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, hmoPro
     }
 
     if (referralRequired && !referringPhysician?.trim()) {
-      setBookingError("Please give the name of the doctor who requested these tests — your HMO needs it to approve coverage.");
+      // Two branches, because the reason differs and the reason is the whole message. Telling a
+      // self-paying Private patient that "your HMO needs it" contradicts the option they just
+      // chose, and the explanation rendered directly above the field.
+      setBookingError(
+        hmoSelected
+          ? 'Please give the name of the doctor who requested these tests — your HMO needs it to approve coverage.'
+          : 'Please give the name of the doctor who requested these tests — a Private patient is one a physician referred.'
+      );
       return;
     }
 

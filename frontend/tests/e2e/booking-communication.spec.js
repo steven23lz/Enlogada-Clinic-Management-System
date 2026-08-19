@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { selfPayProfile } from './helpers/patients.js';
 
 // What the patient is told about their own booking. [1.24.0]
 //
@@ -89,8 +90,9 @@ test.describe('Booking communication and preparation', () => {
     // The email is a courtesy; the appointment is the thing that matters. sendEmail swallows its
     // own failures, and appointmentService wraps the whole send — so an SMTP outage must not
     // surface as a failed booking.
-    const patientId = (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth(clientToken) })).json())
-      .data.patients[0].id;
+    const patientId = selfPayProfile(
+      (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth(clientToken) })).json()).data.patients
+    ).id;
 
     const day = new Date();
     day.setDate(day.getDate() + 250 + (Date.now() % 40));

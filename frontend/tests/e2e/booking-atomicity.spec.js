@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { loginAs } from './helpers/ticketRelease.js';
+import { selfPayProfile } from './helpers/patients.js';
 
 // Booking atomicity and duplicate handling.
 //
@@ -37,7 +38,7 @@ test.describe('Booking atomicity (API)', () => {
     const profilesRes = await apiContext.get(`${API}/patients/my-profiles`, {
       headers: { Authorization: `Bearer ${clientToken}` }
     });
-    patientId = (await profilesRes.json()).data.patients[0].id;
+    patientId = selfPayProfile((await profilesRes.json()).data.patients).id;
 
     const testsRes = await apiContext.get(`${API}/tests`);
     testIds = (await testsRes.json()).data.tests.slice(0, 2).map((t) => t.id);

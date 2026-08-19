@@ -39,20 +39,6 @@ function timeToMinutes(timeStr) {
  * either, but the API is reachable directly and the check is the only thing that makes the
  * availability screen more than a suggestion.
  */
-// One message for both places a reschedule can be refused: the pre-check, and the losing side of
-// the compare-and-swap in updateSchedule. A caller cannot tell — and should not need to — whether
-// the check-in landed a moment before their request or a moment after it.
-function refuseReschedule(status) {
-  const error = new Error(
-    status === 'Confirmed'
-      ? 'This appointment has already been checked in and cannot be rescheduled.'
-      : status
-        ? `A ${String(status).toLowerCase()} appointment cannot be rescheduled.`
-        : 'This appointment changed while you were rescheduling it. Please reload and try again.'
-  );
-  error.statusCode = 409;
-  return error;
-}
 
 async function assertSlotWithinOperatingHours(scheduledDate, scheduledTime) {
   const dayOfWeek = new Date(`${scheduledDate}T12:00:00Z`).getUTCDay();
@@ -70,6 +56,21 @@ async function assertSlotWithinOperatingHours(scheduledDate, scheduledTime) {
     throw error;
   }
   return hours;
+}
+
+// One message for both places a reschedule can be refused: the pre-check, and the losing side of
+// the compare-and-swap in updateSchedule. A caller cannot tell — and should not need to — whether
+// the check-in landed a moment before their request or a moment after it.
+function refuseReschedule(status) {
+  const error = new Error(
+    status === 'Confirmed'
+      ? 'This appointment has already been checked in and cannot be rescheduled.'
+      : status
+        ? `A ${String(status).toLowerCase()} appointment cannot be rescheduled.`
+        : 'This appointment changed while you were rescheduling it. Please reload and try again.'
+  );
+  error.statusCode = 409;
+  return error;
 }
 
 function minutesToTime(mins) {
@@ -162,15 +163,20 @@ class AppointmentService {
       // the desk and on any HMO claim, but not on an online self-pay booking — so a patient could
       // book from home in a state reception would have refused at the counter.
       //
-      // Straight to the repository rather than patientService.getPatientById: this wants the
-      // patient's type, not a department-scoped read, and calling the scoped helper with no
-      // requesting user would look like the scoping had been considered and waived.
-      //
       // Still ahead of the transaction, so a booking that cannot succeed never takes the slot's
       // advisory lock, and inside the try so a rejection still discards the uploaded card.
+      //
+      // A staff caller reaches here without assertClientOwnsPatient having read anything, so an
+      // unknown patientId would otherwise pass this assertion with an undefined type and fail
+      // later as a foreign-key violation — a 500 where a 404 is the honest answer.
       const bookingPatient = await patientRepository.findPatientById(patientId);
+      if (!bookingPatient) {
+        const error = new Error('Patient not found');
+        error.statusCode = 404;
+        throw error;
+      }
       assertReferralIfRequired({
-        patientTypeName: bookingPatient?.patient_type_name,
+        patientTypeName: bookingPatient.patient_type_name,
         hasHmoClaim: Boolean(hmo),
         referringPhysician: referral?.referringPhysician
       });
@@ -540,7 +546,22 @@ class AppointmentService {
       error.statusCode = 404;
       throw error;
     }
-    const updated = await appointmentRepository.updateAppointmentStatus(id, status);
+    // Checking a patient in is only meaningful against the booking the receptionist just looked
+    // at. Passing the status they read makes this a compare-and-swap against a reschedule landing
+    // in the same instant — without it, a move that commits while this call waits on the row lock
+    // would be confirmed on top of, leaving Confirmed against a date the patient was never told.
+    // Other transitions stay unguarded: they are legitimate from more than one starting state.
+    const updated = status === 'Confirmed'
+      ? await appointmentRepository.updateAppointmentStatus(id, status, { expectedStatus: appointment.status })
+      : await appointmentRepository.updateAppointmentStatus(id, status);
+
+    if (!updated) {
+      const error = new Error(
+        'This appointment changed while you were checking it in. Please reload and try again.'
+      );
+      error.statusCode = 409;
+      throw error;
+    }
 
     // Confirming an appointment IS the receptionist's half of the release rule (the QR scan /
     // reference check-in at the front desk). If the booking was already paid online, this is
