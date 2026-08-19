@@ -167,8 +167,19 @@ class PaymentRepository {
           AS cash,
         COALESCE(SUM(pay.amount) FILTER (
           WHERE pay.payment_status = 'Paid'
-            AND pay.payment_method IN ('GCash', 'PayMaya', 'Maya')), 0)::numeric(12,2)
+            AND pay.payment_method IN ('GCash', 'PayMaya')), 0)::numeric(12,2)
           AS ewallet,
+        -- Bank transfer is neither cash nor e-wallet, and without it the method figures do not
+        -- reconcile to the collected figure — today they were short by a 200.00 transfer that
+        -- appeared in no tile at all, which is exactly the money a cashier stops to hunt for.
+        --
+        -- Named rather than lumped into an "other": chk_payment_method enumerates the whole
+        -- vocabulary as ('Cash', 'GCash', 'PayMaya', 'Bank'), so cash + e-wallet + bank IS the
+        -- total, and a bucket implying an unknown remainder would be inventing uncertainty the
+        -- schema does not have.
+        COALESCE(SUM(pay.amount) FILTER (
+          WHERE pay.payment_status = 'Paid' AND pay.payment_method = 'Bank'), 0)::numeric(12,2)
+          AS bank,
         COALESCE(SUM(pay.discount_amount) FILTER (WHERE pay.payment_status = 'Paid'), 0)::numeric(12,2)
           AS discounts,
         -- Reported, never subtracted. A drawer that is short by a refund needs the refund named.

@@ -61,7 +61,10 @@ async function payAWalkIn(apiContext, recToken, cashToken, patientId) {
   const visit = (await visitRes.json()).data.visit;
 
   const testsRes = await apiContext.get(`${API}/tests`);
-  const labTest = (await testsRes.json()).data.tests.filter((t) => t.category_name === 'Laboratory')[0];
+  // find + assert, so a catalogue with no Laboratory test fails saying that, rather than
+  // throwing a TypeError on `.id` twenty lines later.
+  const labTest = (await testsRes.json()).data.tests.find((t) => t.category_name === 'Laboratory');
+  expect(labTest, 'the catalogue needs at least one Laboratory test for this fixture').toBeTruthy();
   await apiContext.post(`${API}/tests/visit-tests`, {
     headers: { Authorization: `Bearer ${recToken}` },
     data: { patientVisitId: visit.id, testIds: [labTest.id] },
@@ -150,6 +153,17 @@ test.describe('a reversed receipt stays in the cash-up, and stays out of the tot
     const naiveSum = after.transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
     expect(naiveSum).toBeGreaterThan(Number(after.summary.collected));
     expect(naiveSum).toBeCloseTo(Number(after.summary.collected) + Number(after.summary.reversed), 2);
+  });
+
+  test('the method splits add up to the collected total', async () => {
+    const { summary } = await getLog(apiContext, cashToken);
+
+    // chk_payment_method allows exactly ('Cash', 'GCash', 'PayMaya', 'Bank'), so these three
+    // figures are the whole of `collected` and must reconcile to it. They did not before: only
+    // Cash and E-Wallet had tiles, so a day carrying a bank transfer showed a total that the
+    // splits beneath it could not account for — ₱200.00 unexplained on the day this was found.
+    const parts = Number(summary.cash) + Number(summary.ewallet) + Number(summary.bank);
+    expect(parts).toBeCloseTo(Number(summary.collected), 2);
   });
 
   test('the summary describes the whole range, not the page in hand', async () => {

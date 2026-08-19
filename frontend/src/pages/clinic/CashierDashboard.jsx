@@ -410,11 +410,12 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const totalCollectionsToday = Number(queue.summary?.collected || 0);
   const cashTotal = Number(queue.summary?.cash || 0);
   const eWalletTotal = Number(queue.summary?.ewallet || 0);
-  const receiptsIssued = Number(queue.summary?.receipts || 0);
+  const receiptsSettled = Number(queue.summary?.receipts || 0);
   const statutoryDiscounts = Number(queue.summary?.discounts || 0);
   const reversalCount = Number(queue.summary?.reversals || 0);
   const reversedAmount = Number(queue.summary?.reversed || 0);
-  const averagePerReceipt = receiptsIssued > 0 ? totalCollectionsToday / receiptsIssued : 0;
+  const bankTotal = Number(queue.summary?.bank || 0);
+  const averagePerReceipt = receiptsSettled > 0 ? totalCollectionsToday / receiptsSettled : 0;
 
 
   return (
@@ -438,13 +439,28 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
         {/* Collections Overview Metrics Bar */}
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-          <MetricCard label="Collected Today" value={formatCurrency(totalCollectionsToday)} icon={DollarSign} tone="green" />
+          {/* The caption closes a reconciliation gap rather than decorating the tile. Only Cash
+              and E-Wallet have tiles, but chk_payment_method also allows Bank — so on any day
+              carrying a transfer, the two tiles below simply did not add up to this one and the
+              difference was nowhere on screen. Today that difference was ₱200.00. */}
+          <MetricCard
+            label="Collected Today"
+            value={formatCurrency(totalCollectionsToday)}
+            caption={bankTotal > 0 ? `incl. ${formatCurrency(bankTotal)} bank transfer` : undefined}
+            captionTone={bankTotal > 0 ? 'slate' : undefined}
+            icon={DollarSign}
+            tone="green"
+          />
           <MetricCard label="Cash Collected" value={formatCurrency(cashTotal)} icon={Banknote} tone="emerald" />
           <MetricCard label="E-Wallet" value={formatCurrency(eWalletTotal)} caption="GCash + PayMaya" captionTone="slate" icon={Wallet} tone="indigo" />
+          {/* "Receipts Settled", not "Receipts Issued": this counts rows the drawer should
+              hold, and a receipt that was issued and then reversed is not one of them. The old
+              label described the log below, while the number described the money — the exact
+              mismatch this whole change exists to remove. */}
           <MetricCard
-            label="Receipts Issued"
-            value={receiptsIssued}
-            caption={reversalCount > 0 ? `${reversalCount} reversed, not counted` : undefined}
+            label="Receipts Settled"
+            value={receiptsSettled}
+            caption={reversalCount > 0 ? `${reversalCount} more issued, then reversed` : undefined}
             captionTone={reversalCount > 0 ? 'rose' : undefined}
             icon={Receipt}
             tone="slate"
