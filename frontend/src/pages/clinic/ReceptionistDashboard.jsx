@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import SidebarLayout from '../../components/SidebarLayout';
-import { usePolling } from '../../hooks/usePolling';
 import { Button } from '../../components/ui/button';
 import { Panel, PanelBody } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
@@ -28,6 +27,8 @@ import { ReceptionThroughputPanel } from '../../components/reports/OperationsPan
 import WalkInRegistration from '../../components/reception/WalkInRegistration';
 import { useVisitHistory, HISTORY_PAGE_SIZE } from '../../hooks/useVisitHistory';
 import { usePatientLookup } from '../../hooks/usePatientLookup';
+import { useReceptionQueue } from '../../hooks/useReceptionQueue';
+import { useClinicReferenceData } from '../../hooks/useClinicReferenceData';
 import {
   ClipboardList,
   UserCheck,
@@ -78,7 +79,6 @@ const PAGE_BLURBS = {
   'reception-history': 'Every visit in a chosen date range, whatever state it reached. Read-only.',
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
-const QUEUE_PAGE_SIZE = 25;
 
 // scheduled_date arrives as a full ISO instant (pg parses the DATE column with the local-time
 // constructor, then JSON serialises it to UTC). Formatting it back to a local calendar date is
@@ -97,26 +97,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   // Desk performance, on Visit History where someone is reviewing rather than checking people
   // in. The queue KPIs count who is waiting; nothing measured how long they wait.
   const operations = useOperationsReport({ days: 7, enabled: view === 'reception-history' });
-  const [activeVisits, setActiveVisits] = useState([]);
-  const [testCatalog, setTestCatalog] = useState([]);
-  const [patientTypes, setPatientTypes] = useState([]);
-  const [hmoProviders, setHmoProviders] = useState([]);
-  const [staticDataError, setStaticDataError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [queueError, setQueueError] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
-  const searchDebounceRef = useRef(null);
-
-  // Server-driven pagination state (UI/UX Phase 2): the queue can genuinely grow into the
-  // hundreds on a busy day, so search/status filtering and paging now happen in the backend
-  // query, not in a client-side .filter() over every visit already downloaded.
-  const [queuePage, setQueuePage] = useState(1);
-  const [queueTotal, setQueueTotal] = useState(0);
-  const [queueTotalPages, setQueueTotalPages] = useState(1);
-  const [queuePendingCount, setQueuePendingCount] = useState(0);
-  const [queueProcessingCount, setQueueProcessingCount] = useState(0);
-  const [queueWalkinCount, setQueueWalkinCount] = useState(0);
+  const queue = useReceptionQueue({ enabled: view === 'reception-queue' });
+  const reference = useClinicReferenceData();
 
   const history = useVisitHistory({ enabled: view === 'reception-history' });
 
@@ -181,55 +163,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [pendingHmoRequests, setPendingHmoRequests] = useState([]);
   const [hmoRequestsLoading, setHmoRequestsLoading] = useState(true);
 
-  const fetchActiveVisits = useCallback(async ({ page = 1, search = searchQuery, status = statusFilter } = {}) => {
-    setLoading(true);
-    setQueueError('');
-    try {
-      const response = await api.get('/visits/active', {
-        params: {
-          page,
-          limit: QUEUE_PAGE_SIZE,
-          search: search || undefined,
-          status: status && status !== 'All' ? status : undefined
-        }
-      });
-      const data = response.data.data;
-      setActiveVisits(data.visits || []);
-      setQueueTotal(data.total || 0);
-      setQueueTotalPages(data.totalPages || 1);
-      setQueuePendingCount(data.pendingCount || 0);
-      setQueueProcessingCount(data.processingCount || 0);
-      setQueueWalkinCount(data.walkinCount || 0);
-      setQueuePage(data.page || page);
-    } catch (err) {
-      console.error('Failed to fetch active visits:', err);
-      setQueueError('Could not load the active queue. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const fetchStaticData = useCallback(async () => {
-    setStaticDataError('');
-    try {
-      const testsRes = await api.get('/tests');
-      setTestCatalog(testsRes.data.data.tests || []);
-
-      const typesRes = await api.get('/patients/types');
-      setPatientTypes(typesRes.data.data.patientTypes || []);
-
-      const hmoRes = await api.get('/hmo/providers');
-      setHmoProviders((hmoRes.data.data.providers || []).filter(p => p.is_active));
-    } catch (err) {
-      console.error('Failed to fetch static data:', err);
-      // Phase D finding 05: this previously failed silently — the test catalog, patient types,
-      // and HMO provider dropdowns would just render empty with no explanation, right when
-      // Reception needs them mid-registration or mid-HMO-logging.
-      setStaticDataError('Could not load test catalog, patient types, or HMO providers. Some forms below may be incomplete.');
-    }
-  }, []);
-
   // UI/UX Modernization Phase 10: GET /hmo/requests has always been authorized for
   // Receptionist, but nothing on this dashboard ever called it — pending requests were
   // effectively invisible unless someone already knew to look at Admin's Service Requests page.
@@ -247,21 +180,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   }, []);
 
   useEffect(() => {
-    fetchActiveVisits({ page: 1, search: '', status: 'All' });
-    fetchStaticData();
     fetchPendingHmoRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchActiveVisits, fetchStaticData, fetchPendingHmoRequests]);
-
-  // Keep the queue live. Walk-ins registered at another terminal, tickets the cashier has just
-  // settled, and the wait-time badges (which recompute on render) all went stale the moment this
-  // screen loaded — a receptionist who opened the queue at 08:00 saw the 08:00 queue all shift.
-  // Only while the queue is actually on screen; paused automatically when the tab is hidden.
-  usePolling(
-    () => fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter }),
-    30000,
-    { enabled: view === 'reception-queue' }
-  );
+  }, [fetchPendingHmoRequests]);
 
   /**
    * Prints the physical queue slip the patient carries.
@@ -284,24 +204,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       window.print();
       setTicketToPrint(null);
     });
-  };
-
-  const handleQueueSearchChange = (value) => {
-    setSearchQuery(value);
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => {
-      fetchActiveVisits({ page: 1, search: value, status: statusFilter });
-    }, 400);
-  };
-
-  const handleQueueStatusFilterChange = (value) => {
-    setStatusFilter(value);
-    fetchActiveVisits({ page: 1, search: searchQuery, status: value });
-  };
-
-  const handleQueuePageChange = (newPage) => {
-    if (newPage < 1 || newPage > queueTotalPages) return;
-    fetchActiveVisits({ page: newPage, search: searchQuery, status: statusFilter });
   };
 
   const handleVerifyReference = async (e, refOverride) => {
@@ -376,7 +278,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         lookup.noteCheckedIn(`${patient.first_name} ${patient.last_name} checked in! Physical Queue Ticket: ${visit.queue_number}`);
         lookup.setQuery('');
       }
-      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
+      queue.refresh();
       setCheckInTarget(null);
     } catch (err) {
       setCheckInError(err.response?.data?.message || 'Failed to check in patient');
@@ -392,7 +294,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     try {
       await api.patch(`/visits/${cancelVisitTarget.id}/status`, { status: 'Cancelled' });
       setCancelVisitTarget(null);
-      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
+      queue.refresh();
     } catch (err) {
       setCancelVisitError(err.response?.data?.message || 'Failed to cancel this visit.');
     } finally {
@@ -413,7 +315,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       // register) all do and this one did not. Without it the no-showed patient stayed on the
       // Active Queue for the rest of the session, so staff could go chasing — or re-check-in —
       // someone already marked absent.
-      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
+      queue.refresh();
     } catch (err) {
       setNoShowError(err.response?.data?.message || 'Failed to mark this appointment as a no-show.');
     } finally {
@@ -444,7 +346,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         testIds: selectedTestIds.map(id => parseInt(id, 10))
       });
       setShowTestsModal(false);
-      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
+      queue.refresh();
     } catch (err) {
       toastError(err.response?.data?.message || 'Failed to assign tests to visit');
     } finally {
@@ -491,7 +393,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setShowHmoModal(false);
       setHmoMemberNumber('');
       setHmoApprovalCode('');
-      fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
+      queue.refresh();
       fetchPendingHmoRequests();
     } catch (err) {
       setHmoError(err.response?.data?.message || 'Failed to log HMO authorization');
@@ -525,11 +427,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           }
         />
 
-        {staticDataError && (
+        {reference.error && (
           <div role="alert" className="alert alert-warning">
             <AlertCircle />
-            <span>{staticDataError}</span>
-            <button type="button" onClick={fetchStaticData} className="ml-auto cursor-pointer border-0 bg-transparent p-0 font-bold text-amber-900 underline underline-offset-2">Retry</button>
+            <span>{reference.error}</span>
+            <button type="button" onClick={reference.reload} className="ml-auto cursor-pointer border-0 bg-transparent p-0 font-bold text-amber-900 underline underline-offset-2">Retry</button>
           </div>
         )}
 
@@ -537,10 +439,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           <>
             {/* KPI Metrics Header */}
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-              <MetricCard label="Active Queue Visits" value={queueTotal} icon={UserCheck} tone="green" />
-              <MetricCard label="Pending Intake" value={queuePendingCount} icon={Clock} tone="amber" />
-              <MetricCard label="In Diagnostic" value={queueProcessingCount} icon={ClipboardList} tone="indigo" />
-              <MetricCard label="Walk-Ins Today" value={queueWalkinCount} icon={UserPlus} tone="emerald" />
+              <MetricCard label="Active Queue Visits" value={queue.total} icon={UserCheck} tone="green" />
+              <MetricCard label="Pending Intake" value={queue.pendingCount} icon={Clock} tone="amber" />
+              <MetricCard label="In Diagnostic" value={queue.processingCount} icon={ClipboardList} tone="indigo" />
+              <MetricCard label="Walk-Ins Today" value={queue.walkinCount} icon={UserPlus} tone="emerald" />
             </div>
 
             {/* UI/UX Modernization Phase 10: read-only visibility into pending HMO requests —
@@ -587,12 +489,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               <Toolbar attached>
                 <SearchInput
                   placeholder="Search patient name or Queue #..."
-                  value={searchQuery}
-                  onChange={e => handleQueueSearchChange(e.target.value)}
+                  value={queue.search}
+                  onChange={e => queue.onSearchChange(e.target.value)}
                   containerClassName="w-full sm:w-64"
                 />
 
-                <Select value={statusFilter} onValueChange={handleQueueStatusFilterChange}>
+                <Select value={queue.status} onValueChange={queue.onStatusChange}>
                   <SelectTrigger className="w-36">
                     <SelectValue placeholder="Status Filter" />
                   </SelectTrigger>
@@ -605,7 +507,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </Select>
                 <ToolbarSpacer />
                 <span className="whitespace-nowrap text-fine font-medium text-slate-500 tabular-nums">
-                  Showing {activeVisits.length} of {queueTotal} visit{queueTotal === 1 ? '' : 's'}
+                  Showing {queue.visits.length} of {queue.total} visit{queue.total === 1 ? '' : 's'}
                 </span>
               </Toolbar>
 
@@ -625,19 +527,19 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {queueError ? (
+                    {queue.error ? (
                       <TableRow className="hover:bg-transparent">
                         <TableCell colSpan={7} className="p-0">
                           <EmptyState
                             tone="error"
                             icon={AlertCircle}
                             title="Couldn't load the queue"
-                            description={queueError}
+                            description={queue.error}
                             action={
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter })}
+                                onClick={() => queue.refresh()}
                               >
                                 Try again
                               </Button>
@@ -645,10 +547,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                           />
                         </TableCell>
                       </TableRow>
-                    ) : loading ? (
+                    ) : queue.loading ? (
                       <SkeletonRows rows={6} columns={7} />
-                    ) : activeVisits.length > 0 ? (
-                      activeVisits.map(visit => (
+                    ) : queue.visits.length > 0 ? (
+                      queue.visits.map(visit => (
                         <TableRow key={visit.id}>
                           <TableCell label="Queue Ticket">
                             <div className="flex items-center gap-1">
@@ -760,14 +662,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                         <TableCell colSpan={7} className="p-0">
                           <EmptyState
                             icon={UserCheck}
-                            title={searchQuery || statusFilter !== 'All' ? 'No visits match this filter' : 'Nobody is waiting'}
+                            title={queue.search || queue.status !== 'All' ? 'No visits match this filter' : 'Nobody is waiting'}
                             description={
-                              searchQuery || statusFilter !== 'All'
+                              queue.search || queue.status !== 'All'
                                 ? 'Clear the search or switch the status filter back to All.'
                                 : 'The queue is clear. Register a walk-in or check in an appointment to start one.'
                             }
                             action={
-                              !searchQuery && statusFilter === 'All' ? (
+                              !queue.search && queue.status === 'All' ? (
                                 <Button size="sm" onClick={() => onSelectNav?.('reception-walkin')}>
                                   <UserPlus className="h-3.5 w-3.5" />
                                   Register Walk-In
@@ -782,10 +684,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 </Table>
               </PanelBody>
               <Pagination
-                page={queuePage}
-                totalPages={queueTotalPages}
-                onPageChange={handleQueuePageChange}
-                totalLabel={`${queueTotal} total`}
+                page={queue.page}
+                totalPages={queue.totalPages}
+                onPageChange={queue.goToPage}
+                totalLabel={`${queue.total} total`}
               />
             </Panel>
             </div>
@@ -990,9 +892,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             </Panel>
 
             <WalkInRegistration
-              patientTypes={patientTypes}
-              testCatalog={testCatalog}
-              onRegistered={() => fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter })}
+              patientTypes={reference.patientTypes}
+              testCatalog={reference.testCatalog}
+              onRegistered={() => queue.refresh()}
             />
           </div>
         )}
@@ -1157,7 +1059,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               {/* Same control as the registration form below, so the two cannot drift on
                   grouping, the running total, or the preparation warning. */}
               <TestPicker
-                tests={testCatalog}
+                tests={reference.testCatalog}
                 selectedIds={selectedTestIds}
                 onToggle={handleToggleTest}
                 disabled={isAttachingTests}
@@ -1201,7 +1103,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     <SelectValue placeholder="Select HMO provider" />
                   </SelectTrigger>
                   <SelectContent>
-                    {hmoProviders.map(hmo => (
+                    {reference.hmoProviders.map(hmo => (
                       <SelectItem key={hmo.id} value={hmo.id.toString()}>
                         {hmo.name}
                       </SelectItem>
