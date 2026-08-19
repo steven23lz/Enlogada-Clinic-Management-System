@@ -29,6 +29,7 @@ import useOperationsReport from '../../hooks/useOperationsReport';
 import { BillingTotalsPanel, SalesByServicePanel } from '../../components/reports/OperationsPanels';
 import { useTransactionHistory, HISTORY_PAGE_SIZE } from '../../hooks/useTransactionHistory';
 import { useBillingQueue } from '../../hooks/useBillingQueue';
+import { useRefund } from '../../hooks/useRefund';
 import {
   Receipt,
   Wallet,
@@ -82,10 +83,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
   // Feature Gap Plan Phase A: payment_status has always allowed 'Refunded'/'Cancelled', but
   // nothing in the app ever set them — a duplicate or disputed charge had no reversal path.
-  const [refundTarget, setRefundTarget] = useState(null);
-  const [refundReason, setRefundReason] = useState('');
-  const [refunding, setRefunding] = useState(false);
-  const [refundError, setRefundError] = useState('');
+  const refund = useRefund({ onRefunded: () => history.reload() });
 
   // Selected Billing Item in POS Layout
   const [selectedVisit, setSelectedVisit] = useState(null);
@@ -241,32 +239,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     }
   };
 
-  const handleOpenRefund = (transaction) => {
-    setRefundTarget(transaction);
-    setRefundReason('');
-    setRefundError('');
-  };
 
-  const confirmRefund = async () => {
-    if (!refundTarget) return;
-    setRefundError('');
-
-    if (refundReason.trim().length < 3) {
-      setRefundError('A reason is required (at least 3 characters) — this becomes part of the audit trail.');
-      return;
-    }
-
-    setRefunding(true);
-    try {
-      await api.patch(`/payments/${refundTarget.id}/status`, { status: 'Refunded', reason: refundReason.trim() });
-      setRefundTarget(null);
-      history.reload();
-    } catch (err) {
-      setRefundError(err.response?.data?.message || 'Failed to refund this payment.');
-    } finally {
-      setRefunding(false);
-    }
-  };
 
   useEffect(() => {
     fetchDiscountCatalogue();
@@ -1052,7 +1025,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                                 type="button"
                                 variant="outline"
                                 size="xs"
-                                onClick={() => handleOpenRefund(t)}
+                                onClick={() => refund.request(t)}
                                 className="text-rose-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700"
                               >
                                 <Undo2 className="h-3 w-3" />
@@ -1102,43 +1075,43 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
           );
         })()}
 
-        <Dialog open={!!refundTarget} onOpenChange={(open) => !refunding && !open && setRefundTarget(null)}>
+        <Dialog open={!!refund.target} onOpenChange={(open) => { if (!open) refund.cancel(); }}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle>Refund Payment</DialogTitle>
               <DialogDescription className="text-xs text-gray-500">
-                {refundTarget && `Refund ${formatCurrency(refundTarget.amount)} (Receipt ${refundTarget.receipt_number || `OR-${refundTarget.id}`})? This marks the payment as Refunded and cannot be undone from this screen.`}
+                {refund.target && `Refund ${formatCurrency(refund.target.amount)} (Receipt ${refund.target.receipt_number || `OR-${refund.target.id}`})? This marks the payment as Refunded and cannot be undone from this screen.`}
               </DialogDescription>
             </DialogHeader>
 
-            {refundError && (
+            {refund.error && (
               <div role="alert" className="alert alert-error">
                 <AlertCircle />
-                <span>{refundError}</span>
+                <span>{refund.error}</span>
               </div>
             )}
 
             <div className="space-y-1">
               <label htmlFor="cashierdashboard-reason" className="field-label">Reason <span className="text-red-600">*</span></label>
               <Textarea id="cashierdashboard-reason"
-                value={refundReason}
-                onChange={e => setRefundReason(e.target.value)}
+                value={refund.reason}
+                onChange={e => refund.setReason(e.target.value)}
                 placeholder="e.g. Duplicate charge, patient dispute..."
-                disabled={refunding}
+                disabled={refund.submitting}
                 required
                 className="text-xs rounded-xl"
               />
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setRefundTarget(null)} disabled={refunding}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={refund.cancel} disabled={refund.submitting}>Cancel</Button>
               <Button
                 type="button"
-                onClick={confirmRefund}
-                disabled={refunding}
+                onClick={refund.confirm}
+                disabled={refund.submitting}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
-                {refunding ? 'Refunding…' : 'Confirm Refund'}
+                {refund.submitting ? 'Refunding…' : 'Confirm Refund'}
               </Button>
             </DialogFooter>
           </DialogContent>
