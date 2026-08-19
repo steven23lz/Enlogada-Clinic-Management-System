@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import SidebarLayout from '../../components/SidebarLayout';
-import { usePolling } from '../../hooks/usePolling';
 import { Button } from '../../components/ui/button';
 import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
@@ -29,6 +28,7 @@ import ReceiptDocument from '../../components/Receipt';
 import useOperationsReport from '../../hooks/useOperationsReport';
 import { BillingTotalsPanel, SalesByServicePanel } from '../../components/reports/OperationsPanels';
 import { useTransactionHistory, HISTORY_PAGE_SIZE } from '../../hooks/useTransactionHistory';
+import { useBillingQueue } from '../../hooks/useBillingQueue';
 import {
   Receipt,
   Wallet,
@@ -72,22 +72,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // Sales analysis belongs on the History screen, not the till: a cashier mid-transaction does
   // not want a report, and a cashier doing the cash-up does. Only fetched when that view is open.
   const operations = useOperationsReport({ days: 7, enabled: view === 'cashier-history' });
-  const [activeVisits, setActiveVisits] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  // Phase D finding 05: the billing queue, today's collections, and patient-type filter all
-  // previously failed silently (console.error only) — the queue would just render empty with
-  // no way to tell "no visits" apart from "the request failed."
-  const [queueError, setQueueError] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState('All');
-  const [sortOrder, setSortOrder] = useState('oldest');
-  const [patientTypes, setPatientTypes] = useState([]);
 
   // Nine pieces of state, a fetch, a pagination handler and a lazy-load effect, behind one name.
   //
-  // Deliberately separate from `transactions` above, which stays pinned to *today* — it also
-  // drives paidVisitIds and the queue's collections metrics. Sharing one list between the two
+  // Deliberately separate from `queue.transactions` above, which stays pinned to *today* — it also
+  // drives queue.paidVisitIds and the queue's collections metrics. Sharing one list between the two
   // would mean picking a date range in History silently changes what "Today's Collections" means.
   const history = useTransactionHistory({ enabled: view === 'cashier-history' });
 
@@ -100,6 +89,10 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
   // Selected Billing Item in POS Layout
   const [selectedVisit, setSelectedVisit] = useState(null);
+
+  // Declared after `selectedVisit` because it reads it: polling is suspended while a visit is
+  // open for billing, so a refetch cannot move the row out from under the cashier's cursor.
+  const queue = useBillingQueue({ enabled: view === 'cashier-queue', paused: Boolean(selectedVisit) });
   const [billDetails, setBillDetails] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [referenceNumber, setReferenceNumber] = useState('');
@@ -132,37 +125,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
 
-  const fetchActiveVisits = useCallback(async () => {
-    try {
-      const response = await api.get('/visits/active');
-      setActiveVisits(response.data.data.visits || []);
-      setQueueError('');
-    } catch (err) {
-      console.error('Failed to fetch active visits:', err);
-      setQueueError('Could not load the billing queue. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
-  const fetchTransactions = useCallback(async () => {
-    try {
-      const response = await api.get('/payments/transactions');
-      setTransactions(response.data.data.transactions || []);
-    } catch (err) {
-      console.error('Failed to fetch transaction logs:', err);
-      setQueueError('Could not load today\'s collections. Please try again.');
-    }
-  }, []);
 
-  const fetchPatientTypes = useCallback(async () => {
-    try {
-      const res = await api.get('/patients/types');
-      setPatientTypes(res.data.data.patientTypes || []);
-    } catch (err) {
-      console.error('Failed to fetch patient types:', err);
-    }
-  }, []);
 
   const fetchDiscountCatalogue = useCallback(async () => {
     try {
@@ -223,11 +187,6 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
     }
   };
 
-  const retryQueueData = () => {
-    fetchActiveVisits();
-    fetchTransactions();
-    fetchPatientTypes();
-  };
 
   // Paged at the server. [1.29.0] This pulled every settled payment in the range and sliced
   // fifteen out of it here. Measured at 570 bytes a payment, a year-wide range is a 2.0 MB
@@ -310,36 +269,17 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   };
 
   useEffect(() => {
-    fetchActiveVisits();
-    fetchTransactions();
-    fetchPatientTypes();
     fetchDiscountCatalogue();
-  }, [fetchActiveVisits, fetchTransactions, fetchPatientTypes, fetchDiscountCatalogue]);
+  }, [fetchDiscountCatalogue]);
 
-  // Keep the billing queue current: visits released by the front desk, and payments taken at a
-  // second terminal, both used to be invisible here until the cashier changed a filter. Suspended
-  // while a visit is selected for billing — refetching mid-checkout would rewrite the list under
-  // the cashier's cursor, and `paidVisitIds` is derived from transactions, so a refresh could
-  // pull the row they are actively charging out from under them.
-  usePolling(
-    () => {
-      fetchActiveVisits();
-      fetchTransactions();
-    },
-    30000,
-    { enabled: view === 'cashier-queue' && !selectedVisit }
-  );
 
 
   // GET /visits/active returns both 'Pending' and 'Processing' visits (Processing = already
   // checked in, which includes visits already paid today) — cross-reference against today's
-  // transactions so an already-paid visit can't be selected and billed a second time.
-  const paidVisitIds = new Set(
-    transactions.filter(t => t.payment_status === 'Paid').map(t => t.patient_visit_id)
-  );
+  // queue.transactions so an already-paid visit can't be selected and billed a second time.
 
   const handleSelectVisitForBilling = async (visit) => {
-    if (paidVisitIds.has(visit.id)) {
+    if (queue.paidVisitIds.has(visit.id)) {
       toastError('This visit has already been paid today. Refresh the queue if this looks wrong.');
       return;
     }
@@ -391,7 +331,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       return;
     }
 
-    if (paidVisitIds.has(selectedVisit.id)) {
+    if (queue.paidVisitIds.has(selectedVisit.id)) {
       setPaymentError('This visit was already paid — refresh the queue before retrying.');
       return;
     }
@@ -445,8 +385,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
       // what was actually charged even once the panel moves on to the next patient.
       setReceiptBill(billDetails);
       setShowReceiptModal(true);
-      fetchActiveVisits();
-      fetchTransactions();
+      queue.refresh();
     } catch (err) {
       setPaymentError(err.response?.data?.message || 'Failed to process payment');
       setShowPaymentConfirm(false);
@@ -464,23 +403,10 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   };
 
   // Metrics calculation
-  const totalCollectionsToday = transactions.reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-  const cashTotal = transactions.filter(t => t.payment_method === 'Cash').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-  const eWalletTotal = transactions.filter(t => t.payment_method === 'GCash' || t.payment_method === 'PayMaya').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+  const totalCollectionsToday = queue.transactions.reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+  const cashTotal = queue.transactions.filter(t => t.payment_method === 'Cash').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+  const eWalletTotal = queue.transactions.filter(t => t.payment_method === 'GCash' || t.payment_method === 'PayMaya').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
 
-  const filteredVisits = activeVisits
-    .filter(v => {
-      if (paidVisitIds.has(v.id)) return false;
-      const matchesSearch = !searchQuery ||
-        `${v.first_name} ${v.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (v.queue_number && v.queue_number.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesType = typeFilter === 'All' || v.patient_type_name === typeFilter;
-      return matchesSearch && matchesType;
-    })
-    .sort((a, b) => {
-      const diff = new Date(a.created_at) - new Date(b.created_at);
-      return sortOrder === 'oldest' ? diff : -diff;
-    });
 
   return (
     <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
@@ -493,11 +419,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
         {view === 'cashier-queue' && (
         <>
-        {queueError && (
+        {queue.error && (
           <div role="alert" className="alert alert-error">
             <AlertCircle />
-            <span>{queueError}</span>
-            <button type="button" onClick={retryQueueData} className="ml-auto cursor-pointer border-0 bg-transparent p-0 font-bold text-rose-800 underline underline-offset-2">Retry</button>
+            <span>{queue.error}</span>
+            <button type="button" onClick={queue.refresh} className="ml-auto cursor-pointer border-0 bg-transparent p-0 font-bold text-rose-800 underline underline-offset-2">Retry</button>
           </div>
         )}
 
@@ -506,7 +432,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
           <MetricCard label="Collected Today" value={formatCurrency(totalCollectionsToday)} icon={DollarSign} tone="green" />
           <MetricCard label="Cash Collected" value={formatCurrency(cashTotal)} icon={Banknote} tone="emerald" />
           <MetricCard label="E-Wallet" value={formatCurrency(eWalletTotal)} caption="GCash + PayMaya" captionTone="slate" icon={Wallet} tone="indigo" />
-          <MetricCard label="Receipts Issued" value={transactions.length} icon={Receipt} tone="slate" />
+          <MetricCard label="Receipts Issued" value={queue.transactions.length} icon={Receipt} tone="slate" />
         </div>
 
         {/* POS Split Workstation (Left: Billing Queue, Right: Invoice Checkout Terminal) */}
@@ -520,7 +446,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 icon={Receipt}
                 actions={
                   <Badge variant="outline" className="border-brand-200 bg-brand-50 text-brand-700">
-                    {filteredVisits.length} waiting
+                    {queue.visits.length} waiting
                   </Badge>
                 }
               />
@@ -530,18 +456,18 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
               <div className="space-y-2 border-b border-[#e6ebf1] bg-slate-50/70 p-3">
                 <SearchInput
                   placeholder="Search ticket # or name..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
+                  value={queue.searchQuery}
+                  onChange={e => queue.setSearchQuery(e.target.value)}
                 />
 
                 <div className="flex items-center gap-2">
-                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <Select value={queue.typeFilter} onValueChange={queue.setTypeFilter}>
                     <SelectTrigger className="flex-1" aria-label="Filter the billing queue by patient type">
                       <SelectValue placeholder="Patient Type" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">All Types</SelectItem>
-                      {patientTypes.map(t => (
+                      {queue.patientTypes.map(t => (
                         <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -549,20 +475,20 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setSortOrder(o => (o === 'oldest' ? 'newest' : 'oldest'))}
+                    onClick={() => queue.setSortOrder(o => (o === 'oldest' ? 'newest' : 'oldest'))}
                     title="Toggle sort order"
                   >
                     <ArrowUpDown className="h-3.5 w-3.5" />
-                    {sortOrder === 'oldest' ? 'Oldest first' : 'Newest first'}
+                    {queue.sortOrder === 'oldest' ? 'Oldest first' : 'Newest first'}
                   </Button>
                 </div>
               </div>
 
               <div className="max-h-[520px] space-y-2 overflow-y-auto p-3">
-                {loading ? (
+                {queue.loading ? (
                   <SkeletonList rows={4} />
-                ) : filteredVisits.length > 0 ? (
-                  filteredVisits.map(visit => {
+                ) : queue.visits.length > 0 ? (
+                  queue.visits.map(visit => {
                     const isSelected = selectedVisit?.id === visit.id;
                     return (
                       // A button, not a div with onClick. This is how a cashier picks the visit
@@ -613,8 +539,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   <EmptyState
                     compact
                     icon={Inbox}
-                    title={(searchQuery || typeFilter !== 'All') ? 'No tickets match this filter' : 'Nothing awaiting payment'}
-                    description={(searchQuery || typeFilter !== 'All')
+                    title={(queue.searchQuery || queue.typeFilter !== 'All') ? 'No tickets match this filter' : 'Nothing awaiting payment'}
+                    description={(queue.searchQuery || queue.typeFilter !== 'All')
                       ? 'Clear the search or choose All Types to see the whole queue.'
                       : 'Visits appear here once Reception attaches tests to them.'}
                   />
@@ -967,9 +893,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     <p className="text-sm font-bold text-gray-500 m-0">
                       Select a patient ticket from the queue to open the billing terminal.
                     </p>
-                    {filteredVisits.length > 0 && (
+                    {queue.visits.length > 0 && (
                       <p className="text-xs text-gray-400 m-0">
-                        {filteredVisits.length} patient{filteredVisits.length === 1 ? '' : 's'} waiting to be billed.
+                        {queue.visits.length} patient{queue.visits.length === 1 ? '' : 's'} waiting to be billed.
                       </p>
                     )}
                   </div>
@@ -979,7 +905,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       This shift so far
                     </span>
                     {/* "Receipts issued" used to be the left half of this pair, showing
-                        `transactions.length` — the identical number to the Receipts Issued metric
+                        `queue.transactions.length` — the identical number to the Receipts Issued metric
                         card 400px above it, under an identical label. Six zeros on one screen and
                         two of them were the same zero. What replaces it is the figure the strip
                         above genuinely does not carry: how much was given away in statutory
@@ -989,9 +915,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
                         <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Average per receipt</span>
                         <span className="text-lg font-extrabold text-slate-900 tabular-nums">
-                          {transactions.length > 0
+                          {queue.transactions.length > 0
                             ? formatCurrency(
-                                transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0) / transactions.length
+                                queue.transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0) / queue.transactions.length
                               )
                             : formatCurrency(0)}
                         </span>
@@ -1000,20 +926,20 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Statutory discounts</span>
                         <span className="text-lg font-extrabold text-slate-900 tabular-nums">
                           {formatCurrency(
-                            transactions.reduce((sum, t) => sum + parseFloat(t.discount_amount || 0), 0)
+                            queue.transactions.reduce((sum, t) => sum + parseFloat(t.discount_amount || 0), 0)
                           )}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {transactions.length > 0 && (
+                  {queue.transactions.length > 0 && (
                     <div>
                       <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block mb-2">
                         Recent receipts
                       </span>
                       <div className="space-y-1.5">
-                        {transactions.slice(0, 4).map((t) => (
+                        {queue.transactions.slice(0, 4).map((t) => (
                           <div
                             key={t.id}
                             className="flex items-center justify-between rounded-lg border border-[#e6ebf1] px-3 py-2"
