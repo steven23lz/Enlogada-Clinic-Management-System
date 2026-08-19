@@ -57,9 +57,18 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, hmoPro
   const [slotsRefreshKey, setSlotsRefreshKey] = useState(0);
 
 
+  // One predicate for the field's `required`, the pre-submit guard, and what the server enforces.
+  // Derived rather than duplicated: three copies of this rule is how the desk ends up demanding
+  // something the booking form never asked for.
+  const hmoSelected = Boolean(
+    bookingData.hmoProviderId && bookingData.hmoProviderId !== 'none'
+  );
+  const referralRequired = hmoSelected || selectedProfile?.patient_type_name === 'Private';
+
   // The card is identity evidence, so it must never outlive the context it was attached in.
   // Left in state it would follow the patient selector: attach your own card, close the dialog,
   // switch to your child's profile, and their claim is filed against your member number.
+
   const clearHmoCard = useCallback(() => {
     setHmoCardFile(null);
     setHmoCardError('');
@@ -131,8 +140,15 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, hmoPro
       return;
     }
 
-    if (hmo && !referringPhysician?.trim()) {
-      setBookingError("Please give the name of the doctor who requested these tests — your HMO needs it to approve coverage.");
+    if (referralRequired && !referringPhysician?.trim()) {
+      // Two branches, because the reason differs and the reason is the whole message. Telling a
+      // self-paying Private patient that "your HMO needs it" contradicts the option they just
+      // chose, and the explanation rendered directly above the field.
+      setBookingError(
+        hmoSelected
+          ? 'Please give the name of the doctor who requested these tests — your HMO needs it to approve coverage.'
+          : 'Please give the name of the doctor who requested these tests — a Private patient is one a physician referred.'
+      );
       return;
     }
 
@@ -175,7 +191,12 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, hmoPro
           scheduledTime,
           notes,
           testIds: testIds.map((id) => parseInt(id, 10)),
-          hmo: null
+          hmo: null,
+          // Sent on this branch too: a referred self-payer still belongs on the record, and the
+          // server requires it for a Private patient. The controller already read this field on
+          // both branches — only the client never supplied it here.
+          referringPhysician: referringPhysician?.trim() || undefined,
+          referringPhysicianPrc: referringPhysicianPrc?.trim() || undefined
         });
       }
 
@@ -398,20 +419,6 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, hmoPro
                                   />
                                 </div>
 
-                                {/* Mandatory on an HMO claim: the LOA runs through the requesting
-                                    doctor, and a claim that cannot name one is hard to reimburse —
-                                    which the clinic discovers weeks later, chasing a patient who has
-                                    long since gone home. */}
-                                <ReferringPhysicianFields
-                                  physician={bookingData.referringPhysician}
-                                  prc={bookingData.referringPhysicianPrc}
-                                  onPhysicianChange={(v) => setBookingData({ ...bookingData, referringPhysician: v })}
-                                  onPrcChange={(v) => setBookingData({ ...bookingData, referringPhysicianPrc: v })}
-                                  required
-                                  reason="Your HMO needs the doctor who requested these tests in order to approve coverage."
-                                  disabled={isBooking}
-                                />
-
                                 <div className="space-y-1.5">
                                   <label className="field-label">
                                     Photo of your HMO card <span className="text-rose-600">*</span>
@@ -463,6 +470,30 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, hmoPro
                                 </div>
                               </>
                             )}
+
+                            {/* Shown for every booking, not just an HMO one. A self-paying patient
+                                who WAS referred still needs the doctor on the record — the report
+                                goes back to them — which is what this component's own contract says
+                                and what ReceptionistDashboard already does. Required when an HMO
+                                claim needs it for the LOA, or when the patient's type is Private,
+                                which at this clinic means a physician sent them. Same predicate the
+                                server enforces, so the patient is not told at submit what could
+                                have been said while they were typing. */}
+                            <ReferringPhysicianFields
+                              physician={bookingData.referringPhysician}
+                              prc={bookingData.referringPhysicianPrc}
+                              onPhysicianChange={(v) => setBookingData({ ...bookingData, referringPhysician: v })}
+                              onPrcChange={(v) => setBookingData({ ...bookingData, referringPhysicianPrc: v })}
+                              required={referralRequired}
+                              reason={
+                                hmoSelected
+                                  ? 'Your HMO needs the doctor who requested these tests in order to approve coverage.'
+                                  : referralRequired
+                                    ? 'A Private patient is one a physician referred, so the record needs to name them.'
+                                    : null
+                              }
+                              disabled={isBooking}
+                            />
 
                             <div className="space-y-1.5">
                               <label htmlFor="clientdashboard-additional-clinical-notes" className="field-label">Additional Clinical Notes</label>

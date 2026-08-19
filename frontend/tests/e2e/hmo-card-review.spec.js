@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { selfPayProfile } from './helpers/patients.js';
 
 // The two screens the HMO card feature added, driven through the browser rather than the API.
 //
@@ -101,8 +102,9 @@ test.describe('HMO card evidence (UI)', () => {
     const clientToken = await token('client@enlogada.com');
     const auth = { Authorization: `Bearer ${clientToken}` };
 
-    const patientId = (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth })).json())
-      .data.patients[0].id;
+    const patientId = selfPayProfile(
+      (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth })).json()).data.patients
+    ).id;
     const testId = (await (await ctx.get(`${API}/tests`)).json()).data.tests[0].id;
     const providerId = (await (await ctx.get(`${API}/hmo/providers`, { headers: auth })).json())
       .data.providers[0].id;

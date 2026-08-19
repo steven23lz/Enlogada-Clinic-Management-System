@@ -618,6 +618,12 @@ CREATE INDEX IF NOT EXISTS idx_visit_tests_status ON visit_tests(status);
 -- that column and therefore already serves a bare status filter. [1.29.0]
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
 CREATE INDEX IF NOT EXISTS idx_appointments_scheduled ON appointments(scheduled_date, scheduled_time);
+-- The reminder sweep's own access path. Partial, because it only ever looks for bookings that are
+-- still Pending and have not been reminded yet. Present in migrateAppointmentReminders.js but
+-- missing here, so a database built fresh from this file lacked the index it is designed around.
+CREATE INDEX IF NOT EXISTS idx_appointments_pending_reminder
+    ON appointments (scheduled_date)
+    WHERE reminder_sent_at IS NULL AND status = 'Pending';
 CREATE INDEX IF NOT EXISTS idx_patient_visits_created ON patient_visits(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_test_results_released_by ON test_results(released_by);
 CREATE INDEX IF NOT EXISTS idx_notification_events_created ON notification_events(created_at DESC);
