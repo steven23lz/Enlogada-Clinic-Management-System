@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React from 'react';
 import SidebarLayout from '../../components/SidebarLayout';
 import { Button } from '../../components/ui/button';
 import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
@@ -18,10 +18,8 @@ import WaitBadge from '../../components/ui/wait-badge';
 import { SkeletonList, SkeletonRows } from '../../components/ui/skeleton';
 import { Textarea } from '../../components/ui/textarea';
 import Pagination from '../../components/ui/pagination';
-import api from '../../config/api';
 import { formatDateTime } from '../../lib/date';
 import { formatCurrency } from '../../lib/currency';
-import { toastError } from '../../lib/toast';
 import { useAuth } from '../../contexts/AuthContext';
 // Aliased: `Receipt` is already taken by the lucide icon used in this file's headers.
 import ReceiptDocument from '../../components/Receipt';
@@ -30,6 +28,8 @@ import { BillingTotalsPanel, SalesByServicePanel } from '../../components/report
 import { useTransactionHistory, HISTORY_PAGE_SIZE } from '../../hooks/useTransactionHistory';
 import { useBillingQueue } from '../../hooks/useBillingQueue';
 import { useRefund } from '../../hooks/useRefund';
+import { useCheckout } from '../../hooks/useCheckout';
+import { useReceipt } from '../../hooks/useReceipt';
 import {
   Receipt,
   Wallet,
@@ -85,295 +85,33 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // nothing in the app ever set them — a duplicate or disputed charge had no reversal path.
   const refund = useRefund({ onRefunded: () => history.reload() });
 
-  // Selected Billing Item in POS Layout
-  const [selectedVisit, setSelectedVisit] = useState(null);
+  // The till, the queue and the receipt are three separate concerns and are wired to each other
+  // here rather than inside one another. `checkout.selectedVisit` is read by the queue (to pause polling)
+  // and the checkout announces a completed sale outward — nothing reaches back in.
+  const receipt = useReceipt();
 
-  // Declared after `selectedVisit` because it reads it: polling is suspended while a visit is
-  // open for billing, so a refetch cannot move the row out from under the cashier's cursor.
-  const queue = useBillingQueue({ enabled: view === 'cashier-queue', paused: Boolean(selectedVisit) });
-  const [billDetails, setBillDetails] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState('Cash');
-  const [referenceNumber, setReferenceNumber] = useState('');
-  const [amountTendered, setAmountTendered] = useState('');
-  const [showReceiptModal, setShowReceiptModal] = useState(false);
-  // The receipt modal gets its own copy of the bill rather than sharing `billDetails` with the
-  // billing panel. Reprinting a past receipt used to overwrite `billDetails`, so returning to the
-  // Billing Queue afterwards rendered the *checkout panel* from a history row — see
-  // handleReprintReceipt below.
-  const [receiptBill, setReceiptBill] = useState(null);
-  // Monotonic id for bill fetches, so a slow response for a previously-selected patient cannot
-  // overwrite the bill for the one the cashier is looking at now.
-  const billRequestRef = useRef(0);
-  // Statutory (Senior Citizen / PWD) and commercial discounts. The entitlement is stored against
-  // the visit rather than held in the page, so the recalculated total comes back from the server
-  // — the cashier must never be able to charge a figure the backend did not compute.
-  const [discountCatalogue, setDiscountCatalogue] = useState([]);
-  const [discountTypeId, setDiscountTypeId] = useState('');
-  const [discountIdNumber, setDiscountIdNumber] = useState('');
-  const [applyingDiscount, setApplyingDiscount] = useState(false);
-  const [discountError, setDiscountError] = useState('');
-
-  // Cash tendered and change are on the receipt now, and they only exist at the moment of
-  // sale — a reprint has no record of what was handed over. null therefore means "this is a
-  // reprint", which is also what stamps the duplicate copy.
-  const [receiptTender, setReceiptTender] = useState(null);
-
-  const [paymentError, setPaymentError] = useState('');
-  const [paymentSuccess, setPaymentSuccess] = useState(null);
-  const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
-  const [confirmingPayment, setConfirmingPayment] = useState(false);
-
-
-
-
-  const fetchDiscountCatalogue = useCallback(async () => {
-    try {
-      const res = await api.get('/discounts');
-      setDiscountCatalogue(res.data.data.discounts || []);
-    } catch (err) {
-      console.error('Failed to fetch discount catalogue:', err);
-    }
-  }, []);
-
-  /**
-   * Re-reads the bill for the selected visit.
-   *
-   * Applying a discount changes the amount due, and that amount is recomputed server-side — the
-   * cashier's screen must reflect what the backend will actually accept, since processPayment
-   * rejects a submitted amount that disagrees by more than a centavo.
-   */
-  const refreshBill = useCallback(async (visitId) => {
-    const response = await api.get(`/payments/bill/${visitId}`);
-    const bill = response.data.data.bill;
-    setBillDetails(bill);
-    setAmountTendered((bill?.totalAmount ?? 0).toString());
-    return bill;
-  }, []);
-
-  const handleApplyDiscount = async () => {
-    if (!selectedVisit || !discountTypeId) return;
-    setApplyingDiscount(true);
-    setDiscountError('');
-    try {
-      await api.post(`/discounts/visit/${selectedVisit.id}`, {
-        discountTypeId: parseInt(discountTypeId, 10),
-        idNumber: discountIdNumber.trim(),
-      });
-      await refreshBill(selectedVisit.id);
-      setDiscountTypeId('');
-      setDiscountIdNumber('');
-    } catch (err) {
-      // Shown inline rather than as a toast: the commonest failure is a missing OSCA/PWD ID, and
-      // the message needs to sit next to the field it is about.
-      setDiscountError(err.response?.data?.message || 'Could not apply the discount.');
-    } finally {
-      setApplyingDiscount(false);
-    }
-  };
-
-  const handleRemoveDiscount = async () => {
-    if (!selectedVisit) return;
-    setApplyingDiscount(true);
-    setDiscountError('');
-    try {
-      await api.delete(`/discounts/visit/${selectedVisit.id}`);
-      await refreshBill(selectedVisit.id);
-    } catch (err) {
-      setDiscountError(err.response?.data?.message || 'Could not remove the discount.');
-    } finally {
-      setApplyingDiscount(false);
-    }
-  };
-
-
-  // Paged at the server. [1.29.0] This pulled every settled payment in the range and sliced
-  // fifteen out of it here. Measured at 570 bytes a payment, a year-wide range is a 2.0 MB
-  // response to fill a fifteen-row table — on the screen a cashier opens for the daily cash-up.
-
-  // Phase D finding 03: Transaction History had no way to reopen a past receipt — the only
-  // "Print Receipt" affordance was the modal shown immediately after processing a *new* payment.
-  // Reuses that exact modal, just fed from a history row instead of a fresh processPayment response.
-  // UI/UX Modernization Phase 10: previously reconstructed billDetails with only patientName, so
-  // a reprinted receipt showed no itemized test breakdown even though the original one did —
-  // fetches the same GET /payments/bill/:visitId the checkout panel already uses, keyed on the
-  // transaction's own patient_visit_id, instead of hand-rolling a partial object.
-  // Writes to `receiptBill`, never `billDetails`.
-  //
-  // It used to write `setBillDetails({ patientName })` — an object with no `items` array — into
-  // the state that the *billing panel* also renders from. Two things went wrong with that. The
-  // panel does `billDetails.items.map(...)` unguarded, so selecting a visit, reprinting a past
-  // receipt, then returning to the Billing Queue threw a TypeError and (before the ErrorBoundary)
-  // whited out the terminal. And more quietly: the panel would show one patient's name and totals
-  // beside another patient's queue number, which is the state the wrong-amount charge came from.
-  const handleReprintReceipt = async (transaction) => {
-    setPaymentSuccess(transaction);
-    setReceiptTender(null);
-    setReceiptBill({
-      patientName: `${transaction.patient_first_name} ${transaction.patient_last_name}`,
-      items: [], // present from the start so the itemised block can never map over undefined
-    });
-    setShowReceiptModal(true);
-    try {
-      const response = await api.get(`/payments/bill/${transaction.patient_visit_id}`);
-      setReceiptBill(response.data.data.bill);
-    } catch (err) {
-      console.error('Failed to load itemized bill for reprint:', err);
-      toastError('Could not load the itemized test list for this receipt.');
-    }
-  };
-
-  /**
-   * Prints the receipt at 80mm rather than A4.
-   *
-   * The page size is chosen by a body class (see the @page rule in index.css) because @page
-   * cannot be scoped to an element — it applies to the whole printed document. Set it, print,
-   * take it off again, so printing a diagnostic report afterwards still gets a normal sheet.
-   * The class is removed in a finally so an aborted print dialog cannot leave it stuck on.
-   */
-  const printReceipt = () => {
-    document.body.classList.add('printing-receipt');
-    try {
-      window.print();
-    } finally {
-      document.body.classList.remove('printing-receipt');
-    }
-  };
-
-
-
-  useEffect(() => {
-    fetchDiscountCatalogue();
-  }, [fetchDiscountCatalogue]);
-
-
-
-  // GET /visits/active returns both 'Pending' and 'Processing' visits (Processing = already
-  // checked in, which includes visits already paid today) — cross-reference against today's
-  // queue.transactions so an already-paid visit can't be selected and billed a second time.
-
-  const handleSelectVisitForBilling = async (visit) => {
-    if (queue.paidVisitIds.has(visit.id)) {
-      toastError('This visit has already been paid today. Refresh the queue if this looks wrong.');
-      return;
-    }
-    setSelectedVisit(visit);
-    setPaymentError('');
-    setPaymentSuccess(null);
-    setReferenceNumber('');
-    setAmountTendered('');
-
-    // Clear the previous patient's bill before fetching the next one. Without this, a failed
-    // fetch left the *previous* patient's totals on screen next to the newly selected patient's
-    // queue number — and confirmProcessPayment posts `selectedVisit.id` with
-    // `billDetails.totalAmount`, so the cashier would charge one patient another's amount. The
-    // confirmation dialog quotes the stale name and figure too, so it reads as self-consistent
-    // and gets confirmed.
-    setBillDetails(null);
-    // Clear the discount entry too: an OSCA number typed for one patient must never linger into
-    // the next patient's bill.
-    setDiscountTypeId('');
-    setDiscountIdNumber('');
-    setDiscountError('');
-
-    // Guards against out-of-order responses: clicking patient A then B quickly can let A's slower
-    // reply land last. Only the most recent selection is allowed to write state.
-    const requestId = ++billRequestRef.current;
-
-    try {
-      const response = await api.get(`/payments/bill/${visit.id}`);
-      if (requestId !== billRequestRef.current) return; // superseded by a later selection
-      const bill = response.data.data.bill;
-      setBillDetails(bill);
-      setAmountTendered((bill?.totalAmount ?? 0).toString());
-    } catch (err) {
-      if (requestId !== billRequestRef.current) return;
-      console.error(err);
-      // Drop the selection as well as the bill. Leaving a selected visit with no bill is the
-      // half-state that invited the mismatch above.
-      setSelectedVisit(null);
-      toastError('Failed to retrieve billing summary.');
-    }
-  };
-
-  const handleProcessPayment = async (e) => {
-    e.preventDefault();
-    setPaymentError('');
-
-    if (!selectedVisit || !billDetails) {
-      setPaymentError('No active billing ticket selected.');
-      return;
-    }
-
-    if (queue.paidVisitIds.has(selectedVisit.id)) {
-      setPaymentError('This visit was already paid — refresh the queue before retrying.');
-      return;
-    }
-
-    const totalDue = parseFloat(billDetails.totalAmount);
-    const tendered = parseFloat(amountTendered);
-
-    if (paymentMethod === 'Cash' && (isNaN(tendered) || tendered < totalDue)) {
-      setPaymentError(`Cash tendered (${formatCurrency(tendered || 0)}) is less than total amount due (${formatCurrency(totalDue)}).`);
-      return;
-    }
-
-    if (paymentMethod !== 'Cash' && !referenceNumber) {
-      setPaymentError(`Reference number is required for ${paymentMethod} transaction.`);
-      return;
-    }
-
-    // Payment processing is irreversible (creates a receipt and advances the visit) —
-    // require explicit confirmation before it fires. See .agents/skills/*/SKILL.md Phase 12.
-    setShowPaymentConfirm(true);
-  };
-
-  const confirmProcessPayment = async () => {
-    const totalDue = parseFloat(billDetails.totalAmount);
-    setConfirmingPayment(true);
-    setPaymentError('');
-
-    try {
-      const response = await api.post('/payments', {
-        patientVisitId: selectedVisit.id,
-        paymentMethod,
-        referenceNumber: paymentMethod !== 'Cash' ? referenceNumber : null,
-        amount: totalDue
-      });
-
-      const payment = response.data.data.payment;
-
-      // The visit is advanced server-side, inside POST /payments itself. It used to be a
-      // separate PATCH from here, which meant a network blip between the two requests left a
-      // fully paid visit stuck at 'Pending' with its ticket never reaching a modality. A
-      // walk-in is released the moment this returns; an appointment additionally needs its
-      // front-desk check-in, and the backend handles that ordering either way.
-      setShowPaymentConfirm(false);
-      setPaymentSuccess(payment);
-      setReceiptTender(
-        paymentMethod === 'Cash'
-          ? { tendered: parseFloat(amountTendered || 0), change: calculateChange() }
-          : { tendered: null, change: null }
-      );
-      // Snapshot the bill for the receipt. The modal reads `receiptBill`, so it keeps showing
-      // what was actually charged even once the panel moves on to the next patient.
-      setReceiptBill(billDetails);
-      setShowReceiptModal(true);
+  const checkout = useCheckout({
+    // A function, not `queue.paidVisitIds` — `queue` is declared below (it needs
+    // `checkout.selectedVisit`), so reading a value here would hit the temporal dead zone.
+    isAlreadyPaid: (visitId) => queue.paidVisitIds.has(visitId),
+    // Everything that must happen only AFTER the money is taken. The checkout does not know a
+    // receipt exists; it says a sale happened and the screen decides what that means.
+    onPaid: ({ payment, bill, tender }) => {
+      receipt.showForSale(payment, bill, tender);
       queue.refresh();
-    } catch (err) {
-      setPaymentError(err.response?.data?.message || 'Failed to process payment');
-      setShowPaymentConfirm(false);
-    } finally {
-      setConfirmingPayment(false);
-    }
-  };
+    },
+  });
 
-  const calculateChange = () => {
-    if (!billDetails) return 0;
-    const totalDue = parseFloat(billDetails.totalAmount);
-    const tendered = parseFloat(amountTendered);
-    if (isNaN(tendered) || tendered < totalDue) return 0;
-    return tendered - totalDue;
-  };
+  // Declared after `checkout` because it reads it: polling is suspended while a visit is open
+  // for billing, so a refetch cannot move the row out from under the cashier's cursor.
+  const queue = useBillingQueue({
+    enabled: view === 'cashier-queue',
+    paused: Boolean(checkout.selectedVisit),
+  });
+
+
+
+
 
   // Metrics calculation
   // Every peso figure on this screen comes from the endpoint's SQL summary, not from reducing
@@ -494,7 +232,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   <SkeletonList rows={4} />
                 ) : queue.visits.length > 0 ? (
                   queue.visits.map(visit => {
-                    const isSelected = selectedVisit?.id === visit.id;
+                    const isSelected = checkout.selectedVisit?.id === visit.id;
                     return (
                       // A button, not a div with onClick. This is how a cashier picks the visit
                       // they are about to take money for; it has to be reachable by keyboard and
@@ -502,7 +240,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       <button
                         key={visit.id}
                         type="button"
-                        onClick={() => handleSelectVisitForBilling(visit)}
+                        onClick={() => checkout.select(visit)}
                         aria-pressed={isSelected}
                         className={`w-full cursor-pointer rounded-lg border p-3 text-left transition-colors ${
                           isSelected
@@ -557,7 +295,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
           {/* Right Panel: Invoice & Cashier POS Terminal */}
           <div className="lg:col-span-7">
             <Panel className="overflow-hidden">
-              {selectedVisit && billDetails ? (
+              {checkout.selectedVisit && checkout.bill ? (
                 <div>
                   {/* Who, how much, and the button — pinned to the top of the terminal.
                       ── Why the top and not the bottom ──────────────────────────────────────────
@@ -578,10 +316,10 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     <div className="min-w-0">
                       <span className="field-label">Now billing</span>
                       <h2 className="m-0 truncate text-[15px] font-bold tracking-tight text-slate-900">
-                        {billDetails.patientName}
+                        {checkout.bill.patientName}
                       </h2>
                       <span className="text-fine text-slate-500">
-                        Ticket {selectedVisit.queue_number} &bull; {selectedVisit.patient_type_name}
+                        Ticket {checkout.selectedVisit.queue_number} &bull; {checkout.selectedVisit.patient_type_name}
                       </span>
                     </div>
                     <div className="flex items-center gap-4">
@@ -590,7 +328,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           Amount due
                         </span>
                         <span className="block text-xl font-extrabold leading-none tracking-tight tabular-nums text-slate-900">
-                          {formatCurrency(billDetails.totalAmount)}
+                          {formatCurrency(checkout.bill.totalAmount)}
                         </span>
                       </div>
                       <Button type="submit" form="checkout-form" size="lg">
@@ -615,11 +353,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {/* `billDetails` is now only ever a complete bill or null, so this
+                          {/* `checkout.bill` is now only ever a complete bill or null, so this
                               cannot be partial the way it could when the reprint path wrote here.
                               The optional chain stays as a cheap guard at what was the crash
                               site, in case the endpoint's shape ever changes. */}
-                          {(billDetails.items ?? []).map((item, idx) => (
+                          {(checkout.bill.items ?? []).map((item, idx) => (
                             <TableRow key={idx}>
                               <TableCell className="py-2.5 text-xs font-bold text-slate-900">
                                 {item.name}
@@ -646,47 +384,47 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-2 text-xs">
                     <div className="flex justify-between items-center text-gray-600">
                       <span>Gross Services Subtotal:</span>
-                      <span className="font-bold text-slate-900">{formatCurrency(billDetails.subtotal)}</span>
+                      <span className="font-bold text-slate-900">{formatCurrency(checkout.bill.subtotal)}</span>
                     </div>
                     <div className="flex justify-between items-center text-gray-600">
                       {/* Renamed: this line is HMO coverage only. It used to read "HMO Coverage /
                           Discount", which was the single occurrence of the word "discount" in the
                           entire app and described something that did not exist. */}
                       <span>HMO Coverage:</span>
-                      <span className="font-bold text-emerald-600">- {formatCurrency(billDetails.hmoCoverage || 0)}</span>
+                      <span className="font-bold text-emerald-600">- {formatCurrency(checkout.bill.hmoCoverage || 0)}</span>
                     </div>
                     {/* A statutory sale is VAT-EXEMPT, so the 12% comes off before the 20% does.
                         Shown as its own line because the patient is comparing what they pay to
                         the shelf price, and because BIR requires a VAT-exempt sale to be
                         presented this way rather than folded into one "discount" figure. */}
-                    {parseFloat(billDetails.vatDeducted || 0) > 0 && (
+                    {parseFloat(checkout.bill.vatDeducted || 0) > 0 && (
                       <>
                         <div className="flex justify-between items-center text-gray-600">
                           <span>Less VAT (12%) — VAT-exempt sale:</span>
-                          <span className="font-bold text-emerald-600">- {formatCurrency(billDetails.vatDeducted)}</span>
+                          <span className="font-bold text-emerald-600">- {formatCurrency(checkout.bill.vatDeducted)}</span>
                         </div>
                         <div className="flex justify-between items-center text-gray-500 pt-1 border-t border-dashed border-gray-200">
                           <span className="text-fine uppercase tracking-wide font-bold">VAT-exempt sale</span>
-                          <span className="text-fine font-bold text-slate-700">{formatCurrency(billDetails.vatExemptSale)}</span>
+                          <span className="text-fine font-bold text-slate-700">{formatCurrency(checkout.bill.vatExemptSale)}</span>
                         </div>
                       </>
                     )}
                     {/* Statutory deductions must be itemised on the receipt by name and rate, not
                         folded into the total — RA 9994 / RA 10754. */}
-                    {billDetails.discount && (
+                    {checkout.bill.discount && (
                       <div className="flex justify-between items-center text-gray-600">
                         <span>
-                          {billDetails.discount.name} ({parseFloat(billDetails.discount.percentage)}%)
-                          {billDetails.discount.idNumber && (
-                            <span className="text-meta text-gray-400 font-normal"> · ID {billDetails.discount.idNumber}</span>
+                          {checkout.bill.discount.name} ({parseFloat(checkout.bill.discount.percentage)}%)
+                          {checkout.bill.discount.idNumber && (
+                            <span className="text-meta text-gray-400 font-normal"> · ID {checkout.bill.discount.idNumber}</span>
                           )}
                         </span>
-                        <span className="font-bold text-emerald-600">- {formatCurrency(billDetails.discountAmount || 0)}</span>
+                        <span className="font-bold text-emerald-600">- {formatCurrency(checkout.bill.discountAmount || 0)}</span>
                       </div>
                     )}
                     <div className="pt-2 border-t border-gray-200 flex justify-between items-center text-sm font-extrabold text-slate-900">
                       <span>NET AMOUNT DUE:</span>
-                      <span className="text-base text-brand-600">{formatCurrency(billDetails.totalAmount)}</span>
+                      <span className="text-base text-brand-600">{formatCurrency(checkout.bill.totalAmount)}</span>
                     </div>
                   </div>
 
@@ -696,32 +434,32 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       before any money is taken. */}
                   <div className="bg-white p-4 rounded-xl border border-gray-200/80 space-y-2.5">
                     <span className="field-label">Statutory / other discount</span>
-                    {billDetails.discount ? (
+                    {checkout.bill.discount ? (
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2 text-xs">
                           <BadgeCheck className="w-4 h-4 text-brand-600 flex-shrink-0" aria-hidden="true" />
-                          <span className="font-bold text-slate-900">{billDetails.discount.name}</span>
+                          <span className="font-bold text-slate-900">{checkout.bill.discount.name}</span>
                           <span className="text-gray-500">
-                            {parseFloat(billDetails.discount.percentage)}%
-                            {billDetails.discount.idNumber ? ` · ID ${billDetails.discount.idNumber}` : ''}
+                            {parseFloat(checkout.bill.discount.percentage)}%
+                            {checkout.bill.discount.idNumber ? ` · ID ${checkout.bill.discount.idNumber}` : ''}
                           </span>
                         </div>
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          disabled={applyingDiscount}
-                          onClick={handleRemoveDiscount}
+                          disabled={checkout.applyingDiscount}
+                          onClick={checkout.removeDiscount}
                         >
-                          {applyingDiscount ? 'Removing…' : 'Remove'}
+                          {checkout.applyingDiscount ? 'Removing…' : 'Remove'}
                         </Button>
                       </div>
                     ) : (
                       <div className="flex flex-col sm:flex-row gap-2">
-                        <Select value={discountTypeId} onValueChange={setDiscountTypeId}>
+                        <Select value={checkout.discountTypeId} onValueChange={checkout.setDiscountTypeId}>
                           <SelectTrigger className="text-xs sm:w-44" aria-label="Statutory or other discount"><SelectValue placeholder="No discount" /></SelectTrigger>
                           <SelectContent>
-                            {discountCatalogue.map(d => (
+                            {checkout.discountCatalogue.map(d => (
                               <SelectItem key={d.id} value={String(d.id)}>
                                 {d.name} ({parseFloat(d.percentage)}%)
                               </SelectItem>
@@ -729,35 +467,35 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           </SelectContent>
                         </Select>
                         <Input
-                          value={discountIdNumber}
-                          onChange={(e) => setDiscountIdNumber(e.target.value)}
+                          value={checkout.discountIdNumber}
+                          onChange={(e) => checkout.setDiscountIdNumber(e.target.value)}
                           placeholder="OSCA / PWD ID number"
                           className="text-xs flex-1"
                           aria-label="Senior Citizen or PWD ID number"
                         />
                         <Button
                           type="button"
-                          disabled={!discountTypeId || applyingDiscount}
-                          onClick={handleApplyDiscount}
+                          disabled={!checkout.discountTypeId || checkout.applyingDiscount}
+                          onClick={checkout.applyDiscount}
                           className="font-bold"
                         >
-                          {applyingDiscount ? 'Applying…' : 'Apply'}
+                          {checkout.applyingDiscount ? 'Applying…' : 'Apply'}
                         </Button>
                       </div>
                     )}
-                    {discountError && (
-                      <p role="alert" className="text-fine text-rose-600 font-semibold m-0">{discountError}</p>
+                    {checkout.discountError && (
+                      <p role="alert" className="text-fine text-rose-600 font-semibold m-0">{checkout.discountError}</p>
                     )}
                   </div>
 
                   {/* Payment Processor Form */}
                   {/* id, because the Take Payment button lives in the pinned header above and
                       reaches this form by `form="checkout-form"`. */}
-                  <form id="checkout-form" onSubmit={handleProcessPayment} className="space-y-4">
-                    {paymentError && (
+                  <form id="checkout-form" onSubmit={checkout.requestConfirmation} className="space-y-4">
+                    {checkout.error && (
                       <div role="alert" className="alert alert-error">
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                        <span>{paymentError}</span>
+                        <span>{checkout.error}</span>
                       </div>
                     )}
 
@@ -768,9 +506,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           <button
                             key={method}
                             type="button"
-                            onClick={() => setPaymentMethod(method)}
+                            onClick={() => checkout.setPaymentMethod(method)}
                             className={`cursor-pointer rounded-lg border px-3 py-2 text-fine font-semibold transition-colors ${
-                              paymentMethod === method
+                              checkout.paymentMethod === method
                                 ? 'border-brand-500 bg-brand-500 text-white'
                                 : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                             }`}
@@ -784,16 +522,16 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                     {/* Reflects the real, per-test-approved coverage computed server-side
                         (Module 14) — an HMO-category patient is not guaranteed full coverage
                         just from their billing category alone. */}
-                    {billDetails?.patientType === 'HMO' && (
-                      parseFloat(billDetails.hmoCoverage) > 0 ? (
+                    {checkout.bill?.patientType === 'HMO' && (
+                      parseFloat(checkout.bill.hmoCoverage) > 0 ? (
                         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
                           <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                           <span>
-                            <strong>HMO Partner Accredited</strong> — {formatCurrency(billDetails.hmoCoverage)} covered
-                            {parseFloat(billDetails.hmoCoverage) >= parseFloat(billDetails.subtotal) ? ' (full coverage, ₱0.00 out of pocket).' : ' (partial coverage — remaining balance due).'}
+                            <strong>HMO Partner Accredited</strong> — {formatCurrency(checkout.bill.hmoCoverage)} covered
+                            {parseFloat(checkout.bill.hmoCoverage) >= parseFloat(checkout.bill.subtotal) ? ' (full coverage, ₱0.00 out of pocket).' : ' (partial coverage — remaining balance due).'}
                           </span>
                         </div>
-                      ) : (billDetails.hmoPendingCount ?? 0) === 0 && (
+                      ) : (checkout.bill.hmoPendingCount ?? 0) === 0 && (
                         <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
                           <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                           <span><strong>HMO Partner Accredited</strong> — no approved coverage yet for this visit. Full amount is due unless Reception logs an approval first.</span>
@@ -811,13 +549,13 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         and refund later, or large enough to be worth chasing the provider first.
                         Not a block — some providers take days, and the patient cannot wait at the
                         counter for one. */}
-                    {(billDetails?.hmoPendingCount ?? 0) > 0 && (
+                    {(checkout.bill?.hmoPendingCount ?? 0) > 0 && (
                       <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 flex items-start space-x-2 text-xs">
                         <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                         <span>
                           <strong>
-                            {billDetails.hmoPendingCount} test{billDetails.hmoPendingCount > 1 ? 's' : ''} still
-                            awaiting an HMO decision — {formatCurrency(billDetails.hmoPendingAmount)}
+                            {checkout.bill.hmoPendingCount} test{checkout.bill.hmoPendingCount > 1 ? 's' : ''} still
+                            awaiting an HMO decision — {formatCurrency(checkout.bill.hmoPendingAmount)}
                           </strong>
                           <span className="block font-normal mt-0.5">
                             That amount is billed in full here. If the HMO approves it afterwards,
@@ -827,7 +565,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       </div>
                     )}
 
-                    {paymentMethod === 'Cash' ? (
+                    {checkout.paymentMethod === 'Cash' ? (
                       <div className="space-y-2 bg-white p-3 rounded-xl border border-gray-200">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
@@ -836,15 +574,15 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                               type="number"
                               step="0.01"
                               placeholder="0.00"
-                              value={amountTendered}
-                              onChange={e => setAmountTendered(e.target.value)}
+                              value={checkout.amountTendered}
+                              onChange={e => checkout.setAmountTendered(e.target.value)}
                               className="text-sm font-bold"
                               required
                             />
                           </div>
                           <div className="space-y-1 bg-gray-50 p-2 rounded-lg border border-[#e6ebf1]">
                             <span className="field-label">Change Due</span>
-                            <span className="text-base font-extrabold text-emerald-600">{formatCurrency(calculateChange())}</span>
+                            <span className="text-base font-extrabold text-emerald-600">{formatCurrency(checkout.changeDue())}</span>
                           </div>
                         </div>
 
@@ -855,7 +593,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             <button
                               key={val}
                               type="button"
-                              onClick={() => setAmountTendered(val)}
+                              onClick={() => checkout.setAmountTendered(val)}
                               className="px-2 py-0.5 bg-slate-100 hover:bg-brand-500 hover:text-white rounded-md text-meta font-bold text-slate-700 transition-all border border-slate-200 cursor-pointer"
                             >
                               ₱{val}
@@ -863,7 +601,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                           ))}
                           <button
                             type="button"
-                            onClick={() => setAmountTendered((billDetails?.totalAmount ?? 0).toString())}
+                            onClick={() => checkout.setAmountTendered((checkout.bill?.totalAmount ?? 0).toString())}
                             className="px-2 py-0.5 bg-brand-50 text-brand-600 hover:bg-brand-500 hover:text-white rounded-md text-meta font-bold transition-all border border-brand-300 cursor-pointer"
                           >
                             Exact
@@ -874,9 +612,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       <div className="space-y-1">
                         <label htmlFor="cashierdashboard-transaction-reference" className="field-label">Transaction reference</label>
                         <Input id="cashierdashboard-transaction-reference"
-                          placeholder={`Enter ${paymentMethod} reference code`}
-                          value={referenceNumber}
-                          onChange={e => setReferenceNumber(e.target.value)}
+                          placeholder={`Enter ${checkout.paymentMethod} reference code`}
+                          value={checkout.referenceNumber}
+                          onChange={e => checkout.setReferenceNumber(e.target.value)}
                           className="text-xs rounded-xl"
                           required
                         />
@@ -1081,7 +819,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                         <TableCell label="Paid at" className="whitespace-nowrap text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <Button type="button" variant="outline" size="xs" onClick={() => handleReprintReceipt(t)}>
+                            <Button type="button" variant="outline" size="xs" onClick={() => receipt.reprint(t)}>
                               <Printer className="h-3 w-3" />
                               Reprint
                             </Button>
@@ -1184,38 +922,38 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
         {/* Payment confirmation — irreversible action, see .agents Phase 12 */}
         <ConfirmDialog
-          open={showPaymentConfirm}
-          onOpenChange={setShowPaymentConfirm}
+          open={checkout.confirming}
+          onOpenChange={(next) => { if (!next) checkout.cancelConfirmation(); }}
           title="Confirm Payment"
-          description={billDetails ? `Charge ${formatCurrency(billDetails.totalAmount)} via ${paymentMethod} for ${billDetails.patientName}? This will issue a receipt and cannot be undone from this screen.` : ''}
+          description={checkout.bill ? `Charge ${formatCurrency(checkout.bill.totalAmount)} via ${checkout.paymentMethod} for ${checkout.bill.patientName}? This will issue a receipt and cannot be undone from this screen.` : ''}
           confirmLabel="Confirm & Process"
-          onConfirm={confirmProcessPayment}
-          loading={confirmingPayment}
-          error={paymentError}
+          onConfirm={checkout.confirm}
+          loading={checkout.submitting}
+          error={checkout.error}
         />
 
         {/* Printable receipt. The document itself lives in components/Receipt.jsx so the point of
             sale and a later reprint cannot drift into showing different things. */}
-        <Dialog open={showReceiptModal} onOpenChange={setShowReceiptModal}>
+        <Dialog open={receipt.open} onOpenChange={receipt.setOpen}>
           <DialogContent className="max-w-sm">
-            {paymentSuccess && receiptBill && (
+            {receipt.payment && receipt.bill && (
               <>
                 <ReceiptDocument
-                  payment={paymentSuccess}
-                  bill={receiptBill}
+                  payment={receipt.payment}
+                  bill={receipt.bill}
                   cashier={user ? `${user.firstName} ${user.lastName}` : undefined}
-                  tendered={receiptTender?.tendered}
-                  change={receiptTender?.change}
-                  reprint={receiptTender == null}
+                  tendered={receipt.tender?.tendered}
+                  change={receipt.tender?.change}
+                  reprint={receipt.tender == null}
                 />
                 {/* no-print: the print rule reveals every descendant of .print-area, so a toolbar
                     inside it comes out of the printer with the receipt. That is exactly what the
                     previous version did — the Print button printed itself. */}
                 <div className="no-print flex justify-end gap-2 border-t border-[#e6ebf1] pt-3">
-                  <Button variant="outline" onClick={() => setShowReceiptModal(false)}>
+                  <Button variant="outline" onClick={() => receipt.setOpen(false)}>
                     Close
                   </Button>
-                  <Button onClick={printReceipt}>
+                  <Button onClick={receipt.print}>
                     <Printer className="h-3.5 w-3.5" />
                     Print Receipt
                   </Button>

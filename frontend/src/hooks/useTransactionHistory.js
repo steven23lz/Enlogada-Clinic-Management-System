@@ -38,6 +38,10 @@ export function useTransactionHistory({ enabled = false } = {}) {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Paged at the server, not here. [1.29.0] This used to pull every settled payment in the range
+  // and slice fifteen out of it in the browser. Measured at 570 bytes a payment, a year-wide
+  // range is a 2.0 MB response to fill a fifteen-row table — on the screen a cashier opens for
+  // the daily cash-up.
   const fetch = useCallback(async (from, to, nextPage = 1) => {
     setLoading(true);
     setError('');
