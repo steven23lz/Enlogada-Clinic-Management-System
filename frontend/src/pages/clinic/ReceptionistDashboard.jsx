@@ -18,7 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import api from '../../config/api';
-import { todayStr, formatDateTime } from '../../lib/date';
+import { formatDateTime } from '../../lib/date';
 import { toastSuccess, toastError, toastInfo } from '../../lib/toast';
 import QrScanner from '../../components/QrScanner';
 import RescheduleDialog from '../../components/booking/RescheduleDialog';
@@ -26,6 +26,8 @@ import TestPicker from '../../components/booking/TestPicker';
 import useOperationsReport from '../../hooks/useOperationsReport';
 import { ReceptionThroughputPanel } from '../../components/reports/OperationsPanels';
 import WalkInRegistration from '../../components/reception/WalkInRegistration';
+import { useVisitHistory, HISTORY_PAGE_SIZE } from '../../hooks/useVisitHistory';
+import { usePatientLookup } from '../../hooks/usePatientLookup';
 import {
   ClipboardList,
   UserCheck,
@@ -77,7 +79,6 @@ const PAGE_BLURBS = {
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 const QUEUE_PAGE_SIZE = 25;
-const HISTORY_PAGE_SIZE = 25;
 
 // scheduled_date arrives as a full ISO instant (pg parses the DATE column with the local-time
 // constructor, then JSON serialises it to UTC). Formatting it back to a local calendar date is
@@ -117,20 +118,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [queueProcessingCount, setQueueProcessingCount] = useState(0);
   const [queueWalkinCount, setQueueWalkinCount] = useState(0);
 
-  // Visit History state (new nav destination, UI/UX Phase 2)
-  const [historyVisits, setHistoryVisits] = useState([]);
-  // Paged at the server. [1.29.0] This screen fetched every visit in the range and rendered all
-  // of them — no slice, no footer, the whole list straight into the DOM. Measured at 664 bytes a
-  // visit, a year-wide range is a 3.6 MB response and roughly 5,700 table rows.
-  const [historyPage, setHistoryPage] = useState(1);
-  const [historyTotal, setHistoryTotal] = useState(0);
-  const [historyTotalPages, setHistoryTotalPages] = useState(1);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState('');
-  const [historySearch, setHistorySearch] = useState('');
-  const [historyStartDate, setHistoryStartDate] = useState(todayStr());
-  const [historyEndDate, setHistoryEndDate] = useState(todayStr());
-  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const history = useVisitHistory({ enabled: view === 'reception-history' });
 
   // QR Code / Ref Verification State
   const [searchRef, setSearchRef] = useState('');
@@ -174,11 +162,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   const [ticketToPrint, setTicketToPrint] = useState(null);
 
   // Existing Patient Lookup State (Module 7: patient record lookup)
-  const [patientSearchQuery, setPatientSearchQuery] = useState('');
-  const [patientSearchResults, setPatientSearchResults] = useState(null);
-  const [patientSearching, setPatientSearching] = useState(false);
-  const [patientSearchError, setPatientSearchError] = useState('');
-  const [lookupCheckInSuccess, setLookupCheckInSuccess] = useState('');
+  const lookup = usePatientLookup();
 
   // Walk-in Registration State
 
@@ -224,26 +208,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const fetchVisitHistory = useCallback(async (startDate, endDate, search, page = 1) => {
-    setHistoryLoading(true);
-    setHistoryError('');
-    try {
-      const response = await api.get('/visits/history', {
-        params: { startDate, endDate, search: search || undefined, page, limit: HISTORY_PAGE_SIZE }
-      });
-      const { visits, total, totalPages } = response.data.data;
-      setHistoryVisits(visits || []);
-      setHistoryTotal(total ?? (visits || []).length);
-      setHistoryTotalPages(totalPages || 1);
-      setHistoryPage(page);
-    } catch (err) {
-      console.error('Failed to fetch visit history:', err);
-      setHistoryError('Could not load visit history. Please try again.');
-    } finally {
-      setHistoryLoading(false);
-    }
   }, []);
 
   const fetchStaticData = useCallback(async () => {
@@ -298,16 +262,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     30000,
     { enabled: view === 'reception-queue' }
   );
-
-  // Lazy-load Visit History only once the tab is actually opened, not on every Receptionist
-  // dashboard mount.
-  useEffect(() => {
-    if (view === 'reception-history' && !historyLoaded) {
-      setHistoryLoaded(true);
-      fetchVisitHistory(historyStartDate, historyEndDate, historySearch);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
 
   /**
    * Prints the physical queue slip the patient carries.
@@ -419,9 +373,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           visitType: 'Walk in',
         });
         const visit = vRes.data.data.visit;
-        setLookupCheckInSuccess(`${patient.first_name} ${patient.last_name} checked in! Physical Queue Ticket: ${visit.queue_number}`);
-        setPatientSearchResults(null);
-        setPatientSearchQuery('');
+        lookup.noteCheckedIn(`${patient.first_name} ${patient.last_name} checked in! Physical Queue Ticket: ${visit.queue_number}`);
+        lookup.setQuery('');
       }
       fetchActiveVisits({ page: queuePage, search: searchQuery, status: statusFilter });
       setCheckInTarget(null);
@@ -468,28 +421,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     }
   };
 
-
-  const handlePatientSearch = async (e) => {
-    e.preventDefault();
-    setPatientSearchError('');
-    setLookupCheckInSuccess('');
-
-    if (patientSearchQuery.trim().length < 2) {
-      setPatientSearchError('Enter at least 2 characters to search.');
-      return;
-    }
-
-    setPatientSearching(true);
-    try {
-      const response = await api.get('/patients/search', { params: { q: patientSearchQuery.trim() } });
-      setPatientSearchResults(response.data.data.patients);
-    } catch (err) {
-      setPatientSearchError(err.response?.data?.message || 'Failed to search patient records.');
-      setPatientSearchResults(null);
-    } finally {
-      setPatientSearching(false);
-    }
-  };
 
   const handleOpenAssignTests = (visitId) => {
     setSelectedVisitId(visitId);
@@ -866,20 +797,20 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             <Toolbar attached>
               <SearchInput
                 placeholder="Search patient or Queue #..."
-                value={historySearch}
-                onChange={e => setHistorySearch(e.target.value)}
+                value={history.search}
+                onChange={e => history.setSearch(e.target.value)}
                 containerClassName="w-full sm:w-56"
               />
-              <Input type="date" value={historyStartDate} onChange={e => setHistoryStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
+              <Input type="date" value={history.startDate} onChange={e => history.setStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
               <span className="text-fine text-slate-400">to</span>
-              <Input type="date" value={historyEndDate} onChange={e => setHistoryEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
-              <Button variant="outline" onClick={() => fetchVisitHistory(historyStartDate, historyEndDate, historySearch)}>
+              <Input type="date" value={history.endDate} onChange={e => history.setEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
+              <Button variant="outline" onClick={history.reload}>
                 <RefreshCw className="h-3.5 w-3.5" />
                 Apply
               </Button>
               <ToolbarSpacer />
               <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
-                {historyTotal} visit{historyTotal === 1 ? '' : 's'}
+                {history.total} visit{history.total === 1 ? '' : 's'}
               </span>
             </Toolbar>
 
@@ -897,26 +828,26 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {historyError ? (
+                    {history.error ? (
                       <TableRow className="hover:bg-transparent">
                         <TableCell colSpan={6} className="p-0">
                           <EmptyState
                             tone="error"
                             icon={AlertCircle}
                             title="Couldn't load visit history"
-                            description={historyError}
+                            description={history.error}
                             action={
-                              <Button variant="outline" size="sm" onClick={() => fetchVisitHistory(historyStartDate, historyEndDate, historySearch)}>
+                              <Button variant="outline" size="sm" onClick={history.reload}>
                                 Try again
                               </Button>
                             }
                           />
                         </TableCell>
                       </TableRow>
-                    ) : historyLoading ? (
+                    ) : history.loading ? (
                       <SkeletonRows rows={6} columns={6} />
-                    ) : historyVisits.length > 0 ? (
-                      historyVisits.map(v => (
+                    ) : history.visits.length > 0 ? (
+                      history.visits.map(v => (
                         <TableRow key={v.id}>
                           <TableCell label="Queue Ticket">
                             <span className="rounded-md bg-slate-100 px-2 py-1 text-fine font-bold tabular-nums text-slate-700">
@@ -959,10 +890,10 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
               </PanelBody>
               {/* The screen had no footer at all, because it rendered every row it fetched. */}
               <Pagination
-                page={historyPage}
-                totalPages={historyTotalPages}
-                onPageChange={(next) => fetchVisitHistory(historyStartDate, historyEndDate, historySearch, next)}
-                total={historyTotal}
+                page={history.page}
+                totalPages={history.totalPages}
+                onPageChange={history.goToPage}
+                total={history.total}
                 pageSize={HISTORY_PAGE_SIZE}
               />
             </Panel>
@@ -991,38 +922,38 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 <p className="mt-1 text-fine leading-relaxed text-slate-500">Search before registering — a returning patient should be checked in, not re-registered.</p>
               </div>
 
-              {lookupCheckInSuccess && (
+              {lookup.notice && (
                 <div role="status" className="mb-4 alert alert-success">
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                  <span>{lookupCheckInSuccess}</span>
+                  <span>{lookup.notice}</span>
                 </div>
               )}
-              {patientSearchError && (
+              {lookup.error && (
                 <div role="alert" className="mb-4 alert alert-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{patientSearchError}</span>
+                  <span>{lookup.error}</span>
                 </div>
               )}
 
-              <form onSubmit={handlePatientSearch} className="flex space-x-2">
+              <form onSubmit={lookup.search} className="flex space-x-2">
                 <Input
                   aria-label="Search existing patients by name"
                   placeholder="Search by patient name..."
-                  value={patientSearchQuery}
-                  onChange={e => setPatientSearchQuery(e.target.value)}
+                  value={lookup.query}
+                  onChange={e => lookup.setQuery(e.target.value)}
                   className="flex-1"
                 />
-                <Button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white" disabled={patientSearching}>
-                  {patientSearching ? 'Searching...' : 'Search'}
+                <Button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white" disabled={lookup.searching}>
+                  {lookup.searching ? 'Searching...' : 'Search'}
                 </Button>
               </form>
 
-              {patientSearchResults && (
+              {lookup.results && (
                 <div className="mt-4 space-y-2">
-                  {patientSearchResults.length === 0 ? (
+                  {lookup.results.length === 0 ? (
                     <p className="text-xs text-slate-500 text-center py-3">No matching patient records found. Register them as a new patient below.</p>
                   ) : (
-                    patientSearchResults.map(patient => (
+                    lookup.results.map(patient => (
                       <div key={patient.id} className="flex items-center justify-between border border-[#e6ebf1] rounded-xl p-3 bg-slate-50/70">
                         <div className="text-xs">
                           <span className="block font-bold text-slate-900">{patient.first_name} {patient.last_name} <span className="text-meta text-gray-400 font-normal">PT-{patient.id}</span></span>
