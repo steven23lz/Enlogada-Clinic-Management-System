@@ -403,9 +403,19 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   };
 
   // Metrics calculation
-  const totalCollectionsToday = queue.transactions.reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-  const cashTotal = queue.transactions.filter(t => t.payment_method === 'Cash').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
-  const eWalletTotal = queue.transactions.filter(t => t.payment_method === 'GCash' || t.payment_method === 'PayMaya').reduce((acc, t) => acc + parseFloat(t.amount || 0), 0);
+  // Every peso figure on this screen comes from the endpoint's SQL summary, not from reducing
+  // `queue.transactions`. That list is the receipt LOG and now includes receipts that were
+  // reversed — summing it would put refunded money back into the day's collections, on the one
+  // screen where the number has to match what is physically in the drawer.
+  const totalCollectionsToday = Number(queue.summary?.collected || 0);
+  const cashTotal = Number(queue.summary?.cash || 0);
+  const eWalletTotal = Number(queue.summary?.ewallet || 0);
+  const receiptsSettled = Number(queue.summary?.receipts || 0);
+  const statutoryDiscounts = Number(queue.summary?.discounts || 0);
+  const reversalCount = Number(queue.summary?.reversals || 0);
+  const reversedAmount = Number(queue.summary?.reversed || 0);
+  const bankTotal = Number(queue.summary?.bank || 0);
+  const averagePerReceipt = receiptsSettled > 0 ? totalCollectionsToday / receiptsSettled : 0;
 
 
   return (
@@ -429,10 +439,32 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
         {/* Collections Overview Metrics Bar */}
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-          <MetricCard label="Collected Today" value={formatCurrency(totalCollectionsToday)} icon={DollarSign} tone="green" />
+          {/* The caption closes a reconciliation gap rather than decorating the tile. Only Cash
+              and E-Wallet have tiles, but chk_payment_method also allows Bank — so on any day
+              carrying a transfer, the two tiles below simply did not add up to this one and the
+              difference was nowhere on screen. Today that difference was ₱200.00. */}
+          <MetricCard
+            label="Collected Today"
+            value={formatCurrency(totalCollectionsToday)}
+            caption={bankTotal > 0 ? `incl. ${formatCurrency(bankTotal)} bank transfer` : undefined}
+            captionTone={bankTotal > 0 ? 'slate' : undefined}
+            icon={DollarSign}
+            tone="green"
+          />
           <MetricCard label="Cash Collected" value={formatCurrency(cashTotal)} icon={Banknote} tone="emerald" />
           <MetricCard label="E-Wallet" value={formatCurrency(eWalletTotal)} caption="GCash + PayMaya" captionTone="slate" icon={Wallet} tone="indigo" />
-          <MetricCard label="Receipts Issued" value={queue.transactions.length} icon={Receipt} tone="slate" />
+          {/* "Receipts Settled", not "Receipts Issued": this counts rows the drawer should
+              hold, and a receipt that was issued and then reversed is not one of them. The old
+              label described the log below, while the number described the money — the exact
+              mismatch this whole change exists to remove. */}
+          <MetricCard
+            label="Receipts Settled"
+            value={receiptsSettled}
+            caption={reversalCount > 0 ? `${reversalCount} more issued, then reversed` : undefined}
+            captionTone={reversalCount > 0 ? 'rose' : undefined}
+            icon={Receipt}
+            tone="slate"
+          />
         </div>
 
         {/* POS Split Workstation (Left: Billing Queue, Right: Invoice Checkout Terminal) */}
@@ -915,22 +947,32 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                       <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
                         <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Average per receipt</span>
                         <span className="text-lg font-extrabold text-slate-900 tabular-nums">
-                          {queue.transactions.length > 0
-                            ? formatCurrency(
-                                queue.transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0) / queue.transactions.length
-                              )
-                            : formatCurrency(0)}
+                          {formatCurrency(averagePerReceipt)}
                         </span>
                       </div>
                       <div className="rounded-xl border border-[#e6ebf1] bg-slate-50/80 p-3">
                         <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block">Statutory discounts</span>
                         <span className="text-lg font-extrabold text-slate-900 tabular-nums">
-                          {formatCurrency(
-                            queue.transactions.reduce((sum, t) => sum + parseFloat(t.discount_amount || 0), 0)
-                          )}
+                          {formatCurrency(statutoryDiscounts)}
                         </span>
                       </div>
                     </div>
+                    {/* Only when there is one. A permanent "0 reversed" row would be noise on the
+                        overwhelming majority of shifts; on the shift where it is not zero, it is
+                        the reason the drawer will not balance. */}
+                    {reversalCount > 0 && (
+                      <div className="mt-3 flex items-center justify-between rounded-xl border border-rose-100 bg-rose-50/60 px-3 py-2">
+                        <span className="text-meta font-bold uppercase tracking-wider text-rose-700">
+                          Reversed this shift
+                        </span>
+                        <span className="text-sm font-extrabold tabular-nums text-rose-700">
+                          {formatCurrency(reversedAmount)}
+                          <span className="ml-1.5 font-semibold text-rose-500">
+                            ({reversalCount} receipt{reversalCount === 1 ? '' : 's'})
+                          </span>
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {queue.transactions.length > 0 && (
@@ -948,9 +990,23 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                               <span className="block text-xs font-bold text-slate-900 truncate">
                                 {t.patient_first_name} {t.patient_last_name}
                               </span>
-                              <span className="block text-meta text-gray-400 font-mono">#{t.receipt_number}</span>
+                              <span className="block text-meta text-gray-400 font-mono">
+                                #{t.receipt_number}
+                                {/* Named, not merely struck. This list is glanceable — four lines
+                                    a cashier reads sideways — and a reversed receipt sitting in it
+                                    unlabelled reads as money taken. */}
+                                {(t.payment_status || 'Paid') !== 'Paid' && (
+                                  <span className="ml-1.5 font-sans font-bold uppercase tracking-wide text-rose-600">
+                                    {t.payment_status}
+                                  </span>
+                                )}
+                              </span>
                             </div>
-                            <span className="text-xs font-extrabold text-slate-900 tabular-nums flex-shrink-0">
+                            <span className={`text-xs font-extrabold tabular-nums flex-shrink-0 ${
+                              (t.payment_status || 'Paid') === 'Paid'
+                                ? 'text-slate-900'
+                                : 'text-slate-400 line-through'
+                            }`}>
                               {formatCurrency(parseFloat(t.amount || 0))}
                             </span>
                           </div>
@@ -982,7 +1038,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
             </Button>
             <ToolbarSpacer />
             <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
-              {history.transactions.length} receipt{history.transactions.length === 1 ? '' : 's'}
+              {history.total} receipt{history.total === 1 ? '' : 's'}
             </span>
           </Toolbar>
 
@@ -1036,7 +1092,16 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                             <span className="mt-0.5 block font-mono text-fine text-slate-500">{t.reference_number}</span>
                           )}
                         </TableCell>
-                        <TableCell label="Amount" className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(t.amount)}</TableCell>
+                        <TableCell
+                          label="Amount"
+                          className={`text-right font-semibold tabular-nums ${
+                            (t.payment_status || 'Paid') === 'Paid'
+                              ? 'text-emerald-700'
+                              : 'text-slate-400 line-through'
+                          }`}
+                        >
+                          {formatCurrency(t.amount)}
+                        </TableCell>
                         <TableCell label="Status">
                           <StatusBadge status={t.payment_status || 'Paid'} />
                         </TableCell>

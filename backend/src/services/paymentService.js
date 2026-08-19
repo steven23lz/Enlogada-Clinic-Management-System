@@ -272,20 +272,32 @@ class PaymentService {
   // `limit` is optional and absent by default, so the callers that need the whole set — the
   // cashier's own daily collections total, the metric strip, the sales-by-service report — keep
   // getting it. Only the screens that show a page ask for one.
+  //
+  // `summary` accompanies the list on every call, paged or not, and is the ONLY place a peso
+  // total should come from. Screens used to reduce() the list instead, which quietly required
+  // the list to contain settled rows exclusively — so the log could not show a reversal without
+  // that reversal being counted as income on four different screens. It is also simply correct
+  // on a paged call, where reducing the rows in hand totals one page and labels it the day.
   async getTransactions({ startDate, endDate, page, limit }) {
     const limitNum = limit ? Math.min(Math.max(parseInt(limit, 10) || 0, 1), 100) : null;
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
 
-    const rows = await paymentRepository.findTransactions({
-      startDate,
-      endDate,
-      limit: limitNum,
-      offset: limitNum ? (pageNum - 1) * limitNum : 0,
-    });
+    const [rows, summary] = await Promise.all([
+      paymentRepository.findTransactions({
+        startDate,
+        endDate,
+        limit: limitNum,
+        offset: limitNum ? (pageNum - 1) * limitNum : 0,
+      }),
+      paymentRepository.findTransactionSummary({ startDate, endDate }),
+    ]);
 
-    if (!limitNum) return rows;
+    // Unpaged callers are handed the array they have always been handed, with the figures
+    // riding along as properties — same trick as `total`, so no existing consumer changes shape.
+    if (!limitNum) return Object.assign(rows, { summary });
     return {
       transactions: Array.from(rows),
+      summary,
       total: rows.total,
       page: pageNum,
       limit: limitNum,

@@ -21,6 +21,9 @@ import { usePolling } from './usePolling';
 export function useBillingQueue({ enabled = true, paused = false } = {}) {
   const [activeVisits, setActiveVisits] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  // The day's peso figures, aggregated in SQL over settled rows. `transactions` is the receipt
+  // LOG and includes reversals, so it is not a thing to add up — see lib/collections.js.
+  const [summary, setSummary] = useState(null);
   const [patientTypes, setPatientTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   // A failed fetch used to reach console.error and stop there, so the queue rendered its EMPTY
@@ -48,6 +51,7 @@ export function useBillingQueue({ enabled = true, paused = false } = {}) {
     try {
       const response = await api.get('/payments/transactions');
       setTransactions(response.data.data.transactions || []);
+      setSummary(response.data.data.summary || null);
     } catch (err) {
       console.error('Failed to fetch transaction logs:', err);
       setError("Could not load today's collections. Please try again.");
@@ -79,7 +83,13 @@ export function useBillingQueue({ enabled = true, paused = false } = {}) {
     { enabled: enabled && !paused }
   );
 
-  /** Visits already settled today. A paid ticket must not sit in a queue of people to charge. */
+  /**
+   * Visits already settled today. A paid ticket must not sit in a queue of people to charge.
+   *
+   * The 'Paid' filter is load-bearing, not defensive: the log now lists reversed receipts too,
+   * and a refunded visit genuinely owes money again — so it should reappear here to be charged,
+   * which is also what uq_payments_one_paid_per_visit allows by being partial on 'Paid'.
+   */
   const paidVisitIds = useMemo(
     () => new Set(transactions.filter((t) => t.payment_status === 'Paid').map((t) => t.patient_visit_id)),
     [transactions]
@@ -101,7 +111,7 @@ export function useBillingQueue({ enabled = true, paused = false } = {}) {
     }), [activeVisits, paidVisitIds, searchQuery, typeFilter, sortOrder]);
 
   return {
-    visits, transactions, patientTypes, paidVisitIds,
+    visits, transactions, summary, patientTypes, paidVisitIds,
     loading, error,
     searchQuery, setSearchQuery,
     typeFilter, setTypeFilter,

@@ -71,11 +71,12 @@ class PaymentController {
     try {
       const { startDate, endDate, page, limit } = req.query;
       const result = await paymentService.getTransactions({ startDate, endDate, page, limit });
-      // Unpaged callers still get a bare array under `transactions`, exactly as before.
+      // Unpaged callers still get a bare array under `transactions`, exactly as before — now
+      // with `summary` beside it, which is where every peso figure on the client comes from.
       return res.status(200).json({
         status: 'success',
         data: Array.isArray(result)
-          ? { transactions: result, total: result.total ?? result.length }
+          ? { transactions: result, total: result.total ?? result.length, summary: result.summary }
           : result,
       });
     } catch (err) {

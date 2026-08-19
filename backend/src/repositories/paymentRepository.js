@@ -1,5 +1,14 @@
 const db = require('../config/database');
 
+// A row that represents a receipt the clinic actually handed to a patient — settled, or settled
+// and later reversed. Written once and shared by the log and its summary so the two can never
+// disagree about which rows they are describing, which is the failure this pair exists to avoid.
+// See the note in findTransactions for why both halves are needed.
+const ISSUED_RECEIPT = `
+  WHERE pay.payment_status IN ('Paid', 'Refunded', 'Cancelled')
+    AND pay.receipt_number IS NOT NULL
+`;
+
 class PaymentRepository {
   /**
    * The discount fields are a snapshot, not a reference.
@@ -64,18 +73,43 @@ class PaymentRepository {
     let whereText = '';
     const params = [];
 
-    // Only settled money. Online GCash/Maya checkouts insert a 'Pending' row the moment the
-    // patient is redirected to the provider, and that row must never reach the cashier's
-    // transaction log or daily collections total — it isn't revenue until the signed webhook
-    // confirms it. Every pre-gateway row is 'Paid', so this narrows nothing that existed before.
+    // Receipts that were actually issued — which is what this log is, and what the screen above
+    // it says it is: "refunds and cancellations are recorded against the original receipt".
+    //
+    // This used to read `payment_status = 'Paid'`, and so a refunded receipt DISAPPEARED from the
+    // cashier's log the moment it was reversed. For a daily cash-up that is backwards: the
+    // receipt a cashier most needs to account for is the one they had to reverse, and the drawer
+    // is short by an amount with nothing on screen to explain it.
+    //
+    // Two conditions, and both are load-bearing:
+    //
+    //   payment_status IN (…)     keeps 'Pending' and 'Failed' out. An online checkout inserts a
+    //                             'Pending' row the moment the patient is redirected, and that is
+    //                             not money until the signed webhook says so. It also leads the
+    //                             (payment_status, paid_at) index, so the range below still scans.
+    //
+    //   receipt_number IS NOT NULL  is what separates the two meanings of 'Cancelled'. A patient
+    //                             who opens a second checkout gets their first session cancelled
+    //                             by cancelPendingGatewayPayments — money never taken, and it must
+    //                             never appear here as a receipt. A *paid* receipt voided by staff
+    //                             is a real reversal and must. The receipt number is the
+    //                             difference: it is assigned on settlement and never before, so a
+    //                             row that has one was, at some point, money.
+    //
+    // paid_at cannot make that distinction — it is DEFAULT CURRENT_TIMESTAMP, so an abandoned
+    // gateway session carries one too.
+    //
+    // Money totals do NOT come from this list any more; see findTransactionSummary. Widening a
+    // list that ten client-side reduce() calls were summing is exactly how a refund would have
+    // started counting as revenue.
     if (startDate && endDate) {
       // Half-open range rather than a ::date cast: a B-tree index cannot serve a predicate on
       // an expression, so the cast turned every transaction lookup into a sequential scan of
       // payments — the table that grows fastest and is read on every cashier dashboard load.
-      whereText = " WHERE pay.payment_status = 'Paid' AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)";
+      whereText = `${ISSUED_RECEIPT} AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)`;
       params.push(startDate, endDate);
     } else {
-      whereText = " WHERE pay.payment_status = 'Paid' AND pay.paid_at >= CURRENT_DATE AND pay.paid_at < (CURRENT_DATE + 1)";
+      whereText = `${ISSUED_RECEIPT} AND pay.paid_at >= CURRENT_DATE AND pay.paid_at < (CURRENT_DATE + 1)`;
     }
 
     const countRes = await db.query(`SELECT COUNT(*)::int AS total ${fromClause} ${whereText}`, params);
@@ -93,6 +127,71 @@ class PaymentRepository {
     // An array with a `total` on it: every existing caller keeps treating this as the list it
     // always was, and the paged callers read the count without a second round trip.
     return Object.assign(result.rows, { total });
+  }
+
+  /**
+   * The money figures for the same range, aggregated in SQL over SETTLED rows only.
+   *
+   * Every screen that shows a peso total used to compute it in the browser, by reduce()-ing the
+   * transaction list — ten such reductions across the cashier dashboard, cashier monitoring, the
+   * admin dashboard and the reports overview. That worked only because the list was, by
+   * accident, exclusively 'Paid' rows. It made the list's WHERE clause silently load-bearing for
+   * every revenue figure in the app: the moment the log correctly began showing a reversal, all
+   * ten would have counted the refunded amount as income.
+   *
+   * So the log and the money are two different questions and get two different queries. The log
+   * shows what happened; this counts what the drawer should hold.
+   *
+   * FILTER rather than separate round trips, matching reportRepository.getOperationsReport —
+   * one pass over one index range, and `refunded` is reported beside `collected` rather than
+   * being netted off it. A cash-up needs both numbers: netting hides that a reversal happened.
+   */
+  async findTransactionSummary({ startDate, endDate }) {
+    const params = [];
+    let rangeText;
+    if (startDate && endDate) {
+      rangeText = 'AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)';
+      params.push(startDate, endDate);
+    } else {
+      rangeText = 'AND pay.paid_at >= CURRENT_DATE AND pay.paid_at < (CURRENT_DATE + 1)';
+    }
+
+    const queryText = `
+      SELECT
+        COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_status = 'Paid'), 0)::numeric(12,2)
+          AS collected,
+        COUNT(*) FILTER (WHERE pay.payment_status = 'Paid')::int
+          AS receipts,
+        COALESCE(SUM(pay.amount) FILTER (
+          WHERE pay.payment_status = 'Paid' AND pay.payment_method = 'Cash'), 0)::numeric(12,2)
+          AS cash,
+        COALESCE(SUM(pay.amount) FILTER (
+          WHERE pay.payment_status = 'Paid'
+            AND pay.payment_method IN ('GCash', 'PayMaya')), 0)::numeric(12,2)
+          AS ewallet,
+        -- Bank transfer is neither cash nor e-wallet, and without it the method figures do not
+        -- reconcile to the collected figure — today they were short by a 200.00 transfer that
+        -- appeared in no tile at all, which is exactly the money a cashier stops to hunt for.
+        --
+        -- Named rather than lumped into an "other": chk_payment_method enumerates the whole
+        -- vocabulary as ('Cash', 'GCash', 'PayMaya', 'Bank'), so cash + e-wallet + bank IS the
+        -- total, and a bucket implying an unknown remainder would be inventing uncertainty the
+        -- schema does not have.
+        COALESCE(SUM(pay.amount) FILTER (
+          WHERE pay.payment_status = 'Paid' AND pay.payment_method = 'Bank'), 0)::numeric(12,2)
+          AS bank,
+        COALESCE(SUM(pay.discount_amount) FILTER (WHERE pay.payment_status = 'Paid'), 0)::numeric(12,2)
+          AS discounts,
+        -- Reported, never subtracted. A drawer that is short by a refund needs the refund named.
+        COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_status <> 'Paid'), 0)::numeric(12,2)
+          AS reversed,
+        COUNT(*) FILTER (WHERE pay.payment_status <> 'Paid')::int
+          AS reversals
+      FROM payments pay
+      ${ISSUED_RECEIPT} ${rangeText}
+    `;
+    const result = await db.query(queryText, params);
+    return result.rows[0];
   }
 
   async getBillingSummary(patientVisitId) {
