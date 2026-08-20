@@ -104,7 +104,7 @@ const ClientDashboard = ({ onNavigate }) => {
             <ResultsTab profiles={profiles} results={results} onPreviewDocument={setPreviewDoc} />
           </TabsContent>
 
-          {/* My Appointments (Module 3: view/cancel own bookings.appointments) — full width now, no
+          {/* My Appointments (Module 3: view/cancel own appointments) — full width now, no
               more max-h scroll-box compression forced by sharing a column with two other
               cards.
 

@@ -33,7 +33,7 @@ export default function ProfileBar({ profiles, reference }) {
                 </SelectContent>
               </Select>
             ) : (
-              <span className="text-sm text-gray-500 font-medium italic">No profiles.profiles created yet</span>
+              <span className="text-sm text-gray-500 font-medium italic">No profiles created yet</span>
             )}
           </div>
         </div>

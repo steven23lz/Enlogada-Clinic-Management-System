@@ -296,7 +296,22 @@ and the copies had drifted apart:
   holding the current screen always opens). The top bar is a **breadcrumb**, not a second page
   title — the screen's own `PageHeader` carries the heading, so don't add a title to both.
 - `DashboardLayout.jsx` / `PublicHeader.jsx` / `PublicFooter.jsx` are the public-page equivalents.
-- **Don't couple a test to a class name.** `payment.spec.js` used to scope itself with
+- **A rename walks through prose. Run `python scripts/prose_scan.py frontend/src` after one.**
+Extracting state into a hook means rewriting `findings` to `entry.findings` across a file, and a
+word-boundary regex matches inside English and inside string literals — a hyphen and a space are
+both non-word characters. It has produced, on screen: *"Release CBC entry.findings for Juan Dela
+Cruz?"* on the dialog a technician confirms before a report leaves the department; *"No
+bookings.appointments booked yet."* on a patient's own dashboard; and *"SuperAdmin · 30
+access.permissions"* on the RBAC matrix. **No spec asserts this copy, and the build compiles it
+happily**, so nothing catches it but reading the screen or running the scan.
+
+The scanner checks all four places prose hides — quoted strings, template literals, JSX text
+between tags, and `{/* … */}` comments — and ignores a backticked `hook.property`, which is the
+convention for a deliberate code reference. Its `HOOKS` list is its eyesight: **a prefix missing
+from it is damage it cannot see**, which is how the RBAC copy survived a run reporting clean. Add
+each new hook's binding name to that list in the same commit that introduces the hook.
+
+**Don't couple a test to a class name.** `payment.spec.js` used to scope itself with
   `ancestor::div[contains(@class,"rounded-2xl")]`, so changing a corner radius failed a payment
   assertion. Add a `data-testid` instead.
 

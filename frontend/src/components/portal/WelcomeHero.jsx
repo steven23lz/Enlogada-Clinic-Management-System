@@ -24,7 +24,7 @@ export default function WelcomeHero({ profiles, results, bookings, reference }) 
                 {profiles.selected ? `Welcome, ${profiles.selected.first_name}` : 'Welcome to Enlogada'}
               </h1>
               <p className="m-0 max-w-xl text-[13px] leading-relaxed text-slate-300">
-                Book Laboratory, Ultrasound and X-Ray bookings.appointments, follow a visit as it moves through the clinic, and download your certified reports.
+                Book Laboratory, Ultrasound and X-Ray appointments, follow a visit as it moves through the clinic, and download your certified reports.
               </p>
             </div>
 

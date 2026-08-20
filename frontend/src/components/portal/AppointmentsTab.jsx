@@ -51,9 +51,9 @@ export default function AppointmentsTab({ bookings }) {
               )}
               <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
               {bookings.loading ? (
-                <p className="text-xs text-gray-400 text-center py-4">Loading bookings.appointments…</p>
+                <p className="text-xs text-gray-400 text-center py-4">Loading appointments…</p>
               ) : bookings.appointments.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-4 italic">No bookings.appointments booked yet.</p>
+                <p className="text-xs text-gray-400 text-center py-4 italic">No appointments booked yet.</p>
               ) : (
                 paged.map((appt) => {
                   const isCancellable = appt.status === 'Pending' || appt.status === 'Confirmed';
@@ -151,7 +151,7 @@ export default function AppointmentsTab({ bookings }) {
 
                       {/* Reschedule sits before Cancel, and only while the booking is still
                           Pending — once reception has checked the patient in, the date is not
-                          the thing anyone is changing. Ordering matters here: bookings.cancelling used to
+                          the thing anyone is changing. Ordering matters here: cancelling used to
                           be the only way to change a booking, so it was doing duty as both, and
                           a patient who only wanted a different Tuesday gave their slot up to get
                           it. The gentler action goes first. */}
