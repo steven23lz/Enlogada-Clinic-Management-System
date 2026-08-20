@@ -127,7 +127,7 @@ test.describe('Ticket release gating (API)', () => {
 
     const uploadRes = await apiContext.post(`${API}/results/${visitTestId}`, {
       headers: { Authorization: `Bearer ${labToken}` },
-      data: { findings: 'should never be recorded', remarks: '', fileUrl: null }
+      data: { findings: 'should never be recorded', remarks: '' }
     });
     expect(uploadRes.status()).toBe(403);
   });
@@ -161,7 +161,7 @@ test.describe('Ticket release gating (API)', () => {
 
     const uploadRes = await apiContext.post(`${API}/results/${visitTestId}`, {
       headers: { Authorization: `Bearer ${labToken}` },
-      data: { findings: 'CBC within normal limits.', remarks: '', fileUrl: null }
+      data: { findings: 'CBC within normal limits.', remarks: '' }
     });
     expect(uploadRes.status()).toBe(201);
 
@@ -181,7 +181,7 @@ test.describe('Ticket release gating (API)', () => {
 
     await apiContext.post(`${API}/results/${visitTestId}`, {
       headers: { Authorization: `Bearer ${labToken}` },
-      data: { findings: 'Findings.', remarks: '', fileUrl: null }
+      data: { findings: 'Findings.', remarks: '' }
     });
     const releaseRes = await apiContext.post(`${API}/results/${visitTestId}/release`, {
       headers: { Authorization: `Bearer ${labToken}` }

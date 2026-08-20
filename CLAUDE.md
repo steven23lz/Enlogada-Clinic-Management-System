@@ -50,6 +50,7 @@ node src/scripts/migrateHmoDecisionTrail.js    # [1.27.0] why an HMO refused a t
 node src/scripts/migrateHmoClaimDecision.js    # [1.28.0] turning a whole claim down, + member number (--rollback reverses it)
 node src/scripts/migrateIndexHygiene.js       # [1.29.0] index the growing FKs, drop two redundant indexes (--rollback reverses it)
 node src/scripts/migrateRefundTimestamp.js    # [1.30.0] a reversal gets its own date, so a closed day is never restated (--rollback reverses it)
+node src/scripts/migrateClaimIntegrity.js     # [1.31.0] one live HMO claim per test; drops the dead test_results.file_url (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.

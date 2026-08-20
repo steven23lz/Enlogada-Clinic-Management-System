@@ -169,14 +169,14 @@ class ResultService {
   }
 
   async uploadResult(
-    { visitTestId, fileUrl, file, findings, remarks, releasedBy, amendmentReason, isCritical },
+    { visitTestId, file, findings, remarks, releasedBy, amendmentReason, isCritical },
     requestingUser
   ) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
 
-    // Fetched once, up front: doubles as (a) the file-preservation source when neither a new
-    // file nor fileUrl is provided, and (b) the correction signal below — a result already
-    // existing before this call means this is an edit, not a first-time release.
+    // Fetched once, up front: doubles as (a) the file-preservation source when no new file is
+    // attached, and (b) the correction signal below — a result already existing before this call
+    // means this is an edit, not a first-time release.
     const existing = await resultRepository.findResultByVisitTestId(visitTestId);
     const isCorrection = !!existing;
 
@@ -201,10 +201,6 @@ class ResultService {
       throw error;
     }
 
-    // Phase B: a real uploaded file (via multer) takes precedence over the legacy fileUrl text
-    // field — both can't meaningfully apply at once, and the frontend only ever sends one or
-    // the other.
-    let resolvedFileUrl = fileUrl || null;
     let filePath = null, fileOriginalName = null, fileMimeType = null, fileSizeBytes = null;
 
     if (file) {
@@ -212,8 +208,7 @@ class ResultService {
       fileOriginalName = file.originalname;
       fileMimeType = file.mimetype;
       fileSizeBytes = file.size;
-      resolvedFileUrl = null;
-    } else if (!fileUrl && existing) {
+    } else if (existing) {
       // Phase C: this call now also handles correcting an already-released result (editing
       // findings/remarks without re-attaching a file) — without this, re-submitting would
       // silently wipe a previously uploaded file's metadata, since createResult's upsert
@@ -222,7 +217,6 @@ class ResultService {
       fileOriginalName = existing.file_original_name;
       fileMimeType = existing.file_mime_type;
       fileSizeBytes = existing.file_size_bytes;
-      resolvedFileUrl = existing.file_url;
     }
 
     // Recording the findings and moving the ticket are one event.
@@ -253,7 +247,6 @@ class ResultService {
 
       const created = await resultRepository.createResult({
         visitTestId,
-        fileUrl: resolvedFileUrl,
         filePath,
         fileOriginalName,
         fileMimeType,

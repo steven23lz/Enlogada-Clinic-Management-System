@@ -65,12 +65,11 @@ class ResultController {
   async uploadResult(req, res, next) {
     try {
       const { visitTestId } = req.params;
-      const { fileUrl, findings, remarks, amendmentReason, isCritical } = req.body;
+      const { findings, remarks, amendmentReason, isCritical } = req.body;
       const releasedBy = req.user.userId;
 
       const result = await resultService.uploadResult({
         visitTestId,
-        fileUrl,
         file: req.file,
         findings,
         remarks,

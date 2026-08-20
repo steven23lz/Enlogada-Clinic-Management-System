@@ -1,5 +1,57 @@
 # Database Migration & Schema History
 
+## [1.31.0] - 2026-08-21 (One live claim per test; a dead column removed)
+
+Run `node src/scripts/migrateClaimIntegrity.js` on any database created before this version
+(`--rollback` reverses it).
+
+### One live claim per test
+
+`uq_hmo_request_visit_test (hmo_request_id, visit_test_id)` stopped a test being listed twice
+inside **one** claim. Nothing stopped the same test being claimed by two **different** requests,
+and `hmoService.createRequest` does not check either — two Pending claims, or a Pending beside an
+Approved, were reachable through the ordinary UI.
+
+That is not cosmetic. `paymentRepository.getBillingSummary` reads coverage with a correlated
+subquery *specifically* to survive it: a plain LEFT JOIN would duplicate the line item and inflate
+the bill subtotal. The schema permitted a state the biller had to defend against at read time.
+
+The new index is deliberately **partial**, not absolute:
+
+```sql
+CREATE UNIQUE INDEX uq_hmo_one_live_claim_per_test
+    ON hmo_request_tests (visit_test_id)
+ WHERE approval_status <> 'Rejected';
+```
+
+"One claim per test, ever" would have been wrong. If a provider refuses, re-claiming the same test
+with a second provider is legitimate and is what a patient carrying two cards expects. Rejected
+rows stay free to accumulate because each carries a reason and a decider [1.27.0] — the answer to
+"why am I being charged for this".
+
+Verified in both directions before shipping: a second live claim while the first is Pending is
+refused by the new index; a fresh claim once the first is Rejected is accepted.
+
+The correlated subquery stays. A refused claim and its retry can coexist, so "exactly one row per
+test" is still not something a JOIN may assume.
+
+The migration refuses to run if any test already carries two live claims, naming them, rather than
+picking one — which of two claims is real is a question for the HMO coordinator, and choosing here
+would quietly decide who pays.
+
+### Removed: `test_results.file_url`
+
+Superseded by `file_path` when result files stopped being served statically and started streaming
+through an authenticated, ownership-checked route. Carried since as a "nullable legacy fallback",
+populated in **0 of 42 rows**, while still being selected in four queries, branched on in
+`resultService`, and accepted as a field on the release endpoint — dead weight that read as a live
+alternative to whoever met it next. The whole thread is gone: controller, service, repository.
+
+The rollback restores the column but not its contents, which is honest rather than lossy: there
+were none.
+
+---
+
 ## [1.30.0] - 2026-08-21 (A reversal has its own date)
 
 Run `node src/scripts/migrateRefundTimestamp.js` on any database created before this version

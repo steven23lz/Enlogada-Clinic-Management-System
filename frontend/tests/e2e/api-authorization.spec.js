@@ -188,7 +188,7 @@ test.describe('Admin vs SuperAdmin — separation of duties', () => {
   test('Admin cannot author or release a clinical result', async () => {
     const upload = await apiContext.post(`${API}/results/1`, {
       headers: { Authorization: `Bearer ${adminToken}` },
-      data: { findings: 'should not be accepted', remarks: '', fileUrl: null },
+      data: { findings: 'should not be accepted', remarks: '' },
     });
     expect(upload.status()).toBe(403);
 

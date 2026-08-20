@@ -135,7 +135,7 @@ class ResultRepository {
              t.name as test_name, tc.name as category_name,
              pv.id as visit_id, pv.queue_number,
              p.id as patient_id, p.first_name, p.last_name,
-             tr.findings, tr.remarks as result_remarks, tr.file_url, tr.file_path, tr.released_at,
+             tr.findings, tr.remarks as result_remarks, tr.file_path, tr.released_at,
              tr.version, tr.is_critical, tr.critical_acknowledged_at,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM visit_tests vt
@@ -157,7 +157,7 @@ class ResultRepository {
     return result.rows;
   }
 
-  async createResult({ visitTestId, fileUrl, filePath, fileOriginalName, fileMimeType, fileSizeBytes, findings, remarks, releasedBy, amendmentReason, isCritical }) {
+  async createResult({ visitTestId, filePath, fileOriginalName, fileMimeType, fileSizeBytes, findings, remarks, releasedBy, amendmentReason, isCritical }) {
     // Writes a NEW VERSION rather than overwriting the previous one.
     //
     // This used to be `ON CONFLICT (visit_test_id) DO UPDATE`, which overwrote findings, remarks
@@ -178,7 +178,9 @@ class ResultRepository {
     // recorded" and is worse than either version winning.
     //
     // Phase B: file_path/file_original_name/file_mime_type/file_size_bytes back a real uploaded
-    // file; file_url remains as a nullable legacy fallback.
+    // file, streamed through an authenticated, ownership-checked route. [1.31.0] The legacy URL
+    // column that used to sit beside them is gone — superseded when result files stopped being
+    // served statically, and populated in no row anywhere by the time it was removed.
     return await db.withTransaction(async () => {
       const previous = (
         await db.query(
@@ -198,14 +200,14 @@ class ResultRepository {
 
       const inserted = await db.query(
         `INSERT INTO test_results (
-           visit_test_id, file_url, file_path, file_original_name, file_mime_type, file_size_bytes,
+           visit_test_id, file_path, file_original_name, file_mime_type, file_size_bytes,
            findings, remarks, released_by, recorded_by,
            version, is_current, amendment_reason, is_critical
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, $10, TRUE, $11, $12)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, TRUE, $10, $11)
          RETURNING *`,
         [
-          visitTestId, fileUrl || null, filePath || null, fileOriginalName || null,
+          visitTestId, filePath || null, fileOriginalName || null,
           fileMimeType || null, fileSizeBytes || null, findings, remarks, releasedBy,
           previous ? previous.version + 1 : 1,
           // Only meaningful on an amendment; the first version has nothing to explain.
@@ -348,7 +350,7 @@ class ResultRepository {
              -- addressed to them as much as to the patient. [1.23.0]
              pv.referring_physician, pv.referring_physician_prc,
              tr.id as result_id, tr.findings, tr.remarks as result_remarks,
-             tr.file_url, tr.file_path, tr.file_original_name, tr.released_at,
+             tr.file_path, tr.file_original_name, tr.released_at,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id

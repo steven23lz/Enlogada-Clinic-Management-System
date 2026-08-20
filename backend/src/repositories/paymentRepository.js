@@ -234,11 +234,12 @@ class PaymentRepository {
     `;
     const visitResult = await db.query(visitQuery, [patientVisitId]);
 
-    // Correlated subquery (not a LEFT JOIN) for hmo_approval_status: a visit_test could in
-    // principle be linked to more than one hmo_request_tests row (no constraint prevents it
-    // across different HMO requests), and a JOIN would then duplicate that test's line item,
-    // silently inflating the bill subtotal. The subquery guarantees exactly one row per test,
-    // taking the most recent linked request if more than one exists.
+    // Correlated subquery (not a LEFT JOIN) for hmo_approval_status. uq_hmo_one_live_claim_per_test
+    // [1.31.0] now allows at most one LIVE claim per test, but a refused claim and its retry can
+    // coexist — that is the point of the constraint being partial — so a test can still match more
+    // than one hmo_request_tests row and a JOIN would duplicate the line item, silently inflating
+    // the bill subtotal. The subquery guarantees exactly one row per test, taking the most recent
+    // linked request, which is the live one whenever a rejected predecessor exists.
     const itemsQuery = `
       SELECT vt.id as visit_test_id, vt.price_at_time, vt.status,
              t.name as test_name, tc.name as category_name,

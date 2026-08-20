@@ -93,7 +93,7 @@ test.describe('Laboratory worklist (API)', () => {
 
     const uploadRes = await apiContext.post(`${API}/results/${visitTestId}`, {
       headers: { Authorization: `Bearer ${labToken}` },
-      data: { findings: 'CBC within normal limits.', remarks: '', fileUrl: null },
+      data: { findings: 'CBC within normal limits.', remarks: '' },
     });
     expect(uploadRes.status()).toBe(201);
 
@@ -113,7 +113,7 @@ test.describe('Laboratory worklist (API)', () => {
     const { visitTestId } = await createLabVisitTest(apiContext, recToken);
     await apiContext.post(`${API}/results/${visitTestId}`, {
       headers: { Authorization: `Bearer ${labToken}` },
-      data: { findings: 'Done.', remarks: '', fileUrl: null },
+      data: { findings: 'Done.', remarks: '' },
     });
     await apiContext.post(`${API}/results/${visitTestId}/release`, { headers: { Authorization: `Bearer ${labToken}` } });
 

@@ -370,6 +370,20 @@ CREATE TABLE hmo_request_tests (
     CONSTRAINT uq_hmo_request_visit_test UNIQUE (hmo_request_id, visit_test_id)
 );
 
+-- At most ONE live claim per test. [1.31.0] uq_hmo_request_visit_test below stops a test being
+-- listed twice inside one claim; nothing stopped the same test being claimed by two DIFFERENT
+-- requests, and getBillingSummary had to defend against that at read time with a correlated
+-- subquery or a JOIN would duplicate the line item and inflate the bill.
+--
+-- Partial rather than absolute, on purpose: if a provider refuses, re-claiming the same test with
+-- a second provider is legitimate and is what a patient carrying two cards would expect. Rejected
+-- rows stay free to accumulate because each carries a reason and a decider [1.27.0] — the answer
+-- to "why am I being charged for this".
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hmo_one_live_claim_per_test
+    ON hmo_request_tests (visit_test_id)
+ WHERE approval_status <> 'Rejected';
+
+
 -- Undecided rows only: the screen that reads these is "claims still waiting on a decision", and
 -- decided rows are the overwhelming majority, read one claim at a time by id.
 CREATE INDEX IF NOT EXISTS idx_hmo_request_tests_pending
@@ -383,7 +397,6 @@ CREATE TABLE test_results (
     -- the partial unique index uq_test_results_current_per_test below. The old UNIQUE here is
     -- what made a correction overwrite the original — see migrations.md [1.15.0].
     visit_test_id INT NOT NULL,
-    file_url TEXT,
     file_path TEXT,
     file_original_name TEXT,
     file_mime_type TEXT,
