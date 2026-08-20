@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import { Button } from '../../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
@@ -18,13 +18,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import Pagination from '../../components/ui/pagination';
 import RescheduleDialog from '../../components/booking/RescheduleDialog';
 import BookingDialog from '../../components/booking/BookingDialog';
-import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
-import { validatePatientProfile } from '../../validations/patientValidation';
 import BookingPass from '../../components/BookingPass';
 import ResultDocument from '../../components/ResultDocument';
 import { formatDateTime, formatAppointmentDate } from '../../lib/date';
 import { isSafeResultUrl, downloadResultFile } from '../../lib/resultFile';
+import { usePatientProfiles } from '../../hooks/usePatientProfiles';
+import { useMyResultHistory } from '../../hooks/useMyResultHistory';
+import { useMyAppointments } from '../../hooks/useMyAppointments';
+import { useMyPayments } from '../../hooks/useMyPayments';
+import { useClinicReferenceData } from '../../hooks/useClinicReferenceData';
 import {
   Activity,
   Calendar, 
@@ -69,173 +72,13 @@ const LIST_PAGE_SIZE = 8;
 
 
 const ClientDashboard = ({ onNavigate }) => {
-  const [profiles, setProfiles] = useState([]);
-  const [selectedProfileId, setSelectedProfileId] = useState(null);
-  const [selectedProfile, setSelectedProfile] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [testCatalog, setTestCatalog] = useState([]);
-  const [patientTypes, setPatientTypes] = useState([]);
-  const [hmoProviders, setHmoProviders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filterCategory, setFilterCategory] = useState('All');
-  const [searchFilter, setSearchFilter] = useState('');
-
-  // New Profile Form
-  const [showAddProfile, setShowAddProfile] = useState(false);
-  const [newProfileData, setNewProfileData] = useState({
-    firstName: '',
-    lastName: '',
-    birthdate: '',
-    sex: 'Male',
-    address: '',
-    contactNumber: '',
-    emergencyContact: '',
-    patientTypeId: ''
-  });
-  const [isAddingProfile, setIsAddingProfile] = useState(false);
-  const [addProfileError, setAddProfileError] = useState('');
-
-  // Edit Profile Form (Module 4: Patient Management)
-  const [showEditProfile, setShowEditProfile] = useState(false);
-  const [editProfileData, setEditProfileData] = useState({
-    firstName: '',
-    lastName: '',
-    birthdate: '',
-    sex: 'Male',
-    address: '',
-    contactNumber: '',
-    emergencyContact: '',
-    patientTypeId: ''
-  });
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [editProfileError, setEditProfileError] = useState('');
-
-  // Appointment Booking Wizard State
-
-  // My Appointments (Module 3: view/cancel own appointments)
-  const [appointments, setAppointments] = useState([]);
-  const [appointmentsLoading, setAppointmentsLoading] = useState(true);
-  const [appointmentsPage, setAppointmentsPage] = useState(1);
-  const [cancelTarget, setCancelTarget] = useState(null);
-  // The report currently open in the inline viewer, or null. Held here rather than per-row so
-  // only one blob is ever alive at a time — see the revoke note in ResultDocument.
   const [previewDoc, setPreviewDoc] = useState(null);
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelError, setCancelError] = useState('');
 
-  // Payment History (Module 14: client-side payment visibility)
-  const [paymentHistory, setPaymentHistory] = useState([]);
-  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(true);
-  const [paymentHistoryPage, setPaymentHistoryPage] = useState(1);
-
-  // Online payment (GCash / Maya). `gateway.available` is false whenever the deployment has no
-  // merchant credentials configured, in which case no online-payment option is rendered at all
-  // and the patient simply pays at the counter — the pre-existing behaviour.
-  const [gateway, setGateway] = useState({ available: false, methods: [] });
-  const [payingAppointmentId, setPayingAppointmentId] = useState(null);
-  // The booking currently open in the reschedule dialog, or null. Held as the whole appointment
-  // rather than an id so the dialog can show what is being moved without a second lookup.
-  const [reschedulingAppointment, setReschedulingAppointment] = useState(null);
-  const [payError, setPayError] = useState('');
-
-  const fetchProfiles = useCallback(async () => {
-    try {
-      const response = await api.get('/patients/my-profiles');
-      const list = response.data.data.patients;
-      setProfiles(list);
-      if (list.length > 0 && !selectedProfileId) {
-        setSelectedProfileId(list[0].id.toString());
-      }
-    } catch (err) {
-      console.error('Failed to fetch patient profiles:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedProfileId]);
-
-  const fetchStaticData = useCallback(async () => {
-    try {
-      const testsRes = await api.get('/tests');
-      setTestCatalog(testsRes.data.data.tests);
-      
-      const typesRes = await api.get('/patients/types');
-      setPatientTypes(typesRes.data.data.patientTypes);
-
-      const hmoRes = await api.get('/hmo/providers');
-      setHmoProviders((hmoRes.data.data.providers || []).filter(p => p.is_active));
-    } catch (err) {
-      console.error('Failed to fetch catalog data:', err);
-    }
-  }, []);
-
-  const fetchHistory = useCallback(async (patientId) => {
-    try {
-      const response = await api.get(`/results/history/${patientId}`);
-      setHistory(response.data.data.results);
-    } catch (err) {
-      console.error('Failed to fetch diagnostic history:', err);
-    }
-  }, []);
-
-  const fetchAppointments = useCallback(async () => {
-    setAppointmentsLoading(true);
-    try {
-      const response = await api.get('/appointments/my-bookings');
-      setAppointments(response.data.data.bookings || []);
-    } catch (err) {
-      console.error('Failed to fetch appointments:', err);
-    } finally {
-      setAppointmentsLoading(false);
-    }
-  }, []);
-
-  const fetchPaymentHistory = useCallback(async () => {
-    setPaymentHistoryLoading(true);
-    try {
-      const response = await api.get('/payments/my-payments');
-      setPaymentHistory(response.data.data.payments || []);
-    } catch (err) {
-      console.error('Failed to fetch payment history:', err);
-    } finally {
-      setPaymentHistoryLoading(false);
-    }
-  }, []);
-
-  const fetchGatewayStatus = useCallback(async () => {
-    try {
-      const response = await api.get('/payments/gateway/status');
-      setGateway(response.data.data.gateway || { available: false, methods: [] });
-    } catch {
-      // Treat any failure as "not available" — never offer a payment route we can't confirm.
-      setGateway({ available: false, methods: [] });
-    }
-  }, []);
-
-  // Redirects the browser to the provider's own hosted page (GCash / Maya). The visit is NOT
-  // marked paid here or on return — only the signed provider webhook can do that — so this
-  // function's job ends at the redirect.
-  const handlePayOnline = async (appointment, method) => {
-    setPayError('');
-    setPayingAppointmentId(appointment.id);
-    try {
-      const response = await api.post('/payments/gateway/checkout', {
-        patientVisitId: appointment.patient_visit_id,
-        paymentMethod: method
-      });
-      window.location.href = response.data.data.checkout.checkoutUrl;
-    } catch (err) {
-      setPayError(err.response?.data?.message || `Could not start the ${method} payment. Please try again.`);
-      setPayingAppointmentId(null);
-    }
-  };
-
-  useEffect(() => {
-    fetchProfiles();
-    fetchStaticData();
-    fetchAppointments();
-    fetchPaymentHistory();
-    fetchGatewayStatus();
-  }, [fetchProfiles, fetchStaticData, fetchAppointments, fetchPaymentHistory, fetchGatewayStatus]);
+  const reference = useClinicReferenceData();
+  const profiles = usePatientProfiles();
+  const results = useMyResultHistory({ patientId: profiles.selectedId });
+  const bookings = useMyAppointments();
+  const payments = useMyPayments();
 
   // Returning from the provider's hosted page. The URL flag is presentational only — it says
   // "the browser came back", not "the money arrived", and is deliberately not trusted to mark
@@ -248,146 +91,22 @@ const ClientDashboard = ({ onNavigate }) => {
     if (!outcome) return;
 
     if (outcome === 'success') {
-      setPayError('');
-      fetchAppointments();
-      fetchPaymentHistory();
+      bookings.clearPayError();
+      bookings.reload();
+      payments.reload();
     } else if (outcome === 'cancelled') {
-      setPayError('Payment was cancelled. Your booking is still reserved — you can pay again below or at the clinic.');
+      bookings.notePaymentCancelled();
     }
 
     window.history.replaceState({}, '', window.location.pathname);
-  }, [fetchAppointments, fetchPaymentHistory]);
-
-  useEffect(() => {
-    if (selectedProfileId) {
-      fetchHistory(selectedProfileId);
-      const active = profiles.find(p => p.id === parseInt(selectedProfileId, 10));
-      setSelectedProfile(active || null);
-    } else {
-      setSelectedProfile(null);
-      setHistory([]);
-    }
-  }, [selectedProfileId, profiles, fetchHistory]);
-
-  const handleAddProfile = async (e) => {
-    e.preventDefault();
-    setAddProfileError('');
-
-    const validationError = validatePatientProfile(newProfileData);
-    if (validationError) {
-      setAddProfileError(validationError);
-      return;
-    }
-
-    setIsAddingProfile(true);
-    try {
-      const response = await api.post('/patients', newProfileData);
-      const created = response.data.data.patient;
-      setNewProfileData({
-        firstName: '',
-        lastName: '',
-        birthdate: '',
-        sex: 'Male',
-        address: '',
-        contactNumber: '',
-        emergencyContact: '',
-        patientTypeId: ''
-      });
-      setShowAddProfile(false);
-      await fetchProfiles();
-      setSelectedProfileId(created.id.toString());
-    } catch (err) {
-      setAddProfileError(err.response?.data?.message || 'Failed to create patient profile');
-    } finally {
-      setIsAddingProfile(false);
-    }
-  };
-
-  // pg returns birthdate as a full ISO instant string (see Module 3 report for why) — convert
-  // to the local calendar date an <input type="date"> expects, without a UTC day-shift.
-  const toDateInputValue = (value) => {
-    if (!value) return '';
-    const d = new Date(value);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-
-  const handleOpenEditProfile = () => {
-    if (!selectedProfile) return;
-    setEditProfileError('');
-    setEditProfileData({
-      firstName: selectedProfile.first_name || '',
-      lastName: selectedProfile.last_name || '',
-      birthdate: toDateInputValue(selectedProfile.birthdate),
-      sex: selectedProfile.sex || 'Male',
-      address: selectedProfile.address || '',
-      contactNumber: selectedProfile.contact_number || '',
-      emergencyContact: selectedProfile.emergency_contact || '',
-      patientTypeId: selectedProfile.patient_type_id ? selectedProfile.patient_type_id.toString() : ''
-    });
-    setShowEditProfile(true);
-  };
-
-  const handleEditProfile = async (e) => {
-    e.preventDefault();
-    setEditProfileError('');
-
-    const validationError = validatePatientProfile(editProfileData);
-    if (validationError) {
-      setEditProfileError(validationError);
-      return;
-    }
-
-    setIsEditingProfile(true);
-    try {
-      await api.put(`/patients/${selectedProfile.id}`, editProfileData);
-      setShowEditProfile(false);
-      await fetchProfiles();
-    } catch (err) {
-      setEditProfileError(err.response?.data?.message || 'Failed to update patient profile');
-    } finally {
-      setIsEditingProfile(false);
-    }
-  };
+    // Both reloads are stable useCallbacks; the rule cannot see that through the hook objects,
+    // and depending on the objects themselves would re-run this on every render — replaying the
+    // banner the last line just stripped the query string to prevent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
-
-
-  const handleRequestCancelAppointment = (appointment) => {
-    setCancelError('');
-    setCancelTarget(appointment);
-  };
-
-  const confirmCancelAppointment = async () => {
-    if (!cancelTarget) return;
-    setCancelling(true);
-    setCancelError('');
-    try {
-      await api.put(`/appointments/${cancelTarget.id}/cancel`);
-      setCancelTarget(null);
-      fetchAppointments();
-    } catch (err) {
-      setCancelError(err.response?.data?.message || 'Failed to cancel appointment.');
-    } finally {
-      setCancelling(false);
-    }
-  };
-
-
-  const filteredHistory = history.filter(item => {
-    const matchesCategory = filterCategory === 'All' || item.category_name === filterCategory;
-    const matchesSearch = !searchFilter || 
-      item.test_name.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      item.category_name.toLowerCase().includes(searchFilter.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
-
-  const pendingCount = history.filter(h => h.test_status === 'Pending' || h.test_status === 'Processing').length;
-  const completedCount = history.filter(h => h.test_status === 'Completed').length;
-
-  if (loading) {
+  if (profiles.loading) {
     return (
       <DashboardLayout onNavigate={onNavigate} activeTab="dashboard">
         <div className="flex-1 flex flex-col items-center justify-center space-y-3 py-16">
@@ -402,9 +121,9 @@ const ClientDashboard = ({ onNavigate }) => {
   // patient can actually act on: a far-future cancelled booking outranks tomorrow's paid visit,
   // so a QR booking pass could sit pages deep behind rows that do nothing. Order by what the
   // patient needs — still-open bookings first (soonest first, since the next visit is the one
-  // that matters), then closed ones (most recent first, as history).
+  // that matters), then closed ones (most recent first, as history usually reads).
   const isOpenBooking = (a) => a.status !== 'Cancelled' && a.status !== 'Completed';
-  const sortedAppointments = [...appointments].sort((a, b) => {
+  const sortedAppointments = [...bookings.appointments].sort((a, b) => {
     if (isOpenBooking(a) !== isOpenBooking(b)) return isOpenBooking(a) ? -1 : 1;
     const da = new Date(a.scheduled_date).getTime();
     const db = new Date(b.scheduled_date).getTime();
@@ -412,15 +131,15 @@ const ClientDashboard = ({ onNavigate }) => {
   });
 
   const appointmentsTotalPages = Math.max(1, Math.ceil(sortedAppointments.length / LIST_PAGE_SIZE));
-  const safeAppointmentsPage = Math.min(appointmentsPage, appointmentsTotalPages);
+  const safeAppointmentsPage = Math.min(bookings.page, appointmentsTotalPages);
   const pagedAppointments = sortedAppointments.slice(
     (safeAppointmentsPage - 1) * LIST_PAGE_SIZE,
     safeAppointmentsPage * LIST_PAGE_SIZE
   );
 
-  const paymentHistoryTotalPages = Math.max(1, Math.ceil(paymentHistory.length / LIST_PAGE_SIZE));
-  const safePaymentHistoryPage = Math.min(paymentHistoryPage, paymentHistoryTotalPages);
-  const pagedPaymentHistory = paymentHistory.slice(
+  const paymentHistoryTotalPages = Math.max(1, Math.ceil(payments.payments.length / LIST_PAGE_SIZE));
+  const safePaymentHistoryPage = Math.min(payments.page, paymentHistoryTotalPages);
+  const pagedPaymentHistory = payments.payments.slice(
     (safePaymentHistoryPage - 1) * LIST_PAGE_SIZE,
     safePaymentHistoryPage * LIST_PAGE_SIZE
   );
@@ -437,13 +156,13 @@ const ClientDashboard = ({ onNavigate }) => {
             </div>
             <div>
               <span className="field-label">Active Profile</span>
-              {profiles.length > 0 ? (
-                <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
+              {profiles.profiles.length > 0 ? (
+                <Select value={profiles.selectedId} onValueChange={profiles.setSelectedId}>
                   <SelectTrigger className="w-64 border-0 p-0 font-bold text-slate-800 focus:ring-0 focus:outline-none bg-transparent" aria-label="Active patient profile">
                     <SelectValue placeholder="Select patient profile" />
                   </SelectTrigger>
                   <SelectContent>
-                    {profiles.map(p => (
+                    {profiles.profiles.map(p => (
                       <SelectItem key={p.id} value={p.id.toString()}>
                         {p.first_name} {p.last_name} ({p.patient_type_name || 'Patient'})
                       </SelectItem>
@@ -451,12 +170,12 @@ const ClientDashboard = ({ onNavigate }) => {
                   </SelectContent>
                 </Select>
               ) : (
-                <span className="text-sm text-gray-500 font-medium italic">No profiles created yet</span>
+                <span className="text-sm text-gray-500 font-medium italic">No profiles.profiles created yet</span>
               )}
             </div>
           </div>
 
-          <Dialog open={showAddProfile} onOpenChange={(open) => { setShowAddProfile(open); if (!open) setAddProfileError(''); }}>
+          <Dialog open={profiles.showAdd} onOpenChange={profiles.openAdd}>
             <DialogTrigger asChild>
               <Button className="flex items-center space-x-2 rounded-xl font-bold text-xs cursor-pointer transition-all">
                 <UserPlus className="w-4 h-4" />
@@ -470,11 +189,11 @@ const ClientDashboard = ({ onNavigate }) => {
                   Register a profile for yourself or a family dependent.
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleAddProfile} className="space-y-4 pt-2">
-                {addProfileError && (
+              <form onSubmit={profiles.add} className="space-y-4 pt-2">
+                {profiles.addError && (
                   <div role="alert" className="alert alert-error">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                    <span>{addProfileError}</span>
+                    <span>{profiles.addError}</span>
                   </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -482,9 +201,9 @@ const ClientDashboard = ({ onNavigate }) => {
                     <label htmlFor="clientdashboard-first-name" className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
                     <Input id="clientdashboard-first-name"
                       placeholder="Juan"
-                      value={newProfileData.firstName}
-                      onChange={e => setNewProfileData({...newProfileData, firstName: e.target.value})}
-                      disabled={isAddingProfile}
+                      value={profiles.addDraft.firstName}
+                      onChange={e => profiles.setAddDraft({...profiles.addDraft, firstName: e.target.value})}
+                      disabled={profiles.adding}
                       required
                     />
                   </div>
@@ -492,9 +211,9 @@ const ClientDashboard = ({ onNavigate }) => {
                     <label htmlFor="clientdashboard-last-name" className="text-xs font-semibold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
                     <Input id="clientdashboard-last-name"
                       placeholder="Dela Cruz"
-                      value={newProfileData.lastName}
-                      onChange={e => setNewProfileData({...newProfileData, lastName: e.target.value})}
-                      disabled={isAddingProfile}
+                      value={profiles.addDraft.lastName}
+                      onChange={e => profiles.setAddDraft({...profiles.addDraft, lastName: e.target.value})}
+                      disabled={profiles.adding}
                       required
                     />
                   </div>
@@ -505,18 +224,18 @@ const ClientDashboard = ({ onNavigate }) => {
                     <label htmlFor="clientdashboard-birthdate" className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
                     <Input id="clientdashboard-birthdate"
                       type="date"
-                      value={newProfileData.birthdate}
-                      onChange={e => setNewProfileData({...newProfileData, birthdate: e.target.value})}
-                      disabled={isAddingProfile}
+                      value={profiles.addDraft.birthdate}
+                      onChange={e => profiles.setAddDraft({...profiles.addDraft, birthdate: e.target.value})}
+                      disabled={profiles.adding}
                       required
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-600 uppercase" htmlFor="clientdashboard-sex">Sex <span className="text-rose-600">*</span></label>
                     <Select
-                      value={newProfileData.sex}
-                      onValueChange={val => setNewProfileData({...newProfileData, sex: val})}
-                      disabled={isAddingProfile}
+                      value={profiles.addDraft.sex}
+                      onValueChange={val => profiles.setAddDraft({...profiles.addDraft, sex: val})}
+                      disabled={profiles.adding}
                     >
                       <SelectTrigger id="clientdashboard-sex">
                         <SelectValue />
@@ -534,23 +253,23 @@ const ClientDashboard = ({ onNavigate }) => {
                     <label htmlFor="clientdashboard-contact-number" className="text-xs font-semibold text-gray-600 uppercase">Contact Number</label>
                     <Input id="clientdashboard-contact-number"
                       placeholder="09171234567"
-                      value={newProfileData.contactNumber}
-                      onChange={e => setNewProfileData({...newProfileData, contactNumber: e.target.value})}
-                      disabled={isAddingProfile}
+                      value={profiles.addDraft.contactNumber}
+                      onChange={e => profiles.setAddDraft({...profiles.addDraft, contactNumber: e.target.value})}
+                      disabled={profiles.adding}
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-600 uppercase" htmlFor="clientdashboard-patient-billing-category">Patient Billing Category <span className="text-rose-600">*</span></label>
                     <Select
-                      value={newProfileData.patientTypeId}
-                      onValueChange={val => setNewProfileData({...newProfileData, patientTypeId: val})}
-                      disabled={isAddingProfile}
+                      value={profiles.addDraft.patientTypeId}
+                      onValueChange={val => profiles.setAddDraft({...profiles.addDraft, patientTypeId: val})}
+                      disabled={profiles.adding}
                     >
                       <SelectTrigger id="clientdashboard-patient-billing-category">
                         <SelectValue placeholder="Category" />
                       </SelectTrigger>
                       <SelectContent>
-                        {patientTypes.map(type => (
+                        {reference.patientTypes.map(type => (
                           <SelectItem key={type.id} value={type.id.toString()}>
                             {type.name}
                           </SelectItem>
@@ -564,9 +283,9 @@ const ClientDashboard = ({ onNavigate }) => {
                   <label htmlFor="clientdashboard-address" className="text-xs font-semibold text-gray-600 uppercase">Address</label>
                   <Input id="clientdashboard-address"
                     placeholder="Barangay, City, Province"
-                    value={newProfileData.address}
-                    onChange={e => setNewProfileData({...newProfileData, address: e.target.value})}
-                    disabled={isAddingProfile}
+                    value={profiles.addDraft.address}
+                    onChange={e => profiles.setAddDraft({...profiles.addDraft, address: e.target.value})}
+                    disabled={profiles.adding}
                   />
                 </div>
 
@@ -574,16 +293,16 @@ const ClientDashboard = ({ onNavigate }) => {
                   <label htmlFor="clientdashboard-emergency-contact" className="text-xs font-semibold text-gray-600 uppercase">Emergency Contact</label>
                   <Input id="clientdashboard-emergency-contact"
                     placeholder="Name & Contact Number"
-                    value={newProfileData.emergencyContact}
-                    onChange={e => setNewProfileData({...newProfileData, emergencyContact: e.target.value})}
-                    disabled={isAddingProfile}
+                    value={profiles.addDraft.emergencyContact}
+                    onChange={e => profiles.setAddDraft({...profiles.addDraft, emergencyContact: e.target.value})}
+                    disabled={profiles.adding}
                   />
                 </div>
 
                 <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
-                  <Button type="button" variant="outline" onClick={() => setShowAddProfile(false)} disabled={isAddingProfile}>Cancel</Button>
-                  <Button type="submit"  disabled={isAddingProfile}>
-                    {isAddingProfile ? 'Saving...' : 'Save Profile'}
+                  <Button type="button" variant="outline" onClick={() => profiles.openAdd(false)} disabled={profiles.adding}>Cancel</Button>
+                  <Button type="submit"  disabled={profiles.adding}>
+                    {profiles.adding ? 'Saving...' : 'Save Profile'}
                   </Button>
                 </div>
               </form>
@@ -591,19 +310,19 @@ const ClientDashboard = ({ onNavigate }) => {
           </Dialog>
 
           {/* Edit Profile Dialog (Module 4: Patient Management) */}
-          <Dialog open={showEditProfile} onOpenChange={(open) => { setShowEditProfile(open); if (!open) setEditProfileError(''); }}>
+          <Dialog open={profiles.showEdit} onOpenChange={profiles.closeEdit}>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle className="text-lg font-bold text-slate-900">Edit Patient Profile</DialogTitle>
                 <DialogDescription>
-                  Update {selectedProfile?.first_name}'s details.
+                  Update {profiles.selected?.first_name}'s details.
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleEditProfile} className="space-y-4 pt-2">
-                {editProfileError && (
+              <form onSubmit={profiles.edit} className="space-y-4 pt-2">
+                {profiles.editError && (
                   <div role="alert" className="alert alert-error">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                    <span>{editProfileError}</span>
+                    <span>{profiles.editError}</span>
                   </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -611,9 +330,9 @@ const ClientDashboard = ({ onNavigate }) => {
                     <label htmlFor="clientdashboard-first-name" className="text-xs font-semibold text-gray-600 uppercase">First Name <span className="text-rose-600">*</span></label>
                     <Input id="clientdashboard-first-name"
                       placeholder="Juan"
-                      value={editProfileData.firstName}
-                      onChange={e => setEditProfileData({...editProfileData, firstName: e.target.value})}
-                      disabled={isEditingProfile}
+                      value={profiles.editDraft.firstName}
+                      onChange={e => profiles.setEditDraft({...profiles.editDraft, firstName: e.target.value})}
+                      disabled={profiles.editing}
                       required
                     />
                   </div>
@@ -621,9 +340,9 @@ const ClientDashboard = ({ onNavigate }) => {
                     <label htmlFor="clientdashboard-last-name" className="text-xs font-semibold text-gray-600 uppercase">Last Name <span className="text-rose-600">*</span></label>
                     <Input id="clientdashboard-last-name"
                       placeholder="Dela Cruz"
-                      value={editProfileData.lastName}
-                      onChange={e => setEditProfileData({...editProfileData, lastName: e.target.value})}
-                      disabled={isEditingProfile}
+                      value={profiles.editDraft.lastName}
+                      onChange={e => profiles.setEditDraft({...profiles.editDraft, lastName: e.target.value})}
+                      disabled={profiles.editing}
                       required
                     />
                   </div>
@@ -634,18 +353,18 @@ const ClientDashboard = ({ onNavigate }) => {
                     <label htmlFor="clientdashboard-birthdate" className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
                     <Input id="clientdashboard-birthdate"
                       type="date"
-                      value={editProfileData.birthdate}
-                      onChange={e => setEditProfileData({...editProfileData, birthdate: e.target.value})}
-                      disabled={isEditingProfile}
+                      value={profiles.editDraft.birthdate}
+                      onChange={e => profiles.setEditDraft({...profiles.editDraft, birthdate: e.target.value})}
+                      disabled={profiles.editing}
                       required
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-600 uppercase" htmlFor="clientdashboard-sex-2">Sex <span className="text-rose-600">*</span></label>
                     <Select
-                      value={editProfileData.sex}
-                      onValueChange={val => setEditProfileData({...editProfileData, sex: val})}
-                      disabled={isEditingProfile}
+                      value={profiles.editDraft.sex}
+                      onValueChange={val => profiles.setEditDraft({...profiles.editDraft, sex: val})}
+                      disabled={profiles.editing}
                     >
                       <SelectTrigger id="clientdashboard-sex-2">
                         <SelectValue />
@@ -663,23 +382,23 @@ const ClientDashboard = ({ onNavigate }) => {
                     <label htmlFor="clientdashboard-contact-number" className="text-xs font-semibold text-gray-600 uppercase">Contact Number</label>
                     <Input id="clientdashboard-contact-number"
                       placeholder="09171234567"
-                      value={editProfileData.contactNumber}
-                      onChange={e => setEditProfileData({...editProfileData, contactNumber: e.target.value})}
-                      disabled={isEditingProfile}
+                      value={profiles.editDraft.contactNumber}
+                      onChange={e => profiles.setEditDraft({...profiles.editDraft, contactNumber: e.target.value})}
+                      disabled={profiles.editing}
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-gray-600 uppercase" htmlFor="clientdashboard-patient-billing-category-3">Patient Billing Category <span className="text-rose-600">*</span></label>
                     <Select
-                      value={editProfileData.patientTypeId}
-                      onValueChange={val => setEditProfileData({...editProfileData, patientTypeId: val})}
-                      disabled={isEditingProfile}
+                      value={profiles.editDraft.patientTypeId}
+                      onValueChange={val => profiles.setEditDraft({...profiles.editDraft, patientTypeId: val})}
+                      disabled={profiles.editing}
                     >
                       <SelectTrigger id="clientdashboard-patient-billing-category-3">
                         <SelectValue placeholder="Category" />
                       </SelectTrigger>
                       <SelectContent>
-                        {patientTypes.map(type => (
+                        {reference.patientTypes.map(type => (
                           <SelectItem key={type.id} value={type.id.toString()}>
                             {type.name}
                           </SelectItem>
@@ -693,9 +412,9 @@ const ClientDashboard = ({ onNavigate }) => {
                   <label htmlFor="clientdashboard-address" className="text-xs font-semibold text-gray-600 uppercase">Address</label>
                   <Input id="clientdashboard-address"
                     placeholder="Barangay, City, Province"
-                    value={editProfileData.address}
-                    onChange={e => setEditProfileData({...editProfileData, address: e.target.value})}
-                    disabled={isEditingProfile}
+                    value={profiles.editDraft.address}
+                    onChange={e => profiles.setEditDraft({...profiles.editDraft, address: e.target.value})}
+                    disabled={profiles.editing}
                   />
                 </div>
 
@@ -703,16 +422,16 @@ const ClientDashboard = ({ onNavigate }) => {
                   <label htmlFor="clientdashboard-emergency-contact" className="text-xs font-semibold text-gray-600 uppercase">Emergency Contact</label>
                   <Input id="clientdashboard-emergency-contact"
                     placeholder="Name & Contact Number"
-                    value={editProfileData.emergencyContact}
-                    onChange={e => setEditProfileData({...editProfileData, emergencyContact: e.target.value})}
-                    disabled={isEditingProfile}
+                    value={profiles.editDraft.emergencyContact}
+                    onChange={e => profiles.setEditDraft({...profiles.editDraft, emergencyContact: e.target.value})}
+                    disabled={profiles.editing}
                   />
                 </div>
 
                 <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
-                  <Button type="button" variant="outline" onClick={() => setShowEditProfile(false)} disabled={isEditingProfile}>Cancel</Button>
-                  <Button type="submit"  disabled={isEditingProfile}>
-                    {isEditingProfile ? 'Saving...' : 'Save Changes'}
+                  <Button type="button" variant="outline" onClick={() => profiles.closeEdit(false)} disabled={profiles.editing}>Cancel</Button>
+                  <Button type="submit"  disabled={profiles.editing}>
+                    {profiles.editing ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </div>
               </form>
@@ -731,29 +450,29 @@ const ClientDashboard = ({ onNavigate }) => {
             <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
               <div className="space-y-1.5">
                 <h1 className="m-0 text-2xl font-bold tracking-tight text-white md:text-3xl">
-                  {selectedProfile ? `Welcome, ${selectedProfile.first_name}` : 'Welcome to Enlogada'}
+                  {profiles.selected ? `Welcome, ${profiles.selected.first_name}` : 'Welcome to Enlogada'}
                 </h1>
                 <p className="m-0 max-w-xl text-[13px] leading-relaxed text-slate-300">
-                  Book Laboratory, Ultrasound and X-Ray appointments, follow a visit as it moves through the clinic, and download your certified reports.
+                  Book Laboratory, Ultrasound and X-Ray bookings.appointments, follow a visit as it moves through the clinic, and download your certified reports.
                 </p>
               </div>
 
               {/* Action Button */}
               <BookingDialog
-                selectedProfileId={selectedProfileId}
-                selectedProfile={selectedProfile}
-                testCatalog={testCatalog}
-                hmoProviders={hmoProviders}
-                onBooked={() => { fetchHistory(selectedProfileId); fetchAppointments(); }}
+                selectedProfileId={profiles.selectedId}
+                selectedProfile={profiles.selected}
+                testCatalog={reference.testCatalog}
+                hmoProviders={reference.hmoProviders}
+                onBooked={() => { results.reload(); bookings.reload(); }}
               />
             </div>
 
             {/* Quick Metrics Bar inside Hero */}
             <div className="grid grid-cols-2 gap-3 border-t border-white/10 pt-5 md:grid-cols-4">
-              <MetricCard variant="dark" label="Pending Requests" value={pendingCount} icon={Clock} tone="amber" />
-              <MetricCard variant="dark" label="Completed Reports" value={completedCount} icon={CheckCircle} tone="emerald" />
-              <MetricCard variant="dark" label="Total Test History" value={history.length} icon={FileText} tone="slate" />
-              <MetricCard variant="dark" label="Billing Type" value={selectedProfile?.patient_type_name || 'Standard'} icon={Receipt} tone="green" />
+              <MetricCard variant="dark" label="Pending Requests" value={results.pendingCount} icon={Clock} tone="amber" />
+              <MetricCard variant="dark" label="Completed Reports" value={results.completedCount} icon={CheckCircle} tone="emerald" />
+              <MetricCard variant="dark" label="Total Test History" value={results.history.length} icon={FileText} tone="slate" />
+              <MetricCard variant="dark" label="Billing Type" value={profiles.selected?.patient_type_name || 'Standard'} icon={Receipt} tone="green" />
             </div>
 
           </div>
@@ -783,8 +502,8 @@ const ClientDashboard = ({ onNavigate }) => {
               <ToolbarSpacer />
               <SearchInput
                 placeholder="Search test..."
-                value={searchFilter}
-                onChange={e => setSearchFilter(e.target.value)}
+                value={results.search}
+                onChange={e => results.setSearch(e.target.value)}
                 containerClassName="w-full sm:w-48"
               />
 
@@ -794,9 +513,9 @@ const ClientDashboard = ({ onNavigate }) => {
                   {['All', 'Laboratory', 'Ultrasound', 'Xray', '2D Echo', 'ECG'].map(cat => (
                     <button
                       key={cat}
-                      onClick={() => setFilterCategory(cat)}
+                      onClick={() => results.setCategory(cat)}
                       className={`cursor-pointer rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors ${
-                        filterCategory === cat
+                        results.category === cat
                           ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
                           : 'bg-transparent text-slate-500 hover:text-slate-800'
                       }`}
@@ -809,8 +528,8 @@ const ClientDashboard = ({ onNavigate }) => {
 
             {/* Test Cards List */}
             <div className="space-y-3">
-              {filteredHistory.length > 0 ? (
-                filteredHistory.map(item => (
+              {results.filtered.length > 0 ? (
+                results.filtered.map(item => (
                   <Card key={item.visit_test_id} className="border-[#e6ebf1] rounded-xl hover:shadow-raised transition-all">
                     <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div className="flex items-start space-x-3.5">
@@ -865,7 +584,7 @@ const ClientDashboard = ({ onNavigate }) => {
                             <div className="bg-gray-50 border border-[#e6ebf1] rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                               <div>
                                 <span className="text-gray-400 font-bold text-meta uppercase block">Patient Name</span>
-                                <span className="font-bold text-slate-900">{selectedProfile?.first_name} {selectedProfile?.last_name}</span>
+                                <span className="font-bold text-slate-900">{profiles.selected?.first_name} {profiles.selected?.last_name}</span>
                               </div>
                               <div>
                                 <span className="text-gray-400 font-bold text-meta uppercase block">Examination</span>
@@ -927,7 +646,7 @@ const ClientDashboard = ({ onNavigate }) => {
                                         onClick={() => setPreviewDoc({
                                           visitTestId: item.visit_test_id,
                                           testName: item.test_name,
-                                          patientName: `${selectedProfile?.first_name || ''} ${selectedProfile?.last_name || ''}`.trim(),
+                                          patientName: `${profiles.selected?.first_name || ''} ${profiles.selected?.last_name || ''}`.trim(),
                                           fileName: item.file_original_name,
                                         })}
                                       >
@@ -1001,7 +720,7 @@ const ClientDashboard = ({ onNavigate }) => {
             </div>
           </TabsContent>
 
-          {/* My Appointments (Module 3: view/cancel own appointments) — full width now, no
+          {/* My Appointments (Module 3: view/cancel own bookings.appointments) — full width now, no
               more max-h scroll-box compression forced by sharing a column with two other
               cards.
 
@@ -1021,17 +740,17 @@ const ClientDashboard = ({ onNavigate }) => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4">
-                {payError && (
+                {bookings.payError && (
                   <div role="alert" className="alert alert-error mb-3">
                     <XCircle className="w-4 h-4 flex-shrink-0" />
-                    <span>{payError}</span>
+                    <span>{bookings.payError}</span>
                   </div>
                 )}
                 <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                {appointmentsLoading ? (
-                  <p className="text-xs text-gray-400 text-center py-4">Loading appointments…</p>
-                ) : appointments.length === 0 ? (
-                  <p className="text-xs text-gray-400 text-center py-4 italic">No appointments booked yet.</p>
+                {bookings.loading ? (
+                  <p className="text-xs text-gray-400 text-center py-4">Loading bookings.appointments…</p>
+                ) : bookings.appointments.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-4 italic">No bookings.appointments booked yet.</p>
                 ) : (
                   pagedAppointments.map((appt) => {
                     const isCancellable = appt.status === 'Pending' || appt.status === 'Confirmed';
@@ -1042,7 +761,7 @@ const ClientDashboard = ({ onNavigate }) => {
                     // reasoning sounded right and the effect was to disable the feature: this
                     // clinic takes most payments at the counter, so the large majority of
                     // bookings never got a QR at all, and the receptionist's scanner had almost
-                    // nothing to read. GET /appointments/verify/:reference has always resolved a
+                    // nothing to read. GET /bookings.appointments/verify/:reference has always resolved a
                     // reference regardless of payment, so the scan worked; the patient simply had
                     // no code to present.
                     //
@@ -1051,7 +770,7 @@ const ClientDashboard = ({ onNavigate }) => {
                     // without a staff account to verify it against (see BookingPass.jsx).
                     // Payment is a separate fact, said separately below.
                     const showPass = isOpen;
-                    const showPayOptions = isOpen && !appt.is_paid && gateway.available;
+                    const showPayOptions = isOpen && !appt.is_paid && bookings.gateway.available;
                     return (
                       <div
                         key={appt.id}
@@ -1105,22 +824,22 @@ const ClientDashboard = ({ onNavigate }) => {
                               here — show it at the front desk on arrival.
                             </p>
                             <div className="flex gap-2">
-                              {gateway.methods.map((method) => (
+                              {bookings.gateway.methods.map((method) => (
                                 <Button
                                   key={method}
                                   type="button"
-                                  disabled={payingAppointmentId === appt.id}
-                                  onClick={() => handlePayOnline(appt, method)}
+                                  disabled={bookings.payingId === appt.id}
+                                  onClick={() => bookings.payOnline(appt, method)}
                                   className="flex-1 text-fine font-bold rounded-lg py-1.5"
                                 >
-                                  {payingAppointmentId === appt.id ? 'Redirecting…' : `Pay with ${method}`}
+                                  {bookings.payingId === appt.id ? 'Redirecting…' : `Pay with ${method}`}
                                 </Button>
                               ))}
                             </div>
                           </div>
                         )}
 
-                        {isOpen && !appt.is_paid && !gateway.available && (
+                        {isOpen && !appt.is_paid && !bookings.gateway.available && (
                           <p className="text-fine text-gray-500 bg-gray-100 border border-gray-200 rounded-lg p-2 m-0">
                             Please settle payment at the clinic counter on arrival. Your reference code above
                             is what the receptionist needs to check you in.
@@ -1129,7 +848,7 @@ const ClientDashboard = ({ onNavigate }) => {
 
                         {/* Reschedule sits before Cancel, and only while the booking is still
                             Pending — once reception has checked the patient in, the date is not
-                            the thing anyone is changing. Ordering matters here: cancelling used to
+                            the thing anyone is changing. Ordering matters here: bookings.cancelling used to
                             be the only way to change a booking, so it was doing duty as both, and
                             a patient who only wanted a different Tuesday gave their slot up to get
                             it. The gentler action goes first. */}
@@ -1139,7 +858,7 @@ const ClientDashboard = ({ onNavigate }) => {
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => setReschedulingAppointment(appt)}
+                                onClick={() => bookings.openReschedule(appt)}
                                 className="flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-fine font-bold"
                               >
                                 <CalendarClock className="h-3.5 w-3.5" />
@@ -1150,7 +869,7 @@ const ClientDashboard = ({ onNavigate }) => {
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => handleRequestCancelAppointment(appt)}
+                                onClick={() => bookings.requestCancel(appt)}
                                 className="flex-1 items-center justify-center gap-1.5 rounded-lg border-rose-200 py-1.5 text-fine font-bold text-rose-600 hover:bg-rose-50"
                               >
                                 <XCircle className="h-3.5 w-3.5" />
@@ -1165,12 +884,12 @@ const ClientDashboard = ({ onNavigate }) => {
                 )}
                 </div>
               </CardContent>
-              {appointments.length > 0 && (
+              {bookings.appointments.length > 0 && (
                 <Pagination
                   page={safeAppointmentsPage}
                   totalPages={appointmentsTotalPages}
-                  onPageChange={setAppointmentsPage}
-                  total={appointments.length}
+                  onPageChange={bookings.setPage}
+                  total={bookings.appointments.length}
                   pageSize={LIST_PAGE_SIZE}
                 />
               )}
@@ -1191,9 +910,9 @@ const ClientDashboard = ({ onNavigate }) => {
                 <h3 className="m-0 text-[13px] font-semibold text-slate-900">Payment History</h3>
               </div>
               <div className="space-y-2 p-4">
-                {paymentHistoryLoading ? (
+                {payments.loading ? (
                   <SkeletonList rows={3} />
-                ) : paymentHistory.length === 0 ? (
+                ) : payments.payments.length === 0 ? (
                   <EmptyState
                     compact
                     icon={Receipt}
@@ -1218,12 +937,12 @@ const ClientDashboard = ({ onNavigate }) => {
                   ))
                 )}
               </div>
-              {paymentHistory.length > 0 && (
+              {payments.payments.length > 0 && (
                 <Pagination
                   page={safePaymentHistoryPage}
                   totalPages={paymentHistoryTotalPages}
-                  onPageChange={setPaymentHistoryPage}
-                  total={paymentHistory.length} pageSize={LIST_PAGE_SIZE}
+                  onPageChange={payments.setPage}
+                  total={payments.payments.length} pageSize={LIST_PAGE_SIZE}
                 />
               )}
             </Panel>
@@ -1231,7 +950,7 @@ const ClientDashboard = ({ onNavigate }) => {
 
           {/* Patient Profile Summary + HMO info — grouped under one Profile tab */}
           <TabsContent value="profile" className="m-0 space-y-4 max-w-2xl">
-            {selectedProfile && (
+            {profiles.selected && (
               <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
                 <CardHeader className="bg-slate-50/80 border-b border-[#e6ebf1] py-3.5 flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
@@ -1241,7 +960,7 @@ const ClientDashboard = ({ onNavigate }) => {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={handleOpenEditProfile}
+                    onClick={profiles.openEdit}
                     aria-label="Edit patient profile"
                     className="h-7 w-7 p-0 border-gray-200 text-gray-500 hover:text-brand-600 hover:border-brand-500 rounded-lg"
                   >
@@ -1251,22 +970,22 @@ const ClientDashboard = ({ onNavigate }) => {
                 <CardContent className="p-4 space-y-3">
                   <div className="flex justify-between items-center text-xs border-b border-gray-50 pb-2">
                     <span className="text-gray-500 font-medium">Patient ID:</span>
-                    <span className="font-extrabold text-slate-900">PT-{selectedProfile.id}</span>
+                    <span className="font-extrabold text-slate-900">PT-{profiles.selected.id}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs border-b border-gray-50 pb-2">
                     <span className="text-gray-500 font-medium">Birthdate:</span>
                     <span className="font-bold text-slate-900">
-                      {new Date(selectedProfile.birthdate).toLocaleDateString()}
+                      {new Date(profiles.selected.birthdate).toLocaleDateString()}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-xs border-b border-gray-50 pb-2">
                     <span className="text-gray-500 font-medium">Contact:</span>
-                    <span className="font-bold text-slate-900">{selectedProfile.contact_number || 'N/A'}</span>
+                    <span className="font-bold text-slate-900">{profiles.selected.contact_number || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs pb-1">
                     <span className="text-gray-500 font-medium">Category:</span>
                     <Badge variant="secondary" className="font-bold text-meta bg-brand-50 text-brand-600">
-                      {selectedProfile.patient_type_name}
+                      {profiles.selected.patient_type_name}
                     </Badge>
                   </div>
                 </CardContent>
@@ -1289,22 +1008,22 @@ const ClientDashboard = ({ onNavigate }) => {
 
         {/* Cancel appointment confirmation */}
         <ConfirmDialog
-          open={!!cancelTarget}
-          onOpenChange={(open) => { if (!open) setCancelTarget(null); }}
+          open={!!bookings.cancelTarget}
+          onOpenChange={(open) => { if (!open) bookings.dismissCancel(); }}
           title="Cancel Appointment"
-          description={cancelTarget ? `Cancel your appointment on ${formatAppointmentDate(cancelTarget.scheduled_date)} at ${cancelTarget.scheduled_time?.slice(0, 5)}? This cannot be undone.` : ''}
+          description={bookings.cancelTarget ? `Cancel your appointment on ${formatAppointmentDate(bookings.cancelTarget.scheduled_date)} at ${bookings.cancelTarget.scheduled_time?.slice(0, 5)}? This cannot be undone.` : ''}
           confirmLabel="Cancel Appointment"
           cancelLabel="Keep Appointment"
-          onConfirm={confirmCancelAppointment}
-          loading={cancelling}
-          error={cancelError}
+          onConfirm={bookings.confirmCancel}
+          loading={bookings.cancelling}
+          error={bookings.cancelError}
         />
 
         <RescheduleDialog
-          open={Boolean(reschedulingAppointment)}
-          onOpenChange={(open) => { if (!open) setReschedulingAppointment(null); }}
-          appointment={reschedulingAppointment}
-          onRescheduled={() => fetchAppointments()}
+          open={Boolean(bookings.rescheduling)}
+          onOpenChange={(open) => { if (!open) bookings.openReschedule(null); }}
+          appointment={bookings.rescheduling}
+          onRescheduled={() => bookings.reload()}
         />
 
       </div>

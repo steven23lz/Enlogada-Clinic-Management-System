@@ -641,10 +641,10 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               )}
 
               <div className="space-y-1.5">
-                <label htmlFor="diagnosticdashboard-entry.findings-impression-required" className="field-label">Findings & Impression (Required)</label>
-                <textarea id="diagnosticdashboard-entry.findings-impression-required"
+                <label htmlFor="diagnosticdashboard-findings-impression-required" className="field-label">Findings & Impression (Required)</label>
+                <textarea id="diagnosticdashboard-findings-impression-required"
                   rows={6}
-                  placeholder="Enter detailed laboratory/imaging entry.findings, measurements, and impression..."
+                  placeholder="Enter detailed laboratory/imaging findings, measurements, and impression..."
                   value={entry.findings}
                   onChange={e => entry.setFindings(e.target.value)}
                   className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -653,8 +653,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="diagnosticdashboard-entry.remarks-recommendations-optional" className="field-label">Remarks / Recommendations (Optional)</label>
-                <Input id="diagnosticdashboard-entry.remarks-recommendations-optional"
+                <label htmlFor="diagnosticdashboard-remarks-recommendations-optional" className="field-label">Remarks / Recommendations (Optional)</label>
+                <Input id="diagnosticdashboard-remarks-recommendations-optional"
                   placeholder="e.g. Clinical correlation recommended..."
                   value={entry.remarks}
                   onChange={e => entry.setRemarks(e.target.value)}
