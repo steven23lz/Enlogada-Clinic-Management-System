@@ -761,7 +761,7 @@ const ClientDashboard = ({ onNavigate }) => {
                     // reasoning sounded right and the effect was to disable the feature: this
                     // clinic takes most payments at the counter, so the large majority of
                     // bookings never got a QR at all, and the receptionist's scanner had almost
-                    // nothing to read. GET /bookings.appointments/verify/:reference has always resolved a
+                    // nothing to read. GET /appointments/verify/:reference has always resolved a
                     // reference regardless of payment, so the scan worked; the patient simply had
                     // no code to present.
                     //

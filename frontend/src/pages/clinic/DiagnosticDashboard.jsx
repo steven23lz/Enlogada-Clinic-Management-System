@@ -120,7 +120,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   const CATEGORY_LABELS = { Xray: 'X-Ray', Ultrasound: 'Ultrasound (incl. 2D Echo)' };
   const categoryLabel = CATEGORY_LABELS[worklist.category] || worklist.category;
   // 'Processing' = released to this department, exam not yet done.
-  // 'Waiting for Release' = exam done and entry.findings recorded, awaiting authorisation.
+  // 'Waiting for Release' = exam done and findings recorded, awaiting authorisation.
   const processingCount = worklist.pending.filter(t => t.test_status === 'Processing').length;
   const awaitingReleaseCount = worklist.pending.filter(t => t.test_status === 'Waiting for Release').length;
   const pageTitle = mode === 'history' ? `${categoryLabel} Result History` : `${categoryLabel} Operations Worklist`;
