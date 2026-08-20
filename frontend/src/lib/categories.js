@@ -1,3 +1,4 @@
+import { FlaskConical, Scan, Stethoscope } from 'lucide-react';
 /**
  * One colour per diagnostic category, for the whole app. [1.28.0]
  *
@@ -45,6 +46,39 @@ const CATEGORY_TINTS = {
 };
 
 const UNMAPPED_TINT = 'bg-slate-100 text-slate-700';
+
+/**
+ * How a category is written on screen, where that differs from how the database spells it.
+ *
+ * Two entries, both earned: the column stores 'Xray' and a radiographer reads "X-Ray", and
+ * 'Ultrasound' covers 2D Echo as well — a technician looking at an Ultrasound worklist needs to
+ * know the echo studies are in it. Anything not listed is already correct as stored.
+ *
+ * Here rather than inside the diagnostic console, which declared it as a local object rebuilt on
+ * every render, so a second screen naming a category would have had to spell it a second time.
+ */
+export const CATEGORY_LABELS = {
+  Xray: 'X-Ray',
+  Ultrasound: 'Ultrasound (incl. 2D Echo)',
+};
+
+/**
+ * The icon a department is recognised by on its own worklist.
+ *
+ * Beside the label rather than inside the diagnostic console, for the same reason: one place
+ * that decides how a category presents itself. Laboratory is the fallback because it is the
+ * department with no distinctive instrument to draw.
+ */
+export function categoryIcon(name) {
+  if (name === 'Ultrasound') return Stethoscope;
+  if (name === 'Xray') return Scan;
+  return FlaskConical;
+}
+
+/** The display name for a category, falling back to whatever the database has. */
+export function categoryLabel(name) {
+  return CATEGORY_LABELS[name] || name;
+}
 
 /** The canonical key for a category name as the database happens to have spelled it. */
 export function categoryKey(name = '') {
