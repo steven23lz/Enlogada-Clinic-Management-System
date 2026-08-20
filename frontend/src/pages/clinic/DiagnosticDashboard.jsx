@@ -135,7 +135,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
           description={
             mode === 'history'
               ? `Every ${categoryLabel} result this department has released, including amended versions.`
-              : `Patients whose ${categoryLabel} exam has been paid for and released to this department. Record entry.findings, then authorise the release of the report.`
+              : `Patients whose ${categoryLabel} exam has been paid for and released to this department. Record findings, then authorise the release of the report.`
           }
         />
 
@@ -236,7 +236,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                               this screen gave no indication of age at all. */}
                           <WaitBadge since={test.visit_created_at} />
                         </div>
-                        {/* Age and sex, on the screen where entry.findings are recorded.
+                        {/* Age and sex, on the screen where findings are recorded.
                             Diagnostic reference ranges are banded by both — a haemoglobin that is
                             normal for a 40-year-old man is anaemia in a child — and the tech had
                             to open a second screen to find out which band applied. The query has
@@ -490,7 +490,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                   <p className="text-xs m-0">{viewingResult.result_remarks}</p>
                 </div>
               )}
-              {/* The attachment. This screen showed the entry.findings text and nothing about the file
+              {/* The attachment. This screen showed the findings text and nothing about the file
                   the modality actually uploaded, so verifying that the right scan went to the
                   right patient meant downloading it from somewhere else. */}
               {viewingResult?.file_path && (
@@ -601,7 +601,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
               )}
 
               {/* Phase C finding 02: past results for this same patient, surfaced at the point
-                  of writing new entry.findings — GET /results/history/:patientId already existed but
+                  of writing new findings — GET /results/history/:patientId already existed but
                   nothing on this screen ever called it. */}
               {(patientHistory.loading || patientHistory.results.length > 0) && (
                 <div className="space-y-1.5">
@@ -621,7 +621,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
                 </div>
               )}
 
-              {/* Quick Template Generator Buttons — scoped to this department's worklist.category */}
+              {/* Quick Template Generator Buttons — scoped to this department's category */}
               {TEMPLATES_BY_CATEGORY[worklist.category]?.length > 0 && (
                 <div className="space-y-1.5">
                   <span className="text-meta font-bold text-gray-500 uppercase tracking-wider block">Clinical Report Templates</span>
@@ -759,8 +759,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
           title={entry.isEditing ? 'Save Correction' : 'Authorize & Release Result'}
           description={entry.activeTest ? (
             entry.isEditing
-              ? `Save the corrected ${entry.activeTest.test_name} entry.findings for ${entry.activeTest.first_name} ${entry.activeTest.last_name}? The patient will receive a new "results ready" email.`
-              : `Release ${entry.activeTest.test_name} entry.findings for ${entry.activeTest.first_name} ${entry.activeTest.last_name}? This finalizes the result and cannot be undone from this screen.`
+              ? `Save the corrected ${entry.activeTest.test_name} findings for ${entry.activeTest.first_name} ${entry.activeTest.last_name}? The patient will receive a new "results ready" email.`
+              : `Release ${entry.activeTest.test_name} findings for ${entry.activeTest.first_name} ${entry.activeTest.last_name}? This finalizes the result and cannot be undone from this screen.`
           ) : ''}
           confirmLabel={entry.isEditing ? 'Save Correction' : 'Authorize & Release'}
           onConfirm={entry.release}
