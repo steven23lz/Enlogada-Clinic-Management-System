@@ -12,9 +12,17 @@ import { test, expect, request } from 'playwright/test';
  *
  * The fix widened the list, which is only safe because the peso figures stopped being derived
  * from it. Ten client-side reduce() calls across four screens used to sum whatever rows the
- * endpoint returned; every one of them would have begun counting refunds as revenue. So the two
- * halves are tested together here — the list showing MORE while the total shows the SAME is the
- * whole invariant, and asserting either alone would pass while the pair was broken.
+ * endpoint returned; every one of them would have begun counting refunds as revenue.
+ *
+ * [1.30.0] The figures are a period cash book: money IN bucketed by paid_at, money BACK bucketed
+ * by refunded_at, and `net` the difference. Collections are therefore never restated — a day that
+ * has been printed and filed keeps saying what it said — and a reversal lands on the day the
+ * drawer is actually short rather than on the day the receipt was originally issued.
+ *
+ * NOTE ON WORKERS: these tests assert exact deltas on the day's live totals, so they require the
+ * single worker playwright.config.js already sets. A second worker taking a payment concurrently
+ * would move `collected` between the two reads here and fail this file for a reason that is not a
+ * bug. Same constraint as the permission and password specs, for money rather than for state.
  */
 
 const BACKEND_URL = process.env.E2E_API_URL || 'http://localhost:5000';
@@ -128,7 +136,7 @@ test.describe('a reversed receipt stays in the cash-up, and stays out of the tot
     expect(row.receipt_number).toBe(payment.receipt_number);
   });
 
-  test('the refunded amount leaves collections and is reported as a reversal', async () => {
+  test('a reversal is reported beside collections, and does not restate them', async () => {
     const patient = await registerClientWithPatient(apiContext, 'RefundTotals');
     const payment = await payAWalkIn(apiContext, recToken, cashToken, patient.id);
     const amount = parseFloat(payment.amount);
@@ -137,22 +145,29 @@ test.describe('a reversed receipt stays in the cash-up, and stays out of the tot
     await refund(apiContext, cashToken, payment.id, 'Reversed for the totals assertion.');
     const after = await getLog(apiContext, cashToken);
 
-    // Collections drop by exactly the refund; the receipt count drops by one.
-    expect(Number(after.summary.collected)).toBeCloseTo(Number(before.summary.collected) - amount, 2);
-    expect(after.summary.receipts).toBe(before.summary.receipts - 1);
+    // Collections do NOT move. [1.30.0] This receipt was money taken in today, and it stays
+    // counted on the day it was taken whatever happens to it afterwards — otherwise reversing an
+    // older receipt silently rewrites a day that has already been printed and filed, and the
+    // sheet in the drawer stops agreeing with the screen with no way to tell which is right.
+    expect(Number(after.summary.collected)).toBeCloseTo(Number(before.summary.collected), 2);
+    expect(after.summary.receipts).toBe(before.summary.receipts);
 
-    // The money is named rather than silently dropped. A drawer short by a refund needs the
-    // refund on screen, which is why `reversed` is reported instead of netted off `collected`.
+    // The refund is reported beside it, bucketed by when it was HANDED BACK rather than when the
+    // money came in, so it lands on the day the drawer is actually short.
     expect(Number(after.summary.reversed)).toBeCloseTo(Number(before.summary.reversed) + amount, 2);
     expect(after.summary.reversals).toBe(before.summary.reversals + 1);
 
-    // The row is still in the list, so the list is now larger than the money in it. That pairing
-    // is exactly what makes a client-side reduce() over these rows wrong, and it is asserted
-    // here so re-deriving a total from the list fails in CI rather than on a cash-up sheet.
-    expect(after.transactions.length).toBe(before.transactions.length);
+    // What the drawer should hold. `reversed` is never netted off `collected` in the response,
+    // because a single reconciled total hides that a reversal happened — but the two together
+    // are the figure a cashier counts against, and it is this that drops by the refund.
+    const netBefore = Number(before.summary.collected) - Number(before.summary.reversed);
+    const netAfter = Number(after.summary.collected) - Number(after.summary.reversed);
+    expect(netAfter).toBeCloseTo(netBefore - amount, 2);
+
+    // And a reduce over the rows is still not any of these numbers — it counts the reversed
+    // receipt at full value, which is exactly why the peso figures come from `summary`.
     const naiveSum = after.transactions.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
-    expect(naiveSum).toBeGreaterThan(Number(after.summary.collected));
-    expect(naiveSum).toBeCloseTo(Number(after.summary.collected) + Number(after.summary.reversed), 2);
+    expect(naiveSum).toBeGreaterThan(netAfter);
   });
 
   test('the method splits add up to the collected total', async () => {

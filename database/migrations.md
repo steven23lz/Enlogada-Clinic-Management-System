@@ -1,5 +1,59 @@
 # Database Migration & Schema History
 
+## [1.30.0] - 2026-08-21 (A reversal has its own date)
+
+Run `node src/scripts/migrateRefundTimestamp.js` on any database created before this version
+(`--rollback` reverses it).
+
+### The problem
+
+`payments` carried `refund_reason` but no timestamp, so a reversal had no date of its own and the
+cash-up could only bucket it by `paid_at` — the day the money came **in**. Reversing a receipt
+from an earlier day therefore did two wrong things at once. Measured against the seeded data
+before the fix, reversing a ₱550.00 receipt paid on the 19th, on the 20th:
+
+| | before | after |
+|---|---|---|
+| 19th `collected` | 4,830.00 → **4,280.00** | 4,830.00, unchanged |
+| 20th `reversed` | **0.00** | 550.00 |
+
+The first row is the worse of the two. Restating a closed day means yesterday's figure changes
+after yesterday ended, so the cash-up sheet in the drawer and the screen disagree and neither is
+wrong — there is no date on which the clinic can say what it took.
+
+### The model
+
+A period cash book, which is what a daily drawer is:
+
+* `collected` — money taken **in** during the range, bucketed by `paid_at`, counted whatever
+  happens to the receipt later.
+* `reversed` — money handed **back** during the range, bucketed by `refunded_at`.
+* the drawer — `collected - reversed`. Reported as two figures, never one: netting hides that a
+  reversal happened, and a drawer short by a refund needs the refund named.
+
+A receipt paid and refunded on the same day reads as 550 in and 550 out rather than as nothing
+having happened, which is what the drawer actually did.
+
+### Added
+* `payments.refunded_at TIMESTAMP` — set on the way **into** `'Refunded'`/`'Cancelled'` and only
+  once, so a status change cannot move a reversal to a later date.
+* `idx_payments_refunded_at` — partial, `WHERE refunded_at IS NOT NULL`. Almost no payment is ever
+  reversed, so the rest have no business in this index.
+
+### Changed
+* `findTransactionSummary` buckets collections and reversals on different columns (above).
+* `findTransactions` matches the range on **either** date, so a receipt paid on the 19th and
+  reversed on the 20th appears in both days' logs — as an issued receipt in one and as the
+  reversal the cashier processed in the other. Without this the summary reported a `reversed`
+  figure with no row behind it.
+
+### Backfill
+Existing reversed rows get `refunded_at = paid_at`. That is a guess and deliberately the
+conservative one: it reproduces exactly what those rows did before, so no historical figure moves
+when the migration runs. `payments` has no `updated_at` to do better with.
+
+---
+
 ## [1.29.0] - 2026-08-18 (Index what grows; stop maintaining what nothing reads)
 
 Run `node src/scripts/migrateIndexHygiene.js` on any database created before this version

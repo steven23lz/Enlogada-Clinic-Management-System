@@ -434,6 +434,11 @@ CREATE TABLE payments (
     payment_status VARCHAR(50) DEFAULT 'Paid',
     refund_reason TEXT,
     paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- WHEN the receipt was reversed, which is a different day from when it was paid. [1.30.0]
+    -- The cash-up buckets money taken IN by paid_at and money handed BACK by this column, so
+    -- reversing an older receipt lands on the day the drawer is short instead of silently
+    -- restating a day that has already been printed and filed. NULL for anything not reversed.
+    refunded_at TIMESTAMP,
     -- Online payment gateway linkage (GCash / Maya via PayMongo hosted checkout). NULL for
     -- payments recorded at the counter by a cashier. A gateway payment is inserted as
     -- 'Pending' when checkout starts and only flips to 'Paid' when the signed
@@ -616,6 +621,9 @@ CREATE INDEX IF NOT EXISTS idx_patient_visits_status ON patient_visits(status);
 CREATE INDEX IF NOT EXISTS idx_visit_tests_status ON visit_tests(status);
 -- No single-column index on payments(payment_status): idx_payments_status_paid_at leads with
 -- that column and therefore already serves a bare status filter. [1.29.0]
+-- The cash-up's "what was reversed in this range" question; paid_at's index cannot serve it.
+-- Partial: almost no payment is ever reversed, so the rest have no business in this index. [1.30.0]
+CREATE INDEX IF NOT EXISTS idx_payments_refunded_at ON payments (refunded_at) WHERE refunded_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
 CREATE INDEX IF NOT EXISTS idx_appointments_scheduled ON appointments(scheduled_date, scheduled_time);
 -- The reminder sweep's own access path. Partial, because it only ever looks for bookings that are

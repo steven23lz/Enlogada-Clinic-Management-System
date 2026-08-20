@@ -99,6 +99,12 @@ class PaymentRepository {
     // paid_at cannot make that distinction — it is DEFAULT CURRENT_TIMESTAMP, so an abandoned
     // gateway session carries one too.
     //
+    // The range matches on EITHER date. [1.30.0] A receipt paid on the 19th and reversed on the
+    // 20th belongs in both days' logs, for different reasons: on the 19th it is a receipt that
+    // was issued, and on the 20th it is the reversal the cashier processed and has to account
+    // for. Matching only paid_at left the summary's `reversed` figure with no row behind it on
+    // the day it was reported.
+    //
     // Money totals do NOT come from this list any more; see findTransactionSummary. Widening a
     // list that ten client-side reduce() calls were summing is exactly how a refund would have
     // started counting as revenue.
@@ -106,10 +112,16 @@ class PaymentRepository {
       // Half-open range rather than a ::date cast: a B-tree index cannot serve a predicate on
       // an expression, so the cast turned every transaction lookup into a sequential scan of
       // payments — the table that grows fastest and is read on every cashier dashboard load.
-      whereText = `${ISSUED_RECEIPT} AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)`;
+      whereText = `${ISSUED_RECEIPT} AND (
+        (pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1))
+        OR (pay.refunded_at >= $1::date AND pay.refunded_at < ($2::date + 1))
+      )`;
       params.push(startDate, endDate);
     } else {
-      whereText = `${ISSUED_RECEIPT} AND pay.paid_at >= CURRENT_DATE AND pay.paid_at < (CURRENT_DATE + 1)`;
+      whereText = `${ISSUED_RECEIPT} AND (
+        (pay.paid_at >= CURRENT_DATE AND pay.paid_at < (CURRENT_DATE + 1))
+        OR (pay.refunded_at >= CURRENT_DATE AND pay.refunded_at < (CURRENT_DATE + 1))
+      )`;
     }
 
     const countRes = await db.query(`SELECT COUNT(*)::int AS total ${fromClause} ${whereText}`, params);
@@ -148,47 +160,56 @@ class PaymentRepository {
    */
   async findTransactionSummary({ startDate, endDate }) {
     const params = [];
-    let rangeText;
+    let inRange;
     if (startDate && endDate) {
-      rangeText = 'AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)';
+      inRange = (col) => `pay.${col} >= $1::date AND pay.${col} < ($2::date + 1)`;
       params.push(startDate, endDate);
     } else {
-      rangeText = 'AND pay.paid_at >= CURRENT_DATE AND pay.paid_at < (CURRENT_DATE + 1)';
+      inRange = (col) => `pay.${col} >= CURRENT_DATE AND pay.${col} < (CURRENT_DATE + 1)`;
     }
+
+    // Money IN during the range, and money BACK during the range — two different dates, which is
+    // the whole point of refunded_at existing. [1.30.0]
+    //
+    // `issued` deliberately does NOT test payment_status: a receipt issued on the 19th was money
+    // on the 19th whatever happens to it afterwards. Filtering it out once reversed restated a
+    // closed day, so the printed cash-up sheet and the screen disagreed with no way to tell which
+    // was right. A receipt paid and refunded on the same day now reads as 550 in and 550 out
+    // rather than as nothing having happened, which is what the drawer actually did.
+    const issued = inRange('paid_at');
+    const reversed = `pay.refunded_at IS NOT NULL AND ${inRange('refunded_at')}`;
 
     const queryText = `
       SELECT
-        COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_status = 'Paid'), 0)::numeric(12,2)
+        COALESCE(SUM(pay.amount) FILTER (WHERE ${issued}), 0)::numeric(12,2)
           AS collected,
-        COUNT(*) FILTER (WHERE pay.payment_status = 'Paid')::int
+        COUNT(*) FILTER (WHERE ${issued})::int
           AS receipts,
         COALESCE(SUM(pay.amount) FILTER (
-          WHERE pay.payment_status = 'Paid' AND pay.payment_method = 'Cash'), 0)::numeric(12,2)
+          WHERE ${issued} AND pay.payment_method = 'Cash'), 0)::numeric(12,2)
           AS cash,
         COALESCE(SUM(pay.amount) FILTER (
-          WHERE pay.payment_status = 'Paid'
-            AND pay.payment_method IN ('GCash', 'PayMaya')), 0)::numeric(12,2)
+          WHERE ${issued} AND pay.payment_method IN ('GCash', 'PayMaya')), 0)::numeric(12,2)
           AS ewallet,
         -- Bank transfer is neither cash nor e-wallet, and without it the method figures do not
-        -- reconcile to the collected figure — today they were short by a 200.00 transfer that
-        -- appeared in no tile at all, which is exactly the money a cashier stops to hunt for.
-        --
-        -- Named rather than lumped into an "other": chk_payment_method enumerates the whole
-        -- vocabulary as ('Cash', 'GCash', 'PayMaya', 'Bank'), so cash + e-wallet + bank IS the
-        -- total, and a bucket implying an unknown remainder would be inventing uncertainty the
-        -- schema does not have.
+        -- reconcile to the collected figure — a 200.00 transfer once appeared in no tile at all,
+        -- which is exactly the money a cashier stops to hunt for. Named rather than lumped into
+        -- an "other": chk_payment_method enumerates the whole vocabulary as ('Cash', 'GCash',
+        -- 'PayMaya', 'Bank'), so cash + e-wallet + bank IS the total.
         COALESCE(SUM(pay.amount) FILTER (
-          WHERE pay.payment_status = 'Paid' AND pay.payment_method = 'Bank'), 0)::numeric(12,2)
+          WHERE ${issued} AND pay.payment_method = 'Bank'), 0)::numeric(12,2)
           AS bank,
-        COALESCE(SUM(pay.discount_amount) FILTER (WHERE pay.payment_status = 'Paid'), 0)::numeric(12,2)
+        COALESCE(SUM(pay.discount_amount) FILTER (WHERE ${issued}), 0)::numeric(12,2)
           AS discounts,
-        -- Reported, never subtracted. A drawer that is short by a refund needs the refund named.
-        COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_status <> 'Paid'), 0)::numeric(12,2)
+        -- Reported beside the collections figure, never subtracted from it. Netting hides that a
+        -- reversal happened, and a drawer short by a refund needs the refund named.
+        COALESCE(SUM(pay.amount) FILTER (WHERE ${reversed}), 0)::numeric(12,2)
           AS reversed,
-        COUNT(*) FILTER (WHERE pay.payment_status <> 'Paid')::int
+        COUNT(*) FILTER (WHERE ${reversed})::int
           AS reversals
       FROM payments pay
-      ${ISSUED_RECEIPT} ${rangeText}
+      ${ISSUED_RECEIPT}
+        AND ((${issued}) OR (${reversed}))
     `;
     const result = await db.query(queryText, params);
     return result.rows[0];
@@ -286,7 +307,19 @@ class PaymentRepository {
   async updatePaymentStatus(id, status, reason) {
     const queryText = `
       UPDATE payments
-      SET payment_status = $1, refund_reason = $2
+      SET payment_status = $1::varchar,
+          refund_reason = $2,
+          -- Stamped only on the way INTO a reversal, and only once. [1.30.0] Without this the
+          -- cash-up had nothing to bucket a refund by except paid_at — the day the money came
+          -- in — so reversing an older receipt restated a day that was already closed.
+          -- $1 is cast everywhere it appears. Without the casts Postgres has to deduce one type
+          -- for a parameter used both as a varchar assignment and as the left side of an IN, and
+          -- refuses: "inconsistent types deduced for parameter $1" — a 500 on every reversal.
+          refunded_at = CASE
+            WHEN $1::varchar IN ('Refunded', 'Cancelled') AND refunded_at IS NULL THEN CURRENT_TIMESTAMP
+            WHEN $1::varchar IN ('Refunded', 'Cancelled') THEN refunded_at
+            ELSE NULL
+          END
       WHERE id = $3
       RETURNING *
     `;

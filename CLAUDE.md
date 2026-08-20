@@ -49,6 +49,7 @@ node src/scripts/migrateAppointmentReminders.js # [1.25.0] day-before reminder t
 node src/scripts/migrateHmoDecisionTrail.js    # [1.27.0] why an HMO refused a test, and who recorded it (--rollback reverses it)
 node src/scripts/migrateHmoClaimDecision.js    # [1.28.0] turning a whole claim down, + member number (--rollback reverses it)
 node src/scripts/migrateIndexHygiene.js       # [1.29.0] index the growing FKs, drop two redundant indexes (--rollback reverses it)
+node src/scripts/migrateRefundTimestamp.js    # [1.30.0] a reversal gets its own date, so a closed day is never restated (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -204,8 +205,17 @@ clause silently load-bearing for every revenue figure in the app: the log could 
 a reversal without that reversal being counted as income on the admin dashboard, the reports
 overview, cashier monitoring and the cashier's own terminal. `summary` is also computed across the
 whole date range, so it stays right on a paged call, where reducing the rows in hand totals one
-page and labels it the day. `reversed` is reported *beside* `collected`, never netted off it — a
-drawer that is short by a refund needs the refund named. Two conditions decide what counts as an
+page and labels it the day.
+
+The figures are a **period cash book** [1.30.0]: `collected` is money taken *in* during the range,
+bucketed by `paid_at` and counted whatever happens to the receipt afterwards; `reversed` is money
+handed *back* during the range, bucketed by `refunded_at`. Collections are therefore never
+restated — reversing an older receipt used to rewrite a day that had already been printed and
+filed, so the sheet in the drawer and the screen disagreed with no way to tell which was right.
+`reversed` is reported *beside* `collected`, never netted off it: a drawer short by a refund needs
+the refund named, and a receipt paid and refunded on the same day should read as money in and money
+out rather than as nothing having happened. The list matches the range on **either** date, so the
+`reversed` figure always has a row behind it. Two conditions decide what counts as an
 issued receipt, and both matter: the status list keeps 'Pending' checkouts out, and
 `receipt_number IS NOT NULL` separates the two meanings of 'Cancelled' — an abandoned gateway
 session (money never taken) from a paid receipt voided by staff (a real reversal). `paid_at`

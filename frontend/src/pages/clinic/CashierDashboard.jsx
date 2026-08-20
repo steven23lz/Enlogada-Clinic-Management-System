@@ -83,7 +83,17 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
   // Feature Gap Plan Phase A: payment_status has always allowed 'Refunded'/'Cancelled', but
   // nothing in the app ever set them — a duplicate or disputed charge had no reversal path.
-  const refund = useRefund({ onRefunded: () => history.reload() });
+  const refund = useRefund({
+    // Both, not just the log. Review catch: refreshing only the history list left the metric
+    // strip stating a Collected Today and a "Reversed this shift" that predated the reversal,
+    // for up to a polling interval — on the screen whose figures a cashier reconciles against
+    // the drawer in front of them. `queue` is declared below; the closure is not called until
+    // the reversal returns, by which point it exists.
+    onRefunded: () => {
+      history.reload();
+      queue.refresh();
+    },
+  });
 
   // The till, the queue and the receipt are three separate concerns and are wired to each other
   // here rather than inside one another. `checkout.selectedVisit` is read by the queue (to pause polling)
