@@ -37,11 +37,20 @@ const PELVIC_US = `PELVIC ULTRASOUND FINDINGS:
 IMPRESSION:
 Normal Pelvic Ultrasound Evaluation.`;
 
+// Normalised to LF on the way out. These are multi-line template literals, so on a checkout with
+// core.autocrlf=true they carry CRLF while the committed blob carries LF — meaning the same
+// template inserts different bytes on Windows and Linux. That matters because the text lands in
+// test_results.findings: a textarea normalises CRLF to LF when the result is reopened, so saving
+// an already-released report produces a version that differs from its predecessor on every line,
+// demands an amendment reason, and re-emails the patient about a correction whose only change is
+// line endings.
+const lf = (text) => text.replace(/\r\n/g, '\n');
+
 /** The template body for a key, or '' if the key is unknown. */
 export const TEMPLATE_TEXT = {
-  cbc_normal: CBC_NORMAL,
-  xray_chest: XRAY_CHEST,
-  pelvic_us: PELVIC_US,
+  cbc_normal: lf(CBC_NORMAL),
+  xray_chest: lf(XRAY_CHEST),
+  pelvic_us: lf(PELVIC_US),
 };
 
 /** Which templates each department is offered. */
