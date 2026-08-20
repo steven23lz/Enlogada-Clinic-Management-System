@@ -107,7 +107,9 @@ export function formatDate(value) {
  * An appointment's date, as the patient reads it. [1.29.0]
  *
  * Lifted out of ClientDashboard.jsx when the booking dialog was extracted — the page and the
- * dialog both need it, so it belongs to neither.
+ * dialog both need it, so it belongs to neither. Reception had written its own identical copy,
+ * on the same field and carrying the same note; that copy is gone and this one absorbed its
+ * unparseable-value guard.
  *
  * The API always sends `scheduled_date` as a full ISO instant (pg parses the SQL DATE column with
  * the local-timezone constructor server-side, then JSON serialises that to UTC). `new Date(...)`
@@ -117,5 +119,10 @@ export function formatDate(value) {
  */
 export function formatAppointmentDate(value) {
   if (!value) return '';
-  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const parsed = new Date(value);
+  // Show whatever we were given rather than the string "Invalid Date". A reference or a booking
+  // that arrives in an unexpected shape is a thing a receptionist can read out and report; the
+  // browser's failure message is not.
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }

@@ -1,0 +1,283 @@
+import React from 'react';
+import { AlertCircle, ClipboardList, Clock, Printer, ShieldAlert, UserCheck, UserPlus, Volume2, XCircle } from 'lucide-react';
+import { Button } from '../ui/button';
+import { Panel, PanelBody } from '../ui/panel';
+import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
+import EmptyState from '../ui/empty-state';
+import { SkeletonRows } from '../ui/skeleton';
+import MetricCard from '../ui/metric-card';
+import { Badge } from '../ui/badge';
+import { SearchInput } from '../ui/search-input';
+import { StatusBadge } from '../ui/status-badge';
+import Pagination from '../ui/pagination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+
+/**
+ * The Active Queue: who is waiting, and every action the front desk takes on them.
+ *
+ * Lifted out of ReceptionistDashboard, which rendered four unrelated screens from one
+ * 1,048-line file. The props are the hooks this screen actually reads — listed rather than
+ * reached for, so what each view depends on is visible at its top instead of inferred by
+ * scrolling.
+ */
+export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignment, onPrintTicket, onCallPatient, onSelectNav }) {
+  return (
+        <>
+          {/* KPI Metrics Header */}
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+            <MetricCard label="Active Queue Visits" value={queue.total} icon={UserCheck} tone="green" />
+            <MetricCard label="Pending Intake" value={queue.pendingCount} icon={Clock} tone="amber" />
+            <MetricCard label="In Diagnostic" value={queue.processingCount} icon={ClipboardList} tone="indigo" />
+            <MetricCard label="Walk-Ins Today" value={queue.walkinCount} icon={UserPlus} tone="emerald" />
+          </div>
+
+          {/* UI/UX Modernization Phase 10: read-only visibility into pending HMO requests —
+              approving one still happens from wherever it already does, this card only
+              surfaces that they exist. */}
+          {!hmo.pendingLoading && hmo.pending.length > 0 && (
+            <Panel tone="notice" className="px-4 py-3">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 flex-shrink-0 text-amber-700" />
+                {/* A count in an alert banner is not a section heading — it was an <h3>, which
+                    put a heading between the page title and the queue's own and broke the
+                    outline for anyone navigating by heading. */}
+                <p className="m-0 text-fine font-semibold text-amber-900">
+                  {hmo.pending.length} pending HMO request{hmo.pending.length === 1 ? '' : 's'} awaiting Admin approval
+                </p>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {/* The patient, then the provider. These chips read "1CoopHealth • 1/2
+                    approved" — five of them, identical, on a queue of five different people.
+                    A receptionist standing in front of a patient asking "has mine come back
+                    yet?" could not answer from this, which is the only question it is here
+                    to answer. */}
+                {hmo.pending.slice(0, 6).map(r => (
+                  <span
+                    key={r.id}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-0.5 text-fine font-medium leading-5 text-amber-900 ring-1 ring-inset ring-amber-200"
+                  >
+                    <span className="font-semibold">
+                      {r.patient_first_name ? `${r.patient_first_name} ${r.patient_last_name}` : r.provider_name}
+                    </span>
+                    <span className="text-amber-500">&bull;</span>
+                    <span className="tabular-nums">{r.approved_test_count}/{r.test_count} approved</span>
+                  </span>
+                ))}
+                {hmo.pending.length > 6 && (
+                  <span className="self-center text-fine font-semibold text-amber-700">+{hmo.pending.length - 6} more</span>
+                )}
+              </div>
+            </Panel>
+          )}
+
+          <div>
+            {/* Search + Status Filter Toolbar */}
+            <Toolbar attached>
+              <SearchInput
+                placeholder="Search patient name or Queue #..."
+                value={queue.search}
+                onChange={e => queue.onSearchChange(e.target.value)}
+                containerClassName="w-full sm:w-64"
+              />
+
+              <Select value={queue.status} onValueChange={queue.onStatusChange}>
+                <SelectTrigger className="w-36">
+                  <SelectValue placeholder="Status Filter" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Statuses</SelectItem>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="Processing">Processing</SelectItem>
+                  <SelectItem value="Completed">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+              <ToolbarSpacer />
+              <span className="whitespace-nowrap text-fine font-medium text-slate-500 tabular-nums">
+                Showing {queue.visits.length} of {queue.total} visit{queue.total === 1 ? '' : 's'}
+              </span>
+            </Toolbar>
+
+          {/* Active Queue Table */}
+          <Panel className="overflow-hidden rounded-t-none">
+            <PanelBody flush>
+              <Table stack>
+                <TableHeader sticky>
+                  <TableRow>
+                    <TableHead>Queue Ticket</TableHead>
+                    <TableHead>Patient Name</TableHead>
+                    <TableHead>Visit Type</TableHead>
+                    <TableHead>Patient Category</TableHead>
+                    <TableHead>Assigned Tests</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {queue.error ? (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={7} className="p-0">
+                        <EmptyState
+                          tone="error"
+                          icon={AlertCircle}
+                          title="Couldn't load the queue"
+                          description={queue.error}
+                          action={
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => queue.refresh()}
+                            >
+                              Try again
+                            </Button>
+                          }
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : queue.loading ? (
+                    <SkeletonRows rows={6} columns={7} />
+                  ) : queue.visits.length > 0 ? (
+                    queue.visits.map(visit => (
+                      <TableRow key={visit.id}>
+                        <TableCell label="Queue Ticket">
+                          <div className="flex items-center gap-1">
+                            {/* The ticket number is the thing a receptionist calls out and a
+                                patient reads back, so it is set larger than the row around it
+                                rather than smaller — it was 12px in a row of 12px text. */}
+                            <span className="rounded-md bg-slate-900 px-2 py-1 text-fine font-bold tabular-nums text-white">
+                              {visit.queue_number || `V-${visit.id}`}
+                            </span>
+                            {/* aria-label as well as title: `title` alone is not a reliable
+                                accessible name and is invisible on touch, so a screen reader
+                                announced two unlabelled buttons on every queue row. */}
+                            <button
+                              onClick={() => onCallPatient(visit.queue_number)}
+                              title="Call Queue Number"
+                              aria-label={`Call queue number ${visit.queue_number}`}
+                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-slate-400 hover:bg-brand-50 hover:text-brand-600"
+                            >
+                              <Volume2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => onPrintTicket(visit)}
+                              title={`Print queue ticket for ${visit.first_name} ${visit.last_name}`}
+                              aria-label={`Print queue ticket for ${visit.first_name} ${visit.last_name}`}
+                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+                            >
+                              <Printer className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </TableCell>
+
+                        <TableCell label="Patient Name" className="font-semibold text-slate-900">
+                          {visit.first_name} {visit.last_name}
+                          <span className="block font-mono text-micro font-normal text-slate-400">PT-{visit.patient_id}</span>
+                        </TableCell>
+
+                        <TableCell label="Visit Type">
+                          <Badge variant="outline" className="text-slate-600">
+                            {visit.visit_type}
+                          </Badge>
+                        </TableCell>
+
+                        <TableCell label="Patient Category" className="text-slate-500">
+                          {visit.patient_type_name}
+                        </TableCell>
+
+                        <TableCell label="Assigned Tests">
+                          {visit.tests && visit.tests.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {visit.tests.map(t => (
+                                <span key={t.id} className="inline-flex items-center gap-0.5">
+                                  <Badge variant="outline" className="text-slate-600">
+                                    {t.test_name}
+                                    <span className="ml-1 text-slate-400">({t.test_status})</span>
+                                  </Badge>
+                                  <button
+                                    type="button"
+                                    onClick={() => hmo.openFor(t)}
+                                    title="Log HMO pre-authorization for this test"
+                                    aria-label={`Log HMO pre-authorization for ${t.test_name}`}
+                                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border-0 bg-transparent text-slate-300 hover:bg-brand-50 hover:text-brand-600"
+                                  >
+                                    <ShieldAlert className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-fine text-slate-400">No tests attached</span>
+                          )}
+                        </TableCell>
+
+                        <TableCell label="Status">
+                          <StatusBadge status={visit.visit_status} />
+                          {/* Where the ticket actually is, in the front desk's own terms.
+                              'Pending' alone doesn't say whether reception or the cashier is
+                              holding it up, which is the question this row exists to answer. */}
+                          <span className="mt-1 block whitespace-nowrap text-micro font-medium text-slate-400">
+                            {visit.visit_status === 'Pending'
+                              ? 'With cashier'
+                              : visit.visit_status === 'Processing'
+                                ? 'With department'
+                                : ''}
+                          </span>
+                        </TableCell>
+
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button onClick={() => testAssignment.openFor(visit.id)} variant="outline" size="xs">
+                              Attach Tests
+                            </Button>
+                            {!['Completed', 'Cancelled'].includes(visit.visit_status) && (
+                              <button
+                                type="button"
+                                onClick={() => disposition.cancel.request(visit)}
+                                title="Cancel this visit"
+                                aria-label={`Cancel visit for ${visit.first_name} ${visit.last_name}`}
+                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={7} className="p-0">
+                        <EmptyState
+                          icon={UserCheck}
+                          title={queue.search || queue.status !== 'All' ? 'No visits match this filter' : 'Nobody is waiting'}
+                          description={
+                            queue.search || queue.status !== 'All'
+                              ? 'Clear the search or switch the status filter back to All.'
+                              : 'The queue is clear. Register a walk-in or check in an appointment to start one.'
+                          }
+                          action={
+                            !queue.search && queue.status === 'All' ? (
+                              <Button size="sm" onClick={() => onSelectNav?.('reception-walkin')}>
+                                <UserPlus className="h-3.5 w-3.5" />
+                                Register Walk-In
+                              </Button>
+                            ) : undefined
+                          }
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </PanelBody>
+            <Pagination
+              page={queue.page}
+              totalPages={queue.totalPages}
+              onPageChange={queue.goToPage}
+              totalLabel={`${queue.total} total`}
+            />
+          </Panel>
+          </div>
+        </>
+  );
+}
