@@ -1,0 +1,260 @@
+import React from 'react';
+import { Activity, Calendar, CheckCircle, ChevronRight, Clock, Download, Eye, FileText, FlaskConical, HeartPulse, Info, Printer, Scan, Stethoscope } from 'lucide-react';
+
+// The mark a patient recognises their own report by. Elements rather than components because
+// they are looked up by name and rendered as-is; the sizing is the same everywhere it appears.
+const CATEGORY_ICONS = {
+  Ultrasound: <Stethoscope className="w-5 h-5" />,
+  Xray: <Scan className="w-5 h-5" />,
+  Laboratory: <FlaskConical className="w-5 h-5" />,
+  '2D Echo': <HeartPulse className="w-5 h-5" />,
+  ECG: <Activity className="w-5 h-5" />,
+};
+import { Button } from '../ui/button';
+import { Card, CardContent } from '../ui/card';
+import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
+import { SearchInput } from '../ui/search-input';
+import { Dialog, DialogContent, DialogTrigger } from '../ui/dialog';
+import { StatusBadge } from '../ui/status-badge';
+import { TabsContent } from '../ui/tabs';
+import { formatDateTime } from '../../lib/date';
+import { isSafeResultUrl, downloadResultFile } from '../../lib/resultFile';
+
+/**
+ * The diagnostic reports this patient can read.
+ *
+ * Lifted out of ClientDashboard, which rendered the profile switcher, two profile dialogs,
+ * a hero and four tab panels from one 1,044-line file. The props are the hooks it reads.
+ */
+export default function ResultsTab({ profiles, results, onPreviewDocument }) {
+  return (
+        <TabsContent value="results" className="m-0 space-y-4">
+
+          {/* Filter & Search Header */}
+          <Toolbar>
+            <span className="flex items-center gap-2 text-[13px] font-semibold text-slate-900">
+              <Activity className="h-4 w-4 text-brand-600" />
+              Diagnostic History
+            </span>
+            <ToolbarSpacer />
+            <SearchInput
+              placeholder="Search test..."
+              value={results.search}
+              onChange={e => results.setSearch(e.target.value)}
+              containerClassName="w-full sm:w-48"
+            />
+
+              <div className="inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
+                {/* Mirrors the 5 seeded test_categories rows exactly (database/schema.sql) —
+                    previously only 3 of 5 were filterable, silently hiding 2D Echo/ECG results. */}
+                {['All', 'Laboratory', 'Ultrasound', 'Xray', '2D Echo', 'ECG'].map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => results.setCategory(cat)}
+                    className={`cursor-pointer rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors ${
+                      results.category === cat
+                        ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                        : 'bg-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+          </Toolbar>
+
+          {/* Test Cards List */}
+          <div className="space-y-3">
+            {results.filtered.length > 0 ? (
+              results.filtered.map(item => (
+                <Card key={item.visit_test_id} className="border-[#e6ebf1] rounded-xl hover:shadow-raised transition-all">
+                  <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-start space-x-3.5">
+                      <div className="w-10 h-10 bg-gray-50 border border-gray-200/80 rounded-xl flex items-center justify-center flex-shrink-0 text-brand-600">
+                        {CATEGORY_ICONS[item.category_name] || <FlaskConical className="w-5 h-5" />}
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-meta text-gray-400 font-bold uppercase tracking-wider">REQ-{item.visit_test_id}</span>
+                          <StatusBadge status={item.test_status} className="text-meta px-2 py-0.5" />
+                        </div>
+                        <h3 className="font-bold text-slate-900 text-sm m-0">
+                          {item.category_name} - {item.test_name}
+                        </h3>
+                        <div className="flex items-center space-x-3 text-xs text-gray-500">
+                          <span className="flex items-center space-x-1">
+                            <Calendar className="w-3.5 h-3.5" />
+                            <span>{new Date(item.visit_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          </span>
+                          <span className="flex items-center space-x-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>{new Date(item.visit_date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Modal Trigger */}
+                    {item.test_status === 'Completed' ? (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            className="border-brand-500 text-brand-600 hover:bg-brand-50 text-xs font-bold px-4 rounded-xl flex items-center space-x-1.5 cursor-pointer"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            <span>View Certificate Report</span>
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+
+                        <div className="print-area space-y-4">
+                          {/* Official Lab Report Simulation Header */}
+                          <div className="border-b border-gray-200 pb-4 text-center space-y-1">
+                            <h2 className="text-base font-extrabold text-slate-900 uppercase tracking-wide m-0">ENLOGADA ULTRASOUND & DIAGNOSTIC CLINIC</h2>
+                            <p className="text-fine text-gray-500 font-semibold m-0">Official Diagnostic Examination Report</p>
+                            <span className="text-meta text-brand-600 font-bold block">CONFIDENTIAL MEDICAL DOCUMENT</span>
+                          </div>
+
+                          {/* Patient Info Summary Block */}
+                          <div className="bg-gray-50 border border-[#e6ebf1] rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                            <div>
+                              <span className="text-gray-400 font-bold text-meta uppercase block">Patient Name</span>
+                              <span className="font-bold text-slate-900">{profiles.selected?.first_name} {profiles.selected?.last_name}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400 font-bold text-meta uppercase block">Examination</span>
+                              <span className="font-bold text-slate-900">{item.test_name}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400 font-bold text-meta uppercase block">Category</span>
+                              <span className="font-bold text-slate-900">{item.category_name}</span>
+                            </div>
+                            {/* Only when there is one. A "Referred by: —" line on a self-pay
+                                walk-in's report is noise: nobody referred them, and an empty
+                                field invites the reader to wonder what is missing. */}
+                            {item.referring_physician && (
+                              <div>
+                                <span className="text-gray-400 font-bold text-meta uppercase block">Referred By</span>
+                                <span className="font-bold text-slate-900">{item.referring_physician}</span>
+                                {item.referring_physician_prc && (
+                                  <span className="block text-meta text-slate-500">
+                                    PRC {item.referring_physician_prc}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Findings Body */}
+                          <div className="space-y-3 pt-2">
+                            <div className="space-y-1">
+                              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider m-0">Clinical Findings & Impression</h4>
+                              <div className="p-4 bg-white border border-gray-200 rounded-xl text-xs leading-relaxed text-gray-800 whitespace-pre-line min-h-[100px]">
+                                {item.findings || 'No specific clinical findings recorded.'}
+                              </div>
+                            </div>
+
+                            {item.remarks && (
+                              <div className="border-l-4 border-brand-500 pl-3 py-1">
+                                <h4 className="text-fine font-bold text-gray-500 uppercase m-0">Remarks</h4>
+                                <p className="text-xs text-gray-700 m-0">{item.remarks}</p>
+                              </div>
+                            )}
+
+                            {(item.file_path || item.file_url) && (
+                              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
+                                <span className="flex items-center gap-2">
+                                  <FileText className="h-4 w-4 text-brand-600" />
+                                  <span className="text-fine font-semibold text-slate-800">
+                                    {item.file_original_name || 'Attached report'}
+                                  </span>
+                                </span>
+                                {item.file_path ? (
+                                  // View, not download. The patient is already looking at the
+                                  // summary; making them save a file to read the report itself
+                                  // is a step that exists only because nothing rendered it.
+                                  <span className="flex items-center gap-1.5">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="xs"
+                                      onClick={() => onPreviewDocument({
+                                        visitTestId: item.visit_test_id,
+                                        testName: item.test_name,
+                                        patientName: `${profiles.selected?.first_name || ''} ${profiles.selected?.last_name || ''}`.trim(),
+                                        fileName: item.file_original_name,
+                                      })}
+                                    >
+                                      <Eye className="h-3 w-3" />
+                                      View Report
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="xs"
+                                      onClick={() => downloadResultFile(item.visit_test_id, item.file_original_name)}
+                                    >
+                                      <Download className="h-3 w-3" />
+                                      Download
+                                    </Button>
+                                  </span>
+                                ) : isSafeResultUrl(item.file_url) ? (
+                                  <a
+                                    href={item.file_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-fine font-semibold text-brand-700 hover:underline"
+                                  >
+                                    <Download className="h-3 w-3" />
+                                    Open attachment
+                                  </a>
+                                ) : (
+                                  <span className="text-fine font-semibold text-amber-700">Attachment link unavailable</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Footer Release Stamp */}
+                          <div className="pt-4 border-t border-[#e6ebf1] text-fine">
+                            <span className="text-gray-400 font-medium">Released: {formatDateTime(item.released_at)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                          <Button
+                            onClick={() => window.print()}
+                            variant="outline"
+                            className="text-xs font-bold flex items-center space-x-1.5"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>Print Official Copy</span>
+                          </Button>
+                        </div>
+
+                        </DialogContent>
+                      </Dialog>
+                    ) : (
+                      <Button 
+                        variant="ghost" 
+                        className="text-gray-500 hover:bg-gray-100 text-xs font-bold px-3 rounded-xl flex items-center space-x-1"
+                      >
+                        <span>Details</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card className="border-dashed border-gray-200 bg-transparent text-center p-8 rounded-2xl">
+                <Info className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-xs font-semibold text-gray-500">No diagnostic requests found matching the current filters.</p>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+  );
+}
