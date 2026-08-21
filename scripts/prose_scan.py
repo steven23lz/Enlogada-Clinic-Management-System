@@ -24,7 +24,7 @@ HOOKS = [
     'profiles', 'results', 'bookings', 'payments', 'worklist', 'entry', 'criticals',
     'checkout', 'queue', 'history', 'lookup', 'checkIn', 'disposition', 'hmo', 'reference',
     'testAssignment', 'patientHistory', 'refund', 'receipt', 'operations', 'summary',
-    'access', 'elevated',
+    'access', 'elevated', 'catalogue', 'hmoAdmin',
 ]
 bad = re.compile(r'\b(' + '|'.join(HOOKS) + r')\.[a-zA-Z]')
 
@@ -105,7 +105,12 @@ def scan(root):
             prose = strip_interpolations(m.group(1))
             if bad.search(prose):
                 findings.append((f, 'template', prose.strip()[:110]))
-        for m in quoted.finditer(src):
+        # Template literals are checked above and must not be re-read as quoted strings: a
+        # template commonly contains real `"` characters around an interpolation, e.g.
+        #   `Deactivate "${hmoAdmin.confirmTarget.name}"?`
+        # and the quoted regex reads that pair as a double-quoted string full of code.
+        without_templates = tmpl.sub('', src)
+        for m in quoted.finditer(without_templates):
             s = m.group(1) if m.group(1) is not None else m.group(2)
             if s and bad.search(s) and not s.startswith(('.', '/', '@')):
                 findings.append((f, 'quoted', s[:110]))
