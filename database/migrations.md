@@ -1,5 +1,110 @@
 # Database Migration & Schema History
 
+## [1.32.0] - 2026-08-22 (The other half of the cash book)
+
+No schema change. `migrateRefundTimestamp.js` gained a better backfill and is safe to re-run —
+it corrects a fabricated date in place — but nothing new is added to any table.
+
+### The fix landed in one of two repositories
+
+[1.30.0] moved `paymentRepository` to a period cash book and left `reportRepository` on
+`payment_status = 'Paid'` over a `paid_at` range. Two consequences, and the second is worse than
+the first:
+
+1. **They disagreed about the same day.** One 550.00 receipt paid and reversed today: the
+   cashier's strip read 550.00 collected, the operations report's "Takings" panel read 0.00.
+2. **The regression [1.30.0] is named for survived in the half that gets PRINTED.** `getBillingTotals`
+   still bucketed everything by `paid_at`, so reversing an older receipt still silently reduced a
+   day that had already been printed and filed.
+
+`getRevenueTrend`, `getPaymentMethodBreakdown` and `getSalesByService` restated closed days the
+same way. All four now read their predicates from `src/constants/moneyRange.js`, which
+`paymentRepository` also uses — one definition, because two drifted apart within a single commit
+of each other.
+
+`getSalesByService` had to move in the same change as `getBillingTotals`: `operations-report.spec.js`
+asserts the sum of that breakdown reconciles to the collected figure, and two bases break it the
+moment anything is reversed.
+
+### Two coupled defects in `getBillingTotals`
+
+- No `receipt_number IS NOT NULL`.
+- `refunds`/`refunded` counted `'Refunded'` only, so a receipt a staff member VOIDED — status
+  `'Cancelled'`, a real reversal — was reported by the cashier's summary and by nothing at all
+  here. Its amount also fell out of `collected`, under-reporting both sides at once, and the panel
+  hides the stat when it is zero: a day of nothing but voids showed no reversal at all.
+
+They cancelled, which is why neither was visible. Fixing either alone makes abandoned gateway
+checkouts — money never taken — report as refunds. One change, not two.
+
+### Backfilled from the audit trail
+
+[1.30.0] set `refunded_at = paid_at` for existing reversals, recorded at the time as a real gap
+because `payments` has no `updated_at`. But `audit_log` carries a `payment.refunded` /
+`payment.cancelled` entry for every reversal, and its `created_at` is the real moment — reading it
+states nothing new, it moves a fact from the table that recorded it to the table that needs it.
+Retention is ~7 years for non-PHI actions (`pruneAuditLog.js`), longer than any cash-up looks back.
+
+Two passes now: the audit trail first, then `paid_at` for whatever it cannot account for, with the
+counts reported separately so the difference is never invisible. The pass also **corrects** a row
+already carrying the fabricated date (`refunded_at = paid_at` exactly — never true of a real
+reversal), which closes the round-trip weakness noted in [1.30.0]: rolling back and reapplying used
+to overwrite a true reversal date permanently.
+
+### A resurrected receipt counted as money returned, forever
+
+`forceSettleGatewayPayment` flips a `'Cancelled'` row back to `'Paid'` when the patient completed a
+checkout we had written off. It did not clear `refunded_at`, and the `reversed` figure keys on
+`refunded_at IS NOT NULL` *without* testing `payment_status` — so the receipt was reported as
+handed back on a day it was actually taken, for as long as the row existed.
+
+### The cross-day case finally has a test
+
+Every test in `cashup-reversals.spec.js` settled and reversed inside one test body, so both dates
+landed on the same day — the case that was never broken. Reaching the broken one needs a receipt
+older than today, which no API can produce. `backend/src/scripts/e2eBackdatePayment.js` ages one,
+refusing anything that is not an E2E-created receipt and refusing to run under
+`NODE_ENV=production` at all. Verified the new test fails against the pre-[1.30.0] semantics before
+trusting it.
+
+### Getting the correction onto a database that already ran [1.30.0]
+
+There is no automatic path, and that was checked rather than assumed: this project has no
+migration ledger table, no npm lifecycle hooks, no nodemon config, no active git hooks, and
+`server.js` opens a port and nothing else. Running the backfill at boot was the obvious idea and
+is the wrong one — `audit_log` has no index on `action`, the backfill aggregates over every
+'payment'-typed row in a table documented as reaching ~300,000 rows a year, the migration scripts
+use `db.pool.connect()` under a stated assumption that they run alone, and `statement_timeout` is
+15s. This file already records what happened the one time schema work hid inside a script that ran
+for another reason.
+
+So the cheap half of the question is asked at boot and the expensive half is not.
+`src/config/startupAdvisory.js` counts rows where `refunded_at = paid_at` to the microsecond — the
+signature of the old backfill, never true of a real reversal — and logs the command to fix them.
+It touches only `payments`, uses the partial index so it scans reversals alone, never throws, and
+says nothing when there is nothing to say.
+
+The instruction in CLAUDE.md also moved. It sat inside the migration block, under a header scoping
+that block to "any database created before [1.29.0]" — so the databases this applies to, which are
+by definition newer, would correctly skip past it. It is now stated above that gate.
+
+### Screens
+
+`counted_in_collected` is now returned per row, because which rows make up `collected` depends on
+the range and only the query knows it: the list matches on **either** date, so it holds receipts
+taken earlier and only reversed inside the range. `lib/collections.js` reads that flag — its
+`payment_status === 'Paid'` test was wrong in both directions and made two breakdowns sum to
+`collected - reversed` while a card in the same grid showed `collected`.
+
+Two captions asserted the opposite of what the code now does and were corrected: "Receipts
+Settled … N more issued, then reversed" (they are counted, and on a same-day reversal they are not
+"more"), and Cashier Monitoring's "not in collections". A **Net in Drawer** figure was added to the
+collections strip and the shift panel, shown only when something was reversed: `reversed` is
+reported beside `collected` and never subtracted from it, which left the cashier doing that
+subtraction in their head against the cash in front of them.
+
+---
+
 ## [1.31.0] - 2026-08-21 (One live claim per test; a dead column removed)
 
 Run `node src/scripts/migrateClaimIntegrity.js` on any database created before this version

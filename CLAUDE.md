@@ -30,6 +30,20 @@ node src/scripts/seedUsers.js     # seeds one test user per role (password: Pass
 node src/scripts/testRbacEndpoints.js  # manual RBAC endpoint smoke test
 node src/scripts/verifyRbacWiring.js  # asserts every permission-gated route matches the seeded matrix
 
+# RUN THIS ON ANY DATABASE THAT ALREADY APPLIED [1.30.0], however current it otherwise is:
+#
+#   node src/scripts/migrateRefundTimestamp.js
+#
+# [1.32.0] adds no schema. It replaces [1.30.0]'s backfill — which set refunded_at = paid_at, a
+# fabricated date — with the real moment read from audit_log, and CORRECTS rows already carrying
+# the guess. Until it runs, every pre-existing reversal claims it happened the instant the receipt
+# was taken, so the cash-up files it on the wrong day. Safe and idempotent; it reports how many it
+# corrected and how many it could not.
+#
+# Deliberately stated ABOVE the gate below rather than inside the list: that gate scopes itself to
+# databases created before [1.29.0], so a database that is already newer than that — which is
+# exactly the one this applies to — would correctly skip the whole block and miss this.
+
 # Additive migrations for an EXISTING database (migrateDb.js is destructive and cannot be used on
 # a live one). Each is safe to re-run; run them in order on any database created before [1.29.0].
 node src/scripts/migrateIndexes.js           # [1.11.0] foreign-key and lookup indexes
@@ -51,6 +65,7 @@ node src/scripts/migrateHmoClaimDecision.js    # [1.28.0] turning a whole claim 
 node src/scripts/migrateIndexHygiene.js       # [1.29.0] index the growing FKs, drop two redundant indexes (--rollback reverses it)
 node src/scripts/migrateRefundTimestamp.js    # [1.30.0] a reversal gets its own date, so a closed day is never restated (--rollback reverses it)
 node src/scripts/migrateClaimIntegrity.js     # [1.31.0] one live HMO claim per test; drops the dead test_results.file_url (--rollback reverses it)
+# [1.32.0] has no script of its own — see the re-run note at the top of this block.
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -219,6 +234,11 @@ a reversal without that reversal being counted as income on the admin dashboard,
 overview, cashier monitoring and the cashier's own terminal. `summary` is also computed across the
 whole date range, so it stays right on a paged call, where reducing the rows in hand totals one
 page and labels it the day.
+
+The same predicates serve `reportRepository` [1.32.0] — the operations report was left behind by
+[1.30.0] and spent a day disagreeing with the cashier's screen about the same figures, while still
+restating closed days on the half that gets printed. They live in `src/constants/moneyRange.js`
+now; two copies of this rule drifted apart within one commit of each other, so there is one.
 
 The figures are a **period cash book** [1.30.0]: `collected` is money taken *in* during the range,
 bucketed by `paid_at` and counted whatever happens to the receipt afterwards; `reversed` is money

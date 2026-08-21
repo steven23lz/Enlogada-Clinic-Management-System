@@ -138,13 +138,18 @@ const CashierMonitoring = () => {
             />
             {/* Reported beside the collections figure, never netted off it. A drawer short by a
                 refund needs the refund named — a single reconciled total hides that one
-                happened, which is the thing an oversight screen exists to surface. */}
+                happened, which is the thing an oversight screen exists to surface.
+
+                The caption used to read "not in collections", which the cash book [1.30.0] made
+                false: a receipt taken in this range and reversed in it is counted in `collected`
+                AND here, money in and money out. It now says what to do with the number instead,
+                which is the question an oversight screen is actually being asked. */}
             {reversals > 0 && (
               <MetricCard
                 className="rounded-none border-0"
                 label="Reversed"
                 value={formatCurrency(reversed)}
-                caption={`${reversals} receipt${reversals === 1 ? '' : 's'}, not in collections`}
+                caption={`${reversals} receipt${reversals === 1 ? '' : 's'} — net ${formatCurrency(collected - reversed)}`}
                 captionTone="rose"
                 icon={Undo2}
                 tone="rose"

@@ -1,5 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { backdatePayment } from './helpers/backdate.js';
+import { todayStr, daysAgoStr } from '../../src/lib/date.js';
 
 /**
  * A reversed receipt must stay in the cash-up log, and must stay out of the total.
@@ -93,6 +95,15 @@ async function payAWalkIn(apiContext, recToken, cashToken, patientId) {
 
 async function getLog(apiContext, token) {
   const res = await apiContext.get(`${API}/payments/transactions`, { headers: { Authorization: `Bearer ${token}` } });
+  return (await res.json()).data;
+}
+
+// The same log, for an explicit day rather than for today. The cross-day test needs to read two
+// days independently, which the default (CURRENT_DATE) range cannot express.
+async function getRange(apiContext, token, day) {
+  const res = await apiContext.get(`${API}/payments/transactions?startDate=${day}&endDate=${day}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
   return (await res.json()).data;
 }
 
@@ -197,6 +208,80 @@ test.describe('a reversed receipt stays in the cash-up, and stays out of the tot
     expect(page1.summary.collected).toBe(whole.summary.collected);
     expect(page2.summary.collected).toBe(whole.summary.collected);
     expect(page1.summary.receipts).toBe(whole.summary.receipts);
+  });
+
+  /**
+   * The cross-day case — the one [1.30.0] is named for, and the only one the file could not reach.
+   *
+   * Every other test here settles and reverses inside one test body, so `paid_at` and
+   * `refunded_at` land on the same calendar day. That case was never broken: on a same-day range
+   * both dates are in range whichever column you bucket by, so it passes against the old query
+   * too. The break was a receipt that outlives its day. Bucketing reversals by `paid_at` meant
+   * reversing yesterday's receipt this morning reported nothing at all on today's cash-up while
+   * silently reducing yesterday's takings — a sheet printed last night no longer reconciling with
+   * the same screen today.
+   *
+   * Assertion (1) is the commit: it fails against a `paid_at`-bucketed reversal and passes here.
+   *
+   * Reaching the state needs a receipt older than today, which no API can produce — settlement
+   * stamps CURRENT_TIMESTAMP and nothing accepts a date. Hence the backdating helper, which
+   * shells out to a backend script that refuses anything but an E2E-created receipt.
+   */
+  test('a receipt reversed the day after it was taken lands on the day it was reversed', async () => {
+    const patient = await registerClientWithPatient(apiContext, 'CrossDay');
+    const payment = await payAWalkIn(apiContext, recToken, cashToken, patient.id);
+    const amount = parseFloat(payment.amount);
+
+    // Shifts paid_at back a whole day, so the clock time and therefore the calendar offset are
+    // preserved however close to midnight this runs.
+    backdatePayment(payment.id, 1);
+
+    // todayStr/daysAgoStr use local getters. toISOString() would return the UTC date, which is
+    // yesterday everywhere east of Greenwich for the first eight hours of the day, while the
+    // server's CURRENT_DATE is local — the exact mismatch CLAUDE.md documents.
+    const yesterday = daysAgoStr(1);
+    const today = todayStr();
+
+    const yBefore = await getRange(apiContext, cashToken, yesterday);
+    const tBefore = await getRange(apiContext, cashToken, today);
+
+    // The fixture did what it claims: the receipt is yesterday's, not today's.
+    expect(yBefore.transactions.some((t) => t.id === payment.id),
+      'backdating should have moved the receipt into yesterday').toBe(true);
+    expect(tBefore.transactions.some((t) => t.id === payment.id)).toBe(false);
+
+    await refund(apiContext, cashToken, payment.id, 'Reversed a day after it was taken.');
+
+    const yAfter = await getRange(apiContext, cashToken, yesterday);
+    const tAfter = await getRange(apiContext, cashToken, today);
+
+    // (1) A CLOSED DAY IS NEVER RESTATED. Yesterday's takings are what yesterday took.
+    expect(Number(yAfter.summary.collected)).toBeCloseTo(Number(yBefore.summary.collected), 2);
+    expect(yAfter.summary.receipts).toBe(yBefore.summary.receipts);
+
+    // (2) And yesterday does not acquire a reversal that happened after it ended.
+    expect(Number(yAfter.summary.reversed)).toBeCloseTo(Number(yBefore.summary.reversed), 2);
+    expect(yAfter.summary.reversals).toBe(yBefore.summary.reversals);
+
+    // (3) Today reports the money that actually left the till today.
+    expect(Number(tAfter.summary.reversed))
+      .toBeCloseTo(Number(tBefore.summary.reversed) + amount, 2);
+    expect(tAfter.summary.reversals).toBe(tBefore.summary.reversals + 1);
+
+    // (4) Without inventing takings. Nothing was collected today.
+    expect(Number(tAfter.summary.collected)).toBeCloseTo(Number(tBefore.summary.collected), 2);
+
+    // (5) The row is in today's log, so the reversed figure has something behind it. A total with
+    // no visible receipt under it is the original complaint moved up one level.
+    const row = tAfter.transactions.find((t) => t.id === payment.id);
+    expect(row, 'the reversed receipt must be listed on the day it was reversed').toBeTruthy();
+    expect(row.refunded_at).toBeTruthy();
+
+    // (6) And it says it is not one of today's takings, which is what lets a per-cashier or
+    // per-method breakdown reduce this list and still reconcile to the total above it.
+    expect(row.counted_in_collected).toBe(false);
+    const yRow = yAfter.transactions.find((t) => t.id === payment.id);
+    expect(yRow.counted_in_collected, 'and IS one of the previous day takings').toBe(true);
   });
 
   test('only receipts that were actually issued appear — no unsettled checkout sessions', async () => {

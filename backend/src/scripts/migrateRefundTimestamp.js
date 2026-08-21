@@ -30,10 +30,24 @@
  *
  * ── Backfill ────────────────────────────────────────────────────────────────────────────────
  *
- * Existing reversed rows get `refunded_at = paid_at`. That is a guess and is deliberately the
- * conservative one: it reproduces exactly the behaviour those rows have today, so no historical
- * figure moves when this runs. `payments` has no `updated_at` to do better with. Rows reversed
- * from here on carry a real timestamp.
+ * Two passes, in order of how much they know.
+ *
+ * Existing reversed rows originally all got `refunded_at = paid_at` — the conservative guess,
+ * because it reproduces exactly the behaviour those rows already had, so no historical figure
+ * moves when this runs. `payments` has no `updated_at` to do better with, and that was recorded
+ * here as a real gap rather than a solved problem.
+ *
+ * The gap is now closed for most rows. `audit_log` carries a `payment.refunded` /
+ * `payment.cancelled` entry for every reversal since the audit hook landed, and its `created_at`
+ * is the real moment the money went back — so the first pass reads the date out of the table that
+ * genuinely recorded it. Only rows the audit trail cannot account for fall through to the guess,
+ * and the script reports the two counts separately so the difference is never invisible.
+ *
+ * This also repairs the round-trip weakness noted when the column shipped: rolling back and
+ * reapplying used to overwrite a true reversal date with `paid_at` permanently. The first pass
+ * now recovers it from the audit trail, so the round trip is lossless wherever an entry exists.
+ * `--rollback` still drops real timestamps for rows with no audit entry; it says so before doing
+ * it. (The rollback drops the column, so ONLY the audit trail survives a round trip.)
  *
  * Additive and idempotent. Reversible:
  *   node src/scripts/migrateRefundTimestamp.js
@@ -50,9 +64,43 @@ async function migrate(client) {
   `);
   logger.info('  + payments.refunded_at');
 
-  // Only rows that were actually reversed — a 'Cancelled' gateway session that never became a
-  // receipt is not a reversal and must not acquire a date that implies one.
-  const { rowCount } = await client.query(
+  // The audit trail knows when each reversal actually happened, so ask it first.
+  //
+  // This originally backfilled every row with `refunded_at = paid_at` — the conservative guess,
+  // chosen because it reproduces the pre-migration behaviour so no historical figure moves, and
+  // recorded at the time as a real gap because `payments` has no `updated_at` to do better with.
+  // But there IS something better: paymentService writes a `payment.refunded` / `payment.cancelled`
+  // audit entry on every successful reversal, and `audit_log.created_at` is the real wall-clock
+  // moment of the event. Reading it states nothing new — it moves a fact from the table that has
+  // it to the table that needs it. Retention is not a constraint either: pruneAuditLog keeps
+  // non-PHI actions ~7 years, far longer than any cash-up looks back.
+  //
+  // MIN(): the reversal endpoint is a check-then-act with no row lock, so two concurrent PATCHes
+  // can both write and log. The FIRST entry is when it happened.
+  const dated = await client.query(
+    `UPDATE payments p
+        SET refunded_at = a.at
+       FROM (SELECT entity_id, MIN(created_at) AS at
+               FROM audit_log
+              WHERE entity_type = 'payment'
+                AND action IN ('payment.refunded', 'payment.cancelled')
+              GROUP BY entity_id) a
+      WHERE p.id = a.entity_id
+        AND p.payment_status = ANY($1)
+        AND p.receipt_number IS NOT NULL
+        -- NULL on a first run; equal to paid_at if an earlier run of THIS script already wrote
+        -- the guess. Correcting that is the point — a fabricated date is not evidence, and the
+        -- exact-equality test cannot catch a real reversal, which is never in the same
+        -- microsecond as the payment it reverses.
+        AND (p.refunded_at IS NULL OR p.refunded_at = p.paid_at)
+        AND a.at IS DISTINCT FROM p.refunded_at`,
+    [REVERSAL_STATUSES]
+  );
+
+  // Whatever the audit trail could not answer keeps the original conservative guess: reversals
+  // predating the audit hook have no honest date, and `paid_at` at least reproduces exactly what
+  // those rows reported before this migration, so no figure moves on their account.
+  const guessed = await client.query(
     `UPDATE payments
         SET refunded_at = paid_at
       WHERE payment_status = ANY($1)
@@ -60,7 +108,9 @@ async function migrate(client) {
         AND refunded_at IS NULL`,
     [REVERSAL_STATUSES]
   );
-  logger.info(`  ~ backfilled ${rowCount} existing reversal(s) from paid_at (no figure moves)`);
+
+  logger.info(`  ~ ${dated.rowCount} reversal(s) dated from the audit trail`);
+  logger.info(`  ~ ${guessed.rowCount} with no audit entry keep paid_at (no figure moves)`);
 
   // The cash-up asks "what was reversed in this range", so the range predicate needs an index of
   // its own — paid_at's does not serve it. Partial, because the overwhelming majority of payments
@@ -74,6 +124,20 @@ async function migrate(client) {
 }
 
 async function rollback(client) {
+  // Say what is about to be lost. The audit trail can restore any reversal it recorded, so the
+  // rows at risk are exactly the ones it cannot account for.
+  const { rows } = await client.query(
+    `SELECT COUNT(*)::int AS n
+       FROM payments p
+      WHERE p.refunded_at IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM audit_log a
+                         WHERE a.entity_type = 'payment' AND a.entity_id = p.id
+                           AND a.action IN ('payment.refunded', 'payment.cancelled'))`
+  ).catch(() => ({ rows: [{ n: 0 }] }));
+  if (rows[0].n > 0) {
+    logger.warn(`  ! ${rows[0].n} reversal date(s) have no audit entry — reapplying cannot recover them`);
+  }
+
   await client.query('DROP INDEX IF EXISTS idx_payments_refunded_at');
   logger.info('  - idx_payments_refunded_at');
   await client.query('ALTER TABLE payments DROP COLUMN IF EXISTS refunded_at');
