@@ -43,6 +43,25 @@ class TestService {
     return await testRepository.createTest(testData);
   }
 
+  /**
+   * An omitted field keeps what the row already has. It does NOT reset it.
+   *
+   * `testRepository.updateTest` writes every column unconditionally, so a caller that sends only
+   * the fields it cares about silently destroys the ones it left out. The Services Catalogue's
+   * status toggle did exactly that: it sent categoryId, name, price and isActive, and every
+   * activate/deactivate wiped the test's patient preparation. Reproduced on Fasting Blood Sugar,
+   * where it deleted "Nothing to eat or drink except water for 8 hours" — the sentence [1.25.0]
+   * puts in the day-before reminder. The patient is then reminded of an appointment with no
+   * fasting instruction, eats breakfast, and the visit is wasted.
+   *
+   * `isActive` had the same shape from the other direction: the controller defaulted an absent
+   * value to `true`, so a PUT that omitted it would quietly re-activate a service someone had
+   * deliberately taken off the public booking form.
+   *
+   * Distinguishing `undefined` (not sent) from `''`/`null` (sent, meaning clear it) is what makes
+   * a partial update safe. Deciding it here rather than in the controller keeps it true for every
+   * caller, including any future one that never reads this comment.
+   */
   async updateTest(id, testData) {
     const existing = await testRepository.findTestById(id);
     if (!existing) {
@@ -50,7 +69,11 @@ class TestService {
       error.statusCode = 404;
       throw error;
     }
-    return await testRepository.updateTest(id, testData);
+    return await testRepository.updateTest(id, {
+      ...testData,
+      preparation: testData.preparation === undefined ? existing.preparation : testData.preparation,
+      isActive: testData.isActive === undefined ? existing.is_active : testData.isActive,
+    });
   }
 
   async updateTestPrice(id, price) {

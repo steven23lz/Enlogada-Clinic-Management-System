@@ -63,12 +63,14 @@ class TestController {
         });
       }
 
+      // `isActive` is passed through as-is, undefined included. It used to default to `true`
+      // here, which turned "I did not mention it" into "switch it on" — see testService.updateTest.
       const test = await testService.updateTest(id, {
         categoryId,
         name,
         price,
         preparation,
-        isActive: isActive !== undefined ? isActive : true
+        isActive
       });
       return res.status(200).json({
         status: 'success',
