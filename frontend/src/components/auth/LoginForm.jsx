@@ -28,21 +28,44 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
   useEffect(() => {
     if (!isGoogleAuthConfigured) return undefined;
     let cancelled = false;
-    // Poll rather than check once: on a cold load the iframe legitimately measures 0x0 for a
-    // moment before Google's script sizes it.
-    const deadline = Date.now() + 5000;
-    const timer = setInterval(() => {
+
+    // Keeps watching, and can change its mind in BOTH directions.
+    //
+    // This used to stop at a 5-second deadline and latch `broken` to true for good. Two ways that
+    // hid a button that worked. Google's origin allowlist propagates over minutes to hours, so
+    // the very first load after a console change legitimately fails and a later one succeeds —
+    // latching meant the page kept apologising after the problem had gone. And the iframe
+    // measures 0 while the sign-in popup has focus, so clicking the button inside the grace
+    // window could itself trip the verdict: sign in successfully, come back, and the control you
+    // just used is gone. Reported from the real screen, not found here.
+    //
+    // So: a grace period before the first verdict, then a slow poll that keeps re-answering the
+    // question. A working button is never hidden for longer than one interval.
+    const GRACE_MS = 8000;
+    const settledAt = Date.now() + GRACE_MS;
+
+    const look = () => {
       if (cancelled) return;
       const iframe = googleSlotRef.current?.querySelector('iframe');
-      const rendered = iframe && iframe.getBoundingClientRect().height > 0;
-      if (rendered) {
-        clearInterval(timer);
-      } else if (Date.now() > deadline) {
-        clearInterval(timer);
-        setGoogleButtonBroken(true);
-      }
-    }, 400);
-    return () => { cancelled = true; clearInterval(timer); };
+      const rendered = Boolean(iframe && iframe.getBoundingClientRect().height > 0);
+      // Before the grace period is up, only good news counts: a 0x0 iframe this early means
+      // Google's script has not sized it yet, not that the origin is refused.
+      if (rendered) setGoogleButtonBroken(false);
+      else if (Date.now() > settledAt) setGoogleButtonBroken(true);
+    };
+
+    const fast = setInterval(look, 400);
+    // Hand over to a slower cadence once the verdict is meaningful; 400ms forever is a needless
+    // wake-up on a page that sits open at a reception desk all day.
+    const slowTimer = setTimeout(() => clearInterval(fast), GRACE_MS + 2000);
+    const slow = setInterval(look, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(fast);
+      clearInterval(slow);
+      clearTimeout(slowTimer);
+    };
   }, []);
 
   const handleSubmit = async (e) => {
