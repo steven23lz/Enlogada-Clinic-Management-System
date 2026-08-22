@@ -44,7 +44,7 @@ export default function CollectionsStrip({ queue }) {
           tone="green"
         />
         <MetricCard label="Cash Collected" value={formatCurrency(cashTotal)} icon={Banknote} tone="emerald" />
-        <MetricCard label="E-Wallet" value={formatCurrency(eWalletTotal)} caption="GCash + PayMaya" captionTone="slate" icon={Wallet} tone="indigo" />
+        <MetricCard label="E-Wallet" value={formatCurrency(eWalletTotal)} caption="GCash" captionTone="slate" icon={Wallet} tone="indigo" />
         {/* "Receipts Issued" is what this counts, and saying so is a correction. [1.30.0]
 
             It read "Receipts Settled", arguing that a receipt issued and then reversed is not one

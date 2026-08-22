@@ -5,7 +5,6 @@ import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
 import EmptyState from '../ui/empty-state';
 import { Badge } from '../ui/badge';
-import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { StatusBadge } from '../ui/status-badge';
 import { SkeletonRows } from '../ui/skeleton';
@@ -15,6 +14,7 @@ import { formatCurrency } from '../../lib/currency';
 import { isCrossDayReversal } from '../../lib/collections';
 import { BillingTotalsPanel, SalesByServicePanel } from '../reports/OperationsPanels';
 import { HISTORY_PAGE_SIZE } from '../../hooks/useTransactionHistory';
+import { DateField, RANGE_PRESETS } from '../ui/date-field';
 
 /**
  * Receipts issued over a chosen range, for the daily cash-up.
@@ -27,9 +27,9 @@ export default function TransactionHistoryPanel({ history, receipt, refund, oper
   return (
       <div>
         <Toolbar attached>
-          <Input type="date" value={history.startDate} onChange={e => history.setStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
+          <DateField presets={RANGE_PRESETS.start} value={history.startDate} onChange={e => history.setStartDate(e.target.value)} containerClassName="w-[150px]" aria-label="History start date" />
           <span className="text-fine text-slate-400">to</span>
-          <Input type="date" value={history.endDate} onChange={e => history.setEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
+          <DateField presets={RANGE_PRESETS.end} value={history.endDate} onChange={e => history.setEndDate(e.target.value)} containerClassName="w-[150px]" aria-label="History end date" />
           <Button variant="outline" onClick={() => history.reload()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Apply

@@ -13,7 +13,6 @@ import EmptyState from '../../components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import MetricCard from '../../components/ui/metric-card';
 import RevenueTrendChart from '../../components/charts/RevenueTrendChart';
@@ -26,6 +25,7 @@ import { formatCurrency } from '../../lib/currency';
 import { todayStr, daysAgoStr } from '../../lib/date';
 import { settled } from '../../lib/collections';
 import { ClipboardList, FileText, Info, RefreshCw, ShieldCheck, DollarSign, Users, FlaskConical, Printer, BarChart3, TrendingUp } from 'lucide-react';
+import { DateField, RANGE_PRESETS } from '../../components/ui/date-field';
 
 const STATUS_COLORS = {
   Pending: 'bg-amber-50 text-amber-800 ring-amber-200',
@@ -220,10 +220,10 @@ const DateRangeReports = () => {
 
       <Toolbar>
         <ToolbarField label="From" htmlFor="rep-from">
-          <Input id="rep-from" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[150px]" />
+          <DateField id="rep-from" presets={RANGE_PRESETS.start} value={startDate} onChange={(e) => setStartDate(e.target.value)} containerClassName="w-[150px]" />
         </ToolbarField>
         <ToolbarField label="To" htmlFor="rep-to">
-          <Input id="rep-to" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[150px]" />
+          <DateField id="rep-to" presets={RANGE_PRESETS.end} value={endDate} onChange={(e) => setEndDate(e.target.value)} containerClassName="w-[150px]" />
         </ToolbarField>
         <div className="flex items-end self-stretch">
           <Button variant="outline" onClick={() => fetchReport(startDate, endDate)}>
@@ -474,9 +474,9 @@ const StaffWorkload = () => {
           <p className="text-xs text-gray-500 m-0">Reception check-ins and Diagnostic results released, by staff member.</p>
         </div>
         <div className="flex items-center space-x-2">
-          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-xs w-36" />
+          <DateField presets={RANGE_PRESETS.start} value={startDate} onChange={(e) => setStartDate(e.target.value)} containerClassName="w-36" aria-label="Workload start date" />
           <span className="text-xs text-gray-400">to</span>
-          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-xs w-36" />
+          <DateField presets={RANGE_PRESETS.end} value={endDate} onChange={(e) => setEndDate(e.target.value)} containerClassName="w-36" aria-label="Workload end date" />
           <Button variant="outline" onClick={() => fetchWorkload(startDate, endDate)} className="flex items-center space-x-1.5 text-xs font-semibold">
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Apply</span>
@@ -589,21 +589,21 @@ const OperationsReport = () => {
     <div className="space-y-4">
       <Toolbar>
         <ToolbarField label="From" htmlFor="ops-from">
-          <Input
+          <DateField
             id="ops-from"
-            type="date"
+            presets={RANGE_PRESETS.start}
             value={range.startDate}
             onChange={(e) => setRange((r) => ({ ...r, startDate: e.target.value }))}
-            className="w-[150px]"
+            containerClassName="w-[150px]"
           />
         </ToolbarField>
         <ToolbarField label="To" htmlFor="ops-to">
-          <Input
+          <DateField
             id="ops-to"
-            type="date"
+            presets={RANGE_PRESETS.end}
             value={range.endDate}
             onChange={(e) => setRange((r) => ({ ...r, endDate: e.target.value }))}
-            className="w-[150px]"
+            containerClassName="w-[150px]"
           />
         </ToolbarField>
         <div className="flex items-end self-stretch">

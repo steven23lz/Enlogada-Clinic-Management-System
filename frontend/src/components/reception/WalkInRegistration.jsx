@@ -9,6 +9,8 @@ import api from '../../config/api';
 import { useScrollIntoViewOnSet } from '../../hooks/useScrollIntoViewOnSet';
 import { validatePatientProfile } from '../../validations/patientValidation';
 import { UserPlus, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { DateField, BIRTHDATE_YEAR_RANGE } from '../ui/date-field';
+import { todayStr } from '../../lib/date';
 
 /**
  * Registering a patient who walked in, and issuing their queue ticket.
@@ -182,12 +184,13 @@ const WalkInRegistration = ({ patientTypes, testCatalog, onRegistered }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="space-y-1 sm:col-span-2">
                       <label className="field-label" htmlFor="wi-birthdate">Birthdate <span className="text-rose-600">*</span></label>
-                      <Input
+                      <DateField
                         id="wi-birthdate"
-                        type="date"
                         value={newPatient.birthdate}
                         onChange={e => setNewPatient({...newPatient, birthdate: e.target.value})}
                         disabled={isRegistering}
+                        max={todayStr()}
+                        yearRange={BIRTHDATE_YEAR_RANGE}
                         required
                       />
                     </div>

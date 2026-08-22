@@ -2,6 +2,7 @@
 import { test, expect, request } from 'playwright/test';
 import { backdatePayment } from './helpers/backdate.js';
 import { todayStr, daysAgoStr } from '../../src/lib/date.js';
+import { COUNTER_PAYMENT_METHODS } from '../../src/lib/paymentMethods.js';
 
 /**
  * A reversed receipt must stay in the cash-up log, and must stay out of the total.
@@ -184,7 +185,7 @@ test.describe('a reversed receipt stays in the cash-up, and stays out of the tot
   test('the method splits add up to the collected total', async () => {
     const { summary } = await getLog(apiContext, cashToken);
 
-    // chk_payment_method allows exactly ('Cash', 'GCash', 'PayMaya', 'Bank'), so these three
+    // chk_payment_method enumerates the whole vocabulary, so these three
     // figures are the whole of `collected` and must reconcile to it. They did not before: only
     // Cash and E-Wallet had tiles, so a day carrying a bank transfer showed a total that the
     // splits beneath it could not account for — ₱200.00 unexplained on the day this was found.
@@ -282,6 +283,55 @@ test.describe('a reversed receipt stays in the cash-up, and stays out of the tot
     expect(row.counted_in_collected).toBe(false);
     const yRow = yAfter.transactions.find((t) => t.id === payment.id);
     expect(yRow.counted_in_collected, 'and IS one of the previous day takings').toBe(true);
+  });
+
+  /**
+   * The Method filter is applied in SQL, so the summary and the rows describe the same set.
+   *
+   * Filtering in the browser would have been a one-line change and wrong: Cashier Monitoring
+   * renders per-cashier totals reduced from this list inside the same grid as summary.collected,
+   * which is aggregated over the whole range. A client-side filter moves one and not the other,
+   * so the per-cashier cards would show one method's takings beside a card showing every method.
+   * lib/collections.js records that exact mismatch shipping on that screen once already.
+   *
+   * The arithmetic assertion is the one that matters: filtering by each method in turn must
+   * partition the unfiltered total exactly, with nothing double-counted and nothing lost. That
+   * only holds while every method in chk_payment_method is reachable through the filter — so
+   * this also fails if a method is added to the vocabulary and not to the UI list. [1.33.0]
+   */
+  test('filtering by method partitions the takings exactly', async () => {
+    const unfiltered = await getLog(apiContext, cashToken);
+
+    let sum = 0;
+    let rowCount = 0;
+    for (const method of COUNTER_PAYMENT_METHODS) {
+      const res = await apiContext.get(`${API}/payments/transactions?method=${method}`, {
+        headers: { Authorization: `Bearer ${cashToken}` },
+      });
+      expect(res.status()).toBe(200);
+      const data = (await res.json()).data;
+
+      // Every row really is that method — the list follows the filter, not just the total.
+      for (const t of data.transactions) expect(t.payment_method).toBe(method);
+
+      sum += Number(data.summary.collected);
+      rowCount += data.transactions.length;
+    }
+
+    // The parts are the whole. A method missing from COUNTER_PAYMENT_METHODS shows up here as a
+    // shortfall rather than as silence.
+    expect(sum).toBeCloseTo(Number(unfiltered.summary.collected), 2);
+    expect(rowCount).toBe(unfiltered.transactions.length);
+  });
+
+  // A money screen must not answer "nothing was taken that way" for a method that does not
+  // exist — the two read identically and only one is true.
+  test('an unknown method is refused rather than silently ignored', async () => {
+    const res = await apiContext.get(`${API}/payments/transactions?method=PayMaya`, {
+      headers: { Authorization: `Bearer ${cashToken}` },
+    });
+    expect(res.status()).toBe(400);
+    expect((await res.json()).message).toMatch(/unknown payment method/i);
   });
 
   test('only receipts that were actually issued appear — no unsettled checkout sessions', async () => {

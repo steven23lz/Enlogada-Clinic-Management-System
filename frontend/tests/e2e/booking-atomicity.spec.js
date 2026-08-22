@@ -2,6 +2,7 @@
 import { test, expect, request } from 'playwright/test';
 import { loginAs } from './helpers/ticketRelease.js';
 import { selfPayProfile } from './helpers/patients.js';
+import { daysAgoStr } from '../../src/lib/date.js';
 
 // Booking atomicity and duplicate handling.
 //
@@ -217,6 +218,44 @@ test.describe('Booking atomicity (API)', () => {
     // 400 — no card, and no referring physician [1.23.0] — and a test that accepts either is no
     // longer testing the rule in its own title.
     expect((await res.json()).message).toMatch(/hmo card/i);
+  });
+
+  // A booking may be for today or later, never before. [1.33.0]
+  //
+  // The date picker has carried min={todayStr()} all along, but nothing on the server compared
+  // the date to today — so POST /appointments would create a real visit and a real appointment
+  // row for last week, occupying a slot on a day that has already happened, on a queue nobody
+  // will ever call. `min` is a browser hint; it does not exist for anything talking to the API.
+  test('a booking in the past is refused, and its slot is never consumed', async () => {
+    const yesterday = daysAgoStr(1);
+
+    const res = await apiContext.post(`${API}/appointments`, {
+      headers: { Authorization: `Bearer ${clientToken}` },
+      data: { patientId, scheduledDate: yesterday, scheduledTime: '09:00', testIds },
+    });
+    expect(res.status()).toBe(400);
+    expect((await res.json()).message).toMatch(/already passed|from today onwards/i);
+
+    // Nothing was written. Counted rather than filtered by date, for the reason the sibling test
+    // gives: the API serialises scheduled_date as a UTC instant.
+    const mine = await apiContext.get(`${API}/appointments/my-bookings`, {
+      headers: { Authorization: `Bearer ${clientToken}` }
+    });
+    const bookings = (await mine.json()).data.bookings;
+    expect(bookings.some((b) => String(b.scheduled_date).startsWith(yesterday))).toBe(false);
+  });
+
+  // The screen and the API must agree: a client should never be offered a slot the server would
+  // then refuse. Availability answers "closed" for a past day rather than erroring, because a
+  // date-picker keystroke turning into a red toast is not what a closed day looks like.
+  test('a past date offers no slots at all', async () => {
+    const res = await apiContext.get(`${API}/appointments/availability?date=${daysAgoStr(1)}`, {
+      headers: { Authorization: `Bearer ${clientToken}` }
+    });
+    expect(res.status()).toBe(200);
+    const data = (await res.json()).data;
+    expect(data.isOpen).toBe(false);
+    expect(data.slots).toHaveLength(0);
   });
 
   test('the Self-Pay sentinel is rejected rather than stored as a null provider', async () => {

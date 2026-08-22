@@ -476,7 +476,11 @@ CREATE TABLE payments (
     CONSTRAINT chk_payments_vat_nonneg CHECK (vat_amount >= 0),
     CONSTRAINT fk_payments_visit FOREIGN KEY (patient_visit_id) REFERENCES patient_visits(id),
     CONSTRAINT fk_payments_processed_by FOREIGN KEY (processed_by) REFERENCES users(id),
-    CONSTRAINT chk_payment_method CHECK (payment_method IN ('Cash', 'GCash', 'PayMaya', 'Bank')),
+    -- The methods the clinic can actually settle. PayMaya was removed in [1.33.0] — the owner
+    -- holds no PayMaya merchant account, so offering it was offering a way to pay that nobody
+    -- could collect. Kept in step with backend/src/constants/paymentMethods.js, which builds
+    -- this constraint via migratePaymentMethods.js; widen it there, not here.
+    CONSTRAINT chk_payment_method CHECK (payment_method IN ('Cash', 'GCash', 'Bank')),
     CONSTRAINT chk_payment_status CHECK (payment_status IN ('Pending', 'Paid', 'Failed', 'Refunded', 'Cancelled')),
     CONSTRAINT chk_payment_amount CHECK (amount >= 0),
     CONSTRAINT uq_payments_gateway_session UNIQUE (gateway_session_id)

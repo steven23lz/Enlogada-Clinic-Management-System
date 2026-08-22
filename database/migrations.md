@@ -1,5 +1,142 @@
 # Database Migration & Schema History
 
+## [1.34.0] - 2026-08-22 (A calendar the app actually owns)
+
+No schema change.
+
+### Why the native picker had to be replaced rather than styled
+
+The calendar behind `<input type="date">` is drawn by the browser outside the document, so no CSS
+reaches it. Replacing it is the only way to change it.
+
+What was NOT replaced is the important half: the `<input type="date">` stays. The value remains a
+bare ISO `YYYY-MM-DD`, so every caller, form and test that reads or fills it is unchanged; `min`
+and `max` keep being enforced natively as a backstop; `required` keeps participating in form
+validation; and on a phone tapping the field still opens the OS picker, which beats a 280px grid
+at 390px. All 17 date inputs migrated — 4 birthdates (month/year dropdowns, and `max=today`, which
+none of them carried, on a field that re-interprets released results), 1 booking picker, 12 range
+filters (which got Today / Last 7 / Last 30 presets, usually the actual question).
+
+### Firefox: the glyph cannot be hidden, so we stay out of the way
+
+Measured in Firefox 153, not assumed: `::-moz-calendar-picker-indicator` and
+`::-moz-calendar-button` are both **discarded by the parser** as unrecognised selectors, and
+`appearance: textfield` leaves the glyph untouched. Mozilla bugs 1830890 and 1812397 are open.
+Covering it was tried and rejected too — Firefox draws its glyph inline after the date text
+(~x=380 in a 150px field), not flush right where our trigger sits (x=405).
+
+So: where the glyph can be removed we own the picker completely; where it cannot, `DateField`
+renders nothing custom and the field behaves exactly as the browser intends. One icon either way.
+Feature-detected via `CSS.supports('selector(::-webkit-calendar-picker-indicator)')`, never
+sniffed — Playwright's Firefox reports an *AppleWebKit* user-agent, so a UA test answers this
+question wrongly on the very browser it is about.
+
+### Escape closes the innermost thing
+
+Radix registers its Escape handler on the document in the CAPTURE phase when a dialog mounts —
+before any popover inside it exists — so a later listener can never run first, whatever phase it
+uses. One press therefore closed the whole booking dialog while a calendar was open on top of it.
+Radix skips its own dismiss when the callback defaultPrevents, so `DialogContent` now defers while
+`[data-datefield-open]` is present. Covered in `mobile-patient.spec.js`.
+
+### Clicking the field opens the calendar
+
+`onClick`, deliberately not `onMouseDown` + `preventDefault`: preventing the default is what would
+stop the caret being placed and the segment selected, which is the typing this is meant to leave
+alone. Gated to `pointer: fine`, so a phone keeps its OS picker rather than stacking two.
+
+**Accessibility cost, stated rather than hidden:** ARIA in HTML permits no `role` and no
+`aria-expanded` on `input type=date`, and the APG combobox pattern that carries them requires
+`type="text"` — which this design rejects for the four reasons above. A screen-reader user
+clicking the field would otherwise get a dialog opening silently. A polite live region announces
+it. That is mitigation, not a cure; icon-only opening is the stricter alternative, and is what
+Firefox itself concluded in bug 1804879.
+
+### Fixed on the way through
+
+- `AddProfileDialog` and `EditProfileDialog` both rendered `id="clientdashboard-birthdate"` — two
+  dialogs, one DOM id, making `htmlFor` ambiguous.
+- Two Per-Staff Workload inputs on Reports had no accessible name at all: no label, no
+  `aria-label`, no id.
+- `ticket-release-gating.spec.js` probed "tomorrow" with `toISOString()`, the UTC bug this project
+  documents. Before 08:00 Manila that returns today; after, tomorrow. Run on a Saturday it probed
+  Sunday, the one closed day, and three release-gating tests skipped — silently, reported only as
+  "3 skipped". It now probes forward for a day the clinic is actually open.
+
+---
+
+## [1.33.0] - 2026-08-22 (Only the methods the clinic can settle)
+
+Run `node src/scripts/migratePaymentMethods.js` (`--rollback` restores the previous vocabulary).
+
+### PayMaya is gone
+
+The clinic owner holds no PayMaya merchant account, so offering it was offering a way to pay
+that nobody could collect. Removed from the counter buttons, the online gateway, the e-wallet
+bucket and `chk_payment_method`.
+
+### The migration refuses rather than converts
+
+A CHECK constraint cannot be narrowed while a row violates it, and there are exactly two ways
+past that — one of them is rewriting a receipt to claim it was paid by a method the patient did
+not use. Which method a real receipt should say is not a question a script can answer, so it
+names the offending rows and stops. Same stance `migrateClaimIntegrity.js` takes on two live
+claims for one test.
+
+**`NOT VALID` is the wrong tool here**, and specifically dangerous. It skips the initial scan but
+Postgres still enforces the constraint on every later UPDATE:
+
+- A `'Pending'` gateway row for a PayMaya checkout started before the change. PayMongo delivers
+  `checkout_session.payment.paid`, `markGatewayPaymentPaid` UPDATEs, the CHECK re-evaluates
+  against the new row version and raises `23514`. Only `23505` is caught, so the webhook 500s,
+  PayMongo redelivers, and it fails identically forever — the patient charged, no receipt. Worse,
+  `getNextReceiptNumber()` runs *before* that UPDATE and the counter never rewinds, so every
+  redelivery burns a receipt number: a widening gap in the official sequence, which is the exact
+  thing `daily_counters` exists to prevent.
+- A historical `'Paid'` PayMaya receipt a cashier later needs to reverse. `updatePaymentStatus`
+  is an UPDATE; same violation, and the refund becomes impossible.
+
+So: no violating row, or no migration. Verified by running it against the seeded data first — it
+refused, named all nine receipts, and changed nothing.
+
+### One vocabulary, not six
+
+`backend/src/constants/paymentMethods.js` is now the single definition, and the CHECK constraint
+is built from it. It previously lived in six places that had no way of knowing about each other:
+an inline SQL literal in the summary's e-wallet bucket, a hard-coded JSX array in the cashier
+terminal, a caption string, the gateway map, `schema.sql`, and two seeder rotations.
+
+Restoring PayMaya later is one line in that constant, one in `frontend/src/lib/paymentMethods.js`,
+and `migratePaymentMethods.js --rollback`. The module asserts at load that every method lands in
+exactly one cash-up tile and that every gateway key is a valid method — the first because the
+Cash/E-Wallet/Bank tiles are asserted to sum to the collected total, the second because a gateway
+key is written straight into `payments.payment_method` and would otherwise violate the constraint
+at settlement, after the patient had been charged.
+
+### A Method filter on Cashier Monitoring
+
+Applied in SQL, filtering the list **and** the summary. Filtering in the browser would have been
+one line and wrong: the per-cashier cards reduce the row list, and they sit in the same grid as
+`summary.collected`, which is aggregated over the whole range — so a client-side filter moves one
+and not the other. `lib/collections.js` records that mismatch shipping on this screen once
+already. An unrecognised method is rejected with 400 rather than ignored: on a money screen,
+silently returning everything reads as "the clinic took nothing that way".
+
+### A booking can no longer be made in the past
+
+`SlotPicker` has carried `min={todayStr()}` all along, but that is a browser hint — it does not
+survive a typed value everywhere, and it does not exist for anything talking to the API. Nothing
+on the server compared the date to today, so `POST /appointments` would create a real visit and a
+real appointment for last week, occupying a slot on a day that has already happened. Guarded now
+on all three paths that matter: create, reschedule (the only other writer of `scheduled_date`),
+and availability — which answers "closed" for a past day so the screen never offers a slot the
+API would refuse.
+
+Inclusive of today: the elapsed part of today is already handled in `getAvailableSlots`, and
+refusing today outright would refuse a walk-in booked for this afternoon.
+
+---
+
 ## [1.32.0] - 2026-08-22 (The other half of the cash book)
 
 No schema change. `migrateRefundTimestamp.js` gained a better backfill and is safe to re-run —

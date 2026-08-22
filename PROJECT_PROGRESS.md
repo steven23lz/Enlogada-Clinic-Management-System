@@ -26,7 +26,7 @@ All 8 system roles have pre-seeded test accounts in PostgreSQL for local testing
 | **SuperAdmin** | `superadmin@enlogada.com` | `Password123!` | System-wide configuration, full console switcher, RBAC management |
 | **Admin** | `admin@enlogada.com` | `Password123!` | Executive clinic dashboard, Services Catalog management, revenue reports |
 | **Receptionist** | `receptionist@enlogada.com` | `Password123!` | Walk-in patient check-in, queue generation, appointment verification, HMO logging |
-| **Cashier** | `cashier@enlogada.com` | `Password123!` | Patient billing computation, payment recording (Cash/GCash/PayMaya), receipt printing |
+| **Cashier** | `cashier@enlogada.com` | `Password123!` | Patient billing computation, payment recording (Cash/GCash/Bank), receipt printing |
 | **Laboratory Staff** | `lab@enlogada.com` | `Password123!` | Pending lab queue processing, findings upload, result releasing & patient email notification |
 | **Xray Staff** | `xray@enlogada.com` | `Password123!` | Pending X-Ray queue processing, findings upload, result releasing |
 | **Ultrasound Staff** | `ultrasound@enlogada.com` | `Password123!` | Pending ultrasound queue processing, findings upload, result releasing |
@@ -74,7 +74,7 @@ Pending ──────────► Processing ─────────
 
 Online payments use **PayMongo's hosted Checkout Session**, which redirects the payer to GCash's and Maya's own real payment pages. GCash and Maya do not issue direct merchant API credentials to applications — in the Philippines you onboard through a BSP-regulated processor, which is what PayMongo is.
 
-- Only **GCash** and **PayMaya** are offered. No cards, no other e-wallets.
+- Only **GCash** is offered online. No cards, no other e-wallets — PayMaya was removed in [1.33.0]; the clinic owner holds no merchant account for it.
 - `POST /api/payments/gateway/checkout` creates the session server-side (the amount is always recomputed from the bill, never taken from the client) and returns the provider's `checkout_url`.
 - `POST /api/payments/gateway/webhook` is the **only** thing that can mark an online payment `Paid`. It verifies the `Paymongo-Signature` HMAC-SHA256 over the raw request body before trusting anything, and is idempotent against PayMongo's delivery retries.
 - **Requires credentials.** With `PAYMONGO_SECRET_KEY` unset the gateway reports itself unavailable, the client UI offers no online option, and the clinic operates exactly as before — cashier-recorded payments only. See `backend/.env.example`.

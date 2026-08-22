@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Input } from '../ui/input';
+import { DateField } from '../ui/date-field';
 import api from '../../config/api';
 import { todayStr } from '../../lib/date';
 import { CalendarX2, Clock } from 'lucide-react';
@@ -81,8 +81,7 @@ const SlotPicker = ({
     <div className="space-y-4">
       <div className="space-y-1">
         <label htmlFor="slotpicker-label" className="field-label">{label}</label>
-        <Input id="slotpicker-label"
-          type="date"
+        <DateField id="slotpicker-label"
           value={date || ''}
           min={minDate}
           disabled={disabled}

@@ -6,6 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import api from '../../config/api';
 import { validatePatientProfile } from '../../validations/patientValidation';
 import { AlertCircle, AlertTriangle } from 'lucide-react';
+import { DateField, BIRTHDATE_YEAR_RANGE } from '../ui/date-field';
+import { todayStr } from '../../lib/date';
 
 /**
  * Correcting a patient's details. [1.24.0]
@@ -125,11 +127,16 @@ const PatientEditDialog = ({ open, onOpenChange, patient, patientTypes = [], onS
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <label htmlFor="patienteditdialog-birthdate" className="field-label">Birthdate <span className="text-rose-600">*</span></label>
-                <Input id="patienteditdialog-birthdate"
-                  type="date"
+                {/* max=today: the markup accepted a future birthdate on all four of these
+                    fields, and a birthdate re-interprets results that have already been
+                    released. yearRange gives month/year dropdowns — paging a month at a time
+                    to 1962 is some 770 clicks. */}
+                <DateField id="patienteditdialog-birthdate"
                   value={form.birthdate}
                   disabled={saving}
                   onChange={(e) => set('birthdate')(e.target.value)}
+                  max={todayStr()}
+                  yearRange={BIRTHDATE_YEAR_RANGE}
                   required
                 />
               </div>

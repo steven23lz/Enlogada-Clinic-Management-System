@@ -503,3 +503,24 @@ body.printing-receipt {
     content: none;
   }
 }
+
+/* The browser's own calendar glyph on <input type="date">.
+ *
+ * Hidden because components/ui/date-field.jsx puts our own trigger in that corner, and two
+ * calendar icons a few pixels apart — one opening a styled popover, one opening the browser's
+ * unstyleable picker — is a control that behaves differently depending on which half you hit.
+ *
+ * The INPUT itself is untouched and still type="date": typing, ISO values, min/max and native
+ * form validation all still work, and on a phone tapping the field still opens the OS picker,
+ * which beats any custom grid at 390px. Only the glyph goes.
+ *
+ * Scoped to inputs inside a DateField, so a bare <Input type="date"> anywhere else keeps the
+ * browser's affordance rather than silently losing its only way to open a picker.
+ */
+[data-datefield] input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
+[data-datefield] input[type="date"]::-webkit-inner-spin-button {
+  display: none;
+}

@@ -209,7 +209,7 @@ still be a decision rather than an accident.
 | 12.1 | Public domain name for the system | 🔴 |
 | 12.2 | Where it will be hosted, and who administers that | 🔴 |
 | 12.3 | Who receives the database backups, and how often | 🔴 |
-| 12.4 | Online payment: does the clinic have a GCash / PayMaya merchant account, or is it counter-only? | 🟡 |
+| 12.4 | Online payment: does the clinic have a GCash merchant account, or is it counter-only? | 🟡 |
 
 ---
 

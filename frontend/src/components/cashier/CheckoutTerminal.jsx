@@ -7,6 +7,8 @@ import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { formatCurrency } from '../../lib/currency';
+// The vocabulary, not a copy of it — mirrors backend constants/paymentMethods.js. [1.33.0]
+import { COUNTER_PAYMENT_METHODS } from '../../lib/paymentMethods';
 
 /**
  * The till: one patient, what they owe, and taking the money.
@@ -231,7 +233,7 @@ export default function CheckoutTerminal({ checkout, queue }) {
                   <div className="space-y-2">
                     <label className="field-label">Payment method</label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {['Cash', 'GCash', 'PayMaya', 'Bank'].map(method => (
+                      {COUNTER_PAYMENT_METHODS.map(method => (
                         <button
                           key={method}
                           type="button"

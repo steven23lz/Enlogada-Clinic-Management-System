@@ -24,13 +24,12 @@ const notificationService = require('./notificationService');
  * payments only.
  */
 
-// clinic-facing payments.payment_method value -> PayMongo payment_method_types value.
-// Restricted to the two e-wallets the clinic accepts online. 'card', 'grab_pay', 'qrph' etc.
-// are valid PayMongo values but are deliberately NOT offered here.
-const GATEWAY_METHODS = {
-  GCash: 'gcash',
-  PayMaya: 'paymaya'
-};
+// clinic-facing payments.payment_method value -> PayMongo payment_method_types value. Now defined
+// in constants/paymentMethods.js, where the counter vocabulary lives too — a gateway key is
+// written straight into payments.payment_method, so a key that is not a valid method would pass
+// checkout and then violate chk_payment_method at settlement, after the patient had been charged.
+// That module asserts the two agree at load. [1.33.0]
+const { GATEWAY_METHODS } = require('../constants/paymentMethods');
 
 const PROVIDER = 'paymongo';
 const PAID_EVENT_TYPES = ['checkout_session.payment.paid', 'payment.paid'];

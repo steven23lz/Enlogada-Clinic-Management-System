@@ -4,6 +4,8 @@ import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { DateField, BIRTHDATE_YEAR_RANGE } from '../ui/date-field';
+import { todayStr } from '../../lib/date';
 
 /**
  * Correcting a patient profile.
@@ -53,12 +55,13 @@ export default function EditProfileDialog({ profiles, reference }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5 sm:col-span-2">
-                  <label htmlFor="clientdashboard-birthdate" className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
-                  <Input id="clientdashboard-birthdate"
-                    type="date"
+                  <label htmlFor="editprofile-birthdate" className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
+                  <DateField id="editprofile-birthdate"
                     value={profiles.editDraft.birthdate}
                     onChange={e => profiles.setEditDraft({...profiles.editDraft, birthdate: e.target.value})}
                     disabled={profiles.editing}
+                    max={todayStr()}
+                    yearRange={BIRTHDATE_YEAR_RANGE}
                     required
                   />
                 </div>
