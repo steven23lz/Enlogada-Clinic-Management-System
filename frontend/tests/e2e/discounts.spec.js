@@ -118,12 +118,22 @@ test.describe('Statutory discounts (Senior Citizen / PWD)', () => {
     const bill = (await (await apiContext.get(`${API}/payments/bill/${visitId}`, { headers: auth(cashier) })).json())
       .data.bill;
 
-    // The order is fixed by RA 9994 / RA 10754 and is not the intuitive one: a sale to a senior
-    // or PWD is VAT-EXEMPT, so a VAT-registered clinic strips the 12% first and applies the 20%
-    // to what remains. Taking a flat 20% off the shelf price overcharges the patient — on a
-    // PHP 1,000 service, 800.00 instead of 714.29.
+    // The order is fixed by RA 9994 / RA 10754, and which order applies depends on whether the
+    // clinic is VAT-registered — so this reads the clinic's actual status rather than assuming
+    // one. Asserting the VAT-registered arithmetic unconditionally is how this spec came to fail
+    // the moment the clinic was correctly configured as NON-VAT: the code was right and the test
+    // was wrong.
+    //
+    //   VAT-registered : strip the 12% first, then 20% off the VAT-exempt base -> 714.29/1,000
+    //   non-VAT        : no VAT to strip, a plain 20% off the price            -> 800.00/1,000
+    //
+    // Enlogada is non-VAT ("Non VAT Reg. TIN" on its BIR-registered invoice booklet). Charging
+    // the VAT-registered way would hand back 85.71 per 1,000 the clinic never collected VAT on.
+    const identity = (await (await apiContext.get(`${API}/clinic`)).json()).data.clinic;
+    const vatRegistered = identity.vatRegistered !== 'false';
+
     const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-    const expectedVat = round2(testPrice - testPrice / 1.12);
+    const expectedVat = vatRegistered ? round2(testPrice - testPrice / 1.12) : 0;
     const expectedBase = round2(testPrice - expectedVat);
     const expectedDiscount = round2(expectedBase * 0.2);
     const expectedDue = round2(expectedBase - expectedDiscount);
@@ -140,8 +150,13 @@ test.describe('Statutory discounts (Senior Citizen / PWD)', () => {
     );
     expect(reconciled).toBe(round2(testPrice));
 
-    // The flat calculation must NOT be what we charge.
-    expect(bill.totalAmount).not.toBe(round2(testPrice * 0.8).toFixed(2));
+    // On a VAT-registered clinic the flat calculation must NOT be what we charge; on a non-VAT
+    // one it is exactly what we charge, and asserting otherwise would be asserting a bug.
+    if (vatRegistered) {
+      expect(bill.totalAmount).not.toBe(round2(testPrice * 0.8).toFixed(2));
+    } else {
+      expect(bill.totalAmount).toBe(round2(testPrice * 0.8).toFixed(2));
+    }
 
     expect(bill.discount.name).toBe('Senior Citizen');
     expect(bill.discount.idNumber).toBe('OSCA-E2E-001');
@@ -222,7 +237,16 @@ test.describe('Statutory discounts (Senior Citizen / PWD)', () => {
     ).toBe(parseFloat(entry.gross_amount).toFixed(2));
 
     expect(parseFloat(register.summary.discountTotal)).toBeGreaterThan(0);
-    expect(parseFloat(register.summary.vatTotal)).toBeGreaterThan(0);
     expect(parseFloat(register.summary.vatExemptSalesTotal)).toBeGreaterThan(0);
+
+    // A non-VAT clinic deducts no VAT, so a zero here is the CORRECT figure rather than a missing
+    // one — the register still has to balance and still has to show the discount, which the two
+    // assertions above check unconditionally.
+    const identity = (await (await apiContext.get(`${API}/clinic`)).json()).data.clinic;
+    if (identity.vatRegistered !== 'false') {
+      expect(parseFloat(register.summary.vatTotal)).toBeGreaterThan(0);
+    } else {
+      expect(parseFloat(register.summary.vatTotal)).toBe(0);
+    }
   });
 });

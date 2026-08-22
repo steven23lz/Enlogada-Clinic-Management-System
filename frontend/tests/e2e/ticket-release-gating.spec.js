@@ -71,6 +71,30 @@ async function createUnreleasedWalkIn(apiContext, recToken) {
   return { patient, visit, visitTestId };
 }
 
+/**
+ * Tomorrow, in the SERVER'S local calendar, skipping days the clinic is shut.
+ *
+ * This was `new Date(Date.now() + 86400000).toISOString().slice(0, 10)`, which is the bug
+ * CLAUDE.md warns about, in its mirror form. toISOString() returns the UTC date, and Philippine
+ * time is UTC+8 — so between midnight and 08:00 local, "now plus a day" in UTC is still TODAY
+ * locally. Run the suite at 03:11 on a Sunday and it probed Sunday, the clinic is closed Sundays,
+ * and `test.skip(!avail.isOpen)` fired.
+ *
+ * Three tests then reported as skipped rather than failed, which is the dangerous part: they are
+ * the ones asserting that an unpaid appointment stays invisible to the department, and a security
+ * check that silently does not run looks exactly like a security check that passed.
+ *
+ * Saturday is skipped as well as Sunday for the reason appointment-reschedule.spec.js documents:
+ * the clinic opens 08:00-12:00 on Saturday, 8 slots against 18, and a spec that claims several
+ * runs out.
+ */
+function nextWorkingDay() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 test.describe('Ticket release gating (API)', () => {
   let apiContext;
   let recToken;
@@ -230,7 +254,7 @@ test.describe('Online appointment gating (API)', () => {
 
     const availRes = await apiContext.get(`${API}/appointments/availability`, {
       headers: { Authorization: `Bearer ${clientToken}` },
-      params: { date: new Date(Date.now() + 86400000).toISOString().slice(0, 10) }
+      params: { date: nextWorkingDay() }
     });
     const avail = (await availRes.json()).data;
     test.skip(!avail.isOpen, 'Clinic closed on the probed date.');

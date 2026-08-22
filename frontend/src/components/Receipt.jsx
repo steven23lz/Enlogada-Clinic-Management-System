@@ -1,5 +1,5 @@
 import React from 'react';
-import { useClinic, hasStatutoryIdentity, isSampleIdentity } from '../lib/clinic';
+import { useClinic, hasStatutoryIdentity, isSampleIdentity, isVatRegistered } from '../lib/clinic';
 import { formatCurrency } from '../lib/currency';
 
 /**
@@ -113,7 +113,19 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
         {/* Printed whenever set, independent of whether this qualifies as an Official Receipt —
             the TIN identifies the taxpayer, and a patient claiming reimbursement wants to see it
             either way. What it does NOT do on its own is authorise the wording below. */}
-        {CLINIC.tin && <p className="m-0 text-[10px] font-semibold text-slate-600">TIN {CLINIC.tin}</p>}
+        {/* A sole proprietorship's receipts name the person behind the trade name, as the
+            clinic's own booklet does ("JESIE B. ENLOGADA - Prop."). */}
+        {CLINIC.proprietor && (
+          <p className="m-0 text-[10px] text-slate-500">{CLINIC.proprietor} &mdash; Prop.</p>
+        )}
+        {/* The Non-VAT designation travels WITH the TIN rather than sitting elsewhere, because
+            that is how it appears on the registered booklet — "Non VAT Reg. TIN: ..." — and
+            because the two facts are only meaningful together. */}
+        {CLINIC.tin && (
+          <p className="m-0 text-[10px] font-semibold text-slate-600">
+            {isVatRegistered(CLINIC) ? 'TIN' : 'Non-VAT Reg. TIN'} {CLINIC.tin}
+          </p>
+        )}
         {CLINIC.businessPermit && (
           <p className="m-0 text-[10px] text-slate-600">ATP/PTU {CLINIC.businessPermit}</p>
         )}
@@ -221,6 +233,15 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
           Thank you. Please keep this receipt — it is required for any refund, and for claiming
           your results.
         </p>
+        {/* Required on a non-VAT establishment's invoice, and printed on the clinic's own
+            booklet in these words. Without it a patient or their employer may try to claim input
+            tax against a document that cannot support it. Independent of the Official Receipt
+            question below: this is about VAT status, that is about authority to issue. */}
+        {!isVatRegistered(CLINIC) && (
+          <p className="m-0 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+            This document is not valid for claiming input taxes.
+          </p>
+        )}
         {!hasStatutoryIdentity(CLINIC) && (
           // Said plainly rather than dressed up. A document that looks like a BIR Official
           // Receipt but is not one is worse than one that admits what it is.

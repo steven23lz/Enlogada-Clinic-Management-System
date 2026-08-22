@@ -234,7 +234,32 @@ issued receipt, and both matter: the status list keeps 'Pending' checkouts out, 
 session (money never taken) from a paid receipt voided by staff (a real reversal). `paid_at`
 cannot make that distinction; it is `DEFAULT CURRENT_TIMESTAMP`, so a pending row carries one too.
 
+**Enlogada is NON-VAT registered, and that changes what a senior pays.** The clinic's
+BIR-registered service invoice reads "Non VAT Reg. TIN : 412-980-963-00000" and "THIS DOCUMENT IS
+NOT VALID FOR CLAIMING INPUT TAXES". `CLINIC_VAT_REGISTERED=false` is therefore set in
+`backend/.env`; it had been defaulting to `true`, which stripped 12% VAT the clinic never charged
+and billed a senior 714.29 on a 1,000.00 service instead of 800.00 — **85.71 undercharged per
+1,000**, and a VAT exemption claimed by an establishment not registered for VAT. Any spec
+asserting the discount arithmetic must read `GET /api/clinic` → `vatRegistered` rather than
+assuming; `discounts.spec.js` does, and failed the day the setting was corrected because it did
+not.
+
+**The catalogue holds the clinic's real prices** — loaded by `node src/scripts/seedRealCatalogue.js`
+(dry-run by default, `--confirm` to write) from the printed price list. It updates rows in place
+rather than replacing them, because `visit_tests.price_at_time` snapshots the sale price and 54
+historical rows point at these ids. Laboratory only: **Ultrasound, X-Ray, 2D Echo and ECG still
+carry demo prices** because that price list covers lab work alone. Do not assert a literal price
+in a spec — read it from `GET /api/tests`, as `booking-communication.spec.js` now does.
+
 **Statutory discounts are VAT-exempt, and the order matters.** The clinic is VAT-registered, so a Senior Citizen / PWD sale has the 12% VAT stripped **first** and the 20% applied to the VAT-exempt base (RA 9994 / RA 10754). A flat 20% off the shelf price overcharges the patient — 800.00 instead of 714.29 on a 1,000.00 service. `tests.price` is stored VAT-inclusive, so VAT is extracted rather than added. Only `is_statutory` discounts get this; a promo rate is an ordinary discount. See `discountService.computeBreakdown`.
+
+**Dates: never use `toISOString()` for "today" — and that includes test code.**
+`ticket-release-gating.spec.js` computed tomorrow as `new Date(Date.now() + 86400000)
+.toISOString().slice(0, 10)`. Run at 03:11 on a Sunday in PHT, UTC is still Saturday, so "tomorrow"
+resolved to Sunday — the clinic is closed Sundays and three tests **silently skipped**. They are
+the ones asserting an unpaid appointment stays invisible to the department, and a security check
+that quietly does not run reads exactly like one that passed. Use the local-date `workingDay()` /
+`nextWorkingDay()` helpers those specs now define. Watch the skip count, not just the pass count.
 
 **Dates: never use `toISOString()` for "today".** It returns the **UTC** date, which in Philippine time (UTC+8) is *yesterday* between midnight and 08:00 — silently, with no error. Postgres `CURRENT_DATE` is the server's local date, so the two disagree every morning. Frontend code uses `frontend/src/lib/date.js` (`todayStr` / `daysAgoStr`, built from local getters); backend code derives date strings **in SQL** rather than in JavaScript. This bug shipped twice: in four dashboard `todayStr` helpers, and in the receipt-number generator.
 

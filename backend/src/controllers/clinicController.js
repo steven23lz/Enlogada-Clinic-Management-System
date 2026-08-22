@@ -35,6 +35,16 @@ class ClinicController {
             address: env('CLINIC_ADDRESS'),
             phone: env('CLINIC_PHONE'),
             email: env('CLINIC_EMAIL'),
+            // A sole proprietorship's receipts name the proprietor; the clinic's own invoice
+            // booklet prints "JESIE B. ENLOGADA - Prop." beneath the trade name.
+            proprietor: env('CLINIC_PROPRIETOR'),
+
+            // Whether the clinic is VAT-registered, as a string so it travels through the same
+            // "use it if non-empty" merge as every other field. It belongs on the receipt for
+            // the same reason it is stamped on the paper booklet: a non-VAT invoice cannot be
+            // used to claim input taxes, and the document has to say so. Mirrors
+            // CLINIC_VAT_REGISTERED, which also drives how a senior/PWD discount is computed.
+            vatRegistered: process.env.CLINIC_VAT_REGISTERED === 'false' ? 'false' : 'true',
 
             // The statutory identifiers. Blank unless configured, and deliberately given no
             // fallback anywhere: an invented TIN on a document a patient files for reimbursement

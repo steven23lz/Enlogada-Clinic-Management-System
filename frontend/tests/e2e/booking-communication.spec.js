@@ -180,7 +180,16 @@ test('the public services page tells you how to prepare, before you have an acco
   await expect(page.getByText(/do not empty your bladder/i).first()).toBeVisible();
 
   // And the price is still there — the instruction must not have displaced it.
-  await expect(page.getByText('₱200.00').first()).toBeVisible();
+  //
+  // Read from the catalogue rather than hardcoded. This asserted a literal ₱200.00, which was a
+  // demo figure; the moment the clinic's real price list was loaded (FBS is ₱190.00) the test
+  // failed on a change that was entirely correct. A spec that has to be edited every time the
+  // clinic re-prices a service is testing the wrong thing — what matters is that the price
+  // renders at all, beside its preparation.
+  const fbs = (await (await request.newContext()).get(`${BACKEND_URL}/api/tests`).then((r) => r.json()))
+    .data.tests.find((t) => t.name === 'Fasting Blood Sugar (FBS)');
+  const formatted = `₱${Number(fbs.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  await expect(page.getByText(formatted).first()).toBeVisible();
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toHaveLength(0);
 });

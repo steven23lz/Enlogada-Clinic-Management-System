@@ -38,6 +38,13 @@ export const CLINIC_DEFAULTS = Object.freeze({
   address: 'Bugo, Cagayan de Oro, Philippines 9000',
   phone: '0936 132 0650',
   email: 'enlogadaclinic2011@gmail.com',
+  proprietor: '',
+
+  // A string, not a boolean, so it merges through the same "use it if non-empty" rule as every
+  // other field. Defaults to VAT-registered because that is the stricter, safer assumption: it
+  // makes the receipt claim LESS (no input-tax wording) rather than more, if the server is
+  // unreachable and this fallback is what renders.
+  vatRegistered: 'true',
 
   // Still honoured if someone does set them at build time, so nothing that worked before breaks.
   // Trimmed here as well as on the server: an env value of "   " is otherwise truthy, and a run of
@@ -106,6 +113,19 @@ const isPlaceholder = (value) => {
  * were both a run of spaces. Found by testing the predicate rather than reading it.
  */
 const isFilled = (value) => typeof value === 'string' && value.trim().length > 0;
+
+/**
+ * Whether the clinic charges VAT.
+ *
+ * A non-VAT establishment's invoice must say so — the clinic's own booklet carries "Non VAT Reg.
+ * TIN" and "THIS DOCUMENT IS NOT VALID FOR CLAIMING INPUT TAXES", because a patient or their
+ * employer could otherwise try to claim input tax against a document that cannot support it.
+ *
+ * It also decides how a senior/PWD discount is computed, server-side: a VAT-registered clinic
+ * strips the 12% before applying the 20% (RA 9994 / RA 10754), a non-VAT one does not. Getting
+ * that backwards moves real money — 85.71 per 1,000 on this clinic's numbers.
+ */
+export const isVatRegistered = (clinic = current) => clinic?.vatRegistered !== 'false';
 
 /** True when any statutory field is a stand-in, so the document must say so. */
 export const isSampleIdentity = (clinic = current) =>
