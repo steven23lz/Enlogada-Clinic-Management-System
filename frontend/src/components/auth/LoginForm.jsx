@@ -24,6 +24,8 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
   // the same explanatory notice as the not-configured case instead of a dead control.
   const googleSlotRef = useRef(null);
   const [googleButtonBroken, setGoogleButtonBroken] = useState(false);
+  /** Whether to offer Google at all: configured, and actually rendering. */
+  const googleUsable = isGoogleAuthConfigured && !googleButtonBroken;
 
   useEffect(() => {
     if (!isGoogleAuthConfigured) return undefined;
@@ -50,8 +52,22 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
       const rendered = Boolean(iframe && iframe.getBoundingClientRect().height > 0);
       // Before the grace period is up, only good news counts: a 0x0 iframe this early means
       // Google's script has not sized it yet, not that the origin is refused.
-      if (rendered) setGoogleButtonBroken(false);
-      else if (Date.now() > settledAt) setGoogleButtonBroken(true);
+      if (rendered) {
+        setGoogleButtonBroken(false);
+      } else if (Date.now() > settledAt) {
+        setGoogleButtonBroken((was) => {
+          // Logged once, on the transition, and only to the console — see the note where the
+          // on-screen notice used to be.
+          if (!was) {
+            console.warn(
+              `[auth] Google Sign-In is not rendering. Google refuses the button when the serving ` +
+              `origin (${window.location.origin}) is missing from the OAuth client's "Authorised ` +
+              `JavaScript origins". Email and password sign-in is unaffected.`
+            );
+          }
+          return true;
+        });
+      }
     };
 
     const fast = setInterval(look, 400);
@@ -181,11 +197,16 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
           </Button>
         </form>
 
-        <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-[#e6ebf1]"></div>
-          <span className="mx-3 flex-shrink text-fine font-medium text-slate-400">Or continue with Google</span>
-          <div className="flex-grow border-t border-[#e6ebf1]"></div>
-        </div>
+        {/* Only drawn when there is a working button beneath it. It used to render
+            unconditionally, so a hidden button left "Or continue with Google" heading an empty
+            gap — an offer the page could not honour. */}
+        {googleUsable && (
+          <div className="relative flex py-2 items-center">
+            <div className="flex-grow border-t border-[#e6ebf1]"></div>
+            <span className="mx-3 flex-shrink text-fine font-medium text-slate-400">Or continue with Google</span>
+            <div className="flex-grow border-t border-[#e6ebf1]"></div>
+          </div>
+        )}
 
         {isGoogleAuthConfigured && (
           // Kept mounted even once known-broken: the detector measures this slot's iframe, and
@@ -211,32 +232,22 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
           </div>
         )}
 
-        {!isGoogleAuthConfigured && (
-          <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-fine leading-relaxed text-amber-800 ring-1 ring-inset ring-amber-200">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-px" />
-            <span>
-              Google Sign-In is not configured on this installation. Set{' '}
-              <code className="font-mono">VITE_GOOGLE_CLIENT_ID</code> in{' '}
-              <code className="font-mono">frontend/.env</code> (and{' '}
-              <code className="font-mono">GOOGLE_CLIENT_ID</code> in{' '}
-              <code className="font-mono">backend/.env</code>), then restart both servers.
-              Signing in with an email and password works as usual.
-            </span>
-          </div>
-        )}
+        {/* No notice here, deliberately.
 
-        {isGoogleAuthConfigured && googleButtonBroken && (
-          <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-fine leading-relaxed text-amber-800 ring-1 ring-inset ring-amber-200">
-            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-px" />
-            <span>
-              Google Sign-In is unavailable on this address. The configured client ID does not
-              list <code className="font-mono">{window.location.origin}</code> under
-              &quot;Authorized JavaScript origins&quot; — add it at{' '}
-              <code className="font-mono">console.cloud.google.com/apis/credentials</code> and
-              reload. Signing in with an email and password works as usual.
-            </span>
-          </div>
-        )}
+            This used to print, on the public login page, that the client ID "does not list
+            http://localhost:5173 under Authorized JavaScript origins — add it at
+            console.cloud.google.com". That is a developer's instruction shown to a patient: it
+            names an internal address, tells them to open a Google Cloud console they have no
+            access to, and reads like the clinic is broken. The same block also fired when Google
+            Sign-In was simply never configured, which is not an error at all — it is a
+            deployment that does not offer Google.
+
+            Either way the patient's answer is the same and is already on screen: sign in with
+            email and password. So the Google section disappears entirely and the page says
+            nothing about it. The diagnosis still exists for whoever needs it, in the console,
+            where a developer looks and a patient does not.
+        */}
+
       </div>
 
       <p className="mt-6 text-center text-[13px] text-slate-500">
