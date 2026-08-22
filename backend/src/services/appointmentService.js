@@ -1,4 +1,8 @@
 const db = require('../config/database');
+const { formatTime12 } = require('../constants/clockFormat');
+const { isStaffUser } = require('../constants/roles');
+const paymentGatewayService = require('./paymentGatewayService');
+const { OCCUPIES_SLOT } = require('../constants/slotHold');
 const appointmentRepository = require('../repositories/appointmentRepository');
 const patientRepository = require('../repositories/patientRepository');
 const visitRepository = require('../repositories/visitRepository');
@@ -259,7 +263,8 @@ class AppointmentService {
         }
 
         const { rows } = await db.query(
-          `SELECT COUNT(*)::int AS cnt FROM appointments WHERE scheduled_date = $1 AND scheduled_time = $2 AND status <> 'Cancelled'`,
+          `SELECT COUNT(*)::int AS cnt FROM appointments
+            WHERE scheduled_date = $1 AND scheduled_time = $2 AND ${OCCUPIES_SLOT()}`,
           [scheduledDate, scheduledTime]
         );
         if (rows[0].cnt >= hours.max_concurrent_bookings) {
@@ -284,11 +289,29 @@ class AppointmentService {
         });
 
         // 5. Create the appointment record linked to the visit
+        //
+        // Provisional — a HOLD rather than a claim — only for a client's own self-pay booking.
+        // [1.35.0] That is the single case where nobody has committed anything: the patient is at
+        // home, the money has not moved, and until this change an abandoned checkout kept the slot
+        // for good because capacity asked only whether the row existed.
+        //
+        // The three exclusions are each a case where the booking is already real:
+        //   staff caller  — the patient is standing at the desk
+        //   HMO claim     — settled at the clinic by design, so it must never be made conditional
+        //                   on an online payment that is never going to happen
+        //   no gateway    — with no online payment configured the instruction is "pay at the
+        //                   counter", and a slot that expires while the patient travels to the
+        //                   clinic would be a worse bug than the one being fixed
+        const payingOnline = !isStaffUser(requestingUser)
+          && !hmo
+          && paymentGatewayService.isConfigured();
+
         const appointment = await appointmentRepository.createAppointment({
           patientVisitId: visit.id,
           scheduledDate,
           scheduledTime,
-          notes
+          notes,
+          provisional: payingOnline
         });
 
         // 6. Attach the chosen tests, and the HMO claim if one was made. Order matters:
@@ -339,7 +362,7 @@ class AppointmentService {
     // booking — and notifyRoles swallows its own errors, so it cannot fail the request either.
     await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
       title: 'New Appointment Booked',
-      message: `Queue #${outcome.queueNumber} — ${scheduledDate} at ${scheduledTime}`,
+      message: `Queue #${outcome.queueNumber} — ${scheduledDate} at ${formatTime12(scheduledTime)}`,
       type: 'info'
     });
 

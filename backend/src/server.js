@@ -3,13 +3,14 @@ const env = require('./config/environment');
 const logger = require('./config/logger');
 const db = require('./config/database');
 
-const { reportPendingRepairs } = require('./config/startupAdvisory');
+const { reportPendingRepairs, reportGatewayConfiguration } = require('./config/startupAdvisory');
 
 const server = app.listen(env.PORT, () => {
   logger.info(`Server running in ${env.NODE_ENV} mode on port ${env.PORT}`);
   // After listen, and deliberately not awaited: an advisory about historical data must never
   // delay the port opening or fail the boot. It reports and returns; it repairs nothing. [1.32.0]
   reportPendingRepairs();
+  reportGatewayConfiguration();
 });
 
 // Handle unhandled promise rejections

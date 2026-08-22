@@ -66,6 +66,7 @@ node src/scripts/migrateIndexHygiene.js       # [1.29.0] index the growing FKs, 
 node src/scripts/migrateRefundTimestamp.js    # [1.30.0] a reversal gets its own date, so a closed day is never restated (--rollback reverses it)
 node src/scripts/migrateClaimIntegrity.js     # [1.31.0] one live HMO claim per test; drops the dead test_results.file_url (--rollback reverses it)
 # [1.32.0] has no script of its own — see the re-run note at the top of this block.
+node src/scripts/migrateSlotHold.js            # [1.35.0] an unpaid online booking holds its slot instead of taking it forever (--rollback reverses it)
 node src/scripts/migratePaymentMethods.js     # [1.33.0] narrow chk_payment_method to what the clinic settles; refuses if a row would violate it (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
@@ -123,6 +124,33 @@ The suite is a deliberately small demo-and-regression net, not exhaustive covera
 Run it before and after any non-trivial change and compare the pass/fail counts — the specs assert RBAC boundaries and some UI copy, so intentional changes to those will legitimately turn specs red and the spec must be updated alongside the code. A run takes ~25 seconds; it runs on a single worker because the specs share one database and seeded accounts (see the note in `playwright.config.js`).
 
 Three notes learned the hard way. The dev rate limiter allows 20,000 requests per 15 minutes; running the suite many times back to back trips it, and the resulting 429s surface as scattered, unrelated-looking failures — restart the backend to reset the counter. (There is now a second, tighter limiter on the credential endpoints, but it only counts *failed* attempts and allows 2,000 outside production, so the suite does not touch it.) Editing a backend file mid-run has the same signature: nodemon restarts, in-flight requests are dropped, and several unrelated specs go red at once — re-run on a settled server before believing a failure. And navigation/role changes need `multirole@enlogada.com` (see `TEST_ACCOUNTS.md`) to exercise properly: a single-role account cannot reveal the class of bug where the sidebar offers a screen the router refuses to open.
+
+**Turning on online payment (GCash) is configuration only — no code change.** [1.37.0] The whole
+path is wired, mounted and unflagged; it is dormant purely because the secrets are blank. In order:
+
+1. Open a PayMongo merchant account and get the `sk_live_…` key (test with `sk_test_…` first).
+2. Make the backend publicly reachable over HTTPS — PayMongo has to be able to POST to it.
+3. Set `FRONTEND_URL` to the real public URL. It is interpolated into the provider's return links,
+   so a stale `localhost:5173` sends the paying patient back to their own machine.
+4. Set `PAYMONGO_SECRET_KEY`.
+5. **In PayMongo's dashboard, create a webhook** pointing at
+   `POST https://<your-host>/api/payments/gateway/webhook`, subscribed to
+   `checkout_session.payment.paid`. Nothing in this repo registers it, and nothing can — it is a
+   human step in their dashboard.
+6. Paste the signing secret it shows **once** into `PAYMONGO_WEBHOOK_SECRET`. This is a different
+   value from step 4, and both are required.
+7. Check `/v1` vs `/v2` in `PAYMONGO_API_BASE` against what the account's dashboard shows.
+8. Restart the backend. No frontend rebuild — availability is fetched at runtime.
+
+Half-configured fails safe and says so: `isConfigured()` requires both secrets, so with only one
+the clinic keeps taking counter payments and the backend logs which half is missing. That check
+exists because the alternative was charging a patient and recording nothing — the webhook verifies
+against the *webhook* secret, so a missing one rejects every delivery 401 through PayMongo's whole
+retry schedule while the money has already moved.
+
+**Two things change the day it goes on.** Unpaid client self-pay bookings become provisional and
+start releasing their slot after 15 minutes ([1.35.0] — HMO and staff bookings stay permanent), and
+the client's booking cards begin offering GCash instead of "pay at the counter".
 
 Env files: `backend/.env` and `frontend/.env`, based on the respective `.env.example`. Backend needs `DATABASE_URL`, `JWT_SECRET`, SMTP settings (for result-release emails), and Google OAuth credentials. Frontend needs `VITE_GOOGLE_CLIENT_ID` and `VITE_API_BASE_URL` (the latter is inlined at **build** time, so it must be set before `npm run build` — setting it on the server afterwards has no effect). The backend refuses to start if `JWT_SECRET` is blank, shorter than 32 characters, or a known example value; generate one with `openssl rand -hex 32`.
 

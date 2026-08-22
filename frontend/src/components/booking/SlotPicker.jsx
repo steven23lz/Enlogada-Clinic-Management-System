@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { DateField } from '../ui/date-field';
 import api from '../../config/api';
-import { todayStr } from '../../lib/date';
+import { todayStr, formatTime12 } from '../../lib/date';
 import { CalendarX2, Clock } from 'lucide-react';
 
 /**
@@ -120,6 +120,10 @@ const SlotPicker = ({
                   return (
                     <button
                       key={slot.time}
+              // The 24-hour value the API speaks, so a test can find this button without
+              // depending on how the clinic happens to render a clock. CLAUDE.md's rule about
+              // not coupling a test to presentation, applied to text instead of a class. [1.36.0]
+              data-testid={`slot-${slot.time}`}
                       type="button"
                       disabled={disabled || !selectable}
                       onClick={() => onTimeChange(slot.time)}
@@ -135,7 +139,7 @@ const SlotPicker = ({
                               : 'cursor-not-allowed border-[#e6ebf1] bg-gray-100 text-gray-300 line-through'
                       }`}
                     >
-                      {slot.time}
+                      {formatTime12(slot.time)}
                     </button>
                   );
                 })}

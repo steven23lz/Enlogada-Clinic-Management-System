@@ -89,7 +89,7 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
                           </span>
                           <span className="flex items-center space-x-1">
                             <Clock className="w-3.5 h-3.5" />
-                            <span>{new Date(item.visit_date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span>{new Date(item.visit_date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
                           </span>
                         </div>
                       </div>

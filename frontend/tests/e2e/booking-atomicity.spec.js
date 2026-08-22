@@ -3,6 +3,7 @@ import { test, expect, request } from 'playwright/test';
 import { loginAs } from './helpers/ticketRelease.js';
 import { selfPayProfile } from './helpers/patients.js';
 import { daysAgoStr } from '../../src/lib/date.js';
+import { holdSlot, expireHold } from './helpers/slotHold.js';
 
 // Booking atomicity and duplicate handling.
 //
@@ -256,6 +257,76 @@ test.describe('Booking atomicity (API)', () => {
     const data = (await res.json()).data;
     expect(data.isOpen).toBe(false);
     expect(data.slots).toHaveLength(0);
+  });
+
+  /**
+   * The scenario [1.35.0] exists for: two clients, one slot, one unfinished payment.
+   *
+   * Before this, `POST /appointments` took the slot the instant the row existed — capacity asked
+   * only `status <> 'Cancelled'` and no capacity query joined `payments`. So a patient who opened
+   * GCash and closed the tab held 11:30 forever: there is no cron in this project, no retention
+   * pass touches appointments, `cancelPendingGatewayPayments` updates only the payments table, and
+   * the webhook understands nothing but a successful payment. Client 2 was refused a slot that
+   * Client 1 never paid for, permanently.
+   *
+   * The hold is evaluated at READ time rather than swept by a job, so the slot returns at the
+   * exact moment it lapses. That is what the second half of this test asserts — nothing runs in
+   * between.
+   */
+  test('an unpaid self-pay booking holds its slot, then releases it when the hold lapses', async () => {
+    const target = await claimSlot();
+
+    const booked = await book({ scheduledTime: target, testIds });
+    expect(booked.status()).toBe(201);
+    const appointment = (await booked.json()).data.appointment;
+
+    // Put it into the state an online payment creates. Done explicitly because a booking is only
+    // provisional when the gateway is configured, and this machine may have no key — the rule
+    // that decides WHICH bookings are held is asserted separately, below.
+    holdSlot(appointment.id);
+
+    // Client 2's view: the slot is taken while Client 1 is paying. This half worked before.
+    const whileHeld = await freeSlot(BOOKING_DATE);
+    expect(whileHeld.some((s) => s.time === target),
+      'the slot must be held while the patient is paying').toBe(false);
+
+    // Client 1 walks away. Nothing cancels the booking; the hold simply runs out.
+    expireHold(appointment.id);
+
+    // The assertion that fails against the old code: the slot is offered again, immediately,
+    // with no job having run.
+    const afterLapse = await freeSlot(BOOKING_DATE);
+    expect(afterLapse.some((s) => s.time === target),
+      'a lapsed hold must return the slot').toBe(true);
+
+    // And Client 2 can actually take it, not merely be shown it — the availability grid and the
+    // booking-time capacity check are separate queries and used to be separately spelled.
+    const client2 = await book({ scheduledTime: target, testIds });
+    expect([200, 201]).toContain(client2.status());
+
+    // The abandoned row is still there, as the record of an attempt rather than a deletion.
+    const mine = await apiContext.get(`${API}/appointments/my-bookings`, {
+      headers: { Authorization: `Bearer ${clientToken}` }
+    });
+    expect((await mine.json()).data.bookings.some((b) => b.id === appointment.id)).toBe(true);
+  });
+
+  // An HMO booking is settled at the clinic by design, so it must never be made conditional on an
+  // online payment that is never going to happen.
+  test('an HMO booking is permanent, not held', async () => {
+    const providersRes = await apiContext.get(`${API}/hmo/providers`, {
+      headers: { Authorization: `Bearer ${clientToken}` }
+    });
+    const providerId = (await providersRes.json()).data.providers[0].id;
+
+    const res = await bookWithCard({
+      scheduledTime: await claimSlot(), testIds, providerId, withCard: true
+    });
+    expect(res.status()).toBe(201);
+    const appointment = (await res.json()).data.appointment;
+
+    // No hold to lapse. The helper refuses a permanent booking, which is the assertion.
+    expect(() => expireHold(appointment.id)).toThrow(/permanent, not held/i);
   });
 
   test('the Self-Pay sentinel is rejected rather than stored as a null provider', async () => {

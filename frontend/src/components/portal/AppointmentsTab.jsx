@@ -8,7 +8,7 @@ import { StatusBadge } from '../ui/status-badge';
 import { TabsContent } from '../ui/tabs';
 import Pagination from '../ui/pagination';
 import BookingPass from '../BookingPass';
-import { formatAppointmentDate } from '../../lib/date';
+import { formatAppointmentDate, formatTime12 } from '../../lib/date';
 
 /**
  * Bookings this patient has, and the pass they present.
@@ -74,7 +74,12 @@ export default function AppointmentsTab({ bookings }) {
                   // Payment is a separate fact, said separately below.
                   const showPass = isOpen;
                   const showPayOptions = isOpen && !appt.is_paid && bookings.gateway.available;
-                  return (
+
+                  // Postgres TIMESTAMP arrives as an ISO instant; toTimeString gives the local
+                  // wall clock, which is what formatTime12 formats and what the patient reads.
+                  const heldUntil = appt.held_until ? new Date(appt.held_until) : null;
+                  const isHeld = Boolean(heldUntil) && heldUntil.getTime() > Date.now();
+                  const heldUntilClock = isHeld ? heldUntil.toTimeString().slice(0, 5) : null;                  return (
                     <div
                       key={appt.id}
                       data-testid="appointment-card"
@@ -86,7 +91,7 @@ export default function AppointmentsTab({ bookings }) {
                           <span className="block text-xs font-extrabold text-slate-900">
                             {formatAppointmentDate(appt.scheduled_date)}
                           </span>
-                          <span className="block text-fine text-gray-500 font-medium">{appt.scheduled_time?.slice(0, 5)}</span>
+                          <span className="block text-fine text-gray-500 font-medium">{formatTime12(appt.scheduled_time)}</span>
                         </div>
                         <StatusBadge status={appt.status} />
                       </div>
@@ -96,6 +101,7 @@ export default function AppointmentsTab({ bookings }) {
                           reference={appt.appointment_reference}
                           queueNumber={appt.queue_number}
                           isPaid={appt.is_paid}
+                          canPayOnline={bookings.gateway.available}
                         />
                       ) : (
                         <span className="block font-mono text-micro text-slate-400">{appt.appointment_reference}</span>
@@ -120,12 +126,31 @@ export default function AppointmentsTab({ bookings }) {
                         </div>
                       )}
 
+                      {/* A hold is live only while held_until is in the future. Compared against
+                          the browser clock, which is the same clock the countdown is read on; the
+                          server's value is authoritative for capacity and this is only the telling. */}
                       {showPayOptions && (
                         <div className="space-y-2 pt-1">
-                          <p className="text-fine text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
-                            Payment is required before your visit. Once paid, your QR booking pass appears
-                            here — show it at the front desk on arrival.
-                          </p>
+                          {/* The hold, said out loud. [1.35.0]
+                              An unpaid self-pay booking now holds its slot rather than taking it,
+                              and releases it when the hold lapses — so a patient who is not told
+                              would come back to a booking that had quietly stopped being theirs.
+                              Only rendered while a hold is actually live: a permanent booking
+                              (staff-made, HMO, or already paid) carries no held_until, and telling
+                              those patients about a deadline that does not apply to them would be
+                              worse than saying nothing. */}
+                          {isHeld ? (
+                            <p className="text-fine text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
+                              <strong>Your slot is held until {formatTime12(heldUntilClock)}.</strong>{' '}
+                              Pay before then to confirm it — after that the time goes back on offer
+                              to other patients, and your booking stays here unpaid.
+                            </p>
+                          ) : (
+                            <p className="text-fine text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
+                              Payment is required before your visit. Once paid, your QR booking pass appears
+                              here — show it at the front desk on arrival.
+                            </p>
+                          )}
                           <div className="flex gap-2">
                             {bookings.gateway.methods.map((method) => (
                               <Button

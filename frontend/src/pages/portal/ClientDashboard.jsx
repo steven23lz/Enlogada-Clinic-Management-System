@@ -4,7 +4,7 @@ import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import RescheduleDialog from '../../components/booking/RescheduleDialog';
 import ResultDocument from '../../components/ResultDocument';
-import { formatAppointmentDate } from '../../lib/date';
+import { formatAppointmentDate, formatTime12 } from '../../lib/date';
 import { usePatientProfiles } from '../../hooks/usePatientProfiles';
 import { useMyResultHistory } from '../../hooks/useMyResultHistory';
 import { useMyAppointments } from '../../hooks/useMyAppointments';
@@ -138,7 +138,7 @@ const ClientDashboard = ({ onNavigate }) => {
           open={!!bookings.cancelTarget}
           onOpenChange={(open) => { if (!open) bookings.dismissCancel(); }}
           title="Cancel Appointment"
-          description={bookings.cancelTarget ? `Cancel your appointment on ${formatAppointmentDate(bookings.cancelTarget.scheduled_date)} at ${bookings.cancelTarget.scheduled_time?.slice(0, 5)}? This cannot be undone.` : ''}
+          description={bookings.cancelTarget ? `Cancel your appointment on ${formatAppointmentDate(bookings.cancelTarget.scheduled_date)} at ${formatTime12(bookings.cancelTarget.scheduled_time)}? This cannot be undone.` : ''}
           confirmLabel="Cancel Appointment"
           cancelLabel="Keep Appointment"
           onConfirm={bookings.confirmCancel}

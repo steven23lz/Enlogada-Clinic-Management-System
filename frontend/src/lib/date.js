@@ -90,7 +90,7 @@ export function formatDateTime(value, { seconds = false } = {}) {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
-    minute: '2-digit',
+    minute: '2-digit', hour12: true,
     ...(seconds ? { second: '2-digit' } : {}),
   });
 }
@@ -125,4 +125,38 @@ export function formatAppointmentDate(value) {
   // browser's failure message is not.
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/**
+ * A clock time as a patient reads it. "09:30" -> "9:30 AM". [1.36.0]
+ *
+ * The clinic runs on a 12-hour clock, and every stored time is 24-hour: `scheduled_time` is a
+ * Postgres TIME, the availability grid emits zero-padded "HH:MM", and the reschedule endpoint
+ * validates that shape. So this is a DISPLAY function and nothing more — the value it is given is
+ * never the value that is sent back. Formatting on the way out and leaving the wire format alone
+ * is what keeps a booking round-tripping through an API that has not changed.
+ *
+ * Written out rather than routed through toLocaleTimeString, for two reasons. The stored value is
+ * a bare "HH:MM" string with no date, and `new Date("09:30")` is Invalid Date — so a Date would
+ * have to be fabricated around it first, which is where UTC-vs-local errors get in. And the locale
+ * form is not pinned: `hour: 'numeric'` renders 24-hour on an en-GB browser, so the clinic's clock
+ * would depend on a machine's regional settings rather than on the clinic.
+ *
+ * Accepts "HH:MM" and "HH:MM:SS" — Postgres returns seconds and several callers had been slicing
+ * them off by hand, one of which had been missed and was showing "09:00:00" on the check-in panel.
+ *
+ * Midnight and noon are the cases hand-rolled versions get wrong: `12` is neither `0` nor `24`,
+ * so `h % 12` alone renders both as "0:00". Both are covered by tests.
+ */
+export function formatTime12(value) {
+  if (!value) return '—';
+  const match = /^(\d{1,2}):(\d{2})/.exec(String(value));
+  if (!match) return '—';
+  const hours = Number(match[1]);
+  const minutes = match[2];
+  if (!Number.isInteger(hours) || hours < 0 || hours > 23) return '—';
+  const suffix = hours < 12 ? 'AM' : 'PM';
+  // 0 -> 12 AM, 12 -> 12 PM, 13 -> 1 PM.
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${minutes} ${suffix}`;
 }

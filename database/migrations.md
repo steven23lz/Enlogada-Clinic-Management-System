@@ -1,5 +1,135 @@
 # Database Migration & Schema History
 
+## [1.37.0] - 2026-08-23 (Both halves of the gateway, or neither)
+
+No schema change.
+
+### Half-configured meant charging a patient and recording nothing
+
+`isConfigured()` tested `PAYMONGO_SECRET_KEY` alone, while `verifyWebhookSignature` verifies
+against `PAYMONGO_WEBHOOK_SECRET` — a different value, from a different screen in PayMongo's
+dashboard, displayed once when a human creates the webhook.
+
+With the key set and the webhook secret blank: the UI offered GCash, the patient really was
+charged, every delivery was rejected 401 through PayMongo's entire retry schedule, the payment
+stayed `Pending`, the visit was never released, and nobody was notified. Money taken, nothing
+recorded, and no error surfaced anywhere. Having one secret and not the other is the ordinary way
+to get this wrong, not an exotic one — they are obtained at different moments.
+
+`isConfigured()` now requires both, so the half-configured state simply leaves online payment off
+and the clinic keeps taking counter payments, which is a supported and documented configuration.
+`startupAdvisory` names the missing half at boot; it is not a startup failure, because refusing to
+boot over a payment option would take the whole clinic down to report something the front desk
+works around all day.
+
+### A card that said two things at once
+
+`BookingPass` rendered "Payment due at the counter" gated on `is_paid` alone, so with the gateway
+on it appeared on the same card as the Pay with GCash buttons. Now gated on there being no online
+option.
+
+### Activation is configuration, verified
+
+Audited end to end: no feature flag, no hardcoded `false`, no commented-out route, and the raw-body
+handling the HMAC needs is already mounted app-wide ahead of the routes. Every activation step is
+`.env`, infrastructure, or an action inside PayMongo's dashboard — the ordered list is now in
+CLAUDE.md. The only step no code can take is creating the webhook itself.
+
+---
+
+## [1.36.0] - 2026-08-22 (The clinic's clock is 12-hour)
+
+No schema change. Display only — every stored time stays 24-hour.
+
+`scheduled_time` is a Postgres TIME, the availability grid emits zero-padded `"HH:MM"`, and the
+reschedule endpoint validates that shape, so formatting happens on the way into a sentence and
+never on the way into a query or a response field. `formatTime12` in `frontend/src/lib/date.js`,
+mirrored by `backend/src/constants/clockFormat.js`.
+
+Written out rather than routed through `toLocaleTimeString` for two reasons: the stored value is a
+bare `"HH:MM"` with no date and `new Date("09:30")` is Invalid Date, so a Date would have to be
+fabricated around it — which is where UTC-vs-local errors get in; and `hour: 'numeric'` renders
+24-hour on an en-GB browser, so the clinic's clock would have depended on a machine's regional
+settings. Midnight and noon are the cases a hand-rolled version gets wrong (`h % 12` renders both
+as `0`); both are covered.
+
+### The backend was quoting a different time from the screen
+
+`appointmentEmailService`'s `readableTime` was `.slice(0, 5)`, so the confirmation email said
+`09:30` while the appointment card said `9:30 AM` — one appointment, two times. Four notification
+and audit strings had the same split. All now share the formatter.
+
+### Five locale sites were not 12-hour at all
+
+`Receipt.jsx`, `ResultsTab.jsx`, `AdminDashboard.jsx` and `formatDateTime` used
+`hour: '2-digit'`/`'numeric'` with an undefined locale, which is 12-hour on en-US and **24-hour on
+en-GB**. Pinned with `hour12: true`.
+
+### Tests decoupled from presentation
+
+`reschedule-ui.spec.js` clicked a slot button by its rendered label and `hmo-card-review.spec.js`
+matched an anchored `/^\d{2}:\d{2}$/`. Slot buttons now carry `data-testid={`slot-${time}`}` with
+the 24-hour value and the tests select on that — the same rule CLAUDE.md states for class names,
+applied to text. Also fixed `CheckInPanel`, the one site that had been rendering `09:00:00`.
+
+---
+
+## [1.35.0] - 2026-08-22 (A booking holds its slot; it does not take it)
+
+Run `node src/scripts/migrateSlotHold.js` (`--rollback` reverses it).
+
+### What was broken
+
+`POST /appointments` writes the appointment before payment is ever discussed, and capacity was
+`status <> 'Cancelled'` and nothing else — no capacity query joined `payments`. A slot was taken
+the instant a booking existed, paid or not, and exactly one thing could give it back: a human
+cancelling it.
+
+So a patient who opened GCash and closed the tab held 11:30 **forever**. Nothing released it:
+there is no cron or scheduler in this project, none of the three retention passes touches
+`appointments`, `cancelPendingGatewayPayments` updates the `payments` table alone, and the webhook
+understands only `checkout_session.payment.paid` — a failed or expired session is answered with
+`{ handled: false }` and 200. `cleanE2eData.js`'s own header already recorded the consequence:
+every bookable day filled within three days of test runs.
+
+### One nullable column, and NULL means permanent
+
+`appointments.held_until`. Nothing is back-filled, so every existing booking keeps meaning exactly
+what it meant. Only a **client's own self-pay booking awaiting online payment** is provisional; the
+three exclusions are each a case where the booking is already real — a staff booking (the patient
+is at the desk), an HMO booking (settled at the clinic by design, so it must never be conditional
+on an online payment that will never happen), and a clinic with no gateway configured (the
+instruction is "pay at the counter", and a slot expiring while the patient travels in would be
+worse than the bug being fixed).
+
+**Note the consequence of that last one: with no `PAYMONGO_SECRET_KEY` the hold never engages and
+every booking is permanent, exactly as before.** It becomes live when a real key is configured.
+
+### Expiry is evaluated at READ time, not swept
+
+There is no reaper job and adding one would be worse: a sweeper reopens the slot at the next sweep
+rather than when the hold ends, which is the same bug with a shorter fuse. `held_until >
+CURRENT_TIMESTAMP` sits in the capacity predicate, so the slot returns at the exact instant the
+hold lapses, with nothing scheduled that can fail. The abandoned row is left as the record of an
+attempt rather than deleted.
+
+The predicate lives in `src/constants/slotHold.js` because **three** queries answer "is this slot
+taken" — the availability grid, the booking-time check and the reschedule-time check. They agreed
+before only by spelling the same string three times, and a term added to two of them is how a
+patient is shown a free slot and then refused it.
+
+### Paying after the hold lapsed
+
+`confirmHold` is unconditional on the hold still being alive. If the patient took longer than the
+window and the slot was resold, the money has still moved — refusing to honour the booking does not
+give it back, the same reasoning `forceSettleGatewayPayment` is built on. The appointment stands
+and staff are notified that the slot is overbooked.
+
+Hold window: 15 minutes, refreshed each time checkout is reopened, so a patient who is actually
+paying never loses their slot to the clock — only one who has stopped.
+
+---
+
 ## [1.34.0] - 2026-08-22 (A calendar the app actually owns)
 
 No schema change.

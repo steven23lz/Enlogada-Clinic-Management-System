@@ -17,7 +17,7 @@ import { QrCode, AlertCircle } from 'lucide-react';
  * `qrcode` is imported lazily so it never lands in the initial bundle: only clients who have a
  * paid booking ever need the encoder. Mirrors how QrScanner.jsx defers html5-qrcode.
  */
-const BookingPass = ({ reference, queueNumber, isPaid }) => {
+const BookingPass = ({ reference, queueNumber, isPaid, canPayOnline = false }) => {
   const [dataUrl, setDataUrl] = useState('');
   const [failed, setFailed] = useState(false);
 
@@ -83,7 +83,10 @@ const BookingPass = ({ reference, queueNumber, isPaid }) => {
       {/* Payment is stated on the pass rather than deciding whether the pass exists at all.
           A patient walking in with an unpaid booking still needs a code to be scanned; what they
           also need is to know they will be paying at the counter first. */}
-      {isPaid === false && (
+      {/* Only when there is no online option. [1.37.0] Gated on isPaid alone, this rendered
+          "Payment due at the counter" on the same card as the Pay with GCash buttons — the clinic
+          telling one patient two different things about one booking. */}
+      {isPaid === false && !canPayOnline && (
         <span className="mt-1 rounded-md bg-amber-50 px-2 py-0.5 text-micro font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
           Payment due at the counter
         </span>

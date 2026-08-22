@@ -45,6 +45,7 @@
  * points at.
  */
 const db = require('./database');
+const paymentGatewayService = require('../services/paymentGatewayService');
 const logger = require('./logger');
 
 async function reportPendingRepairs() {
@@ -69,4 +70,28 @@ async function reportPendingRepairs() {
   }
 }
 
-module.exports = { reportPendingRepairs };
+/**
+ * Says, once at boot, when online payment is half-configured. [1.37.0]
+ *
+ * The two PayMongo secrets come from different screens and the webhook one is displayed exactly
+ * once, so having one and not the other is the ordinary way to get this wrong rather than an
+ * exotic one. isConfigured() now requires both, which makes the half-configured state safe — the
+ * clinic falls back to counter payments — but safe and silent is still a clinic wondering why the
+ * Pay button never appeared. This names the missing half.
+ *
+ * Deliberately not a startup failure. A clinic with no gateway at all is a supported, documented
+ * configuration, and refusing to boot over a payment option would take the whole system down to
+ * report something the front desk can work around all day.
+ */
+function reportGatewayConfiguration() {
+  const missing = paymentGatewayService.missingGatewaySecret();
+  if (!missing) return;
+  logger.warn(
+    `[gateway] Online payment is OFF because ${missing} is not set. PayMongo issues the API key ` +
+    'and the webhook signing secret separately, and both are required — with only one, a patient ' +
+    'could be charged with nothing recorded. Set it in backend/.env and restart. See ' +
+    '.env.example, and CLAUDE.md for the ordered steps.'
+  );
+}
+
+module.exports = { reportPendingRepairs, reportGatewayConfiguration };

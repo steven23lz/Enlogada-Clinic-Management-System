@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import SlotPicker from './SlotPicker';
 import api from '../../config/api';
 import { AlertCircle, ArrowRight, CalendarClock } from 'lucide-react';
+import { formatTime12 } from '../../lib/date';
 
 /**
  * Move an existing booking to a different slot.
@@ -95,7 +96,7 @@ const RescheduleDialog = ({ open, onOpenChange, appointment, onRescheduled }) =>
             <CalendarClock className="h-4 w-4 flex-shrink-0 text-brand-600" />
             <div className="min-w-0 text-fine">
               <span className="block font-semibold text-slate-900">
-                {formatDate(appointment.scheduled_date)} at {currentTime}
+                {formatDate(appointment.scheduled_date)} at {formatTime12(currentTime)}
               </span>
               <span className="block text-slate-500">Current appointment</span>
             </div>
@@ -104,7 +105,7 @@ const RescheduleDialog = ({ open, onOpenChange, appointment, onRescheduled }) =>
                 <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-400" />
                 <div className="min-w-0 text-fine">
                   <span className="block font-semibold text-brand-700">
-                    {formatDate(date)} at {time}
+                    {formatDate(date)} at {formatTime12(time)}
                   </span>
                   <span className="block text-slate-500">New time</span>
                 </div>

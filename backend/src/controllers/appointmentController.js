@@ -1,4 +1,5 @@
 const appointmentService = require('../services/appointmentService');
+const { formatTime12 } = require('../constants/clockFormat');
 const { discardHmoCard } = require('../config/upload');
 const { isStaffUser } = require('../constants/roles');
 const { isNamed } = require('../services/referralService');
@@ -206,7 +207,7 @@ class AppointmentController {
 
       return res.status(200).json({
         status: 'success',
-        message: `Appointment moved to ${scheduledDate} at ${scheduledTime.slice(0, 5)}.`,
+        message: `Appointment moved to ${scheduledDate} at ${formatTime12(scheduledTime)}.`,
         data: { appointment }
       });
     } catch (err) {

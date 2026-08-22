@@ -81,7 +81,9 @@ test.describe('HMO card evidence (UI)', () => {
     await dialog.locator('input[type="date"]').fill(date);
 
     // Slots are fetched by the component itself now, not by the page.
-    const slot = dialog.locator('button', { hasText: /^\d{2}:\d{2}$/ }).first();
+    // Slot buttons carry a data-testid holding the 24-hour value; the visible label is a
+    // 12-hour clock. Matching the testid keeps this about "a slot button exists". [1.36.0]
+    const slot = dialog.locator('[data-testid^="slot-"]').first();
     await expect(slot).toBeVisible({ timeout: 10000 });
     await slot.click();
 
