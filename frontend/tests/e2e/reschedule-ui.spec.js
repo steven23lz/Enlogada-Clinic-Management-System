@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { selfPayProfile } from './helpers/patients.js';
+import { formatTime12 } from '../../src/lib/date.js';
 
 // The reschedule dialog, driven through the browser.
 //
@@ -91,7 +92,10 @@ test('a patient reschedules from their own booking list', async ({ page }) => {
   await expect(confirm).toBeDisabled();
 
   // The slot currently held is marked and still selectable; a different one is picked here.
-  await dialog.getByRole('button', { name: free[1].time, exact: true }).click();
+  // By testid, not by label. The button now reads "9:30 AM" while the API still says "09:30",
+  // and a test that clicks a rendered clock breaks the next time the clinic changes how it
+  // writes one. Same rule CLAUDE.md states for class names. [1.36.0]
+  await dialog.getByTestId(`slot-${free[1].time}`).click();
   // exact, or it also substring-matches the "Confirm new time" button.
   await expect(dialog.getByText('New time', { exact: true })).toBeVisible();
   await expect(confirm).toBeEnabled();
@@ -101,7 +105,8 @@ test('a patient reschedules from their own booking list', async ({ page }) => {
 
   // The list reflects the move without a reload, and the reference is unchanged.
   await expect(page.getByText(reference).first()).toBeVisible();
-  await expect(page.getByText(free[1].time).first()).toBeVisible({ timeout: 10000 });
+  // The list renders a 12-hour clock, so assert on that rather than on the wire value.
+  await expect(page.getByText(formatTime12(free[1].time)).first()).toBeVisible({ timeout: 10000 });
 
   expect(errors, `page errors: ${errors.join(' | ')}`).toHaveLength(0);
 });

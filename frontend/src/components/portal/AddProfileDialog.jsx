@@ -4,6 +4,8 @@ import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { DateField, BIRTHDATE_YEAR_RANGE } from '../ui/date-field';
+import { todayStr } from '../../lib/date';
 
 /**
  * Creating a patient profile under this account.
@@ -62,12 +64,16 @@ export default function AddProfileDialog({ profiles, reference }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5 sm:col-span-2">
-                  <label htmlFor="clientdashboard-birthdate" className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
-                  <Input id="clientdashboard-birthdate"
-                    type="date"
+                  <label htmlFor="addprofile-birthdate" className="text-xs font-semibold text-gray-600 uppercase">Birthdate <span className="text-rose-600">*</span></label>
+                  {/* id was `clientdashboard-birthdate`, the same string EditProfileDialog
+                      used — two dialogs sharing one DOM id, which makes htmlFor ambiguous and
+                      a label click focus whichever mounted first. */}
+                  <DateField id="addprofile-birthdate"
                     value={profiles.addDraft.birthdate}
                     onChange={e => profiles.setAddDraft({...profiles.addDraft, birthdate: e.target.value})}
                     disabled={profiles.adding}
+                    max={todayStr()}
+                    yearRange={BIRTHDATE_YEAR_RANGE}
                     required
                   />
                 </div>

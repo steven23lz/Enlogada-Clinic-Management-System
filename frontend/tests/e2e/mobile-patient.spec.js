@@ -72,6 +72,25 @@ test('no screen in the patient journey scrolls sideways on a phone', async ({ pa
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.waitForTimeout(600);
   expect(await overflowOf(), 'the booking dialog overflows horizontally').toBe(0);
+
+  // The date popover, which is the widest fixed-size thing in that dialog. [1.34.0]
+  //
+  // The app's own calendar replaced the browser's picker, and a browser picker could never
+  // overflow the page because the browser drew it outside the document. Ours cannot borrow that
+  // guarantee: it is an absolutely-positioned element in the layout, 280px wide, inside a dialog
+  // on a 390px screen. Right-aligned for exactly this reason, and asserted here rather than
+  // reasoned about — a control that pushes the page sideways is one of the two failure modes
+  // this file exists to catch.
+  await page.getByRole('button', { name: 'Open calendar' }).first().click();
+  await expect(page.getByRole('dialog', { name: 'Choose a date' })).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await overflowOf(), 'the date popover overflows horizontally').toBe(0);
+
+  // And it must close again without taking the booking dialog with it — the popover and the
+  // dialog both listen for Escape, and the inner one has to win.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Choose a date' })).toBeHidden();
+  await expect(page.getByRole('dialog').first()).toBeVisible();
 });
 
 // The staff worklists at phone width. [1.29.0]

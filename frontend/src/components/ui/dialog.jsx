@@ -27,11 +27,30 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
-const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => (
+/**
+ * Escape closes the innermost thing, not the outermost. [1.34.0]
+ *
+ * Radix registers its Escape listener on the document in the CAPTURE phase when the dialog
+ * mounts — before any popover inside it exists — so a later listener can never run first,
+ * whatever phase it uses. One press therefore closed the whole dialog while a date popover was
+ * still open on top of it, throwing away a half-filled booking form to dismiss a calendar.
+ *
+ * Radix skips its own dismiss when the event has been defaultPrevented by this callback, so
+ * deferring is the supported way out. The check is a DOM query rather than context because
+ * DateField is a leaf that knows nothing about the dialog it happens to be rendered inside, and
+ * a context would make every consumer wire something up to get correct behaviour by default.
+ *
+ * DateField clears the attribute as it closes, so the next Escape reaches the dialog normally.
+ */
+const DialogContent = React.forwardRef(({ className, children, onEscapeKeyDown, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      onEscapeKeyDown={(event) => {
+        if (document.querySelector('[data-datefield-open]')) event.preventDefault();
+        onEscapeKeyDown?.(event);
+      }}
       className={cn(
         "fixed left-[50%] top-[50%] z-50 grid max-h-[90vh] w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-2xl border border-[#e6ebf1] bg-white p-6 shadow-overlay duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
         className

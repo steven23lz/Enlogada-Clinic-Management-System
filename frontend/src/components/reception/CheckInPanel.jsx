@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertCircle, CalendarClock, Camera, CheckCircle2, Keyboard, QrCode, UserCheck, UserX } from 'lucide-react';
-import { formatAppointmentDate } from '../../lib/date';
+import { formatAppointmentDate, formatTime12 } from '../../lib/date';
 import { Button } from '../ui/button';
 import { Panel } from '../ui/panel';
 import { Badge } from '../ui/badge';
@@ -101,7 +101,7 @@ export default function CheckInPanel({ checkIn, disposition }) {
                       raw printed "2026-08-10T16:00:00.000Z" — unreadable, and one day behind
                       the real date on a UTC+8 clock. This is the screen where reception
                       confirms a booking is for today, so it was also the worst place for it. */}
-                  <span className="font-bold text-gray-800">{formatAppointmentDate(checkIn.result.scheduled_date)} at {checkIn.result.scheduled_time}</span>
+                  <span className="font-bold text-gray-800">{formatAppointmentDate(checkIn.result.scheduled_date)} at {formatTime12(checkIn.result.scheduled_time)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-gray-500 uppercase">Queue Ticket</span>

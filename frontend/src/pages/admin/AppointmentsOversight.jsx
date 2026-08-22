@@ -10,6 +10,7 @@ import { SkeletonRows } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { CalendarClock } from 'lucide-react';
+import { formatTime12 } from '../../lib/date';
 
 const STATUS_FILTERS = ['All', 'Pending', 'Confirmed', 'Completed', 'Cancelled', 'No Show'];
 
@@ -125,7 +126,7 @@ const AppointmentsOversight = () => {
                     <TableCell className="font-mono text-fine text-slate-500">{a.appointment_reference}</TableCell>
                     <TableCell className="font-semibold text-slate-900">{a.first_name} {a.last_name}</TableCell>
                     <TableCell>
-                      {new Date(a.scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &bull; {a.scheduled_time?.slice(0, 5)}
+                      {new Date(a.scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &bull; {formatTime12(a.scheduled_time)}
                     </TableCell>
                     <TableCell className="text-slate-500">{a.visit_type}</TableCell>
                     <TableCell><StatusBadge status={a.status} /></TableCell>

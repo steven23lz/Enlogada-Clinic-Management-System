@@ -1,5 +1,377 @@
 # Database Migration & Schema History
 
+## [1.37.0] - 2026-08-23 (Both halves of the gateway, or neither)
+
+No schema change.
+
+### Half-configured meant charging a patient and recording nothing
+
+`isConfigured()` tested `PAYMONGO_SECRET_KEY` alone, while `verifyWebhookSignature` verifies
+against `PAYMONGO_WEBHOOK_SECRET` — a different value, from a different screen in PayMongo's
+dashboard, displayed once when a human creates the webhook.
+
+With the key set and the webhook secret blank: the UI offered GCash, the patient really was
+charged, every delivery was rejected 401 through PayMongo's entire retry schedule, the payment
+stayed `Pending`, the visit was never released, and nobody was notified. Money taken, nothing
+recorded, and no error surfaced anywhere. Having one secret and not the other is the ordinary way
+to get this wrong, not an exotic one — they are obtained at different moments.
+
+`isConfigured()` now requires both, so the half-configured state simply leaves online payment off
+and the clinic keeps taking counter payments, which is a supported and documented configuration.
+`startupAdvisory` names the missing half at boot; it is not a startup failure, because refusing to
+boot over a payment option would take the whole clinic down to report something the front desk
+works around all day.
+
+### A card that said two things at once
+
+`BookingPass` rendered "Payment due at the counter" gated on `is_paid` alone, so with the gateway
+on it appeared on the same card as the Pay with GCash buttons. Now gated on there being no online
+option.
+
+### Activation is configuration, verified
+
+Audited end to end: no feature flag, no hardcoded `false`, no commented-out route, and the raw-body
+handling the HMAC needs is already mounted app-wide ahead of the routes. Every activation step is
+`.env`, infrastructure, or an action inside PayMongo's dashboard — the ordered list is now in
+CLAUDE.md. The only step no code can take is creating the webhook itself.
+
+---
+
+## [1.36.0] - 2026-08-22 (The clinic's clock is 12-hour)
+
+No schema change. Display only — every stored time stays 24-hour.
+
+`scheduled_time` is a Postgres TIME, the availability grid emits zero-padded `"HH:MM"`, and the
+reschedule endpoint validates that shape, so formatting happens on the way into a sentence and
+never on the way into a query or a response field. `formatTime12` in `frontend/src/lib/date.js`,
+mirrored by `backend/src/constants/clockFormat.js`.
+
+Written out rather than routed through `toLocaleTimeString` for two reasons: the stored value is a
+bare `"HH:MM"` with no date and `new Date("09:30")` is Invalid Date, so a Date would have to be
+fabricated around it — which is where UTC-vs-local errors get in; and `hour: 'numeric'` renders
+24-hour on an en-GB browser, so the clinic's clock would have depended on a machine's regional
+settings. Midnight and noon are the cases a hand-rolled version gets wrong (`h % 12` renders both
+as `0`); both are covered.
+
+### The backend was quoting a different time from the screen
+
+`appointmentEmailService`'s `readableTime` was `.slice(0, 5)`, so the confirmation email said
+`09:30` while the appointment card said `9:30 AM` — one appointment, two times. Four notification
+and audit strings had the same split. All now share the formatter.
+
+### Five locale sites were not 12-hour at all
+
+`Receipt.jsx`, `ResultsTab.jsx`, `AdminDashboard.jsx` and `formatDateTime` used
+`hour: '2-digit'`/`'numeric'` with an undefined locale, which is 12-hour on en-US and **24-hour on
+en-GB**. Pinned with `hour12: true`.
+
+### Tests decoupled from presentation
+
+`reschedule-ui.spec.js` clicked a slot button by its rendered label and `hmo-card-review.spec.js`
+matched an anchored `/^\d{2}:\d{2}$/`. Slot buttons now carry `data-testid={`slot-${time}`}` with
+the 24-hour value and the tests select on that — the same rule CLAUDE.md states for class names,
+applied to text. Also fixed `CheckInPanel`, the one site that had been rendering `09:00:00`.
+
+---
+
+## [1.35.0] - 2026-08-22 (A booking holds its slot; it does not take it)
+
+Run `node src/scripts/migrateSlotHold.js` (`--rollback` reverses it).
+
+### What was broken
+
+`POST /appointments` writes the appointment before payment is ever discussed, and capacity was
+`status <> 'Cancelled'` and nothing else — no capacity query joined `payments`. A slot was taken
+the instant a booking existed, paid or not, and exactly one thing could give it back: a human
+cancelling it.
+
+So a patient who opened GCash and closed the tab held 11:30 **forever**. Nothing released it:
+there is no cron or scheduler in this project, none of the three retention passes touches
+`appointments`, `cancelPendingGatewayPayments` updates the `payments` table alone, and the webhook
+understands only `checkout_session.payment.paid` — a failed or expired session is answered with
+`{ handled: false }` and 200. `cleanE2eData.js`'s own header already recorded the consequence:
+every bookable day filled within three days of test runs.
+
+### One nullable column, and NULL means permanent
+
+`appointments.held_until`. Nothing is back-filled, so every existing booking keeps meaning exactly
+what it meant. Only a **client's own self-pay booking awaiting online payment** is provisional; the
+three exclusions are each a case where the booking is already real — a staff booking (the patient
+is at the desk), an HMO booking (settled at the clinic by design, so it must never be conditional
+on an online payment that will never happen), and a clinic with no gateway configured (the
+instruction is "pay at the counter", and a slot expiring while the patient travels in would be
+worse than the bug being fixed).
+
+**Note the consequence of that last one: with no `PAYMONGO_SECRET_KEY` the hold never engages and
+every booking is permanent, exactly as before.** It becomes live when a real key is configured.
+
+### Expiry is evaluated at READ time, not swept
+
+There is no reaper job and adding one would be worse: a sweeper reopens the slot at the next sweep
+rather than when the hold ends, which is the same bug with a shorter fuse. `held_until >
+CURRENT_TIMESTAMP` sits in the capacity predicate, so the slot returns at the exact instant the
+hold lapses, with nothing scheduled that can fail. The abandoned row is left as the record of an
+attempt rather than deleted.
+
+The predicate lives in `src/constants/slotHold.js` because **three** queries answer "is this slot
+taken" — the availability grid, the booking-time check and the reschedule-time check. They agreed
+before only by spelling the same string three times, and a term added to two of them is how a
+patient is shown a free slot and then refused it.
+
+### Paying after the hold lapsed
+
+`confirmHold` is unconditional on the hold still being alive. If the patient took longer than the
+window and the slot was resold, the money has still moved — refusing to honour the booking does not
+give it back, the same reasoning `forceSettleGatewayPayment` is built on. The appointment stands
+and staff are notified that the slot is overbooked.
+
+Hold window: 15 minutes, refreshed each time checkout is reopened, so a patient who is actually
+paying never loses their slot to the clock — only one who has stopped.
+
+---
+
+## [1.34.0] - 2026-08-22 (A calendar the app actually owns)
+
+No schema change.
+
+### Why the native picker had to be replaced rather than styled
+
+The calendar behind `<input type="date">` is drawn by the browser outside the document, so no CSS
+reaches it. Replacing it is the only way to change it.
+
+What was NOT replaced is the important half: the `<input type="date">` stays. The value remains a
+bare ISO `YYYY-MM-DD`, so every caller, form and test that reads or fills it is unchanged; `min`
+and `max` keep being enforced natively as a backstop; `required` keeps participating in form
+validation; and on a phone tapping the field still opens the OS picker, which beats a 280px grid
+at 390px. All 17 date inputs migrated — 4 birthdates (month/year dropdowns, and `max=today`, which
+none of them carried, on a field that re-interprets released results), 1 booking picker, 12 range
+filters (which got Today / Last 7 / Last 30 presets, usually the actual question).
+
+### Firefox: the glyph cannot be hidden, so we stay out of the way
+
+Measured in Firefox 153, not assumed: `::-moz-calendar-picker-indicator` and
+`::-moz-calendar-button` are both **discarded by the parser** as unrecognised selectors, and
+`appearance: textfield` leaves the glyph untouched. Mozilla bugs 1830890 and 1812397 are open.
+Covering it was tried and rejected too — Firefox draws its glyph inline after the date text
+(~x=380 in a 150px field), not flush right where our trigger sits (x=405).
+
+So: where the glyph can be removed we own the picker completely; where it cannot, `DateField`
+renders nothing custom and the field behaves exactly as the browser intends. One icon either way.
+Feature-detected via `CSS.supports('selector(::-webkit-calendar-picker-indicator)')`, never
+sniffed — Playwright's Firefox reports an *AppleWebKit* user-agent, so a UA test answers this
+question wrongly on the very browser it is about.
+
+### Escape closes the innermost thing
+
+Radix registers its Escape handler on the document in the CAPTURE phase when a dialog mounts —
+before any popover inside it exists — so a later listener can never run first, whatever phase it
+uses. One press therefore closed the whole booking dialog while a calendar was open on top of it.
+Radix skips its own dismiss when the callback defaultPrevents, so `DialogContent` now defers while
+`[data-datefield-open]` is present. Covered in `mobile-patient.spec.js`.
+
+### Clicking the field opens the calendar
+
+`onClick`, deliberately not `onMouseDown` + `preventDefault`: preventing the default is what would
+stop the caret being placed and the segment selected, which is the typing this is meant to leave
+alone. Gated to `pointer: fine`, so a phone keeps its OS picker rather than stacking two.
+
+**Accessibility cost, stated rather than hidden:** ARIA in HTML permits no `role` and no
+`aria-expanded` on `input type=date`, and the APG combobox pattern that carries them requires
+`type="text"` — which this design rejects for the four reasons above. A screen-reader user
+clicking the field would otherwise get a dialog opening silently. A polite live region announces
+it. That is mitigation, not a cure; icon-only opening is the stricter alternative, and is what
+Firefox itself concluded in bug 1804879.
+
+### Fixed on the way through
+
+- `AddProfileDialog` and `EditProfileDialog` both rendered `id="clientdashboard-birthdate"` — two
+  dialogs, one DOM id, making `htmlFor` ambiguous.
+- Two Per-Staff Workload inputs on Reports had no accessible name at all: no label, no
+  `aria-label`, no id.
+- `ticket-release-gating.spec.js` probed "tomorrow" with `toISOString()`, the UTC bug this project
+  documents. Before 08:00 Manila that returns today; after, tomorrow. Run on a Saturday it probed
+  Sunday, the one closed day, and three release-gating tests skipped — silently, reported only as
+  "3 skipped". It now probes forward for a day the clinic is actually open.
+
+---
+
+## [1.33.0] - 2026-08-22 (Only the methods the clinic can settle)
+
+Run `node src/scripts/migratePaymentMethods.js` (`--rollback` restores the previous vocabulary).
+
+### PayMaya is gone
+
+The clinic owner holds no PayMaya merchant account, so offering it was offering a way to pay
+that nobody could collect. Removed from the counter buttons, the online gateway, the e-wallet
+bucket and `chk_payment_method`.
+
+### The migration refuses rather than converts
+
+A CHECK constraint cannot be narrowed while a row violates it, and there are exactly two ways
+past that — one of them is rewriting a receipt to claim it was paid by a method the patient did
+not use. Which method a real receipt should say is not a question a script can answer, so it
+names the offending rows and stops. Same stance `migrateClaimIntegrity.js` takes on two live
+claims for one test.
+
+**`NOT VALID` is the wrong tool here**, and specifically dangerous. It skips the initial scan but
+Postgres still enforces the constraint on every later UPDATE:
+
+- A `'Pending'` gateway row for a PayMaya checkout started before the change. PayMongo delivers
+  `checkout_session.payment.paid`, `markGatewayPaymentPaid` UPDATEs, the CHECK re-evaluates
+  against the new row version and raises `23514`. Only `23505` is caught, so the webhook 500s,
+  PayMongo redelivers, and it fails identically forever — the patient charged, no receipt. Worse,
+  `getNextReceiptNumber()` runs *before* that UPDATE and the counter never rewinds, so every
+  redelivery burns a receipt number: a widening gap in the official sequence, which is the exact
+  thing `daily_counters` exists to prevent.
+- A historical `'Paid'` PayMaya receipt a cashier later needs to reverse. `updatePaymentStatus`
+  is an UPDATE; same violation, and the refund becomes impossible.
+
+So: no violating row, or no migration. Verified by running it against the seeded data first — it
+refused, named all nine receipts, and changed nothing.
+
+### One vocabulary, not six
+
+`backend/src/constants/paymentMethods.js` is now the single definition, and the CHECK constraint
+is built from it. It previously lived in six places that had no way of knowing about each other:
+an inline SQL literal in the summary's e-wallet bucket, a hard-coded JSX array in the cashier
+terminal, a caption string, the gateway map, `schema.sql`, and two seeder rotations.
+
+Restoring PayMaya later is one line in that constant, one in `frontend/src/lib/paymentMethods.js`,
+and `migratePaymentMethods.js --rollback`. The module asserts at load that every method lands in
+exactly one cash-up tile and that every gateway key is a valid method — the first because the
+Cash/E-Wallet/Bank tiles are asserted to sum to the collected total, the second because a gateway
+key is written straight into `payments.payment_method` and would otherwise violate the constraint
+at settlement, after the patient had been charged.
+
+### A Method filter on Cashier Monitoring
+
+Applied in SQL, filtering the list **and** the summary. Filtering in the browser would have been
+one line and wrong: the per-cashier cards reduce the row list, and they sit in the same grid as
+`summary.collected`, which is aggregated over the whole range — so a client-side filter moves one
+and not the other. `lib/collections.js` records that mismatch shipping on this screen once
+already. An unrecognised method is rejected with 400 rather than ignored: on a money screen,
+silently returning everything reads as "the clinic took nothing that way".
+
+### A booking can no longer be made in the past
+
+`SlotPicker` has carried `min={todayStr()}` all along, but that is a browser hint — it does not
+survive a typed value everywhere, and it does not exist for anything talking to the API. Nothing
+on the server compared the date to today, so `POST /appointments` would create a real visit and a
+real appointment for last week, occupying a slot on a day that has already happened. Guarded now
+on all three paths that matter: create, reschedule (the only other writer of `scheduled_date`),
+and availability — which answers "closed" for a past day so the screen never offers a slot the
+API would refuse.
+
+Inclusive of today: the elapsed part of today is already handled in `getAvailableSlots`, and
+refusing today outright would refuse a walk-in booked for this afternoon.
+
+---
+
+## [1.32.0] - 2026-08-22 (The other half of the cash book)
+
+No schema change. `migrateRefundTimestamp.js` gained a better backfill and is safe to re-run —
+it corrects a fabricated date in place — but nothing new is added to any table.
+
+### The fix landed in one of two repositories
+
+[1.30.0] moved `paymentRepository` to a period cash book and left `reportRepository` on
+`payment_status = 'Paid'` over a `paid_at` range. Two consequences, and the second is worse than
+the first:
+
+1. **They disagreed about the same day.** One 550.00 receipt paid and reversed today: the
+   cashier's strip read 550.00 collected, the operations report's "Takings" panel read 0.00.
+2. **The regression [1.30.0] is named for survived in the half that gets PRINTED.** `getBillingTotals`
+   still bucketed everything by `paid_at`, so reversing an older receipt still silently reduced a
+   day that had already been printed and filed.
+
+`getRevenueTrend`, `getPaymentMethodBreakdown` and `getSalesByService` restated closed days the
+same way. All four now read their predicates from `src/constants/moneyRange.js`, which
+`paymentRepository` also uses — one definition, because two drifted apart within a single commit
+of each other.
+
+`getSalesByService` had to move in the same change as `getBillingTotals`: `operations-report.spec.js`
+asserts the sum of that breakdown reconciles to the collected figure, and two bases break it the
+moment anything is reversed.
+
+### Two coupled defects in `getBillingTotals`
+
+- No `receipt_number IS NOT NULL`.
+- `refunds`/`refunded` counted `'Refunded'` only, so a receipt a staff member VOIDED — status
+  `'Cancelled'`, a real reversal — was reported by the cashier's summary and by nothing at all
+  here. Its amount also fell out of `collected`, under-reporting both sides at once, and the panel
+  hides the stat when it is zero: a day of nothing but voids showed no reversal at all.
+
+They cancelled, which is why neither was visible. Fixing either alone makes abandoned gateway
+checkouts — money never taken — report as refunds. One change, not two.
+
+### Backfilled from the audit trail
+
+[1.30.0] set `refunded_at = paid_at` for existing reversals, recorded at the time as a real gap
+because `payments` has no `updated_at`. But `audit_log` carries a `payment.refunded` /
+`payment.cancelled` entry for every reversal, and its `created_at` is the real moment — reading it
+states nothing new, it moves a fact from the table that recorded it to the table that needs it.
+Retention is ~7 years for non-PHI actions (`pruneAuditLog.js`), longer than any cash-up looks back.
+
+Two passes now: the audit trail first, then `paid_at` for whatever it cannot account for, with the
+counts reported separately so the difference is never invisible. The pass also **corrects** a row
+already carrying the fabricated date (`refunded_at = paid_at` exactly — never true of a real
+reversal), which closes the round-trip weakness noted in [1.30.0]: rolling back and reapplying used
+to overwrite a true reversal date permanently.
+
+### A resurrected receipt counted as money returned, forever
+
+`forceSettleGatewayPayment` flips a `'Cancelled'` row back to `'Paid'` when the patient completed a
+checkout we had written off. It did not clear `refunded_at`, and the `reversed` figure keys on
+`refunded_at IS NOT NULL` *without* testing `payment_status` — so the receipt was reported as
+handed back on a day it was actually taken, for as long as the row existed.
+
+### The cross-day case finally has a test
+
+Every test in `cashup-reversals.spec.js` settled and reversed inside one test body, so both dates
+landed on the same day — the case that was never broken. Reaching the broken one needs a receipt
+older than today, which no API can produce. `backend/src/scripts/e2eBackdatePayment.js` ages one,
+refusing anything that is not an E2E-created receipt and refusing to run under
+`NODE_ENV=production` at all. Verified the new test fails against the pre-[1.30.0] semantics before
+trusting it.
+
+### Getting the correction onto a database that already ran [1.30.0]
+
+There is no automatic path, and that was checked rather than assumed: this project has no
+migration ledger table, no npm lifecycle hooks, no nodemon config, no active git hooks, and
+`server.js` opens a port and nothing else. Running the backfill at boot was the obvious idea and
+is the wrong one — `audit_log` has no index on `action`, the backfill aggregates over every
+'payment'-typed row in a table documented as reaching ~300,000 rows a year, the migration scripts
+use `db.pool.connect()` under a stated assumption that they run alone, and `statement_timeout` is
+15s. This file already records what happened the one time schema work hid inside a script that ran
+for another reason.
+
+So the cheap half of the question is asked at boot and the expensive half is not.
+`src/config/startupAdvisory.js` counts rows where `refunded_at = paid_at` to the microsecond — the
+signature of the old backfill, never true of a real reversal — and logs the command to fix them.
+It touches only `payments`, uses the partial index so it scans reversals alone, never throws, and
+says nothing when there is nothing to say.
+
+The instruction in CLAUDE.md also moved. It sat inside the migration block, under a header scoping
+that block to "any database created before [1.29.0]" — so the databases this applies to, which are
+by definition newer, would correctly skip past it. It is now stated above that gate.
+
+### Screens
+
+`counted_in_collected` is now returned per row, because which rows make up `collected` depends on
+the range and only the query knows it: the list matches on **either** date, so it holds receipts
+taken earlier and only reversed inside the range. `lib/collections.js` reads that flag — its
+`payment_status === 'Paid'` test was wrong in both directions and made two breakdowns sum to
+`collected - reversed` while a card in the same grid showed `collected`.
+
+Two captions asserted the opposite of what the code now does and were corrected: "Receipts
+Settled … N more issued, then reversed" (they are counted, and on a same-day reversal they are not
+"more"), and Cashier Monitoring's "not in collections". A **Net in Drawer** figure was added to the
+collections strip and the shift panel, shown only when something was reversed: `reversed` is
+reported beside `collected` and never subtracted from it, which left the cashier doing that
+subtraction in their head against the cash in front of them.
+
+---
+
 ## [1.31.0] - 2026-08-21 (One live claim per test; a dead column removed)
 
 Run `node src/scripts/migrateClaimIntegrity.js` on any database created before this version

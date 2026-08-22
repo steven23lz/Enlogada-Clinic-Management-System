@@ -2,6 +2,8 @@
 import { test, expect, request } from 'playwright/test';
 import { payAndReleaseWalkIn, confirmAppointmentCheckIn } from './helpers/ticketRelease.js';
 import { selfPayTypeId } from './helpers/patients.js';
+import { COUNTER_PAYMENT_METHODS } from '../../src/lib/paymentMethods.js';
+import { daysAgoStr } from '../../src/lib/date.js';
 
 // Ticket Release Gating.
 //
@@ -69,30 +71,6 @@ async function createUnreleasedWalkIn(apiContext, recToken) {
   const visitTestId = (await vtRes.json()).data.visitTests[0].id;
 
   return { patient, visit, visitTestId };
-}
-
-/**
- * Tomorrow, in the SERVER'S local calendar, skipping days the clinic is shut.
- *
- * This was `new Date(Date.now() + 86400000).toISOString().slice(0, 10)`, which is the bug
- * CLAUDE.md warns about, in its mirror form. toISOString() returns the UTC date, and Philippine
- * time is UTC+8 — so between midnight and 08:00 local, "now plus a day" in UTC is still TODAY
- * locally. Run the suite at 03:11 on a Sunday and it probed Sunday, the clinic is closed Sundays,
- * and `test.skip(!avail.isOpen)` fired.
- *
- * Three tests then reported as skipped rather than failed, which is the dangerous part: they are
- * the ones asserting that an unpaid appointment stays invisible to the department, and a security
- * check that silently does not run looks exactly like a security check that passed.
- *
- * Saturday is skipped as well as Sunday for the reason appointment-reschedule.spec.js documents:
- * the clinic opens 08:00-12:00 on Saturday, 8 slots against 18, and a spec that claims several
- * runs out.
- */
-function nextWorkingDay() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 test.describe('Ticket release gating (API)', () => {
@@ -252,12 +230,26 @@ test.describe('Online appointment gating (API)', () => {
     const profiles = (await profilesRes.json()).data.patients;
     test.skip(!profiles || profiles.length === 0, 'Seeded client has no patient profile to book with.');
 
-    const availRes = await apiContext.get(`${API}/appointments/availability`, {
-      headers: { Authorization: `Bearer ${clientToken}` },
-      params: { date: nextWorkingDay() }
-    });
-    const avail = (await availRes.json()).data;
-    test.skip(!avail.isOpen, 'Clinic closed on the probed date.');
+    // Probe forward for a day the clinic is actually OPEN, rather than assuming tomorrow is one.
+    //
+    // This used to ask for `new Date(Date.now() + 86400000).toISOString().slice(0, 10)`, which is
+    // the UTC-vs-local bug CLAUDE.md documents, and it made the suite's coverage depend on the
+    // clock: before 08:00 Manila that expression returns TODAY, after it returns tomorrow. Run on
+    // a Saturday morning it therefore probed Sunday, the one day the clinic is closed, and these
+    // three tests skipped — silently, reported only as "3 skipped" with no indication that a
+    // release-gating boundary had gone unchecked that run.
+    //
+    // daysAgoStr uses local getters. The loop is bounded because a clinic closed all week is a
+    // fixture problem worth failing on rather than looping over.
+    let avail = null;
+    for (let ahead = 1; ahead <= 7 && !avail?.isOpen; ahead += 1) {
+      const availRes = await apiContext.get(`${API}/appointments/availability`, {
+        headers: { Authorization: `Bearer ${clientToken}` },
+        params: { date: daysAgoStr(-ahead) }
+      });
+      avail = (await availRes.json()).data;
+    }
+    expect(avail?.isOpen, 'no open day in the next week — check clinic_operating_hours').toBe(true);
     const slot = avail.slots.find((s) => s.available && !claimedSlots.has(s.time));
     test.skip(!slot, 'No available slot to book.');
     claimedSlots.add(slot.time);
@@ -340,7 +332,7 @@ test.describe('Payment gateway configuration', () => {
     await apiContext.dispose();
   });
 
-  test('gateway status reports availability and only ever offers GCash/PayMaya', async () => {
+  test('gateway status reports availability and only ever offers methods the clinic can settle', async () => {
     const res = await apiContext.get(`${API}/payments/gateway/status`, {
       headers: { Authorization: `Bearer ${clientToken}` }
     });
@@ -348,10 +340,13 @@ test.describe('Payment gateway configuration', () => {
 
     const gateway = (await res.json()).data.gateway;
     expect(typeof gateway.available).toBe('boolean');
-    // The clinic accepts exactly these two e-wallets online. If credentials are absent the
-    // list is empty and the UI falls back to counter payment entirely.
+    // Asserted against the clinic's own vocabulary rather than a list repeated here, so this
+    // goes on testing the rule when the vocabulary changes. PayMaya was removed in [1.33.0] —
+    // the owner holds no PayMaya merchant account — and a hard-coded pair would have kept
+    // passing while asserting something no longer true. If credentials are absent the list is
+    // empty and the UI falls back to counter payment entirely.
     for (const method of gateway.methods) {
-      expect(['GCash', 'PayMaya']).toContain(method);
+      expect(COUNTER_PAYMENT_METHODS).toContain(method);
     }
   });
 

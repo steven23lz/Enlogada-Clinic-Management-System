@@ -6,7 +6,6 @@ import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
 import EmptyState from '../ui/empty-state';
 import { SkeletonRows } from '../ui/skeleton';
 import { Badge } from '../ui/badge';
-import { Input } from '../ui/input';
 import { SearchInput } from '../ui/search-input';
 import { StatusBadge } from '../ui/status-badge';
 import Pagination from '../ui/pagination';
@@ -14,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { formatDateTime } from '../../lib/date';
 import { ReceptionThroughputPanel } from '../reports/OperationsPanels';
 import { HISTORY_PAGE_SIZE } from '../../hooks/useVisitHistory';
+import { DateField, RANGE_PRESETS } from '../ui/date-field';
 
 /**
  * Past visits over a chosen range, with the desk's own throughput beside them.
@@ -33,9 +33,9 @@ export default function VisitHistoryPanel({ history, operations }) {
               onChange={e => history.setSearch(e.target.value)}
               containerClassName="w-full sm:w-56"
             />
-            <Input type="date" value={history.startDate} onChange={e => history.setStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
+            <DateField presets={RANGE_PRESETS.start} value={history.startDate} onChange={e => history.setStartDate(e.target.value)} containerClassName="w-[150px]" aria-label="History start date" />
             <span className="text-fine text-slate-400">to</span>
-            <Input type="date" value={history.endDate} onChange={e => history.setEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
+            <DateField presets={RANGE_PRESETS.end} value={history.endDate} onChange={e => history.setEndDate(e.target.value)} containerClassName="w-[150px]" aria-label="History end date" />
             <Button variant="outline" onClick={history.reload}>
               <RefreshCw className="h-3.5 w-3.5" />
               Apply

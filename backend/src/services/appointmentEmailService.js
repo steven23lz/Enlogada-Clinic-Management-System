@@ -1,4 +1,5 @@
 const { sendEmail } = require('../config/email');
+const { formatTime12 } = require('../constants/clockFormat');
 const logger = require('../config/logger');
 
 /**
@@ -35,7 +36,9 @@ const readableDate = (value) => {
   });
 };
 
-const readableTime = (value) => String(value || '').slice(0, 5);
+// Was `.slice(0, 5)`, which printed 24-hour "09:30" while the screen said "9:30 AM" — the
+// clinic quoting two different times for one appointment. [1.36.0]
+const readableTime = (value) => formatTime12(value);
 
 /** Bare-minimum HTML escaping. Test names and instructions are clinic-authored, not user input,
  *  but they land in an email body and a stray angle bracket should not break the layout. */

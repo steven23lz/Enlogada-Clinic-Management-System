@@ -1,13 +1,21 @@
 const db = require('../config/database');
+const {
+  ISSUED_IN_RANGE, REVERSED_IN_RANGE, ISSUED_RECEIPT_CLAUSE
+} = require('../constants/moneyRange');
+// The payment vocabulary and the cash-up buckets built from it. [1.33.0]
+const {
+  CASH_METHOD, BANK_METHOD, EWALLET_METHODS, sqlList
+} = require('../constants/paymentMethods');
 
 // A row that represents a receipt the clinic actually handed to a patient — settled, or settled
 // and later reversed. Written once and shared by the log and its summary so the two can never
 // disagree about which rows they are describing, which is the failure this pair exists to avoid.
 // See the note in findTransactions for why both halves are needed.
-const ISSUED_RECEIPT = `
-  WHERE pay.payment_status IN ('Paid', 'Refunded', 'Cancelled')
-    AND pay.receipt_number IS NOT NULL
-`;
+//
+// Now shared with reportRepository too, for the same reason one step out: the operations report
+// counted reversals without it and only escaped counting abandoned checkout sessions as refunds
+// by also omitting 'Cancelled'. Two mistakes cancelling is not a rule holding.
+const ISSUED_RECEIPT = `WHERE ${ISSUED_RECEIPT_CLAUSE}`;
 
 class PaymentRepository {
   /**
@@ -54,7 +62,7 @@ class PaymentRepository {
   // 2.0 MB response — and this is the money screen, read on every cashier dashboard load and by
   // Admin's monitoring view. `limit` is optional so the callers that legitimately need the whole
   // set (today's collections total, the metric strip) are unchanged.
-  async findTransactions({ startDate, endDate, limit = null, offset = 0 }) {
+  async findTransactions({ startDate, endDate, method = null, limit = null, offset = 0 }) {
     // The FROM/JOIN chain is shared by the list and the count, so the two can never disagree
     // about which rows they are talking about. Written out rather than derived from the list
     // query by a regex: that would break silently the next time somebody edits the SELECT list.
@@ -63,12 +71,6 @@ class PaymentRepository {
       LEFT JOIN users u ON pay.processed_by = u.id
       JOIN patient_visits pv ON pay.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
-    `;
-    const selectList = `
-      SELECT pay.*,
-             u.first_name as processed_by_first_name, u.last_name as processed_by_last_name,
-             p.first_name as patient_first_name, p.last_name as patient_last_name,
-             pv.queue_number
     `;
     let whereText = '';
     const params = [];
@@ -108,21 +110,49 @@ class PaymentRepository {
     // Money totals do NOT come from this list any more; see findTransactionSummary. Widening a
     // list that ten client-side reduce() calls were summing is exactly how a refund would have
     // started counting as revenue.
-    if (startDate && endDate) {
-      // Half-open range rather than a ::date cast: a B-tree index cannot serve a predicate on
-      // an expression, so the cast turned every transaction lookup into a sequential scan of
-      // payments — the table that grows fastest and is read on every cashier dashboard load.
-      whereText = `${ISSUED_RECEIPT} AND (
-        (pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1))
-        OR (pay.refunded_at >= $1::date AND pay.refunded_at < ($2::date + 1))
+    // Half-open range rather than a ::date cast: a B-tree index cannot serve a predicate on an
+    // expression, so the cast turned every transaction lookup into a sequential scan of payments
+    // — the table that grows fastest and is read on every cashier dashboard load.
+    //
+    // Built from the same fragments as the summary's WHERE, so the log and the money can never
+    // describe different rows — which is the one invariant cashup-reversals.spec.js exists to
+    // hold. The `refunded_at IS NOT NULL` in REVERSED_IN_RANGE is redundant against a range test
+    // that a NULL fails anyway, and is kept because sharing one definition is worth more than
+    // shaving a term off a predicate.
+    const hasDates = Boolean(startDate && endDate);
+    if (hasDates) params.push(startDate, endDate);
+    whereText = `${ISSUED_RECEIPT} AND (
+        (${ISSUED_IN_RANGE(hasDates)})
+        OR (${REVERSED_IN_RANGE(hasDates)})
       )`;
-      params.push(startDate, endDate);
-    } else {
-      whereText = `${ISSUED_RECEIPT} AND (
-        (pay.paid_at >= CURRENT_DATE AND pay.paid_at < (CURRENT_DATE + 1))
-        OR (pay.refunded_at >= CURRENT_DATE AND pay.refunded_at < (CURRENT_DATE + 1))
-      )`;
+
+    // The optional method filter. [1.33.0] Parameterised rather than interpolated even though the
+    // service has already checked it against COUNTER_METHODS: a validated value that reaches SQL
+    // by concatenation is one refactor away from an unvalidated one.
+    if (method) {
+      params.push(method);
+      whereText += ` AND pay.payment_method = $${params.length}`;
     }
+
+    // The row's own answer to "did this one contribute to the collected figure". [1.30.0]
+    //
+    // The list matches on EITHER date, so it contains rows that are here only because they were
+    // REVERSED in range — a receipt taken last week and refunded today. A client reducing the
+    // list cannot tell those apart without re-deriving the range predicate, and re-deriving it
+    // from `payment_status` is now wrong in both directions: a reversed receipt still counts if
+    // it was taken in range, and a prior-week receipt does not count even though it is listed.
+    //
+    // Cashier Monitoring's per-cashier breakdown and the Reports method breakdown both reduce
+    // this list and both render inside the same grid as the collected total they should sum to.
+    // Answering from the same predicate that computed the total makes them reconcile by
+    // construction rather than by coincidence.
+    const selectList = `
+      SELECT pay.*,
+             (${ISSUED_IN_RANGE(hasDates)}) AS counted_in_collected,
+             u.first_name as processed_by_first_name, u.last_name as processed_by_last_name,
+             p.first_name as patient_first_name, p.last_name as patient_last_name,
+             pv.queue_number
+    `;
 
     const countRes = await db.query(`SELECT COUNT(*)::int AS total ${fromClause} ${whereText}`, params);
     const total = countRes.rows[0].total;
@@ -158,14 +188,19 @@ class PaymentRepository {
    * one pass over one index range, and `refunded` is reported beside `collected` rather than
    * being netted off it. A cash-up needs both numbers: netting hides that a reversal happened.
    */
-  async findTransactionSummary({ startDate, endDate }) {
+  async findTransactionSummary({ startDate, endDate, method = null }) {
     const params = [];
-    let inRange;
-    if (startDate && endDate) {
-      inRange = (col) => `pay.${col} >= $1::date AND pay.${col} < ($2::date + 1)`;
-      params.push(startDate, endDate);
-    } else {
-      inRange = (col) => `pay.${col} >= CURRENT_DATE AND pay.${col} < (CURRENT_DATE + 1)`;
+    const hasDates = Boolean(startDate && endDate);
+    if (hasDates) params.push(startDate, endDate);
+
+    // Applied to the same rows the list sees, so a filtered screen's totals describe exactly the
+    // rows under them. Note what this means for the method tiles: filter to Cash and `ewallet`
+    // and `bank` correctly become zero, because the clinic took nothing by those methods among
+    // the rows being shown. The three still sum to `collected`. [1.33.0]
+    let methodText = '';
+    if (method) {
+      params.push(method);
+      methodText = ` AND pay.payment_method = $${params.length}`;
     }
 
     // Money IN during the range, and money BACK during the range — two different dates, which is
@@ -176,8 +211,13 @@ class PaymentRepository {
     // closed day, so the printed cash-up sheet and the screen disagreed with no way to tell which
     // was right. A receipt paid and refunded on the same day now reads as 550 in and 550 out
     // rather than as nothing having happened, which is what the drawer actually did.
-    const issued = inRange('paid_at');
-    const reversed = `pay.refunded_at IS NOT NULL AND ${inRange('refunded_at')}`;
+    //
+    // These moved to constants/moneyRange.js unchanged. reportRepository was left on the old
+    // `payment_status = 'Paid'` basis, so the operations report's Takings panel disagreed with
+    // this summary about the same day — and still restated closed days, on the half that gets
+    // printed. Two copies of a rule this subtle drift; one cannot.
+    const issued = ISSUED_IN_RANGE(hasDates);
+    const reversed = REVERSED_IN_RANGE(hasDates);
 
     const queryText = `
       SELECT
@@ -186,18 +226,20 @@ class PaymentRepository {
         COUNT(*) FILTER (WHERE ${issued})::int
           AS receipts,
         COALESCE(SUM(pay.amount) FILTER (
-          WHERE ${issued} AND pay.payment_method = 'Cash'), 0)::numeric(12,2)
+          WHERE ${issued} AND pay.payment_method = '${CASH_METHOD}'), 0)::numeric(12,2)
           AS cash,
         COALESCE(SUM(pay.amount) FILTER (
-          WHERE ${issued} AND pay.payment_method IN ('GCash', 'PayMaya')), 0)::numeric(12,2)
+          WHERE ${issued} AND pay.payment_method IN (${sqlList(EWALLET_METHODS)})), 0)::numeric(12,2)
           AS ewallet,
         -- Bank transfer is neither cash nor e-wallet, and without it the method figures do not
         -- reconcile to the collected figure — a 200.00 transfer once appeared in no tile at all,
         -- which is exactly the money a cashier stops to hunt for. Named rather than lumped into
-        -- an "other": chk_payment_method enumerates the whole vocabulary as ('Cash', 'GCash',
-        -- 'PayMaya', 'Bank'), so cash + e-wallet + bank IS the total.
+        -- an "other": chk_payment_method enumerates the whole vocabulary, and Cash + e-wallet +
+        -- Bank partitions it with no remainder, so these three ARE the total. Built from
+        -- constants/paymentMethods.js [1.33.0], which asserts that partition holds rather than
+        -- leaving it as a comment that a fourth method would silently falsify.
         COALESCE(SUM(pay.amount) FILTER (
-          WHERE ${issued} AND pay.payment_method = 'Bank'), 0)::numeric(12,2)
+          WHERE ${issued} AND pay.payment_method = '${BANK_METHOD}'), 0)::numeric(12,2)
           AS bank,
         COALESCE(SUM(pay.discount_amount) FILTER (WHERE ${issued}), 0)::numeric(12,2)
           AS discounts,
@@ -209,7 +251,7 @@ class PaymentRepository {
           AS reversals
       FROM payments pay
       ${ISSUED_RECEIPT}
-        AND ((${issued}) OR (${reversed}))
+        AND ((${issued}) OR (${reversed}))${methodText}
     `;
     const result = await db.query(queryText, params);
     return result.rows[0];
@@ -406,7 +448,12 @@ class PaymentRepository {
       SET payment_status = 'Paid',
           gateway_payment_id = $2,
           receipt_number = $3,
-          paid_at = CURRENT_TIMESTAMP
+          paid_at = CURRENT_TIMESTAMP,
+          -- The row being resurrected is 'Cancelled' and may carry a reversal date. It is money
+          -- again, and the reversed figure keys on refunded_at IS NOT NULL WITHOUT testing
+          -- payment_status [1.30.0] — so leaving it set reports this receipt as money handed
+          -- back, on a day it was actually taken, for as long as the row exists.
+          refunded_at = NULL
       WHERE gateway_session_id = $1 AND payment_status <> 'Paid'
       RETURNING *
     `;

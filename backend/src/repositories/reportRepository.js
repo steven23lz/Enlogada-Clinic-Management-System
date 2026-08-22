@@ -1,13 +1,30 @@
 const db = require('../config/database');
+const {
+  ISSUED_IN_RANGE, REVERSED_IN_RANGE, ISSUED_IN_DAY_RANGE, MONEY_IN_RANGE, ISSUED_RECEIPT_CLAUSE
+} = require('../constants/moneyRange');
 
 class ReportRepository {
+  /**
+   * Money taken in per day. [1.30.0]
+   *
+   * `payment_status = 'Paid'` used to sit in this predicate, which meant a past day's bar shrank
+   * whenever a receipt from that day was reversed weeks later — the chart rewrote history every
+   * time a cashier corrected a mistake. Under the cash book a day's takings are what was taken
+   * that day, whatever became of the receipt afterwards, so the bar is fixed once the day ends.
+   *
+   * `ISSUED_RECEIPT_CLAUSE` is new here and is what keeps 'Pending' checkout sessions out now
+   * that the status test is gone: an online checkout inserts a row the moment the patient is
+   * redirected, carrying a `paid_at` it got from DEFAULT CURRENT_TIMESTAMP, and that is not money
+   * until the signed webhook says so.
+   */
   async getRevenueTrend(startDate, endDate) {
     const queryText = `
-      SELECT paid_at::date as day, SUM(amount) as total
-      FROM payments
-      WHERE payment_status = 'Paid' AND paid_at >= $1::date AND paid_at < ($2::date + 1)
-      GROUP BY paid_at::date
-      ORDER BY paid_at::date
+      SELECT pay.paid_at::date as day, SUM(pay.amount) as total
+      FROM payments pay
+      WHERE ${ISSUED_RECEIPT_CLAUSE}
+        AND ${ISSUED_IN_DAY_RANGE}
+      GROUP BY pay.paid_at::date
+      ORDER BY pay.paid_at::date
     `;
     const result = await db.query(queryText, [startDate, endDate]);
     return result.rows;
@@ -39,12 +56,16 @@ class ReportRepository {
     return result.rows;
   }
 
+  // Same basis as the cashier's cash / e-wallet / bank tiles, which are FILTERed off `issued`
+  // and are guaranteed in SQL to reconcile to `collected`. On the old basis this breakdown could
+  // not add up to the collected figure shown beside it once anything was reversed. [1.30.0]
   async getPaymentMethodBreakdown(startDate, endDate) {
     const queryText = `
-      SELECT payment_method, SUM(amount) as total, COUNT(*) as payment_count
-      FROM payments
-      WHERE payment_status = 'Paid' AND paid_at >= $1::date AND paid_at < ($2::date + 1)
-      GROUP BY payment_method
+      SELECT pay.payment_method, SUM(pay.amount) as total, COUNT(*) as payment_count
+      FROM payments pay
+      WHERE ${ISSUED_RECEIPT_CLAUSE}
+        AND ${ISSUED_IN_RANGE(true)}
+      GROUP BY pay.payment_method
       ORDER BY total DESC
     `;
     const result = await db.query(queryText, [startDate, endDate]);
@@ -130,8 +151,11 @@ class ReportRepository {
                SUM(pay.amount)                            AS collected,
                SUM(pay.discount_amount + pay.vat_amount)  AS deducted
           FROM payments pay
-         WHERE pay.payment_status = 'Paid'
-           AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)
+         -- Must move with getBillingTotals and never separately: operations-report.spec.js
+         -- asserts the sum of this breakdown reconciles to that query's collected figure to
+         -- within a peso, and two bases would break it the moment anything is reversed. [1.30.0]
+         WHERE ${ISSUED_RECEIPT_CLAUSE}
+           AND ${ISSUED_IN_RANGE(true)}
          GROUP BY pay.patient_visit_id
       ),
       lines AS (
@@ -159,18 +183,41 @@ class ReportRepository {
     return result.rows;
   }
 
-  /** Cash-up figures: what was taken, what was given away, what was reversed. */
+  /**
+   * Cash-up figures: what was taken, what was given away, what was reversed.
+   *
+   * Three defects fixed together in [1.30.0], because they are one defect wearing three hats.
+   * This is the query behind the "Takings" panel on the report that gets PRINTED, so a figure
+   * that moves after the fact is a printout disagreeing with a screen.
+   *
+   * 1. It was left on `payment_status = 'Paid'` over a `paid_at` range while the cashier's
+   *    summary moved to the cash book — so the two disagreed about the same day, and this half
+   *    still restated closed days, which is the regression [1.30.0] is named for.
+   *
+   * 2. `refunds`/`refunded` counted `'Refunded'` only, so a receipt a staff member VOIDED —
+   *    status 'Cancelled', a real reversal — was reported by the cashier's summary and by
+   *    nothing at all here. Its amount fell out of `collected` too, under-reporting both sides
+   *    at once, and BillingTotalsPanel hides the stat entirely when it is zero: a day of nothing
+   *    but voids showed no reversal at all.
+   *
+   * 3. `receipt_number IS NOT NULL` was missing. Harmless only while (2) was also true — the two
+   *    mistakes cancelled. Widen the reversal side without it and abandoned gateway checkouts,
+   *    money never taken, immediately start reporting as refunds. One change, not two.
+   */
   async getBillingTotals(startDate, endDate) {
+    const issued = ISSUED_IN_RANGE(true);
+    const reversed = REVERSED_IN_RANGE(true);
     const queryText = `
       SELECT
-        COUNT(*) FILTER (WHERE payment_status = 'Paid')::int              AS receipts,
-        COALESCE(SUM(amount)      FILTER (WHERE payment_status = 'Paid'), 0)::numeric(12,2) AS collected,
-        COALESCE(SUM(discount_amount) FILTER (WHERE payment_status = 'Paid'), 0)::numeric(12,2) AS discounts,
-        COALESCE(SUM(vat_amount)  FILTER (WHERE payment_status = 'Paid'), 0)::numeric(12,2) AS vat_exempted,
-        COUNT(*) FILTER (WHERE payment_status = 'Refunded')::int          AS refunds,
-        COALESCE(SUM(amount)      FILTER (WHERE payment_status = 'Refunded'), 0)::numeric(12,2) AS refunded
-      FROM payments
-      WHERE paid_at >= $1::date AND paid_at < ($2::date + 1)
+        COUNT(*) FILTER (WHERE ${issued})::int              AS receipts,
+        COALESCE(SUM(pay.amount)      FILTER (WHERE ${issued}), 0)::numeric(12,2) AS collected,
+        COALESCE(SUM(pay.discount_amount) FILTER (WHERE ${issued}), 0)::numeric(12,2) AS discounts,
+        COALESCE(SUM(pay.vat_amount)  FILTER (WHERE ${issued}), 0)::numeric(12,2) AS vat_exempted,
+        COUNT(*) FILTER (WHERE ${reversed})::int          AS refunds,
+        COALESCE(SUM(pay.amount)      FILTER (WHERE ${reversed}), 0)::numeric(12,2) AS refunded
+      FROM payments pay
+      WHERE ${ISSUED_RECEIPT_CLAUSE}
+        AND ${MONEY_IN_RANGE(true)}
     `;
     const result = await db.query(queryText, [startDate, endDate]);
     return result.rows[0];

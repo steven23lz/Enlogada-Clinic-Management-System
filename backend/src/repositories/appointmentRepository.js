@@ -1,18 +1,64 @@
 const crypto = require('crypto');
+const { OCCUPIES_SLOT, HOLD_EXPIRY_SQL } = require('../constants/slotHold');
 const db = require('../config/database');
 
 class AppointmentRepository {
-  async createAppointment({ patientVisitId, scheduledDate, scheduledTime, notes }, client = db) {
+  /**
+   * `provisional` makes the booking HOLD its slot rather than take it. [1.35.0]
+   *
+   * Set only for a client's own self-pay booking, which is the one case where nobody has
+   * committed anything yet — staff bookings and HMO bookings are permanent from the start. The
+   * expiry is computed by Postgres, so the database's clock is the only one that decides when a
+   * slot goes back on sale.
+   */
+  async createAppointment({ patientVisitId, scheduledDate, scheduledTime, notes, provisional = false }, client = db) {
     // Generate a unique appointment reference for QR code lookup
     const appointmentReference = 'APT-' + crypto.randomBytes(6).toString('hex').toUpperCase();
 
     const queryText = `
-      INSERT INTO appointments (patient_visit_id, appointment_reference, scheduled_date, scheduled_time, notes)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO appointments (patient_visit_id, appointment_reference, scheduled_date, scheduled_time, notes, held_until)
+      VALUES ($1, $2, $3, $4, $5, ${provisional ? HOLD_EXPIRY_SQL : 'NULL'})
       RETURNING *
     `;
     const result = await client.query(queryText, [patientVisitId, appointmentReference, scheduledDate, scheduledTime, notes]);
     return result.rows[0];
+  }
+
+  /**
+   * Makes a held booking permanent. Called when the money actually lands. [1.35.0]
+   *
+   * Unconditional on the hold still being alive, deliberately. If the patient took longer than
+   * the hold and somebody else booked the slot in the meantime, the payment has still happened
+   * and PayMongo has still taken the money — refusing to honour the booking does not give it
+   * back. The same reasoning forceSettleGatewayPayment is built on. The caller notices the
+   * overbooking and tells staff; it does not undo a paid appointment.
+   */
+  async confirmHold(patientVisitId, client = db) {
+    const { rows } = await client.query(
+      `UPDATE appointments SET held_until = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE patient_visit_id = $1 AND held_until IS NOT NULL
+        RETURNING *`,
+      [patientVisitId]
+    );
+    return rows[0];
+  }
+
+  /**
+   * Pushes a live hold out by another window, because the patient is actively paying. [1.35.0]
+   *
+   * `held_until IS NOT NULL` keeps this from touching a permanent booking — reopening checkout on
+   * an HMO or staff-created appointment must not turn it provisional. A hold that has already
+   * lapsed is deliberately still extendable: the patient came back and is trying again, and if
+   * the slot is meanwhile gone the capacity check will say so at the point it matters.
+   */
+  async extendHold(patientVisitId, client = db) {
+    const { rows } = await client.query(
+      `UPDATE appointments SET held_until = ${HOLD_EXPIRY_SQL}, updated_at = CURRENT_TIMESTAMP
+        WHERE patient_visit_id = $1 AND held_until IS NOT NULL
+        RETURNING *`,
+      [patientVisitId]
+    );
+    return rows[0];
   }
 
   // `is_paid` rides along so the receptionist's QR-scan panel can show, before they check the
@@ -273,7 +319,7 @@ class AppointmentRepository {
       FROM appointments
       WHERE scheduled_date = $1
         AND scheduled_time = $2
-        AND status <> 'Cancelled'
+        AND ${OCCUPIES_SLOT()}
         AND ($3::int IS NULL OR id <> $3)
     `;
     const result = await db.query(queryText, [scheduledDate, scheduledTime, excludeId]);

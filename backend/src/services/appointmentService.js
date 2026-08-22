@@ -1,4 +1,8 @@
 const db = require('../config/database');
+const { formatTime12 } = require('../constants/clockFormat');
+const { isStaffUser } = require('../constants/roles');
+const paymentGatewayService = require('./paymentGatewayService');
+const { OCCUPIES_SLOT } = require('../constants/slotHold');
 const appointmentRepository = require('../repositories/appointmentRepository');
 const patientRepository = require('../repositories/patientRepository');
 const visitRepository = require('../repositories/visitRepository');
@@ -84,6 +88,36 @@ function todayLocalDateString() {
 }
 
 /**
+ * A booking may be for today or any day after it, never before. [1.33.0]
+ *
+ * The client's date picker has carried `min={todayStr()}` all along, but that is a hint to the
+ * browser and nothing more: it does not survive a typed value in every browser, and it does not
+ * exist at all for anything talking to the API directly. Nothing on the server ever compared the
+ * requested date to today, so POST /appointments would happily create a real visit and a real
+ * appointment row for last Tuesday — occupying a slot in a day that has already happened, on a
+ * queue nobody will ever call.
+ *
+ * INCLUSIVE of today, deliberately. The elapsed part of today is already handled where it
+ * belongs, in getAvailableSlots, which marks a time unavailable once it has passed. Rejecting
+ * today outright here would refuse a walk-in booked for this afternoon.
+ *
+ * String comparison rather than Date arithmetic: both sides are YYYY-MM-DD, which sorts
+ * lexicographically as it sorts chronologically, and it avoids constructing a Date from a bare
+ * date string — which is parsed as UTC midnight and is a day out in Manila. Same reason
+ * formatDateOnly exists.
+ */
+function assertNotInThePast(scheduledDate, verb = 'Book') {
+  const today = todayLocalDateString();
+  if (scheduledDate < today) {
+    const error = new Error(
+      `${verb} a date from today onwards. ${scheduledDate} has already passed.`
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+/**
  * A DATE column as the calendar date it actually is.
  *
  * node-pg parses DATE at LOCAL midnight, so toISOString() on it returns the previous day
@@ -100,6 +134,19 @@ function formatDateOnly(value) {
 
 class AppointmentService {
   async getAvailableSlots(date) {
+    // A day that has already passed is closed, whatever the operating hours say. [1.33.0]
+    //
+    // Without this the grid came back fully open for any past date: `isPast` below is scoped to
+    // today, so for an earlier day every slot reported available and the UI offered last Tuesday
+    // as bookable. Answering here rather than only refusing at POST means the client never shows
+    // a slot it would then reject — the screen and the API agree instead of arguing.
+    //
+    // Shaped as "not open" rather than as an error because that is what it is, and the caller
+    // already renders that state. An error would turn a date-picker keystroke into a red toast.
+    if (date < todayLocalDateString()) {
+      return { date, isOpen: false, slots: [] };
+    }
+
     const dayOfWeek = new Date(`${date}T12:00:00Z`).getUTCDay();
     const hours = await scheduleRepository.findOperatingHoursForDay(dayOfWeek);
 
@@ -181,6 +228,10 @@ class AppointmentService {
         referringPhysician: referral?.referringPhysician
       });
 
+      // Cheapest guard first, and outside the transaction: a past date needs no advisory lock and
+      // no capacity check to be refused. [1.33.0]
+      assertNotInThePast(scheduledDate);
+
       outcome = await db.withTransaction(async () => {
         // 1. Validate the requested slot against clinic operating hours
         const hours = await assertSlotWithinOperatingHours(scheduledDate, scheduledTime);
@@ -212,7 +263,8 @@ class AppointmentService {
         }
 
         const { rows } = await db.query(
-          `SELECT COUNT(*)::int AS cnt FROM appointments WHERE scheduled_date = $1 AND scheduled_time = $2 AND status <> 'Cancelled'`,
+          `SELECT COUNT(*)::int AS cnt FROM appointments
+            WHERE scheduled_date = $1 AND scheduled_time = $2 AND ${OCCUPIES_SLOT()}`,
           [scheduledDate, scheduledTime]
         );
         if (rows[0].cnt >= hours.max_concurrent_bookings) {
@@ -237,11 +289,29 @@ class AppointmentService {
         });
 
         // 5. Create the appointment record linked to the visit
+        //
+        // Provisional — a HOLD rather than a claim — only for a client's own self-pay booking.
+        // [1.35.0] That is the single case where nobody has committed anything: the patient is at
+        // home, the money has not moved, and until this change an abandoned checkout kept the slot
+        // for good because capacity asked only whether the row existed.
+        //
+        // The three exclusions are each a case where the booking is already real:
+        //   staff caller  — the patient is standing at the desk
+        //   HMO claim     — settled at the clinic by design, so it must never be made conditional
+        //                   on an online payment that is never going to happen
+        //   no gateway    — with no online payment configured the instruction is "pay at the
+        //                   counter", and a slot that expires while the patient travels to the
+        //                   clinic would be a worse bug than the one being fixed
+        const payingOnline = !isStaffUser(requestingUser)
+          && !hmo
+          && paymentGatewayService.isConfigured();
+
         const appointment = await appointmentRepository.createAppointment({
           patientVisitId: visit.id,
           scheduledDate,
           scheduledTime,
-          notes
+          notes,
+          provisional: payingOnline
         });
 
         // 6. Attach the chosen tests, and the HMO claim if one was made. Order matters:
@@ -292,7 +362,7 @@ class AppointmentService {
     // booking — and notifyRoles swallows its own errors, so it cannot fail the request either.
     await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
       title: 'New Appointment Booked',
-      message: `Queue #${outcome.queueNumber} — ${scheduledDate} at ${scheduledTime}`,
+      message: `Queue #${outcome.queueNumber} — ${scheduledDate} at ${formatTime12(scheduledTime)}`,
       type: 'info'
     });
 
@@ -444,6 +514,11 @@ class AppointmentService {
     if (appointment.status !== 'Pending') {
       throw refuseReschedule(appointment.status);
     }
+
+    // Moving a booking backwards into the past is the same defect as creating one there, and this
+    // is the only other writer of scheduled_date. Checked after the ownership and status guards
+    // so a client learns "not yours" before "wrong date" — the weaker statement first. [1.33.0]
+    assertNotInThePast(scheduledDate, 'Move it to');
 
     const previous = {
       date: formatDateOnly(appointment.scheduled_date),

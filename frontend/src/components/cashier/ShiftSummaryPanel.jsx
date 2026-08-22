@@ -82,6 +82,22 @@ export default function ShiftSummaryPanel({ queue }) {
                       </span>
                     </div>
                   )}
+                  {/* The count-back figure, on the panel where the count-back happens. [1.30.0]
+                      `reversed` is reported beside `collected` and never subtracted from it —
+                      deliberately, so a reversal is never hidden — which leaves the cashier doing
+                      the subtraction in their head against the cash in front of them at the end
+                      of a shift. Stated here rather than inferred. Same condition as the band
+                      above: on a shift with nothing reversed this is just `collected` again. */}
+                  {reversalCount > 0 && (
+                    <div className="mt-2 flex items-center justify-between rounded-xl border border-[#e6ebf1] bg-slate-50/80 px-3 py-2">
+                      <span className="text-meta font-bold uppercase tracking-wider text-gray-500">
+                        Net in drawer
+                      </span>
+                      <span className="text-sm font-extrabold tabular-nums text-slate-900">
+                        {formatCurrency(collected - reversedAmount)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {queue.transactions.length > 0 && (

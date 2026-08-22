@@ -25,6 +25,9 @@
  *   node src/scripts/seedDemoScenario.js
  */
 const db = require('../config/database');
+// The vocabulary, not a copy of it: a seeder that invents a method the CHECK constraint
+// rejects fails halfway through, leaving a half-built demo. [1.33.0]
+const { COUNTER_METHODS, CASH_METHOD } = require('../constants/paymentMethods');
 const logger = require('../config/logger');
 
 const API = process.env.E2E_API_URL ? `${process.env.E2E_API_URL}/api` : 'http://localhost:5000/api';
@@ -314,7 +317,7 @@ async function main() {
   // screen shows more than one name.
   for (const [i, category] of ['Laboratory', 'Xray', 'Ultrasound', 'ECG'].entries()) {
     const v = await makeVisit({ category, testIndex: 1, referrerIndex: i });
-    await payFor(v, pick(['Cash', 'GCash', 'PayMaya', 'Bank'], today.length));
+    await payFor(v, pick(COUNTER_METHODS, today.length));
     today.push(v);
     stages.push(`${v.patient.first_name} ${v.patient.last_name} — paid, on the ${category} worklist`);
   }
@@ -398,7 +401,7 @@ async function main() {
     for (let i = 0; i < perDay; i++) {
       const category = pick(CATEGORIES, daysAgo + i);
       const v = await makeVisit({ category, testIndex: i });
-      await payFor(v, pick(['Cash', 'Cash', 'GCash', 'PayMaya', 'Bank'], daysAgo + i));
+      await payFor(v, pick([CASH_METHOD, ...COUNTER_METHODS], daysAgo + i));
       await recordFindings(v, { findings: `${category} study. No abnormality detected.` });
       await release(v);
       historical.push({ ...v, daysAgo });

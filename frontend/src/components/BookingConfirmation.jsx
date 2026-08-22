@@ -2,6 +2,7 @@ import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from './ui/button';
 import { Printer, CheckCircle2 } from 'lucide-react';
+import { formatTime12 } from '../lib/date';
 
 // UI/UX Modernization Phase 10: replaces the old plain-text success message (auto-closed after
 // 4 seconds with no lasting record) with a durable, printable confirmation. The QR encodes the
@@ -44,7 +45,7 @@ const BookingConfirmation = ({ referenceCode, queueNumber, patientName, schedule
         {(patientName || scheduledDate) && (
           <div className="pt-3 border-t border-[#e6ebf1] text-xs text-gray-500 space-y-0.5">
             {patientName && <p className="m-0 font-semibold">{patientName}</p>}
-            {scheduledDate && <p className="m-0">{scheduledDate}{scheduledTime ? ` at ${scheduledTime}` : ''}</p>}
+            {scheduledDate && <p className="m-0">{scheduledDate}{scheduledTime ? ` at ${formatTime12(scheduledTime)}` : ''}</p>}
           </div>
         )}
       </div>

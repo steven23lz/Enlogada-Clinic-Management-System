@@ -5,15 +5,16 @@ import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
 import EmptyState from '../ui/empty-state';
 import { Badge } from '../ui/badge';
-import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { StatusBadge } from '../ui/status-badge';
 import { SkeletonRows } from '../ui/skeleton';
 import Pagination from '../ui/pagination';
 import { formatDateTime } from '../../lib/date';
 import { formatCurrency } from '../../lib/currency';
+import { isCrossDayReversal } from '../../lib/collections';
 import { BillingTotalsPanel, SalesByServicePanel } from '../reports/OperationsPanels';
 import { HISTORY_PAGE_SIZE } from '../../hooks/useTransactionHistory';
+import { DateField, RANGE_PRESETS } from '../ui/date-field';
 
 /**
  * Receipts issued over a chosen range, for the daily cash-up.
@@ -26,9 +27,9 @@ export default function TransactionHistoryPanel({ history, receipt, refund, oper
   return (
       <div>
         <Toolbar attached>
-          <Input type="date" value={history.startDate} onChange={e => history.setStartDate(e.target.value)} className="w-[150px]" aria-label="History start date" />
+          <DateField presets={RANGE_PRESETS.start} value={history.startDate} onChange={e => history.setStartDate(e.target.value)} containerClassName="w-[150px]" aria-label="History start date" />
           <span className="text-fine text-slate-400">to</span>
-          <Input type="date" value={history.endDate} onChange={e => history.setEndDate(e.target.value)} className="w-[150px]" aria-label="History end date" />
+          <DateField presets={RANGE_PRESETS.end} value={history.endDate} onChange={e => history.setEndDate(e.target.value)} containerClassName="w-[150px]" aria-label="History end date" />
           <Button variant="outline" onClick={() => history.reload()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Apply
@@ -101,8 +102,38 @@ export default function TransactionHistoryPanel({ history, receipt, refund, oper
                       </TableCell>
                       <TableCell label="Status">
                         <StatusBadge status={t.payment_status || 'Paid'} />
+                        {/* When it was reversed, and why. [1.30.0] The reason was required on
+                            every reversal since [1.26.0] and then read back nowhere in the app —
+                            written into the audit trail and invisible on the one screen where
+                            somebody asks "what is this". The date is new: a reversal only got one
+                            of its own in [1.30.0], and without it a row here cannot say whether
+                            it belongs to this range's takings or only to its reversals. */}
+                        {t.refunded_at && (
+                          <span className="mt-1 block whitespace-nowrap text-fine font-semibold text-rose-600">
+                            {formatDateTime(t.refunded_at)}
+                          </span>
+                        )}
+                        {t.refund_reason && (
+                          <span className="mt-0.5 block max-w-[24ch] text-fine text-slate-500">
+                            {t.refund_reason}
+                          </span>
+                        )}
                       </TableCell>
-                      <TableCell label="Paid at" className="whitespace-nowrap text-right text-fine text-slate-500">{formatDateTime(t.paid_at)}</TableCell>
+                      <TableCell label="Paid at" className="whitespace-nowrap text-right text-fine text-slate-500">
+                        {formatDateTime(t.paid_at)}
+                        {/* The case the log could not represent before this range matched on
+                            either date: taken on one day, reversed on another. Flagged because
+                            the two readings of such a row are opposites — it is in this range's
+                            reversals but not in its takings — and nothing else on the row says
+                            so. */}
+                        {isCrossDayReversal(t) && (
+                          <span className="mt-0.5 block text-fine text-slate-400">
+                            {t.counted_in_collected === false
+                              ? 'taken earlier — not in this range'
+                              : 'reversed on a later day'}
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <Button type="button" variant="outline" size="xs" onClick={() => receipt.reprint(t)}>

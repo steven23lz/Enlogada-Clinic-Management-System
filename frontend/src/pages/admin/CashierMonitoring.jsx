@@ -1,20 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelBody } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
-import Toolbar, { ToolbarField } from '../../components/ui/toolbar';
+import Toolbar, { ToolbarField, SegmentedFilter } from '../../components/ui/toolbar';
 import EmptyState from '../../components/ui/empty-state';
 import MetricCard from '../../components/ui/metric-card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
 import { SkeletonRows } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { todayStr, formatDateTime } from '../../lib/date';
 import { formatCurrency } from '../../lib/currency';
 import { settled } from '../../lib/collections';
+import { METHOD_FILTERS, METHOD_FILTER_ALL } from '../../lib/paymentMethods';
 import { Receipt, RefreshCw, Banknote, Hash, UserCircle2, Undo2 } from 'lucide-react';
+import { DateField, RANGE_PRESETS } from '../../components/ui/date-field';
 
 // Visual Design Improvement Plan Phase V1 — see VISUAL_IDENTITY.md §3a #11.
 const PAGE_SIZE = 20;
@@ -35,14 +36,28 @@ const CashierMonitoring = () => {
   const [loadError, setLoadError] = useState('');
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState(todayStr());
+  // The range currently ON SCREEN, as distinct from the one typed into the inputs above. The
+  // dates are deferred behind Apply, so a method change must re-query the range the figures were
+  // actually drawn from — using the input values would silently apply a half-typed date nobody
+  // asked for. [1.33.0]
+  const [applied, setApplied] = useState({ from: todayStr(), to: todayStr() });
+  const [method, setMethod] = useState(METHOD_FILTER_ALL);
   const [page, setPage] = useState(1);
 
-  const fetchTransactions = useCallback(async (from, to) => {
+  const fetchTransactions = useCallback(async (from, to, forMethod = METHOD_FILTER_ALL) => {
     setLoading(true);
     setLoadError('');
     setPage(1);
+    setApplied({ from, to });
     try {
-      const res = await api.get('/payments/transactions', { params: { startDate: from, endDate: to } });
+      // The filter is applied SERVER-side so the summary and the rows describe the same set.
+      // Filtering the rows in the browser would leave summary.collected — aggregated in SQL over
+      // the whole range — showing every method beside per-cashier cards showing one, which is the
+      // contradiction lib/collections.js records as having already shipped on this screen.
+      // 'All' means send nothing, never send the string.
+      const params = { startDate: from, endDate: to };
+      if (forMethod !== METHOD_FILTER_ALL) params.method = forMethod;
+      const res = await api.get('/payments/transactions', { params });
       setTransactions(res.data.data.transactions || []);
       setSummary(res.data.data.summary || null);
     } catch (err) {
@@ -91,17 +106,31 @@ const CashierMonitoring = () => {
       <div>
         <Toolbar attached>
           <ToolbarField label="From" htmlFor="cm-from">
-            <Input id="cm-from" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-[150px]" />
+            <DateField id="cm-from" presets={RANGE_PRESETS.start} value={startDate} onChange={e => setStartDate(e.target.value)} containerClassName="w-[150px]" />
           </ToolbarField>
           <ToolbarField label="To" htmlFor="cm-to">
-            <Input id="cm-to" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-[150px]" />
+            <DateField id="cm-to" presets={RANGE_PRESETS.end} value={endDate} onChange={e => setEndDate(e.target.value)} containerClassName="w-[150px]" />
           </ToolbarField>
           <div className="flex items-end self-stretch">
-            <Button variant="outline" onClick={() => fetchTransactions(startDate, endDate)}>
+            <Button variant="outline" onClick={() => fetchTransactions(startDate, endDate, method)}>
               <RefreshCw className="h-3.5 w-3.5" />
               Apply
             </Button>
           </div>
+          <ToolbarField label="Method" htmlFor="cm-method">
+            {/* Applies immediately, unlike the dates: picking a method is a complete instruction,
+                whereas a half-typed date is not — which is why the range waits behind Apply and
+                this does not. It re-queries the range already on screen, not the input values. */}
+            <SegmentedFilter
+              ariaLabel="Filter transactions by payment method"
+              options={METHOD_FILTERS.map(m => ({ value: m, label: m }))}
+              value={method}
+              onChange={(next) => {
+                setMethod(next);
+                fetchTransactions(applied.from, applied.to, next);
+              }}
+            />
+          </ToolbarField>
         </Toolbar>
 
         <Panel className="overflow-hidden rounded-t-none">
@@ -122,10 +151,16 @@ const CashierMonitoring = () => {
           <div className={`grid grid-cols-2 gap-px border-b border-[#e6ebf1] bg-[#e6ebf1] ${
             { 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' }[cardCount]
           }`}>
+            {/* Named on the figure itself when a method filter is on. The strip's own note above
+                says these describe THIS result set rather than the clinic — and a filtered
+                collections total that does not say so is exactly how an admin reads one method's
+                takings as the day's. [1.33.0] */}
             <MetricCard
               className="rounded-none border-0"
-              label="Collections in range"
+              label={method === METHOD_FILTER_ALL ? 'Collections in range' : `Collections — ${method} only`}
               value={formatCurrency(collected)}
+              caption={method === METHOD_FILTER_ALL ? undefined : 'filtered by payment method'}
+              captionTone={method === METHOD_FILTER_ALL ? undefined : 'slate'}
               icon={Banknote}
               tone="emerald"
             />
@@ -138,13 +173,18 @@ const CashierMonitoring = () => {
             />
             {/* Reported beside the collections figure, never netted off it. A drawer short by a
                 refund needs the refund named — a single reconciled total hides that one
-                happened, which is the thing an oversight screen exists to surface. */}
+                happened, which is the thing an oversight screen exists to surface.
+
+                The caption used to read "not in collections", which the cash book [1.30.0] made
+                false: a receipt taken in this range and reversed in it is counted in `collected`
+                AND here, money in and money out. It now says what to do with the number instead,
+                which is the question an oversight screen is actually being asked. */}
             {reversals > 0 && (
               <MetricCard
                 className="rounded-none border-0"
                 label="Reversed"
                 value={formatCurrency(reversed)}
-                caption={`${reversals} receipt${reversals === 1 ? '' : 's'}, not in collections`}
+                caption={`${reversals} receipt${reversals === 1 ? '' : 's'} — net ${formatCurrency(collected - reversed)}`}
                 captionTone="rose"
                 icon={Undo2}
                 tone="rose"

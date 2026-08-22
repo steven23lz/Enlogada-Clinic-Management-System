@@ -12,6 +12,9 @@ const logger = require('../config/logger');
 // no reversal path anywhere in the app.
 const REVERSIBLE_TARGET_STATUSES = ['Refunded', 'Cancelled'];
 
+// The methods this clinic records, for validating a filter against. [1.33.0]
+const { COUNTER_METHODS } = require('../constants/paymentMethods');
+
 class PaymentService {
   async getBillingSummary(visitId) {
     const { visitInfo, items } = await paymentRepository.getBillingSummary(visitId);
@@ -278,18 +281,40 @@ class PaymentService {
   // the list to contain settled rows exclusively — so the log could not show a reversal without
   // that reversal being counted as income on four different screens. It is also simply correct
   // on a paged call, where reducing the rows in hand totals one page and labels it the day.
-  async getTransactions({ startDate, endDate, page, limit }) {
+  /**
+   * `method` filters BOTH the list and the summary, deliberately. [1.33.0]
+   *
+   * Filtering only the rows would have been a one-line change on the client, and wrong: Cashier
+   * Monitoring renders per-cashier totals reduced from this list inside the same grid as
+   * `summary.collected`, which is aggregated in SQL over the whole range. A client-side filter
+   * moves one and not the other, so the per-cashier cards would show Cash-only takings beside a
+   * card showing every method — a contradiction inches apart. lib/collections.js records that
+   * this exact class of mismatch has already shipped on this screen once.
+   *
+   * Rejected rather than ignored when unrecognised. Silently returning everything for a method
+   * that does not exist reads, on a money screen, as "the clinic took nothing by that method".
+   */
+  async getTransactions({ startDate, endDate, page, limit, method }) {
     const limitNum = limit ? Math.min(Math.max(parseInt(limit, 10) || 0, 1), 100) : null;
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+
+    if (method && !COUNTER_METHODS.includes(method)) {
+      const error = new Error(
+        `Unknown payment method '${method}'. This clinic records: ${COUNTER_METHODS.join(', ')}.`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
 
     const [rows, summary] = await Promise.all([
       paymentRepository.findTransactions({
         startDate,
         endDate,
+        method,
         limit: limitNum,
         offset: limitNum ? (pageNum - 1) * limitNum : 0,
       }),
-      paymentRepository.findTransactionSummary({ startDate, endDate }),
+      paymentRepository.findTransactionSummary({ startDate, endDate, method }),
     ]);
 
     // Unpaged callers are handed the array they have always been handed, with the figures

@@ -150,7 +150,7 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
       <div className="space-y-0.5">
         <Row label="Receipt No." value={payment.receipt_number || `OR-${payment.id}`} strong />
         <Row label="Date" value={paidAt.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })} />
-        <Row label="Time" value={paidAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} />
+        <Row label="Time" value={paidAt.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true })} />
         {bill?.patientName && <Row label="Patient" value={bill.patientName} />}
         {bill?.queueNumber && <Row label="Queue" value={bill.queueNumber} />}
         {cashier && <Row label="Cashier" value={cashier} />}
@@ -254,7 +254,7 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
           </p>
         )}
         <p className="m-0 text-[9px] text-slate-400">
-          Printed {new Date().toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          Printed {new Date().toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
         </p>
       </footer>
     </div>

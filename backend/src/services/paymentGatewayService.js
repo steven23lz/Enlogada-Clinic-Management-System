@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const appointmentRepository = require('../repositories/appointmentRepository');
+const scheduleRepository = require('../repositories/scheduleRepository');
 const env = require('../config/environment');
 const logger = require('../config/logger');
 const paymentRepository = require('../repositories/paymentRepository');
@@ -24,13 +26,12 @@ const notificationService = require('./notificationService');
  * payments only.
  */
 
-// clinic-facing payments.payment_method value -> PayMongo payment_method_types value.
-// Restricted to the two e-wallets the clinic accepts online. 'card', 'grab_pay', 'qrph' etc.
-// are valid PayMongo values but are deliberately NOT offered here.
-const GATEWAY_METHODS = {
-  GCash: 'gcash',
-  PayMaya: 'paymaya'
-};
+// clinic-facing payments.payment_method value -> PayMongo payment_method_types value. Now defined
+// in constants/paymentMethods.js, where the counter vocabulary lives too — a gateway key is
+// written straight into payments.payment_method, so a key that is not a valid method would pass
+// checkout and then violate chk_payment_method at settlement, after the patient had been charged.
+// That module asserts the two agree at load. [1.33.0]
+const { GATEWAY_METHODS } = require('../constants/paymentMethods');
 
 const PROVIDER = 'paymongo';
 const PAID_EVENT_TYPES = ['checkout_session.payment.paid', 'payment.paid'];
@@ -58,8 +59,35 @@ function toCentavos(pesoAmount) {
 }
 
 class PaymentGatewayService {
+  /**
+   * Online payment needs BOTH secrets, not one. [1.37.0]
+   *
+   * This used to test the API key alone, and the gap between the two was the most expensive
+   * misconfiguration the system could hold. PayMongo issues the webhook signing secret separately
+   * — a different value, from a different screen, shown once when a human creates the webhook —
+   * and `verifyWebhookSignature` refuses everything without it.
+   *
+   * So with the key set and the webhook secret blank: the UI offered GCash, the patient really
+   * was charged, every delivery was rejected 401 through PayMongo's entire retry schedule, the
+   * payment stayed 'Pending', the visit was never released, and nobody was notified. Money taken,
+   * nothing recorded, no error anywhere.
+   *
+   * Requiring both makes that state fail the safe way instead: online payment simply stays off,
+   * the client is told to pay at the counter exactly as it is told today, and the backend says on
+   * startup which half is missing. A clinic that has done half the setup now gets no online
+   * payment rather than unrecorded payments.
+   */
   isConfigured() {
-    return Boolean(env.PAYMONGO_SECRET_KEY);
+    return Boolean(env.PAYMONGO_SECRET_KEY) && Boolean(env.PAYMONGO_WEBHOOK_SECRET);
+  }
+
+  /** Which half of the pair is missing, for the startup advisory. Null when nothing is set at
+   *  all — that is a clinic running on counter payments, not a misconfiguration. */
+  missingGatewaySecret() {
+    const key = Boolean(env.PAYMONGO_SECRET_KEY);
+    const hook = Boolean(env.PAYMONGO_WEBHOOK_SECRET);
+    if (key === hook) return null;
+    return key ? 'PAYMONGO_WEBHOOK_SECRET' : 'PAYMONGO_SECRET_KEY';
   }
 
   /** What the client UI needs in order to decide whether/how to offer online payment. */
@@ -223,6 +251,10 @@ class PaymentGatewayService {
         gatewayProvider: PROVIDER,
         gatewaySessionId: sessionId
       });
+      // The patient is actively paying, so push their hold out by another window. [1.35.0]
+      // A no-op on a permanent booking — extendHold requires held_until to already be set, so
+      // opening checkout on an HMO or staff-created appointment cannot turn it provisional.
+      await appointmentRepository.extendHold(patientVisitId);
     });
 
     return { checkoutUrl, sessionId, amount: totalAmount, paymentMethod };
@@ -365,6 +397,36 @@ class PaymentGatewayService {
       message: `Receipt #${receiptNumber} — ${pending.first_name} ${pending.last_name}, PHP ${parseFloat(settled.amount).toFixed(2)} via ${settled.payment_method}`,
       type: 'success'
     });
+
+    // The slot is paid for, so the hold becomes a claim. [1.35.0]
+    //
+    // Unconditional on the hold still being alive. If the patient took longer than the window and
+    // the slot was resold in the meantime, the money has still moved — refusing to honour the
+    // booking does not give it back, which is the same reasoning forceSettleGatewayPayment is
+    // built on. So the appointment stands and staff are told it overbooked, rather than a paid
+    // patient being quietly left without a slot.
+    const confirmed = await appointmentRepository.confirmHold(settled.patient_visit_id);
+    if (confirmed) {
+      const contended = await appointmentRepository.countActiveInSlot({
+        scheduledDate: confirmed.scheduled_date,
+        scheduledTime: confirmed.scheduled_time,
+        excludeId: confirmed.id
+      });
+      // node-pg parses DATE at LOCAL midnight, so getDay() on it is the local weekday — the same
+      // basis clinic_operating_hours is keyed on. getUTCDay() would be a day out in Manila.
+      const hours = await scheduleRepository.findOperatingHoursForDay(
+        new Date(confirmed.scheduled_date).getDay()
+      );
+      if (hours && contended >= hours.max_concurrent_bookings) {
+        await notificationService.notifyRoles(['Admin', 'SuperAdmin', 'Receptionist'], {
+          title: 'Slot overbooked by a late payment',
+          message:
+            `${confirmed.appointment_reference} paid after its hold lapsed and the slot had been ` +
+            'taken. The booking stands — the money was received. Two patients now hold this time.',
+          type: 'warning'
+        });
+      }
+    }
 
     // Payment satisfied. For an appointment already checked in at the front desk this releases
     // the ticket now; otherwise it stays pending until the receptionist scans the QR.
