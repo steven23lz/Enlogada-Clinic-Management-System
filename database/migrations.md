@@ -1,5 +1,86 @@
 # Database Migration & Schema History
 
+## [1.45.0] - 2026-08-24 (A ramp remapped for one role is still live in the other)
+
+No schema change. Frontend only. Follows [1.44.0]; fixes defects in [1.40.0]'s dark mode found by
+reading the merged stylesheet rather than by any test — nothing in the suite asserts a colour, so
+all of this passed 200 green tests while being visibly broken.
+
+### The mistake, stated once, because it caused most of the list
+
+The dark block remaps `--color-brand-600/700` and `--color-azure-600` to *lighter* values, and the
+comment beside them says why: "ink lightens; the light ramp darkens". That is correct for ink. It
+is wrong for the same token used as a **fill**, and both roles are live:
+
+```
+bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700   <- button.jsx, the default variant
+```
+
+So in dark mode every primary button got *lighter* when hovered (white on `#81a570`, **2.30:1**)
+and lighter still while held down (white on `#acc4a1`, **1.60:1** — the label vanishes under the
+cursor). That is Take Payment, Release Result and Confirm Booking. The fill role is now pinned
+back to the light ramp: hover **5.64:1**, active **7.66:1**, and pressing something still darkens
+it, which is what the gesture means in either theme. Same fault and same fix for `hover:bg-azure-600`
+on the Services CTA (2.60 -> 6.60).
+
+### A fixed-dark surface must not follow the ramp
+
+`.auth-panel` does not flip — like the rail, it is dark in both themes. Three of its four text
+elements used azure as ink, so remapping azure took the eyebrow, all three trust points and the
+address footnote to roughly **1.1:1**: invisible. The tokens are rebound on `.auth-panel` itself
+rather than by matching generated class names, which also covers the opacity variants
+(`text-azure-100/80`) and anything added there later. Now 5.25-6.57:1.
+
+This is the third time this shape of bug has appeared (the rail heroes in [1.40.0], `rail-accent`
+in [1.43.0]). **If a surface is dark in both themes, ink on it is not themeable.**
+
+### Tailwind emits one class per variant, and `divide-*` is not `border-*`
+
+`.border-[#e6ebf1]` never matches `.hover:border-[#e6ebf1]`, and `divide-y` compiles to a selector
+of its own — measured against the built CSS, v4 emits `:where(.divide-[#eef2f6]>:not(:last-child))`,
+**not** the v3 `> :not([hidden]) ~ :not([hidden])` shape. The first version of this fix used the v3
+shape: valid CSS, matching nothing. Covered now, each verified present in `dist/`:
+`divide-[#eef2f6]` (4 admin panels), `hover:border-[#e6ebf1]`, `bg-[#e6ebf1]` (the gridline fill on
+Cashier Monitoring), `bg-white/95` (the checkout terminal's sticky header — one file away from the
+`/85` rule written for exactly this).
+
+### The rest
+
+- **`.alert-*` kept its pale rings.** The rims are `box-shadow: inset`, and `.alert` declares no
+  `border` at all — so [1.40.0]'s `border-color` override was a no-op on all four tones. The
+  sign-in error alert wore a pink pastel ring on a dark tint. Now overrides `box-shadow`.
+- **Stacked table cards were literal `#fff`.** An element selector on `<tr>`, unreachable by the
+  `.bg-white` class override, so below 639px every card list rendered `#eef2f6` ink on white — on
+  the phone width the block exists to serve.
+- **The crash screen was unreadable.** `text-[#192534]` heading and a retry button hovering to
+  `#67803c` from the retired ramp, on the one screen shown when everything else has already failed.
+- **The travelling tab pill matched its own card.** `bg-white` and `.auth-card` both resolve to
+  `--color-surface`, and its shadow is an arbitrary literal inlined at build time, so the indicator
+  [1.44.0] is built around disappeared. It is lighter than the card now, as it is in light mode.
+- **`text-brand-800`** had no dark value (1.40:1 on the permissions-matrix callout). Now 11.78:1.
+- **`shadow-raised`** was not in [1.40.0]'s elevation rewrite, so the hover lift silently stopped
+  existing; `hover:border-azure-200` failed on the same cards at the same moment, leaving service
+  cards with no hover state at all. Both fixed.
+- **The focus ring** was a literal `#0a71a9` at **1.90:1** on the dark canvas — the app's only
+  focus indicator, and the last affordance that should thin out. Now `#549cc3`, **6.17:1**.
+
+Every ratio above is computed, not estimated. All 14 override selectors were checked against the
+built CSS to confirm they match a class Tailwind actually emits.
+
+### Known, deliberately not fixed here
+
+Three need component changes rather than CSS and are left for a decision:
+
+- **The Google sign-in button** is `theme="outline"`, rendered by Google's own widget inside shadow
+  DOM. No stylesheet can reach it, so it stays a white slab in a dark card. Needs `theme` driven
+  off `data-theme`.
+- **Chart axes, gridlines and the hover cursor** are Recharts SVG props (`stroke="#f1f5f9"`,
+  `cursor={{ fill: '#f8fafc' }}`), unreachable by any class override. On a dark card the gridline
+  becomes the loudest thing in the chart.
+- **The categorical chart palette** (`lib/categories.js`) is five fixed hexes; two fall below the
+  3:1 non-text floor against the dark card. Its prose still claims the palette "passes all of
+  them", which was true against one surface and is not with two.
+
 ## [1.44.0] - 2026-08-24 (The sign-in page, actually redesigned)
 
 No schema change. Frontend only.

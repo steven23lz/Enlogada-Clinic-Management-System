@@ -640,12 +640,12 @@ body.printing-receipt {
     border-radius: 12px;
     padding: 0.25rem 0;
     margin-bottom: 0.625rem;
-    background: #fff;
+    background: var(--color-surface);
   }
 
   /* The hover tint is a pointer affordance; on a card list it just looks like a selected row. */
   table[data-stack='true'] tr:hover {
-    background: #fff;
+    background: var(--color-surface);
   }
 
   /* flex-wrap so a value too wide to sit beside its label drops to its own line and gets the
@@ -896,6 +896,23 @@ body.printing-receipt {
     border-color: rgba(255, 255, 255, 0.10);
   }
 
+  /* The sign-in card and the ground it sits on. [1.40.0] Both hardcode a white/near-white field,
+     so on a dark theme the form column stayed a bright slab beside the azure panel — the one
+     screen where the two halves are meant to balance. The card keeps its separation from the
+     ground the same way it does in light mode, by being LIGHTER than what is behind it; the
+     shadow is replaced by a rim, because elevation is compile-time inlined and cannot be
+     re-themed. */
+  html[data-theme="dark"] .auth-card {
+    background: var(--color-surface);
+    box-shadow: 0 12px 32px -12px #000, 0 0 0 1px #ffffff12;
+  }
+  html[data-theme="dark"] .auth-ground {
+    background-color: var(--color-canvas);
+    background-image:
+      radial-gradient(60% 50% at 15% 0%, rgba(10, 113, 169, 0.16) 0%, rgba(10, 113, 169, 0) 70%),
+      radial-gradient(50% 45% at 90% 100%, rgba(83, 132, 59, 0.12) 0%, rgba(83, 132, 59, 0) 70%);
+  }
+
   /* Chrome that hardcodes hex in this file and would otherwise stay light under everything. */
   html[data-theme="dark"] .field-label { color: var(--color-ink-muted); }
   html[data-theme="dark"] ::selection { background: rgb(129 165 112 / 0.30); }
@@ -904,10 +921,83 @@ body.printing-receipt {
 
   /* The four alert tones carry twelve literal hexes between them. They keep their hue — an error
      must still read as an error — but the pale tint becomes a dark one so the text can invert. */
-  html[data-theme="dark"] .alert-error   { background: #2a1215; color: #fda4af; border-color: #4c1d24; }
-  html[data-theme="dark"] .alert-success { background: #0d231b; color: #6ee7b7; border-color: #14532d; }
-  html[data-theme="dark"] .alert-warning { background: #2a1f0b; color: #fcd34d; border-color: #4a3410; }
-  html[data-theme="dark"] .alert-info    { background: #16210f; color: #acc4a1; border-color: #2b451f; }
+  html[data-theme="dark"] .alert-error   { background: #2a1215; color: #fda4af; box-shadow: inset 0 0 0 1px #4c1d24; }
+  html[data-theme="dark"] .alert-success { background: #0d231b; color: #6ee7b7; box-shadow: inset 0 0 0 1px #14532d; }
+  html[data-theme="dark"] .alert-warning { background: #2a1f0b; color: #fcd34d; box-shadow: inset 0 0 0 1px #4a3410; }
+  html[data-theme="dark"] .alert-info    { background: #16210f; color: #acc4a1; box-shadow: inset 0 0 0 1px #2b451f; }
+
+  /* ── A ramp remapped for one role is still live in the other ──────────────────────────────
+     The dark block lightens brand-600/700 and azure-600 because they are INK on a dark ground.
+     They are also FILLS underneath `text-white`, and nothing said so. The result was a primary
+     button that got lighter on hover (white on #81a570, 2.3:1) and lighter still while held down
+     (white on #acc4a1, 1.6:1 — the label disappears under the cursor, on Take Payment and Release
+     Result). Pinning the fill role back to the light ramp keeps "darkens when you press it",
+     which is what the gesture means in both themes. Same fault, same fix, for azure. */
+  html[data-theme="dark"] .hover\:bg-brand-600:hover,
+  html[data-theme="dark"] .file\:bg-brand-600::file-selector-button {
+    background-color: #477233;
+  }
+  html[data-theme="dark"] .active\:bg-brand-700:active,
+  html[data-theme="dark"] .hover\:file\:bg-brand-700:hover::file-selector-button {
+    background-color: #3a5c29;
+  }
+  html[data-theme="dark"] .hover\:bg-azure-600:hover { background-color: #096293; }
+
+  /* The sign-in brand panel is FIXED dark, like the rail — it does not flip. So azure used as ink
+     on it must not follow the ramp, or three of its four text elements go dark-on-dark: the
+     eyebrow, all three trust points and the address footnote. Rebinding the tokens on the panel
+     itself covers the opacity variants (`text-azure-100/80`) too, which matching generated class
+     names would not, and covers any azure ink added here later. */
+  html[data-theme="dark"] .auth-panel {
+    --color-azure-50:  #f3f8fb;
+    --color-azure-100: #e2eef5;
+    --color-azure-200: #bfdae9;
+    --color-azure-600: #096293;
+    --color-azure-700: #07517a;
+    --color-azure-800: #063e5d;
+  }
+
+  /* The travelling tab pill is `bg-white`, which now resolves to the SAME value as the card it
+     sits on, and its shadow is an arbitrary literal that is inlined at build time. The one
+     indicator the redesign is built around therefore vanished. It needs to be lighter than the
+     card, the way it is lighter than the track in light mode. */
+  html[data-theme="dark"] [role="tablist"] > span[aria-hidden="true"] {
+    background-color: #24324a;
+    box-shadow: 0 1px 3px #0009;
+  }
+
+  /* Split generated classes the main override list misses — Tailwind emits one class per variant,
+     so `.border-[#e6ebf1]` never matches `.hover:border-[#e6ebf1]`, and `divide-*` compiles to a
+     `> :not([hidden]) ~ :not([hidden])` selector of its own. Each of these is a light hairline or
+     fill on a surface that flips. */
+  html[data-theme="dark"] .divide-\[\#eef2f6\] > :not(:last-child) {
+    border-color: var(--color-line);                                                     /* 4 */
+  }
+  html[data-theme="dark"] .hover\:border-\[\#e6ebf1\]:hover { border-color: var(--color-line); }
+  html[data-theme="dark"] .bg-\[\#e6ebf1\] { background-color: var(--color-line); }
+  html[data-theme="dark"] .bg-white\/95 {
+    background-color: color-mix(in oklab, var(--color-surface) 95%, transparent);
+  }
+
+  /* The crash screen. Its heading is a literal near-black and its retry button hovers to a green
+     from the retired ramp — so the one screen shown when everything else has already failed was
+     unreadable in dark mode. */
+  html[data-theme="dark"] .text-\[\#192534\] { color: var(--color-ink); }
+  html[data-theme="dark"] .hover\:bg-\[\#67803c\]:hover { background-color: #477233; }
+
+  /* brand-800 is ink on brand-50 in exactly one place (the permissions-matrix callout) and had no
+     dark value, leaving dark green on darker green at ~1.4:1. */
+  html[data-theme="dark"] .text-brand-800 { color: #cfddc8; }
+
+  /* A black shadow says nothing on a dark ground, so the hover lift silently stopped existing.
+     `hover:border-azure-200` fails at the same moment on the same cards, leaving them with no
+     hover state at all — hence both here. */
+  html[data-theme="dark"] .shadow-raised { box-shadow: 0 8px 20px -8px #000, 0 0 0 1px #ffffff14; }
+  html[data-theme="dark"] .hover\:border-azure-200:hover { border-color: #2f4f66; }
+
+  /* The app's only focus indicator, a literal azure-500 at ~1.9:1 on the dark canvas. This is the
+     affordance a keyboard user navigates by; it is the last thing that should thin out. */
+  html[data-theme="dark"] :focus-visible { outline-color: #549cc3; }
 }
 
 /* The second layer of the print guarantee. The @media screen wrapper above already makes dark
