@@ -1,5 +1,64 @@
 # Database Migration & Schema History
 
+## [1.41.0] - 2026-08-23 (The palette comes off the logo)
+
+No schema change. Frontend only.
+
+### The identity was half the logo
+
+Sampled from `Enlogada_Mark.png` itself rather than chosen: the artwork is **49% blue and 49%
+green** by pixel area, and its single most common colour is `#0a71a9`. The UI had been built on
+the green half alone — and on an approximation of it at that. Three things followed:
+
+- **`--color-azure-*` added**, anchored on `#0a71a9` verbatim. This is the clinical half of the
+  identity and it had no presence in the interface at all. It also solves an accessibility problem
+  the green could not: white on `azure-500` measures **5.32:1** and passes WCAG AA outright, where
+  white on the old `brand-500` was **3.59:1** and failed — the standing workaround being to reach
+  for `brand-600` on public pages.
+- **`--color-brand-*` re-anchored on `#53843b`**, the logo's actual green, replacing `#769046` — a
+  lighter, more olive green that approximated the mark rather than matching it. Contrast improves
+  from 3.59:1 to 4.44:1 as a side effect. The four remaining hard-coded `#769046` values (the RBAC
+  checkbox accent, the revenue chart, the Laboratory category colour, the focus ring) moved with it.
+- **`--color-marine-*`** for the logo's deep navy `#1d407d`, distinct from `--color-rail`, which is
+  near-black slate and stays the app shell.
+- **`.rail-gradient` rebuilt from the logo's own two colours.** It had been washing green over
+  `#34466b` — a navy retired as a token months ago that survived only here, hard-coded. Five hero
+  surfaces improved from that one change.
+
+White carries the rest. It is the dominant surface on every public page, and the auth split is now
+a white column against a dark one rather than grey against near-black.
+
+### Services page: the layout was fighting the data
+
+Three columns, one card per department. Laboratory has 22 tests and ECG has one, so the row
+rendered a wall of text beside a card that was 90% empty — column height decided by whichever
+department happened to have the most tests, which is not a decision anyone made.
+
+Each department is a full-width section now and its tests flow in a responsive grid inside it. A
+one-test department is one tidy row; a twenty-two-test one is a block. Added a search box, because
+the list is 32 items and somebody arriving here wants one specific test and its price, and a
+closing call to action, because the page answered "what does it cost" and never "so what now".
+
+### Sign-in: a full-bleed split
+
+It was `max-w-6xl` + `items-center`, so both columns floated in a band of empty canvas. Each half
+owns its full height now. Two real bugs fell out of looking at it:
+
+- **No branding at all below `lg`.** The reassurance panel is `hidden lg:block`, so on every phone
+  the sign-in page showed nothing but a bare form — on the one screen a patient reaches before
+  they have any context about who they are handing their details to.
+- **A 2px horizontal scroll at 390px.** Google's button takes a pixel width only and was
+  hard-coded to 360; with the page's own `px-4` that needs 392. It is measured from its slot now,
+  so it matches the Sign In button at every width and cannot go stale when the column changes.
+
+### The text-size control was wrong on a public page
+
+It shipped as a visible segmented control — an icon and three `A`s in a bordered box — which is a
+utility toggle sitting at full strength in a marketing header, competing with the navigation and
+the primary call to action. It is a single icon button with a popover now: same three choices, one
+click to reach them, none of the weight when nobody is looking for it. Each row in the menu is
+drawn at the size it selects, so the choice previews itself.
+
 ## [1.40.0] - 2026-08-23 (Screens arrive rather than appear)
 
 No schema change. Frontend only.

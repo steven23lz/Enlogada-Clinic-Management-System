@@ -208,7 +208,7 @@ export default function RoleMatrix({ access }) {
                         >
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded accent-[#769046]"
+                            className="h-4 w-4 rounded accent-[#53843b]"
                             checked={checked}
                             disabled={fromRole}
                             onChange={() => access.toggleDepartment(category.id)}
@@ -245,7 +245,7 @@ export default function RoleMatrix({ access }) {
                         >
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded accent-[#769046]"
+                            className="h-4 w-4 rounded accent-[#53843b]"
                             checked={checked}
                             onChange={() =>
                               access.mode === 'role' ? access.toggleRole(permission) : access.togglePerson(permission)

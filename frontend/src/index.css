@@ -12,8 +12,12 @@
  * anything else, because every surface carried the same border, the same near-invisible shadow
  * and the same 10px bold uppercase label.
  *
- * The fix is a single source for each decision, below. The brand is unchanged — #769046 and
- * #192534 still carry the identity; what changed is everything arranged around them.
+ * The fix is a single source for each decision, below.
+ *
+ * The brand was later re-anchored on the logo itself: the mark is 49% blue and 49% green by
+ * pixel area, and the app had been built on an approximation of the green half alone. #53843b
+ * (the logo's green) and #0a71a9 (its azure, and the single most common colour in the file) now
+ * carry the identity together, on white.
  */
 @theme {
   /* ── Type scale ────────────────────────────────────────────────────────────────────────────
@@ -37,9 +41,9 @@
   --text-stat: 1.875rem;    /* 30px */
 
   /* ── Brand ─────────────────────────────────────────────────────────────────────────────── */
-  --color-primary: #769046;
-  --color-primary-hover: #657c3a;
-  --color-primary-active: #536630;
+  --color-primary: #53843b;
+  --color-primary-hover: #477233;
+  --color-primary-active: #3a5c29;
   --color-primary-foreground: #ffffff;
   /* One dark, not two.
    *
@@ -55,25 +59,63 @@
    */
   --color-primary-navy: #16212e;
   --color-primary-navy-hover: #1f2c3c;
-  --color-primary-sage: #769046;
+  --color-primary-sage: #53843b;
   --color-secondary: #16212e;
   --color-secondary-foreground: #ffffff;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
 
   /* Tints of the brand green, so a highlighted row or a selected chip does not have to be
-   * written as `bg-[#769046]/10` at every call site (which is how five slightly different
-   * greens ended up on the same screen). */
-  --color-brand-50: #f4f7ee;
-  --color-brand-100: #e6eed7;
-  --color-brand-200: #cfdcb5;
-  --color-brand-300: #b0c489;
-  --color-brand-400: #93ab63;
-  --color-brand-500: #769046;
-  --color-brand-600: #657c3a;
-  --color-brand-700: #536630;
-  --color-brand-800: #3f4d26;
-  --color-brand-900: #2c351b;
+   * written as `bg-[#53843b]/10` at every call site (which is how five slightly different
+   * greens ended up on the same screen).
+   *
+   * Re-anchored on #53843b, which is the green IN THE LOGO, sampled from the file. The ramp was
+   * built on #769046 — a lighter, more olive green that approximated the mark rather than
+   * matching it, and the difference is visible when the logo sits on a brand-coloured surface.
+   * It also measures 3.59:1 against white, which fails WCAG AA, and the workaround had been to
+   * reach for brand-600 on public pages. The logo's own green is 4.44:1. */
+  --color-brand-50: #f5f8f3;
+  --color-brand-100: #e7eee4;
+  --color-brand-200: #cfddc8;
+  --color-brand-300: #acc4a1;
+  --color-brand-400: #81a570;
+  --color-brand-500: #53843b;   /* the logo's green, verbatim */
+  --color-brand-600: #477233;
+  --color-brand-700: #3a5c29;
+  --color-brand-800: #2b451f;
+  --color-brand-900: #1d2e15;
+
+  /* ── Azure — the other half of the logo ────────────────────────────────────────────────────
+   * Sampled from the mark itself, not chosen: the artwork is 49% blue and 49% green by pixel
+   * area, and the single most common colour in it is #0a71a9. The app had been built on the
+   * green half alone, so the interface and the logo above it were only ever half-agreeing.
+   *
+   * Azure carries the clinical register — it is the colour people read as medical, and pairing
+   * it with the green (care) on a white ground is the whole identity rather than a third of it.
+   *
+   * It also fixes an accessibility problem the green could not. White text on brand-500 measures
+   * 3.59:1, which fails WCAG AA, and the workaround has been to reach for brand-600 on public
+   * pages. White on azure-500 is 5.32:1 — it passes as-is, so the primary action no longer needs
+   * a darker shade to be legible.
+   */
+  --color-azure-50: #f3f8fb;
+  --color-azure-100: #e2eef5;
+  --color-azure-200: #bfdae9;
+  --color-azure-300: #91bfd8;
+  --color-azure-400: #549cc3;
+  --color-azure-500: #0a71a9;   /* the logo's dominant colour, verbatim */
+  --color-azure-600: #096293;
+  --color-azure-700: #07517a;
+  --color-azure-800: #063e5d;
+  --color-azure-900: #042b40;
+
+  /* The logo's deep navy, for dark surfaces that should read as brand rather than as chrome.
+   * Distinct from --color-rail (#16212e), which is near-black slate and stays the app shell. */
+  --color-marine-500: #1d407d;
+  --color-marine-600: #173364;
+  --color-marine-700: #11264b;
+  --color-marine-800: #0c1c37;
+  --color-marine-900: #081426;
 
   /* ── Neutral ramp ──────────────────────────────────────────────────────────────────────────
    * `gray` is remapped onto `slate`. Both ramps were already in use across every console —
@@ -132,7 +174,7 @@
   --color-popover-foreground: #0f172a;
   --color-border: #e6ebf1;
   --color-input: #e2e8f0;
-  --color-ring: #769046;
+  --color-ring: #53843b;
   --color-background: #f4f6f9;
   --color-foreground: #0f172a;
 
@@ -193,7 +235,7 @@ h1, h2, h3, h4 {
    on some controls, nothing at all on the hand-rolled `<button className="border-0">` ones, and
    a browser outline on the rest — so tabbing through a console lost the cursor repeatedly. */
 :focus-visible {
-  outline: 2px solid #769046;
+  outline: 2px solid #53843b;
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -295,9 +337,12 @@ h1, h2, h3, h4 {
 
 /* Glassmorphism & Animations */
 .glass-card {
-  background: rgba(255, 255, 255, 0.85);
+  /* 0.85 over the dark hero composited to roughly #dcdcdc — the card read as grey, not white,
+     and a washed-out panel is the opposite of what a clinic page should project. Kept just shy
+     of solid so it still sits IN the hero rather than on top of it. */
+  background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(229, 231, 235, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .dark-glass-card {
@@ -312,8 +357,12 @@ h1, h2, h3, h4 {
 .rail-gradient {
   background-color: #16212e;
   background-image:
-    radial-gradient(120% 140% at 12% 0%, rgba(118, 144, 70, 0.20) 0%, rgba(118, 144, 70, 0) 55%),
-    radial-gradient(90% 120% at 100% 0%, rgba(52, 70, 107, 0.35) 0%, rgba(52, 70, 107, 0) 60%);
+    /* Both washes are the logo's own colours now — the green (#53843b) it always used, and the
+       azure (#0a71a9) that is actually the mark's dominant colour and had no presence in the UI
+       at all. The blue it used to carry, #34466b, was a navy that matched nothing: it was
+       retired as a token months ago and survived only here, hard-coded. */
+    radial-gradient(120% 140% at 10% 0%, rgba(83, 132, 59, 0.22) 0%, rgba(83, 132, 59, 0) 55%),
+    radial-gradient(95% 125% at 100% 0%, rgba(10, 113, 169, 0.40) 0%, rgba(10, 113, 169, 0) 62%);
 }
 
 /* Hairline grid used behind hero panels at very low opacity — enough texture to stop a large

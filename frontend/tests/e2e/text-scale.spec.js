@@ -33,8 +33,13 @@ const measure = (page) =>
     };
   });
 
-const setSize = (page, label) =>
-  page.getByTestId('text-scale').getByRole('button', { name: `${label} text size` }).click();
+/** Open the size menu and pick one. The control is an icon button with a popover, not three
+ *  visible buttons — a utility toggle should be quiet until somebody goes looking for it. */
+const setSize = async (page, label) => {
+  const control = page.getByTestId('text-scale').first();
+  await control.getByRole('button', { name: /^Text size:/ }).click();
+  await page.getByRole('menuitemradio', { name: `${label} text size` }).click();
+};
 
 test.describe('Text size preference', () => {
   test('a patient can enlarge the interface before signing in, and it sticks', async ({ page }) => {
@@ -92,6 +97,12 @@ test.describe('Text size preference', () => {
 
     const control = page.getByTestId('text-scale');
     await expect(control).toBeVisible({ timeout: 15000 });
+
+    // Let the console's own data land first. The header still shifts ~12px in the 250ms after it
+    // first paints, as the async bits of the top bar arrive, and opening a right-anchored popover
+    // inside that window means clicking at a moving target. A person would not be that fast.
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15000 });
+    await page.waitForLoadState('networkidle');
 
     await setSize(page, 'Larger');
     expect((await measure(page)).root).toBe(20);

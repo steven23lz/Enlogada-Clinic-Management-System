@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
 import { isGoogleAuthConfigured } from '../../config/googleAuth';
@@ -61,6 +61,23 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
       setSubmitting(false);
     }
   };
+
+  // GSI renders once at the width it is given, so this is measured rather than styled.
+  const googleSlot = useRef(null);
+  const [googleWidth, setGoogleWidth] = useState(320);
+  useEffect(() => {
+    const el = googleSlot.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      // 400 is Google's own cap; below that, fill the slot exactly.
+      const w = Math.min(400, Math.floor(el.getBoundingClientRect().width));
+      if (w > 0) setGoogleWidth(w);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const handleGoogleSuccess = async (credentialResponse) => {
     setError('');
@@ -172,12 +189,15 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         )}
 
         {isGoogleAuthConfigured && (
-          <div className="flex justify-center w-full">
+          <div ref={googleSlot} className="flex w-full justify-center">
             {/* Google's Identity Services button takes a pixel width only — it rejects
-                percentages, which is why this is a number and not the "100%" that matched
-                the form's full-width Sign In button above. 360 is the widest value that
-                still fits the card at its narrowest supported layout, and Google caps the
-                button at 400px regardless. */}
+                percentages, which is why this cannot simply be the "100%" that matches the
+                form's full-width Sign In button above.
+                
+                It was a hard-coded 360, which overflowed: 360 plus the page's own `px-4` is
+                392px, so a 390px phone scrolled sideways by exactly 2px. Measuring the slot
+                instead makes it match the Sign In button at every width, and it cannot go stale
+                the next time the column's max-width changes. Google caps it at 400 regardless. */}
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={() => setError('Google Sign In was cancelled or failed.')}
@@ -185,7 +205,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
               shape="pill"
               theme="outline"
               text="continue_with"
-              width={360}
+              width={googleWidth}
             />
           </div>
         )}

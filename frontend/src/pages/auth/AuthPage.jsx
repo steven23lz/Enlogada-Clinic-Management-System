@@ -47,13 +47,31 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
   const CLINIC = useClinic();
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas">
+    <div className="flex min-h-screen flex-col bg-white">
       <PublicHeader currentTab={mode} onNavigate={onNavigate} />
 
+      {/* A full-bleed split, not two cards floating in a centred container.
+          The previous shape was `max-w-6xl` + `items-center`, which on any normal desktop
+          viewport left a broad band of empty canvas above and below both columns — the page read
+          as unfinished rather than as spacious. Each half now owns its full height: the form is
+          centred inside its column, and the dark panel runs edge to edge. */}
       <main className="flex flex-1 items-stretch">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8">
+        <div className="flex flex-1 items-center justify-center bg-white px-4 py-10 sm:px-6 lg:px-12">
           {/* Form. No Card wrapper — the column is the surface. */}
-          <div className="mx-auto w-full max-w-md">
+          <div className="w-full max-w-md">
+            {/* Below `lg` the reassurance panel is hidden, which left the sign-in page carrying
+                no brand at all beyond the header — on the one screen a patient reaches before
+                they have any other context about who they are handing their details to. */}
+            <div className="mb-7 flex items-center gap-3 lg:hidden">
+              <Logo className="h-10 w-10 flex-shrink-0" />
+              <div className="min-w-0 leading-tight">
+                <p className="m-0 text-note font-bold tracking-tight text-slate-900">{CLINIC.shortName}</p>
+                <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-azure-700">
+                  Ultrasound &amp; Diagnostic Clinic
+                </p>
+              </div>
+            </div>
+
             <div key={mode} className="animate-fade-in">
               {mode === 'login' ? (
                 <LoginForm onSwitchToRegister={() => setMode('register')} onNavigate={onNavigate} />
@@ -63,16 +81,18 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
             </div>
           </div>
 
-          {/* Brand and reassurance. Stays put across the crossfade — only the form changes. */}
-          <aside className="rail-gradient rail-grid relative hidden overflow-hidden rounded-2xl border border-[#2b3a4d] p-10 text-white lg:block">
-            <div className="relative">
+        </div>
+
+        {/* Brand and reassurance. Stays put across the crossfade — only the form changes. */}
+        <aside className="rail-gradient rail-grid relative hidden w-[46%] flex-shrink-0 items-center overflow-hidden text-white lg:flex xl:w-[42%]">
+          <div className="relative w-full px-10 py-14 xl:px-14">
               <div className="flex items-center gap-3">
                 <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.07] ring-1 ring-inset ring-white/10">
                   <Logo className="h-8 w-8" />
                 </span>
                 <div className="leading-tight">
                   <p className="m-0 text-lead font-bold tracking-tight text-white">{CLINIC.shortName}</p>
-                  <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-brand-300">
+                  <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-azure-300">
                     Ultrasound &amp; Diagnostic Clinic
                   </p>
                 </div>
@@ -85,7 +105,7 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
               <ul className="m-0 mt-8 list-none space-y-5 p-0">
                 {TRUST_POINTS.map(({ icon: Icon, title, body }) => (
                   <li key={title} className="flex gap-3">
-                    <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-brand-500/20 text-brand-300">
+                    <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-azure-500/20 text-azure-300 ring-1 ring-inset ring-azure-400/20">
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0">
@@ -101,9 +121,8 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
                 <span className="mx-1.5 text-slate-600">·</span>
                 {CLINIC.phone}
               </p>
-            </div>
-          </aside>
-        </div>
+          </div>
+        </aside>
       </main>
     </div>
   );
