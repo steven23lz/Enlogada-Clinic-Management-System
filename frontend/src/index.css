@@ -273,11 +273,24 @@ h1, h2, h3, h4 {
 
 /* One focus treatment for the whole app. Keyboard users previously got Tailwind's default ring
    on some controls, nothing at all on the hand-rolled `<button className="border-0">` ones, and
-   a browser outline on the rest — so tabbing through a console lost the cursor repeatedly. */
+   a browser outline on the rest — so tabbing through a console lost the cursor repeatedly.
+
+   Azure, because focus is an interaction and azure is the interactive colour. It also carries the
+   contrast the green could not: 5.32:1 on white against 4.44:1. */
 :focus-visible {
-  outline: 2px solid #53843b;
+  outline: 2px solid #0a71a9;
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* …except a text field, which draws its own. A 2px offset outline AROUND a bordered input plus
+   the input's own focus border is two rings on one control; the soft inner ring reads as the
+   field lighting up rather than as something drawn on top of it. Same colour either way, so the
+   two treatments are the same idea at two scales, not two ideas. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
 }
 
 /* ── Two component classes ─────────────────────────────────────────────────────────────────────
@@ -453,13 +466,55 @@ h1, h2, h3, h4 {
   animation: fadeIn 0.25s ease-out forwards;
 }
 
-@keyframes authSwap {
-  from { opacity: 0; transform: translateX(14px); }
-  to   { opacity: 1; transform: translateX(0); }
+/* ── Sign-in motion ──────────────────────────────────────────────────────────────────────────
+ * Timings here sit in the 120–220ms band that reads as responsive rather than as animation;
+ * the one exception is the mode swap, which moves a whole form and gets 260ms.
+ *
+ * The swap is DIRECTIONAL. It used to slide in from the right whichever way you were going, so
+ * going back to Sign In moved the same direction as leaving it — the motion contradicted the
+ * navigation. Forward comes from the right, back comes from the left, matching the pill on the
+ * toggle above it.
+ */
+@keyframes authSwapFwd {
+  from { opacity: 0; transform: translate3d(18px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes authSwapBack {
+  from { opacity: 0; transform: translate3d(-18px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+[data-auth-dir='fwd']  { animation: authSwapFwd  0.26s cubic-bezier(0.22, 0.9, 0.28, 1) both; }
+[data-auth-dir='back'] { animation: authSwapBack 0.26s cubic-bezier(0.22, 0.9, 0.28, 1) both; }
+
+/* A wrong password is a rejection, and a head-shake is what a rejection looks like. Paired with
+   the red border and the message text the alert already carries — never the motion alone, which
+   says nothing to anyone who cannot see it or has motion turned off. */
+@keyframes authShake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  15%, 45%, 75% { transform: translate3d(-5px, 0, 0); }
+  30%, 60%, 90% { transform: translate3d(5px, 0, 0); }
+}
+.animate-shake {
+  animation: authShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
-.animate-auth-swap {
-  animation: authSwap 0.32s cubic-bezier(0.22, 0.9, 0.28, 1) both;
+/* The form's own surface. It had none — a bare form on a white column, which is why the page read
+   as unfinished no matter what the panel beside it did. A card with a soft shadow gives the eye
+   something to land on and separates the task from the page. */
+.auth-card {
+  background: #ffffff;
+  border: 1px solid var(--color-line);
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 0.04),
+    0 12px 32px -12px rgb(15 23 42 / 0.12);
+}
+
+/* …and something for it to sit ON. White-on-white gave the card nothing to separate from. */
+.auth-ground {
+  background-color: #f7fafc;
+  background-image:
+    radial-gradient(60% 50% at 15% 0%, rgba(10, 113, 169, 0.07) 0%, rgba(10, 113, 169, 0) 70%),
+    radial-gradient(50% 45% at 90% 100%, rgba(83, 132, 59, 0.06) 0%, rgba(83, 132, 59, 0) 70%);
 }
 
 @keyframes pulseGlow {
