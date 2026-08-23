@@ -596,7 +596,14 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
               bar mounted, so staff can navigate to another screen instead of reloading — which,
               with no router, would drop them back at the default tab. Keyed on the active screen
               so navigating away from a broken console clears the error rather than sticking. */}
-          <ErrorBoundary key={activeNav}>{children}</ErrorBoundary>
+          {/* The screen fades up as it arrives. Keyed on `activeNav`, which is what makes this
+              safe: a CSS animation replays on mount, and this subtree mounts on navigation and
+              only on navigation. Four of these consoles poll every few seconds — hanging the
+              animation off a re-render instead would strobe the whole page at the poll interval.
+              Anyone who has asked the OS for less motion gets the rule in index.css instead. */}
+          <ErrorBoundary key={activeNav}>
+            <div className="animate-fade-in">{children}</div>
+          </ErrorBoundary>
         </main>
       </div>
     </div>

@@ -1,5 +1,21 @@
 # Database Migration & Schema History
 
+## [1.40.0] - 2026-08-23 (Screens arrive rather than appear)
+
+No schema change. Frontend only.
+
+A screen fades up as it arrives, in both shells — `SidebarLayout` for staff and `DashboardLayout`
+for the portal.
+
+The whole question with this is what triggers it, because four of these consoles poll every few
+seconds and a transition hung off a re-render would strobe the entire page at the poll interval.
+It is keyed on the active screen instead: a CSS animation replays on mount, and that subtree mounts
+on navigation and only on navigation. `SidebarLayout` already had `<ErrorBoundary key={activeNav}>`
+for an unrelated reason, so the hook was there.
+
+Measured both ways rather than assumed — parked on the polling Active Queue for 22 seconds: 0
+replays. Navigating: exactly 1. Same result on the portal.
+
 ## [1.39.0] - 2026-08-23 (A button that says it is working, and a spinner that actually spins)
 
 No schema change. Frontend only.
