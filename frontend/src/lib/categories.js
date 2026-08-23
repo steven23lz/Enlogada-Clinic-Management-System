@@ -23,7 +23,7 @@ import { FlaskConical, Scan, Stethoscope } from 'lucide-react';
 
 // Saturated marks — bars, dots, anything the eye reads as the datum itself.
 export const CATEGORY_COLORS = {
-  Laboratory: '#769046',   // brand green, the clinic's primary service
+  Laboratory: '#53843b',   // brand green, the clinic's primary service
   Ultrasound: '#2563eb',   // chart-only blue; navy fails the categorical lightness check
   Xray: '#d97706',         // amber
   '2D Echo': '#7c3aed',    // violet

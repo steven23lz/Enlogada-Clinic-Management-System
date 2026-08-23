@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
 import { isGoogleAuthConfigured } from '../../config/googleAuth';
@@ -9,7 +9,7 @@ import { AlertCircle, ArrowRight } from 'lucide-react';
 
 // Card-only content, no shell/graphic — AuthPage.jsx owns the shared header/footer/graphic
 // panel and the login<->register crossfade.
-const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
+const LoginForm = ({ onNavigate }) => {
   const { login, googleLogin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,6 +62,23 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
     }
   };
 
+  // GSI renders once at the width it is given, so this is measured rather than styled.
+  const googleSlot = useRef(null);
+  const [googleWidth, setGoogleWidth] = useState(320);
+  useEffect(() => {
+    const el = googleSlot.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      // 400 is Google's own cap; below that, fill the slot exactly.
+      const w = Math.min(400, Math.floor(el.getBoundingClientRect().width));
+      if (w > 0) setGoogleWidth(w);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const handleGoogleSuccess = async (credentialResponse) => {
     setError('');
     setSubmitting(true);
@@ -81,7 +98,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
     <div>
       <div className="space-y-1">
         <h1 className="m-0 text-2xl font-bold tracking-tight text-slate-900">Welcome Back</h1>
-        <p className="m-0 text-[13px] leading-relaxed text-slate-500">
+        <p className="m-0 text-note leading-relaxed text-slate-500">
           Sign in to your dashboard to manage records.
         </p>
       </div>
@@ -147,33 +164,40 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
               than as "the brand's second color." */}
           <Button
             type="submit"
-            disabled={submitting}
+            loading={submitting}
             size="lg"
             className="w-full"
           >
-            <span>{submitting ? 'Signing in...' : 'Sign In'}</span>
+            <span>Sign In</span>
             <ArrowRight className="w-4 h-4" />
           </Button>
         </form>
 
-        {/* Only drawn when there is a working button beneath it. It used to render
-            unconditionally, so a hidden button left "Or continue with Google" heading an empty
-            gap — an offer the page could not honour. */}
+        {/* Gated on the same condition as the button below, so the two always appear together.
+            It used to render unconditionally, which left the divider heading an empty gap on any
+            deployment that does not configure Google at all. */}
         {isGoogleAuthConfigured && (
           <div className="relative flex py-2 items-center">
             <div className="flex-grow border-t border-[#e6ebf1]"></div>
-            <span className="mx-3 flex-shrink text-fine font-medium text-slate-400">Or continue with Google</span>
+            {/* Just "or". The button directly beneath already says "Continue with Google" — that
+                wording comes from GSI's `text="continue_with"` and is fixed by Google's branding
+                rules, so spelling it out here too printed the same sentence twice, stacked. The
+                divider's job is to separate the two ways in, not to name the second one. */}
+            <span className="mx-3 flex-shrink text-fine font-medium text-slate-400">or</span>
             <div className="flex-grow border-t border-[#e6ebf1]"></div>
           </div>
         )}
 
         {isGoogleAuthConfigured && (
-          <div className="flex justify-center w-full">
+          <div ref={googleSlot} className="flex w-full justify-center">
             {/* Google's Identity Services button takes a pixel width only — it rejects
-                percentages, which is why this is a number and not the "100%" that matched
-                the form's full-width Sign In button above. 360 is the widest value that
-                still fits the card at its narrowest supported layout, and Google caps the
-                button at 400px regardless. */}
+                percentages, which is why this cannot simply be the "100%" that matches the
+                form's full-width Sign In button above.
+                
+                It was a hard-coded 360, which overflowed: 360 plus the page's own `px-4` is
+                392px, so a 390px phone scrolled sideways by exactly 2px. Measuring the slot
+                instead makes it match the Sign In button at every width, and it cannot go stale
+                the next time the column's max-width changes. Google caps it at 400 regardless. */}
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
               onError={() => setError('Google Sign In was cancelled or failed.')}
@@ -181,7 +205,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
               shape="pill"
               theme="outline"
               text="continue_with"
-              width={360}
+              width={googleWidth}
             />
           </div>
         )}
@@ -203,16 +227,6 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         */}
 
       </div>
-
-      <p className="mt-6 text-center text-[13px] text-slate-500">
-        New to Enlogada?{' '}
-        <button
-          onClick={onSwitchToRegister}
-          className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-brand-600 hover:underline"
-        >
-          Create an account
-        </button>
-      </p>
     </div>
   );
 };

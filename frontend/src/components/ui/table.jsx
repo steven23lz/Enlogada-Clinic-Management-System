@@ -40,7 +40,7 @@ const Table = React.forwardRef(({ className, containerClassName, stack = false, 
     <table
       ref={ref}
       data-stack={stack ? "true" : undefined}
-      className={cn("w-full caption-bottom border-collapse text-[13px]", className)}
+      className={cn("w-full caption-bottom border-collapse text-note", className)}
       {...props} />
   </div>
 ))
@@ -104,7 +104,7 @@ const TableCell = React.forwardRef(({ className, label, ...props }, ref) => (
   <td
     ref={ref}
     data-label={label}
-    className={cn("px-4 py-3 align-middle text-[13px] text-slate-700 [&:has([role=checkbox])]:pr-0", className)}
+    className={cn("px-4 py-3 align-middle text-note text-slate-700 [&:has([role=checkbox])]:pr-0", className)}
     {...props} />
 ))
 TableCell.displayName = "TableCell"

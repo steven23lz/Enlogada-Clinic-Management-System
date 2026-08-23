@@ -98,7 +98,7 @@ DialogTitle.displayName = DialogPrimitive.Title.displayName
 const DialogDescription = React.forwardRef(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-[13px] leading-relaxed text-slate-500", className)}
+    className={cn("text-note leading-relaxed text-slate-500", className)}
     {...props} />
 ))
 DialogDescription.displayName = DialogPrimitive.Description.displayName

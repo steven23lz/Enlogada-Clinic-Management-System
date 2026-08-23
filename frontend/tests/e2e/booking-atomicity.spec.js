@@ -90,14 +90,16 @@ test.describe('Booking atomicity (API)', () => {
     expect(body.data.alreadyBooked).toBe(false);
   });
 
-  test('a rejected booking leaves nothing behind and frees its slot', async () => {
-    const countMyBookings = async () => {
-      const res = await apiContext.get(`${API}/appointments/my-bookings`, {
-        headers: { Authorization: `Bearer ${clientToken}` }
-      });
-      return (await res.json()).data.bookings.length;
-    };
+  // Shared by both "nothing was written" assertions. A count is timezone-proof where a date
+  // comparison is not: the API serialises scheduled_date as a UTC instant.
+  const countMyBookings = async () => {
+    const res = await apiContext.get(`${API}/appointments/my-bookings`, {
+      headers: { Authorization: `Bearer ${clientToken}` }
+    });
+    return (await res.json()).data.bookings.length;
+  };
 
+  test('a rejected booking leaves nothing behind and frees its slot', async () => {
     const target = await claimSlot();
     const before = await countMyBookings();
 
@@ -229,6 +231,7 @@ test.describe('Booking atomicity (API)', () => {
   // will ever call. `min` is a browser hint; it does not exist for anything talking to the API.
   test('a booking in the past is refused, and its slot is never consumed', async () => {
     const yesterday = daysAgoStr(1);
+    const before = await countMyBookings();
 
     const res = await apiContext.post(`${API}/appointments`, {
       headers: { Authorization: `Bearer ${clientToken}` },
@@ -237,13 +240,15 @@ test.describe('Booking atomicity (API)', () => {
     expect(res.status()).toBe(400);
     expect((await res.json()).message).toMatch(/already passed|from today onwards/i);
 
-    // Nothing was written. Counted rather than filtered by date, for the reason the sibling test
-    // gives: the API serialises scheduled_date as a UTC instant.
-    const mine = await apiContext.get(`${API}/appointments/my-bookings`, {
-      headers: { Authorization: `Bearer ${clientToken}` }
-    });
-    const bookings = (await mine.json()).data.bookings;
-    expect(bookings.some((b) => String(b.scheduled_date).startsWith(yesterday))).toBe(false);
+    // Nothing was written — counted, not matched by date.
+    //
+    // This asserted `!bookings.some(b => b.scheduled_date.startsWith(yesterday))` and was wrong in
+    // exactly the way the comment above it claimed to be avoiding. scheduled_date is serialised as
+    // a UTC instant, so an appointment for TODAY in Manila (UTC+8) comes back as
+    // 2026-08-23T16:00:00.000Z — which startsWith yesterday's date. The seeded demo carries a
+    // booking for today, so the test reported a past booking that does not exist. Counting is the
+    // only form of this assertion that does not depend on a timezone.
+    expect(await countMyBookings()).toBe(before);
   });
 
   // The screen and the API must agree: a client should never be offered a slot the server would

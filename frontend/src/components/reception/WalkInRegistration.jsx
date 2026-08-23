@@ -135,7 +135,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, onRegistered }) => {
   return (
               <Panel className="max-w-3xl p-6">
                 <div className="border-b border-[#e6ebf1] pb-3 mb-4">
-                  <h2 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
+                  <h2 className="m-0 flex items-center gap-2 text-lead font-bold tracking-tight text-slate-900">
                     <UserPlus className="h-4 w-4 text-brand-600" />
                     <span>Register Walk-In Patient & Generate Physical Ticket</span>
                   </h2>
@@ -313,7 +313,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, onRegistered }) => {
 
                   <div className="flex justify-end pt-3">
                     <Button type="submit" className="font-bold text-xs px-6 py-2 rounded-xl" disabled={isRegistering}>
-                      {isRegistering ? 'Registering...' : 'Register Walk-In & Issue Queue Ticket'}
+                      {isRegistering ? 'Registering…' : 'Register Walk-In & Issue Queue Ticket'}
                     </Button>
                   </div>
                 </form>

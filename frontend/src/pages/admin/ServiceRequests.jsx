@@ -12,6 +12,7 @@ import { SkeletonRows, SkeletonList } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
+import { toastSuccess } from '../../lib/toast';
 import { canRenderPdfInline, previewKindFor } from '../../lib/preview';
 import { ShieldCheck, AlertCircle, Check, X } from 'lucide-react';
 
@@ -114,6 +115,10 @@ const ServiceRequests = () => {
     try {
       await api.put(`/hmo/request/${detailRequest.id}/approve`, { approvalCode });
       await refreshDetail(detailRequest.id);
+      // The detail panel does re-render with the new status, but this is a three-step handoff —
+      // reception raises the claim, an Admin decides it, the cashier bills on the outcome — and
+      // the person deciding needs to know the decision was recorded, not just displayed.
+      toastSuccess('Claim approved. The cashier will bill against it.');
     } catch (err) {
       setDetailError(err.response?.data?.message || 'Failed to approve request.');
     } finally {
@@ -132,6 +137,7 @@ const ServiceRequests = () => {
       setRejectingClaim(false);
       setClaimReason('');
       await refreshDetail(detailRequest.id);
+      toastSuccess('Claim refused, with your reason on the record. The patient will be billed.');
     } catch (err) {
       setDetailError(err.response?.data?.message || 'Failed to record the refusal.');
     } finally {
@@ -146,6 +152,11 @@ const ServiceRequests = () => {
       setRejecting(null);
       setRejectReason('');
       await refreshDetail(detailRequest.id);
+      toastSuccess(
+        approvalStatus === 'Approved'
+          ? 'Test approved on this claim.'
+          : 'Test refused, with your reason on the record.'
+      );
     } catch (err) {
       setDetailError(err.response?.data?.message || 'Failed to update test approval.');
     }
@@ -516,7 +527,7 @@ const ServiceRequests = () => {
                     <div key={t.id} className="rounded-lg border border-[#e6ebf1] p-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <span className="block truncate text-[13px] font-semibold text-slate-900">{t.test_name}</span>
+                          <span className="block truncate text-note font-semibold text-slate-900">{t.test_name}</span>
                           <span className="text-fine text-slate-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-1">

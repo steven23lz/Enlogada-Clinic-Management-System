@@ -70,7 +70,7 @@ export const PanelHeader = ({ title, description, icon: Icon, actions, className
             here skips a level — an audit found that jump on almost every screen. A screen reader
             user navigating by heading reads the outline as though a section were missing, and
             the visual size is set by the class either way, so nothing moves. */}
-        {title && <h2 className="m-0 truncate text-[13px] font-semibold text-slate-900">{title}</h2>}
+        {title && <h2 className="m-0 truncate text-note font-semibold text-slate-900">{title}</h2>}
         {description && <p className="m-0 mt-0.5 truncate text-fine font-normal text-slate-500">{description}</p>}
         {children}
       </div>

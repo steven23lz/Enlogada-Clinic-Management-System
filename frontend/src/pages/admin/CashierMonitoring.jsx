@@ -106,10 +106,10 @@ const CashierMonitoring = () => {
       <div>
         <Toolbar attached>
           <ToolbarField label="From" htmlFor="cm-from">
-            <DateField id="cm-from" presets={RANGE_PRESETS.start} value={startDate} onChange={e => setStartDate(e.target.value)} containerClassName="w-[150px]" />
+            <DateField id="cm-from" presets={RANGE_PRESETS.start} value={startDate} onChange={e => setStartDate(e.target.value)} containerClassName="w-[9.375rem]" />
           </ToolbarField>
           <ToolbarField label="To" htmlFor="cm-to">
-            <DateField id="cm-to" presets={RANGE_PRESETS.end} value={endDate} onChange={e => setEndDate(e.target.value)} containerClassName="w-[150px]" />
+            <DateField id="cm-to" presets={RANGE_PRESETS.end} value={endDate} onChange={e => setEndDate(e.target.value)} containerClassName="w-[9.375rem]" />
           </ToolbarField>
           <div className="flex items-end self-stretch">
             <Button variant="outline" onClick={() => fetchTransactions(startDate, endDate, method)}>
@@ -238,8 +238,8 @@ const CashierMonitoring = () => {
                   pagedTransactions.map(t => (
                     <TableRow key={t.id}>
                       <TableCell label="Receipt #" className="font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
-                      <TableCell label="Cashier" className="max-w-[160px] truncate" title={`${t.processed_by_first_name} ${t.processed_by_last_name}`}>{t.processed_by_first_name} {t.processed_by_last_name}</TableCell>
-                      <TableCell label="Patient" className="max-w-[160px] truncate font-medium text-slate-900" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
+                      <TableCell label="Cashier" className="max-w-[10rem] truncate" title={`${t.processed_by_first_name} ${t.processed_by_last_name}`}>{t.processed_by_first_name} {t.processed_by_last_name}</TableCell>
+                      <TableCell label="Patient" className="max-w-[10rem] truncate font-medium text-slate-900" title={`${t.patient_first_name} ${t.patient_last_name}`}>{t.patient_first_name} {t.patient_last_name}</TableCell>
                       <TableCell label="Method">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge>

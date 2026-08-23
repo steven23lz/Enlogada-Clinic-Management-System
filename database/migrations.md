@@ -1,5 +1,294 @@
 # Database Migration & Schema History
 
+## [1.43.0] - 2026-08-24 (A front door worth walking through)
+
+No schema change. Frontend only.
+
+### The sign-in panel was muddy, and that was a token being used out of place
+
+The dark column used `.rail-gradient`, which washes **green and azure** over near-black. That is
+correct for a hero band sitting under a page of white content — it is chrome, seen in a strip.
+Filling half the sign-in screen with it produced a large field where the two hues meet and go
+muddy, which is the opposite of what a clinic's front door should look like.
+
+`.auth-panel` is **one hue** — the logo's azure — walked from `#0a71a9` to `#052f47` along a single
+diagonal, with a soft white light-source high on the panel for depth. A single hue cannot go muddy;
+it only gets darker.
+
+### The mode switch was in the wrong place, so the transition had nothing to hold
+
+Getting from sign-in to register was a text link at the very bottom of the form, *below* the Google
+button — so somebody who arrived on the wrong one scrolled past an entire form before finding out
+there was another. The two modes are peers, so they are now a segmented control at the top: it
+states both, says which one you are on, and gives the swap something to actually transition
+between. The two bottom links are gone, being the same action said twice in the worse place.
+
+The swap animation is its own keyframe (`animate-auth-swap`, 320ms with a little lateral travel)
+rather than the generic panel fade. A form *replacing* another form is a different motion from a
+panel appearing.
+
+The panel content was trimmed too: it carried a headline, three paragraphs and a full address
+block, reading as a wall beside a five-field form. Contact details are a footnote now — and the
+address **wraps instead of truncating**, because "Misamis Orient…" is not a shorter address, it is
+a wrong one, and it is the only thing on the page telling somebody where to turn up.
+
+### Large is the default text size, and the public pages lost the control
+
+The size control was clutter on a marketing header — a utility toggle at full strength competing
+with the navigation and the primary call to action. But the *reason* it existed still applies to
+the people reading those pages, and they are the least likely to go hunting for a setting.
+
+So the control is off the public header entirely, and `DEFAULT_ID` is `large`: everyone gets the
+comfortable size until they say otherwise. Staff keep the control on their own consoles and the
+portal, where somebody working a full shift may want the denser layout back.
+
+Swept for overflow at the new default across Home, Services, About and sign-in at 1440 and 390,
+plus all five consoles: clean everywhere.
+
+`text-scale.spec.js` was rewritten to match — it drove the widget on a public page, which no longer
+has one. The hierarchy check now arrives with a stored preference instead, since what it tests is
+the CSS ramp and that has to hold where there is no widget. Its `cn()` guard is expressed against
+the root size rather than a fixed 10px, so it keeps testing the token rather than today's default.
+
+## [1.42.0] - 2026-08-24 (The type scale was being deleted on its way to the DOM)
+
+No schema change. Frontend only. One line of real change, and it moves every screen in the app.
+
+### What was wrong
+
+`cn()` is `twMerge(clsx(...))`. tailwind-merge decides which of two conflicting classes wins by
+parsing the class NAME against its own model of Tailwind — and it knows nothing about this
+project's `@theme` block. For the `text-*` prefix it guessed wrong in the worst available
+direction: `text-micro` is a font size, tailwind-merge cannot tell "micro" from a colour name,
+filed it under text-colour, and then
+
+    cn('… text-micro font-semibold …', 'text-slate-500')
+
+resolved the two as conflicting colours and **dropped the size entirely**.
+
+Measured on the cashier's Collections strip: the metric label asked for `text-micro` (10px) and
+rendered at **16px inherited**. That is why every metric card across every console had a label
+louder than the figure it labels — the component was correct, the class never arrived.
+
+All seven custom sizes behaved this way, in every component reaching for `cn()` alongside a text
+colour, which is most of `components/ui/`. Custom shadows had a quieter version of the same fault:
+unrecognised, so `shadow-float` and `shadow-sm` did not conflict and BOTH applied.
+
+### Why it appeared now
+
+Honest accounting: [1.38.0] introduced it. The app previously wrote these sizes as arbitrary
+values (`text-[13px]`), and tailwind-merge parses `[13px]` as a length and correctly files it as a
+font size. Converting 85 of those to named tokens is right — `rem` tokens scale with the reader's
+text-size setting and pinned pixels do not — but it walked straight into this, and the failure is
+silent in both directions: the class is right there in the JSX, and the build is happy.
+
+    text-[13px] text-slate-700   ->  text-[13px] text-slate-700    (kept)
+    text-note   text-slate-700   ->  text-slate-700                (size gone)
+
+### The fix
+
+`cn()` uses `extendTailwindMerge` with the theme keys registered, so tailwind-merge resolves them
+as what they are. Verified in both directions — `text-sm text-note` → `text-note`, and
+`text-note text-sm` → `text-sm`.
+
+Colours needed no entry: an unknown `bg-*`/`text-*`/`border-*` colour already merges correctly,
+because colour is tailwind-merge's fallback guess. That is the same fallback that broke the sizes.
+
+**Adding a token to a non-colour `@theme` namespace now means adding it to `lib/utils.js` in the
+same commit**, or it works everywhere except the components that use `cn()`.
+
+### The guard
+
+`text-scale.spec.js` gains a case that reads the *computed* size of a real metric label off a live
+console. Nothing catches this by reading source — the class is present in the JSX and absent from
+the DOM — so the only honest check is measuring what the browser ended up with. Verified by
+reverting `cn()` to plain `twMerge`: expected 10, received 16.
+
+## [1.41.0] - 2026-08-23 (The palette comes off the logo)
+
+No schema change. Frontend only.
+
+### The identity was half the logo
+
+Sampled from `Enlogada_Mark.png` itself rather than chosen: the artwork is **49% blue and 49%
+green** by pixel area, and its single most common colour is `#0a71a9`. The UI had been built on
+the green half alone — and on an approximation of it at that. Three things followed:
+
+- **`--color-azure-*` added**, anchored on `#0a71a9` verbatim. This is the clinical half of the
+  identity and it had no presence in the interface at all. It also solves an accessibility problem
+  the green could not: white on `azure-500` measures **5.32:1** and passes WCAG AA outright, where
+  white on the old `brand-500` was **3.59:1** and failed — the standing workaround being to reach
+  for `brand-600` on public pages.
+- **`--color-brand-*` re-anchored on `#53843b`**, the logo's actual green, replacing `#769046` — a
+  lighter, more olive green that approximated the mark rather than matching it. Contrast improves
+  from 3.59:1 to 4.44:1 as a side effect. The four remaining hard-coded `#769046` values (the RBAC
+  checkbox accent, the revenue chart, the Laboratory category colour, the focus ring) moved with it.
+- **`--color-marine-*`** for the logo's deep navy `#1d407d`, distinct from `--color-rail`, which is
+  near-black slate and stays the app shell.
+- **`.rail-gradient` rebuilt from the logo's own two colours.** It had been washing green over
+  `#34466b` — a navy retired as a token months ago that survived only here, hard-coded. Five hero
+  surfaces improved from that one change.
+
+White carries the rest. It is the dominant surface on every public page, and the auth split is now
+a white column against a dark one rather than grey against near-black.
+
+### Services page: the layout was fighting the data
+
+Three columns, one card per department. Laboratory has 22 tests and ECG has one, so the row
+rendered a wall of text beside a card that was 90% empty — column height decided by whichever
+department happened to have the most tests, which is not a decision anyone made.
+
+Each department is a full-width section now and its tests flow in a responsive grid inside it. A
+one-test department is one tidy row; a twenty-two-test one is a block. Added a search box, because
+the list is 32 items and somebody arriving here wants one specific test and its price, and a
+closing call to action, because the page answered "what does it cost" and never "so what now".
+
+### Sign-in: a full-bleed split
+
+It was `max-w-6xl` + `items-center`, so both columns floated in a band of empty canvas. Each half
+owns its full height now. Two real bugs fell out of looking at it:
+
+- **No branding at all below `lg`.** The reassurance panel is `hidden lg:block`, so on every phone
+  the sign-in page showed nothing but a bare form — on the one screen a patient reaches before
+  they have any context about who they are handing their details to.
+- **A 2px horizontal scroll at 390px.** Google's button takes a pixel width only and was
+  hard-coded to 360; with the page's own `px-4` that needs 392. It is measured from its slot now,
+  so it matches the Sign In button at every width and cannot go stale when the column changes.
+
+### The text-size control was wrong on a public page
+
+It shipped as a visible segmented control — an icon and three `A`s in a bordered box — which is a
+utility toggle sitting at full strength in a marketing header, competing with the navigation and
+the primary call to action. It is a single icon button with a popover now: same three choices, one
+click to reach them, none of the weight when nobody is looking for it. Each row in the menu is
+drawn at the size it selects, so the choice previews itself.
+
+## [1.40.0] - 2026-08-23 (Screens arrive rather than appear)
+
+No schema change. Frontend only.
+
+A screen fades up as it arrives, in both shells — `SidebarLayout` for staff and `DashboardLayout`
+for the portal.
+
+The whole question with this is what triggers it, because four of these consoles poll every few
+seconds and a transition hung off a re-render would strobe the entire page at the poll interval.
+It is keyed on the active screen instead: a CSS animation replays on mount, and that subtree mounts
+on navigation and only on navigation. `SidebarLayout` already had `<ErrorBoundary key={activeNav}>`
+for an unrelated reason, so the hook was there.
+
+Measured both ways rather than assumed — parked on the polling Active Queue for 22 seconds: 0
+replays. Navigating: exactly 1. Same result on the portal.
+
+## [1.39.0] - 2026-08-23 (A button that says it is working, and a spinner that actually spins)
+
+No schema change. Frontend only.
+
+### The reduced-motion rule was freezing every loading spinner
+
+`prefers-reduced-motion: reduce` applied `animation-duration: 0.01ms` and
+`animation-iteration-count: 1` to `*`. On a spinner that is not a slowdown — it completes one
+rotation instantly and then **stops, permanently**. Measured with the preference on, `animate-spin`
+computed to `1e-05s` / `1 iteration`.
+
+So for anyone who had asked their OS for less motion, every loading indicator in the app — the boot
+screen, the patient portal, the services page, the admin panels, avatar upload — was a static ring.
+Which is the single worst thing a loading indicator can be, because a frozen spinner does not read
+as "loading", it reads as "hung".
+
+`.animate-spin` is now exempted and runs at half speed instead. The exemption is deliberately
+narrow and was verified as such: with `reduce` on, the spinner computes to `2s / infinite` while the
+decorative `pulse-glow` is still correctly killed at `1e-05s / 1`. A progress indicator is not what
+the preference is asking about — the concern is vestibular, which means large-area movement,
+parallax and zoom, not a 16px ring.
+
+### `<Button loading>`
+
+43 buttons were each hand-rolling `{submitting ? 'Saving...' : 'Save'}`. Three problems with that:
+
+- **The copy had drifted.** `'Saving...'` in eight places and `'Saving…'` in four — the same word
+  with two different ellipsis characters, rendering side by side on different screens. Plus a
+  `ConfirmDialog` that said "Please wait..." on every destructive action in the app.
+- **A static string gives no sign of life**, so a slow request and a hung one look identical.
+- **The label grew mid-click**, reflowing the row and moving whatever sat beside it out from under
+  the cursor at the exact moment somebody was clicking.
+
+`loading` now supplies a spinner, the disable and `aria-busy`, and **the label stays put**. It
+matters most on `ConfirmDialog`, used by nine screens: that dialog confirms a refund, a
+cancellation or a released report, and replacing its label with "Please wait..." threw away the one
+thing the person needed to still be able to read — which of those they had just agreed to.
+
+Converted the eight `<Button>` submit sites (sign in, register, forgot/reset password, reschedule,
+patient correction, patient search, staff account creation) and normalised the remaining
+hand-rolled labels onto one ellipsis character.
+
+### Success that was indistinguishable from cancelling
+
+A dialog that closes on success looks exactly like a dialog that was dismissed. Two did precisely
+that, and both had just written something real:
+
+- **Reschedule** now names the slot back — the only confirmation the patient gets that it took the
+  time they picked rather than the one the dialog opened on.
+- **Patient correction** now names the patient. It is opened from a list of forty; a bare "Saved"
+  confirms nothing worth confirming.
+
+The three HMO decisions on Service Requests also toast now. The panel did re-render with the new
+status, but this is a three-step handoff — reception raises the claim, an Admin decides it, the
+cashier bills on the outcome — and the person deciding needs to know the decision was *recorded*,
+not merely displayed.
+
+Left alone deliberately: `BookingDialog` already shows a confirmation screen carrying the reference
+code, `WalkInRegistration` already prints the queue ticket number, and marking a notification read
+should stay silent. Adding a toast to any of those is noise on top of better feedback.
+
+## [1.38.0] - 2026-08-23 (The reader decides how big the text is)
+
+No schema change. Frontend only.
+
+### What was added
+
+A three-position text size control — Normal / Large / Larger — in the staff console header, the
+patient portal header and the public header, including the phone drawer. The choice is written to
+`localStorage` and applied to `<html>` as a root font size before React mounts, so it survives a
+reload and does not flash the default size first.
+
+It is offered before sign-in as well as after, because the screens a patient reaches first — the
+sign-in form and the booking pages — are the ones where they have no account to carry a preference
+on. Percentages of the browser's own root size, not fixed pixels, so somebody who has already
+raised their default in the OS keeps that as their baseline and this multiplies it instead of
+quietly overriding it.
+
+### The part that was actually load-bearing: 85 pixel-pinned font sizes
+
+Scaling the root only works because every size in the app is a `rem`. Eighty-five of them were
+not — `text-[13px]` in 46 places, `text-[15px]` in 17, and the rest — and those do not merely fail
+to grow. They **invert the hierarchy**, because 13px sits between `text-fine` (12px) and
+`text-sm` (14px):
+
+        token           at 100%      at 125%
+        text-fine        12px         15px      <- overtakes
+        text-[13px]      13px         13px      <- pinned, now the SMALLEST
+        text-sm          14px       17.5px
+
+Three tokens were added to cover the sizes that had none (`--text-nano` 9px, `--text-note` 13px,
+`--text-lead` 15px), the other pinned values already had exact token equivalents, and all 85 sites
+were swapped. Every swap is the same computed pixel size at the default root, so nothing about the
+app's current appearance changed — the diff is identity at 100% and only means something above it.
+
+Nine fixed-width containers that box scaling text were converted the same way (`w-[248px]` ->
+`w-[15.5rem]` for the sidebar rail, the date fields, the notification tray, the truncation caps).
+The sidebar was the visible one: at Larger its labels had truncated to "Walk-In Registr…" and
+"Appointment C…" because the rail was pinned while its own labels grew. Icon and divider sizes
+(`w-[3px]`, `w-[13px]`) stay in px deliberately — they are decoration, and growing them with the
+reading size makes the chrome heavier without making anything easier to read.
+
+### Why this has a spec
+
+`text-scale.spec.js`. The setting itself is easy to eyeball; the invariant is not. The 86th
+pixel-pinned size will look perfect in every screenshot taken at the default size and only misbehave
+for the users who changed it — which is to say, only for the people the feature exists for. The
+spec asserts `fine < note < sm` at all three scales, and it was verified by injecting both failures
+(a `text-[13px]` on a live element, and a px-valued token) and confirming it goes red on each.
+
 ## [1.37.0] - 2026-08-23 (Both halves of the gateway, or neither)
 
 No schema change.

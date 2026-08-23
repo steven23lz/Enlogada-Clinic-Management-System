@@ -4,35 +4,40 @@ import Logo from '../../components/Logo';
 import LoginForm from '../../components/auth/LoginForm';
 import RegisterForm from '../../components/auth/RegisterForm';
 import { useClinic } from '../../lib/clinic';
-import { ShieldCheck, Clock, HeartHandshake } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import { ShieldCheck, Clock, HeartHandshake, MapPin, Phone } from 'lucide-react';
 
-// UI/UX Modernization Phase 6: merges Login.jsx and Register.jsx into one page that owns its own
-// login/register sub-state, so toggling between them no longer fully unmounts/remounts the page.
+// The clinic's front door: sign in and create an account, in one page that owns the switch
+// between them.
 //
-// ── Why the page changed shape [1.23.0] ───────────────────────────────────────────────────────
-// It was a max-width container holding a white form card next to a second card, sitting between
-// the public header and the public footer. Four framed rectangles on one screen, none of which
-// was obviously the thing to do next, and a footer full of links directly beneath the password
-// field — on the one page where the entire job is "sign in".
+// ── Why the page changed shape, twice ─────────────────────────────────────────────────────────
 //
-// Now: full height, two columns, nothing below the fold. The form has no card of its own because
-// its column IS the card; a box inside a box is what made the old version feel cramped. The right
-// column is dark and carries the reassurance a first-time patient actually needs before typing
-// their details into a medical system — who runs this, that results are handled properly, that
-// their HMO is accepted. It is hidden below `lg`, where the form should have the screen to itself.
+// [1.23.0] replaced a white form card floating between the public header and footer — four framed
+// rectangles, none obviously the thing to do next — with a two-column layout and no footer.
 //
-// The public footer is gone from this page specifically. Its links belong on a marketing page,
-// not under a login form.
+// This pass fixes what that left behind:
+//
+//  * The dark column used `.rail-gradient`, which washes green AND azure over near-black. That is
+//    right for a hero band under a page of white content. Filling half the screen with it made a
+//    large muddy field where the two hues meet. `.auth-panel` is one hue — the logo's azure —
+//    walked from mid to deep along a single diagonal. A single hue cannot go muddy.
+//  * Switching between sign-in and register was a text link at the very bottom of the form, below
+//    the Google button, and the swap was a generic fade. The two modes are peers and the choice
+//    belongs at the TOP, so a segmented control states both, says which one you are on, and gives
+//    the transition something to actually transition between.
+//  * The panel carried a headline, three paragraphs and a full address block. It reads as a wall
+//    beside a five-field form. Trimmed: the reassurance is what a first-time patient needs, and
+//    the contact details are a quiet footnote rather than a fourth paragraph.
 const TRUST_POINTS = [
   {
     icon: ShieldCheck,
     title: 'Licensed diagnostics',
-    body: 'Certified medical technologists and radiologists handle every test.',
+    body: 'Certified technologists and radiologists handle every test.',
   },
   {
     icon: Clock,
     title: 'Results you can reach',
-    body: 'Reports are released to your account and emailed the moment they are signed off.',
+    body: 'Released to your account and emailed the moment they are signed off.',
   },
   {
     icon: HeartHandshake,
@@ -41,69 +46,136 @@ const TRUST_POINTS = [
   },
 ];
 
+const MODES = [
+  { id: 'login', label: 'Sign In' },
+  { id: 'register', label: 'Create Account' },
+];
+
 const AuthPage = ({ initialMode = 'login', onNavigate }) => {
   const [mode, setMode] = useState(initialMode);
   // Runtime identity, so the address here and on the receipt cannot disagree. See lib/clinic.js.
   const CLINIC = useClinic();
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas">
+    <div className="flex min-h-screen flex-col bg-white">
       <PublicHeader currentTab={mode} onNavigate={onNavigate} />
 
       <main className="flex flex-1 items-stretch">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8">
-          {/* Form. No Card wrapper — the column is the surface. */}
-          <div className="mx-auto w-full max-w-md">
-            <div key={mode} className="animate-fade-in">
+        {/* Form column. Each half owns its full height — the previous `max-w-6xl` + `items-center`
+            left a band of empty canvas above and below both columns. */}
+        <div className="flex flex-1 items-center justify-center bg-white px-4 py-10 sm:px-6 lg:px-12">
+          <div className="w-full max-w-md">
+            {/* Below `lg` the panel is hidden, which left this page carrying no brand at all — on
+                the one screen a patient reaches before they have any context about who they are
+                handing their details to. */}
+            <div className="mb-7 flex items-center gap-3 lg:hidden">
+              <Logo className="h-10 w-10 flex-shrink-0" />
+              <div className="min-w-0 leading-tight">
+                <p className="m-0 text-note font-bold tracking-tight text-slate-900">{CLINIC.shortName}</p>
+                <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-azure-700">
+                  Ultrasound &amp; Diagnostic Clinic
+                </p>
+              </div>
+            </div>
+
+            {/* The mode switch, at the top where the decision is actually made. It was a text link
+                under the Google button, which is after everything else on the page — so somebody
+                who arrived at the wrong one filled in a form before finding out. */}
+            <div
+              role="tablist"
+              aria-label="Sign in or create an account"
+              className="mb-8 grid grid-cols-2 gap-1 rounded-xl border border-line bg-slate-50 p-1"
+            >
+              {MODES.map((m) => {
+                const on = m.id === mode;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => setMode(m.id)}
+                    className={cn(
+                      'cursor-pointer rounded-lg border-0 px-3 py-2 text-note font-semibold transition-all duration-200',
+                      on
+                        ? 'bg-white text-azure-800 shadow-[0_1px_3px_rgb(15_23_42_/_0.10)]'
+                        : 'bg-transparent text-slate-500 hover:text-slate-800'
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Keyed on the mode, so the animation replays on the swap and only on the swap. */}
+            <div key={mode} className="animate-auth-swap">
               {mode === 'login' ? (
-                <LoginForm onSwitchToRegister={() => setMode('register')} onNavigate={onNavigate} />
+                <LoginForm onNavigate={onNavigate} />
               ) : (
                 <RegisterForm onSwitchToLogin={() => setMode('login')} />
               )}
             </div>
           </div>
-
-          {/* Brand and reassurance. Stays put across the crossfade — only the form changes. */}
-          <aside className="rail-gradient rail-grid relative hidden overflow-hidden rounded-2xl border border-[#2b3a4d] p-10 text-white lg:block">
-            <div className="relative">
-              <div className="flex items-center gap-3">
-                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.07] ring-1 ring-inset ring-white/10">
-                  <Logo className="h-8 w-8" />
-                </span>
-                <div className="leading-tight">
-                  <p className="m-0 text-[15px] font-bold tracking-tight text-white">{CLINIC.shortName}</p>
-                  <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-rail-accent">
-                    Ultrasound &amp; Diagnostic Clinic
-                  </p>
-                </div>
-              </div>
-
-              <h2 className="m-0 mt-8 max-w-sm text-2xl font-bold leading-snug tracking-tight text-white">
-                Book a test, follow your visit, and collect your results in one place.
-              </h2>
-
-              <ul className="m-0 mt-8 list-none space-y-5 p-0">
-                {TRUST_POINTS.map(({ icon: Icon, title, body }) => (
-                  <li key={title} className="flex gap-3">
-                    <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-brand-500/20 text-rail-accent">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[13px] font-semibold text-white">{title}</span>
-                      <span className="block text-fine leading-relaxed text-rail-ink-muted">{body}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              <p className="m-0 mt-10 border-t border-white/10 pt-5 text-fine leading-relaxed text-rail-ink-muted">
-                {CLINIC.address}
-                <span className="mx-1.5 text-rail-ink-dim">·</span>
-                {CLINIC.phone}
-              </p>
-            </div>
-          </aside>
         </div>
+
+        {/* Brand and reassurance. Stays put across the swap — only the form changes. */}
+        <aside className="auth-panel relative hidden w-[46%] flex-shrink-0 items-center overflow-hidden text-white lg:flex xl:w-[44%]">
+          {/* The mark, oversized and barely there. Gives the panel a subject without an image. */}
+          <div aria-hidden="true" className="pointer-events-none absolute -right-24 -bottom-16 opacity-[0.07]">
+            <Logo className="h-[26rem] w-[26rem]" />
+          </div>
+
+          <div className="relative w-full px-10 py-14 xl:px-14">
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 ring-1 ring-inset ring-white/20">
+                <Logo className="h-8 w-8" />
+              </span>
+              <div className="leading-tight">
+                <p className="m-0 text-lead font-bold tracking-tight text-white">{CLINIC.shortName}</p>
+                <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-azure-200">
+                  Ultrasound &amp; Diagnostic Clinic
+                </p>
+              </div>
+            </div>
+
+            <h2 className="m-0 mt-10 max-w-md text-2xl font-bold leading-snug tracking-tight text-white xl:text-3xl">
+              Book a test, follow your visit, and collect your results in one place.
+            </h2>
+
+            <ul className="m-0 mt-9 list-none space-y-3 p-0">
+              {TRUST_POINTS.map(({ icon: Icon, title, body }) => (
+                <li
+                  key={title}
+                  className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.07] p-3.5 backdrop-blur-sm"
+                >
+                  <span className="mt-px flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white/15 text-white">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-note font-semibold text-white">{title}</span>
+                    <span className="mt-0.5 block text-fine leading-relaxed text-azure-100/80">{body}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            {/* A footnote, not a fourth paragraph. */}
+            <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-5 text-fine text-azure-100/70">
+              <span className="flex w-full items-start gap-1.5">
+                <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                {/* Wraps rather than truncates. An address ending "Misamis Orient…" is not a
+                    shorter address, it is a wrong one — and this is the only place on the page
+                    that tells somebody where to physically turn up. */}
+                <span className="leading-relaxed">{CLINIC.address}</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                {CLINIC.phone}
+              </span>
+            </div>
+          </div>
+        </aside>
       </main>
     </div>
   );

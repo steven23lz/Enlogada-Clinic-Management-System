@@ -28,6 +28,30 @@
 | `--color-ring` | `#769046` | Focus rings |
 | `--color-background` | `#f8f9fa` | Page background |
 
+### 1a. The palette is sampled from the logo (2026-08-23)
+
+Every colour decision above was made against an *approximation* of the mark. The file was measured:
+`Enlogada_Mark.png` is **49% blue and 49% green** by opaque pixel area, and its most common single
+colour is `#0a71a9`. The interface used only the green half, and not the logo's actual green.
+
+| Token | Value | Where it comes from |
+|---|---|---|
+| `--color-azure-500` | `#0a71a9` | the mark's dominant colour, verbatim. White text on it is **5.32:1** — passes WCAG AA, which `brand-500` never did |
+| `--color-brand-500` | `#53843b` | the mark's green, verbatim. Replaced `#769046`, which was lighter and more olive. Contrast 3.59:1 → **4.44:1** |
+| `--color-marine-500` | `#1d407d` | the mark's deep navy. For brand-coloured dark surfaces; distinct from `--color-rail`, which is app chrome |
+
+**Division of labour:** azure is the clinical register and carries interactive emphasis — links,
+focus, prices, hero accents. Green stays the primary action and the brand accent. **White is the
+dominant surface**, not a background: on a clinic product the white ground is the identity as much
+as either hue, and the public pages are built on it.
+
+`.rail-gradient` is built from these two and nothing else. It previously washed green over
+`#34466b` — a navy retired as a token months earlier that survived only in that one hard-coded
+rule. Five hero surfaces read as brand-coloured now rather than as generic dark panels.
+
+Item 9 below (the white-on-green AA workaround) is superseded for anything using azure: it no
+longer needs a darker rung to be legible.
+
 **Border radius scale:** `--radius-sm: 8px`, `--radius-md: 12px`, `--radius-lg: 16px`.
 
 **Typography:** `'Outfit'` (Google Fonts, weights 300–700), applied as the body font. No secondary/heading font is defined — `Outfit` is used throughout.

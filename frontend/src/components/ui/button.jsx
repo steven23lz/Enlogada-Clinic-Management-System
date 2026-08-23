@@ -1,5 +1,6 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
+import { Loader2 } from "lucide-react"
 import { cva } from "class-variance-authority";
 
 import { cn } from "../../lib/utils"
@@ -9,7 +10,7 @@ import { cn } from "../../lib/utils"
 // there are many, and which never picked up Tailwind's ring utilities — get the same treatment as
 // these. Keyboard users were previously losing the cursor several times per screen.
 const buttonVariants = cva(
-  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg text-[13px] font-semibold transition-all duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg text-note font-semibold transition-all duration-150 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -47,13 +48,47 @@ const buttonVariants = cva(
   }
 )
 
-const Button = React.forwardRef(({ className, variant, size, asChild = false, ...props }, ref) => {
-  const Comp = asChild ? Slot : "button"
+/**
+ * `loading` puts the button in flight: a spinner appears, the button stops accepting clicks, and
+ * assistive tech is told via `aria-busy`.
+ *
+ * It replaced a text swap that 43 buttons were each doing by hand — `{submitting ? 'Saving…' :
+ * 'Save'}` — which had three problems. The copy had drifted ('Saving…' in six places, 'Saving…'
+ * in four, and a ConfirmDialog that said 'Please wait...' on every destructive action in the app).
+ * A static string gives no sign of life, so a slow request and a hung one look identical. And the
+ * label growing mid-click reflows the row, moving whatever sits next to it out from under the
+ * cursor at the exact moment somebody is clicking.
+ *
+ * The label is therefore kept, not swapped: "Take Payment" stays "Take Payment" and gains a
+ * spinner. The width change is one icon rather than a whole word, and it never says less than it
+ * did before the click.
+ */
+const Button = React.forwardRef(({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
+  // Slot forwards to whatever child it is given and requires exactly one, so a spinner cannot be
+  // injected here. asChild is for links and wrappers, which do not submit anything.
+  if (asChild) {
+    return (
+      <Slot
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}>
+        {children}
+      </Slot>
+    );
+  }
   return (
-    <Comp
+    <button
       className={cn(buttonVariants({ variant, size, className }))}
       ref={ref}
-      {...props} />
+      // Both, deliberately: `disabled` stops the second click that submits a payment twice, and
+      // `aria-busy` is what tells a screen reader the difference between "in flight" and
+      // "unavailable to you".
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      {...props}>
+      {loading && <Loader2 className="animate-spin" aria-hidden="true" />}
+      {children}
+    </button>
   );
 })
 Button.displayName = "Button"

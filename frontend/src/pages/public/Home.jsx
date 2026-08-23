@@ -23,7 +23,7 @@ const Home = ({ onNavigate }) => {
       <PublicHeader currentTab="home" onNavigate={onNavigate} />
 
       {/* Hero Banner Section */}
-      <section className="relative bg-primary-navy text-white min-h-[420px] sm:min-h-[500px] flex items-center overflow-hidden">
+      <section className="rail-gradient rail-grid relative flex min-h-[420px] items-center overflow-hidden text-white sm:min-h-[500px]">
         {/* UI/UX Phase 4: replaces a generic, unrelated stock photo with a brand-forward
             treatment — the clinic's own mark, large and faint, plus a subtle dot grid — so the
             hero reads as this clinic's, not a stock library's. */}
@@ -35,11 +35,13 @@ const Home = ({ onNavigate }) => {
           }}
         />
         <div className="absolute -right-20 top-1/2 -translate-y-1/2 opacity-[0.08] pointer-events-none hidden md:block">
-          <Logo className="w-[480px] h-[480px]" />
+          <Logo className="w-[30rem] h-[480px]" />
         </div>
 
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-navy via-primary-navy/90 to-primary-navy/60" />
+        {/* The flat left-to-right overlay that used to sit here was primary-navy fading into
+            primary-navy — the same colour at three opacities, so it darkened the hero without
+            adding anything. The shared `rail-gradient` on the section carries the light source
+            now, and it is the logo's own azure and green. */}
 
         <PageShell className="relative py-14 sm:py-20 z-10 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           <div className="space-y-5 sm:space-y-6">
@@ -106,7 +108,7 @@ const Home = ({ onNavigate }) => {
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">Licensed Diagnostics</h3>
+              <h3 className="m-0 text-lead font-bold tracking-tight text-slate-900">Licensed Diagnostics</h3>
               <p className="m-0 text-fine leading-relaxed text-slate-500">Certified laboratory tech & radiologists handling your medical tests.</p>
             </div>
           </div>
@@ -116,7 +118,7 @@ const Home = ({ onNavigate }) => {
               <Clock className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">Fast & Accurate Results</h3>
+              <h3 className="m-0 text-lead font-bold tracking-tight text-slate-900">Fast & Accurate Results</h3>
               <p className="m-0 text-fine leading-relaxed text-slate-500">Digital result releasing notified directly to your email inbox.</p>
             </div>
           </div>
@@ -126,7 +128,7 @@ const Home = ({ onNavigate }) => {
               <Award className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">HMO & Private Support</h3>
+              <h3 className="m-0 text-lead font-bold tracking-tight text-slate-900">HMO & Private Support</h3>
               <p className="m-0 text-fine leading-relaxed text-slate-500">HMO verification integrated with manual authorization code tracking.</p>
             </div>
           </div>

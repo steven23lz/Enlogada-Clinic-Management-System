@@ -62,7 +62,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
     <div>
       <div className="space-y-1">
         <h1 className="m-0 text-2xl font-bold tracking-tight text-slate-900">Create an Account</h1>
-        <p className="m-0 text-[13px] leading-relaxed text-slate-500">
+        <p className="m-0 text-note leading-relaxed text-slate-500">
           Register to access your clinic account
         </p>
       </div>
@@ -157,25 +157,15 @@ const RegisterForm = ({ onSwitchToLogin }) => {
 
           <Button
             type="submit"
-            disabled={submitting}
+            loading={submitting}
             size="lg"
             className="w-full mt-2"
           >
-            <span>{submitting ? 'Creating Account...' : 'Create Account'}</span>
+            <span>Create Account</span>
             <ArrowRight className="w-4 h-4" />
           </Button>
         </form>
       </div>
-
-      <p className="mt-6 text-center text-[13px] text-slate-500">
-        Already have an account?{' '}
-        <button
-          onClick={onSwitchToLogin}
-          className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-brand-600 hover:underline"
-        >
-          Sign in
-        </button>
-      </p>
     </div>
   );
 };

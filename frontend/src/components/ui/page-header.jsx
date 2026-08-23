@@ -65,7 +65,7 @@ const PageHeader = ({
               </span>
             )}
             <h1 className="m-0 text-xl font-bold tracking-tight text-white sm:text-2xl">{title}</h1>
-            {description && <p className="m-0 mt-1.5 text-[13px] leading-relaxed text-rail-ink-soft">{description}</p>}
+            {description && <p className="m-0 mt-1.5 text-note leading-relaxed text-rail-ink-soft">{description}</p>}
           </div>
           {actions && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{actions}</div>}
         </div>
@@ -84,7 +84,7 @@ const PageHeader = ({
           </span>
         )}
         <h1 className="m-0 text-lg font-bold tracking-tight text-slate-900 sm:text-xl">{title}</h1>
-        {description && <p className="m-0 mt-1 max-w-2xl text-[13px] leading-relaxed text-slate-500">{description}</p>}
+        {description && <p className="m-0 mt-1 max-w-2xl text-note leading-relaxed text-slate-500">{description}</p>}
         {meta && <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-fine text-slate-500">{meta}</div>}
       </div>
       {actions && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{actions}</div>}

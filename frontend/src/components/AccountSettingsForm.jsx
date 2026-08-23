@@ -150,7 +150,7 @@ const AccountSettingsForm = ({ className = '' }) => {
 
             <div className="flex justify-end pt-2 border-t border-[#e6ebf1]">
               <Button type="submit"  disabled={isSavingAccount}>
-                {isSavingAccount ? 'Saving...' : 'Save Changes'}
+                {isSavingAccount ? 'Saving…' : 'Save Changes'}
               </Button>
             </div>
           </form>
@@ -209,7 +209,7 @@ const AccountSettingsForm = ({ className = '' }) => {
 
             <div className="flex justify-end pt-2 border-t border-[#e6ebf1]">
               <Button type="submit"  disabled={isSavingPassword}>
-                {isSavingPassword ? 'Saving...' : 'Change Password'}
+                {isSavingPassword ? 'Saving…' : 'Change Password'}
               </Button>
             </div>
           </form>

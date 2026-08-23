@@ -115,11 +115,11 @@ const ResetPassword = ({ token, onNavigate }) => {
 
                       <Button
                         type="submit"
-                        disabled={submitting}
+                        loading={submitting}
                         size="lg"
             className="w-full"
                       >
-                        <span>{submitting ? 'Resetting...' : 'Reset Password'}</span>
+                        <span>Reset Password</span>
                         <ArrowRight className="w-4 h-4" />
                       </Button>
                     </>

@@ -78,7 +78,7 @@ export default function RoleMatrix({ access }) {
           <div className="flex min-w-0 flex-col gap-1">
             <label htmlFor="rbac-role" className="field-label m-0">Role</label>
             <Select value={String(access.selectedRoleId)} onValueChange={access.setSelectedRoleId}>
-              <SelectTrigger id="rbac-role" className="w-[240px]">
+              <SelectTrigger id="rbac-role" className="w-[15rem]">
                 <SelectValue placeholder="Choose a role…" />
               </SelectTrigger>
               <SelectContent>
@@ -94,7 +94,7 @@ export default function RoleMatrix({ access }) {
           <div className="flex min-w-0 flex-col gap-1">
             <label htmlFor="rbac-person" className="field-label m-0">Staff member</label>
             <Select value={String(access.selectedUserId)} onValueChange={access.setSelectedUserId}>
-              <SelectTrigger id="rbac-person" className="w-[300px]">
+              <SelectTrigger id="rbac-person" className="w-[18.75rem]">
                 <SelectValue placeholder="Choose a staff member…" />
               </SelectTrigger>
               <SelectContent>
@@ -161,7 +161,7 @@ export default function RoleMatrix({ access }) {
                   </div>
                   <div className="rounded-lg border border-[#e6ebf1] p-3">
                     <span className="field-label">Effective permissions</span>
-                    <span className="text-[15px] font-bold tabular-nums text-slate-900">
+                    <span className="text-lead font-bold tabular-nums text-slate-900">
                       {access.selectedUser.effectivePermissions.length}
                       <span className="ml-1 text-fine font-normal text-slate-500">of {access.permissions.length}</span>
                     </span>
@@ -169,7 +169,7 @@ export default function RoleMatrix({ access }) {
                   <div className={`rounded-lg border p-3 ${access.overrideCount ? 'border-amber-200 bg-amber-50/60' : 'border-[#e6ebf1]'}`}>
                     <span className="field-label">Exceptions</span>
                     <span className="flex items-center gap-2">
-                      <span className="text-[15px] font-bold tabular-nums text-slate-900">{access.overrideCount}</span>
+                      <span className="text-lead font-bold tabular-nums text-slate-900">{access.overrideCount}</span>
                       {access.overrideCount > 0 && (
                         <button
                           type="button"
@@ -208,7 +208,7 @@ export default function RoleMatrix({ access }) {
                         >
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded accent-[#769046]"
+                            className="h-4 w-4 rounded accent-[#53843b]"
                             checked={checked}
                             disabled={fromRole}
                             onChange={() => access.toggleDepartment(category.id)}
@@ -245,7 +245,7 @@ export default function RoleMatrix({ access }) {
                         >
                           <input
                             type="checkbox"
-                            className="h-4 w-4 rounded accent-[#769046]"
+                            className="h-4 w-4 rounded accent-[#53843b]"
                             checked={checked}
                             onChange={() =>
                               access.mode === 'role' ? access.toggleRole(permission) : access.togglePerson(permission)

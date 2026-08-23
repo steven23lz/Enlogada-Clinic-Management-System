@@ -2,20 +2,17 @@
 import { test, expect } from 'playwright/test';
 
 /**
- * The public catalogue folds a long category, and says so unmistakably. [1.38.0]
+ * The public catalogue stays usable now that Laboratory holds 20-odd services.
  *
- * Loading the clinic's real price list took Laboratory from 5 services to 22 while every other
- * category stayed at 4 or fewer, so one column of a three-column grid ran six times the height of
- * its neighbours and buried everything below it.
+ * This file used to assert a fold — the long category collapsed behind a "See all 22 laboratory
+ * services" control. That fold is gone: the card grid it hung off was replaced by full-width
+ * department sections with a search box, which answers the same question (how does a visitor find
+ * one test among many) by letting them type it rather than by hiding the rest.
  *
- * Two properties are worth holding, and they pull against each other — which is the reason for a
- * spec rather than a glance:
- *
- *   the fold has to be OBVIOUS, because a visitor deciding whether this clinic does the test they
- *   need must be able to tell more exists without finding it by accident; and
- *
- *   it must only apply where it earns its place. Folding a one-item ECG card would add a click to
- *   reveal a single line, which is worse than the crowding it was meant to fix.
+ * So the assertions changed and the PROPERTY did not. What has to stay true is that a visitor
+ * deciding whether this clinic does the test they need can find it, and that the preparation
+ * instruction travels with it — this is the only screen somebody reads while still deciding, and
+ * "nothing to eat for 8 hours" is what decides whether they book a morning slot.
  */
 
 async function openServices(page) {
@@ -24,38 +21,46 @@ async function openServices(page) {
   await expect(page.getByText('Blood Typing').first()).toBeVisible({ timeout: 15000 });
 }
 
-test('a long category folds, and the control names what it will show', async ({ page }) => {
+test('every department is listed, and a long one is not truncated', async ({ page }) => {
   await openServices(page);
 
-  const rows = page.locator('#services-laboratory > div');
-  const toggle = page.getByTestId('services-toggle-laboratory');
+  // Laboratory is the category that motivated all of this. Nothing may hide part of it.
+  const lab = page.locator('section[aria-labelledby="cat-Laboratory"]');
+  await expect(lab).toBeVisible();
 
-  await expect(toggle).toBeVisible();
-  const collapsed = await rows.count();
-  expect(collapsed, 'a folded category shows a bounded number of rows').toBeLessThan(await page
-    .evaluate(() => Number(document.querySelector('[data-testid="services-toggle-laboratory"]')
-      ?.textContent?.match(/\d+/)?.[0] || 0)));
+  // Spread across the alphabet, so this fails if anything caps or paginates the list.
+  for (const name of ['Blood Typing', 'Fasting Blood Sugar (FBS)', 'Urinalysis']) {
+    await expect(lab.getByText(name, { exact: true }).first(), `${name} must be listed`).toBeVisible();
+  }
 
-  // The label carries the count rather than saying only that something exists — "See more" tells
-  // a reader nothing about whether it is worth the click.
-  await expect(toggle).toHaveText(/See all \d+ laboratory services/i);
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(toggle).toHaveAttribute('aria-controls', 'services-laboratory');
-
-  await toggle.click();
-  expect(await rows.count(), 'expanding shows every service').toBeGreaterThan(collapsed);
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await expect(toggle).toHaveText(/show fewer/i);
-
-  // And it folds back, so the control is a disclosure rather than a one-way reveal.
-  await toggle.click();
-  expect(await rows.count()).toBe(collapsed);
+  // And the small departments are still there — a layout tuned for the long one must not drop them.
+  await expect(page.locator('section[aria-labelledby="cat-ECG"]')).toBeVisible();
 });
 
-test('a short category is left alone', async ({ page }) => {
+test('search narrows the catalogue and can be cleared', async ({ page }) => {
   await openServices(page);
 
-  // ECG has one service. Anything that folds it has misunderstood the problem.
-  await expect(page.getByTestId('services-toggle-ecg')).toHaveCount(0);
-  await expect(page.getByText('12 Lead ECG').first()).toBeVisible();
+  const search = page.getByPlaceholder(/search a test/i);
+  await search.fill('urinalysis');
+  await page.waitForTimeout(300);
+
+  await expect(page.getByText('Urinalysis', { exact: true }).first()).toBeVisible();
+  // A department with no match should drop out entirely rather than render an empty shell.
+  await expect(page.locator('section[aria-labelledby="cat-ECG"]')).toHaveCount(0);
+
+  // A search that matches nothing must say so — an empty page and a broken page look identical.
+  await search.fill('zzzznotathing');
+  await page.waitForTimeout(300);
+  await expect(page.getByText(/nothing matches that search/i)).toBeVisible();
+
+  await search.fill('');
+  await page.waitForTimeout(300);
+  await expect(page.locator('section[aria-labelledby="cat-ECG"]')).toBeVisible();
+});
+
+test('preparation instructions travel with the test', async ({ page }) => {
+  await openServices(page);
+
+  // The reason this page matters before booking, asserted signed-out and with no account.
+  await expect(page.getByText(/water for 8 hours/i).first()).toBeVisible();
 });

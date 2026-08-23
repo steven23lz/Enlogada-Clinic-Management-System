@@ -31,8 +31,8 @@ const RevenueTrendChart = ({ data }) => {
       <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="revenueTrendFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#769046" stopOpacity={0.25} />
-            <stop offset="100%" stopColor="#769046" stopOpacity={0} />
+            <stop offset="0%" stopColor="#53843b" stopOpacity={0.25} />
+            <stop offset="100%" stopColor="#53843b" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -50,14 +50,14 @@ const RevenueTrendChart = ({ data }) => {
           tickLine={false}
           width={44}
         />
-        <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#769046', strokeWidth: 1, strokeDasharray: '3 3' }} />
+        <Tooltip content={<ChartTooltip />} cursor={{ stroke: '#53843b', strokeWidth: 1, strokeDasharray: '3 3' }} />
         <Area
           type="monotone"
           dataKey="total"
-          stroke="#769046"
+          stroke="#53843b"
           strokeWidth={2}
           fill="url(#revenueTrendFill)"
-          dot={{ r: 3, fill: '#769046', strokeWidth: 0 }}
+          dot={{ r: 3, fill: '#53843b', strokeWidth: 0 }}
           activeDot={{ r: 5 }}
         />
       </AreaChart>

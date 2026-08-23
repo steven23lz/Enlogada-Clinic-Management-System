@@ -137,7 +137,7 @@ export default function EditProfileDialog({ profiles, reference }) {
               <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
                 <Button type="button" variant="outline" onClick={() => profiles.closeEdit(false)} disabled={profiles.editing}>Cancel</Button>
                 <Button type="submit"  disabled={profiles.editing}>
-                  {profiles.editing ? 'Saving...' : 'Save Changes'}
+                  {profiles.editing ? 'Saving…' : 'Save Changes'}
                 </Button>
               </div>
             </form>

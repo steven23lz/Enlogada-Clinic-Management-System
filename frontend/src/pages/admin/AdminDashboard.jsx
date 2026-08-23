@@ -244,7 +244,7 @@ const DashboardOverview = ({ onSelectNav }) => {
                 {recentVisits.map(v => (
                   <li key={v.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
                     <div className="min-w-0">
-                      <p className="m-0 truncate text-[13px] font-semibold text-slate-900">{v.first_name} {v.last_name}</p>
+                      <p className="m-0 truncate text-note font-semibold text-slate-900">{v.first_name} {v.last_name}</p>
                       <p className="m-0 text-fine text-slate-500">
                         {v.visit_type} &middot; {new Date(v.created_at).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true })}
                       </p>

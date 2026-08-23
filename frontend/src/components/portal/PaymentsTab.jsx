@@ -30,7 +30,7 @@ export default function PaymentsTab({ payments }) {
           <Panel data-testid="payment-history" className="max-w-2xl overflow-hidden">
             <div className="flex items-center gap-2 border-b border-[#e6ebf1] bg-slate-50/70 px-5 py-3.5">
               <Receipt className="h-4 w-4 text-brand-600" />
-              <h3 className="m-0 text-[13px] font-semibold text-slate-900">Payment History</h3>
+              <h3 className="m-0 text-note font-semibold text-slate-900">Payment History</h3>
             </div>
             <div className="space-y-2 p-4">
               {payments.loading ? (
@@ -47,7 +47,7 @@ export default function PaymentsTab({ payments }) {
                   <div key={pay.id} className="rounded-lg border border-[#e6ebf1] p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="block text-[15px] font-bold tabular-nums text-slate-900">{formatCurrency(pay.amount)}</span>
+                        <span className="block text-lead font-bold tabular-nums text-slate-900">{formatCurrency(pay.amount)}</span>
                         <span className="block text-fine text-slate-500">{pay.patient_first_name} {pay.patient_last_name}</span>
                       </div>
                       <StatusBadge status={pay.payment_status} />
