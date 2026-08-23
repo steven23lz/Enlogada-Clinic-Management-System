@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { GoogleLogin } from '@react-oauth/google';
 import { isGoogleAuthConfigured } from '../../config/googleAuth';
@@ -16,73 +16,32 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // A configured client ID is not the same as a *working* one. If the serving origin is missing
-  // from the OAuth client's "Authorized JavaScript origins", Google answers GET /gsi/button with
-  // 403 and the button's iframe stays 0x0 — but GSI still paints its own non-interactive markup,
-  // so a Google-looking pill sits there and clicking it does nothing at all. onError never fires
-  // (the flow never starts), so nothing tells the user why. Detect the collapsed iframe and show
-  // the same explanatory notice as the not-configured case instead of a dead control.
-  const googleSlotRef = useRef(null);
-  const [googleButtonBroken, setGoogleButtonBroken] = useState(false);
-  /** Whether to offer Google at all: configured, and actually rendering. */
-  const googleUsable = isGoogleAuthConfigured && !googleButtonBroken;
-
-  useEffect(() => {
-    if (!isGoogleAuthConfigured) return undefined;
-    let cancelled = false;
-
-    // Keeps watching, and can change its mind in BOTH directions.
-    //
-    // This used to stop at a 5-second deadline and latch `broken` to true for good. Two ways that
-    // hid a button that worked. Google's origin allowlist propagates over minutes to hours, so
-    // the very first load after a console change legitimately fails and a later one succeeds —
-    // latching meant the page kept apologising after the problem had gone. And the iframe
-    // measures 0 while the sign-in popup has focus, so clicking the button inside the grace
-    // window could itself trip the verdict: sign in successfully, come back, and the control you
-    // just used is gone. Reported from the real screen, not found here.
-    //
-    // So: a grace period before the first verdict, then a slow poll that keeps re-answering the
-    // question. A working button is never hidden for longer than one interval.
-    const GRACE_MS = 8000;
-    const settledAt = Date.now() + GRACE_MS;
-
-    const look = () => {
-      if (cancelled) return;
-      const iframe = googleSlotRef.current?.querySelector('iframe');
-      const rendered = Boolean(iframe && iframe.getBoundingClientRect().height > 0);
-      // Before the grace period is up, only good news counts: a 0x0 iframe this early means
-      // Google's script has not sized it yet, not that the origin is refused.
-      if (rendered) {
-        setGoogleButtonBroken(false);
-      } else if (Date.now() > settledAt) {
-        setGoogleButtonBroken((was) => {
-          // Logged once, on the transition, and only to the console — see the note where the
-          // on-screen notice used to be.
-          if (!was) {
-            console.warn(
-              `[auth] Google Sign-In is not rendering. Google refuses the button when the serving ` +
-              `origin (${window.location.origin}) is missing from the OAuth client's "Authorised ` +
-              `JavaScript origins". Email and password sign-in is unaffected.`
-            );
-          }
-          return true;
-        });
-      }
-    };
-
-    const fast = setInterval(look, 400);
-    // Hand over to a slower cadence once the verdict is meaningful; 400ms forever is a needless
-    // wake-up on a page that sits open at a reception desk all day.
-    const slowTimer = setTimeout(() => clearInterval(fast), GRACE_MS + 2000);
-    const slow = setInterval(look, 3000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(fast);
-      clearInterval(slow);
-      clearTimeout(slowTimer);
-    };
-  }, []);
+  /**
+   * The Google button is always shown when a client ID is configured. It is never hidden by us.
+   *
+   * There WAS a detector here that hid it when it looked dead, and it was wrong about what it
+   * was measuring. It asked for `slot.querySelector('iframe')` and treated a missing or 0-height
+   * iframe as proof the button had failed — but @react-oauth/google calls
+   * `google.accounts.id.renderButton(container)` into a plain <div>, and GSI frequently renders
+   * the pill as native DOM with no iframe at all. So on a perfectly working sign-in the query
+   * returned null, the check read that as broken, and it hid a button the user had just used.
+   * Reported twice from the real screen; not reproducible in a headless browser here, where the
+   * origin is refused and the DOM looks different.
+   *
+   * Two attempts to make the heuristic smarter (a longer grace period, then letting it change
+   * its mind in both directions) both missed this, because the premise was wrong rather than the
+   * timing. A check that cannot distinguish "no iframe because it rendered natively" from "no
+   * iframe because Google refused" is not measuring the thing it claims to measure.
+   *
+   * What it was guarding against is real: when the origin is refused, GSI still paints a
+   * Google-looking pill and clicking it does nothing, because onError never fires — the flow
+   * never starts. That is a genuine dead control. But hiding a WORKING button is the worse
+   * failure of the two: it removes the sign-in method the user actually has, and it did so
+   * repeatedly, where the dead-button case only appears while an origin allowlist propagates.
+   *
+   * If this needs solving properly it wants a real signal — Google publishing a failure state,
+   * or intercepting the 403 on accounts.google.com/gsi/button — not geometry.
+   */
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -200,7 +159,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         {/* Only drawn when there is a working button beneath it. It used to render
             unconditionally, so a hidden button left "Or continue with Google" heading an empty
             gap — an offer the page could not honour. */}
-        {googleUsable && (
+        {isGoogleAuthConfigured && (
           <div className="relative flex py-2 items-center">
             <div className="flex-grow border-t border-[#e6ebf1]"></div>
             <span className="mx-3 flex-shrink text-fine font-medium text-slate-400">Or continue with Google</span>
@@ -209,12 +168,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         )}
 
         {isGoogleAuthConfigured && (
-          // Kept mounted even once known-broken: the detector measures this slot's iframe, and
-          // unmounting it would destroy the evidence. Hidden instead, so no dead control shows.
-          <div
-            ref={googleSlotRef}
-            className={googleButtonBroken ? 'hidden' : 'flex justify-center w-full'}
-          >
+          <div className="flex justify-center w-full">
             {/* Google's Identity Services button takes a pixel width only — it rejects
                 percentages, which is why this is a number and not the "100%" that matched
                 the form's full-width Sign In button above. 360 is the widest value that
