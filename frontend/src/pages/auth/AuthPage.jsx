@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import PublicHeader from '../../components/PublicHeader';
 import Logo from '../../components/Logo';
 import LoginForm from '../../components/auth/LoginForm';
@@ -53,6 +53,16 @@ const MODES = [
 
 const AuthPage = ({ initialMode = 'login', onNavigate }) => {
   const [mode, setMode] = useState(initialMode);
+  // Which way the swap is travelling, so the form arrives from the side you came from rather than
+  // always from the right. A `ref` and not state: it is read during the same render that the mode
+  // changes, and storing it in state would need a second render to apply.
+  const dir = useRef('fwd');
+  const go = (next) => {
+    if (next === mode) return;
+    dir.current = next === 'register' ? 'fwd' : 'back';
+    setMode(next);
+  };
+  const activeIndex = MODES.findIndex((m) => m.id === mode);
   // Runtime identity, so the address here and on the receipt cannot disagree. See lib/clinic.js.
   const CLINIC = useClinic();
 
@@ -63,8 +73,8 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
       <main className="flex flex-1 items-stretch">
         {/* Form column. Each half owns its full height — the previous `max-w-6xl` + `items-center`
             left a band of empty canvas above and below both columns. */}
-        <div className="flex flex-1 items-center justify-center bg-white px-4 py-10 sm:px-6 lg:px-12">
-          <div className="w-full max-w-md">
+        <div className="auth-ground flex flex-1 items-center justify-center px-4 py-10 sm:px-6 lg:px-12">
+          <div className="w-full max-w-[27rem]">
             {/* Below `lg` the panel is hidden, which left this page carrying no brand at all — on
                 the one screen a patient reaches before they have any context about who they are
                 handing their details to. */}
@@ -78,14 +88,31 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
               </div>
             </div>
 
+            {/* The form gets a surface of its own. It had none — a bare form on a flat white
+                column — which is the single reason the page read as unfinished whatever the panel
+                beside it was doing. A card with a soft shadow gives the eye somewhere to land and
+                separates the task from the page it sits on. */}
+            <div className="auth-card rounded-2xl p-6 sm:p-7">
             {/* The mode switch, at the top where the decision is actually made. It was a text link
                 under the Google button, which is after everything else on the page — so somebody
                 who arrived at the wrong one filled in a form before finding out. */}
             <div
               role="tablist"
               aria-label="Sign in or create an account"
-              className="mb-8 grid grid-cols-2 gap-1 rounded-xl border border-line bg-slate-50 p-1"
+              className="relative mb-7 grid grid-cols-2 rounded-xl border border-line bg-slate-100/70 p-1"
             >
+              {/* One pill that TRAVELS, rather than a white background blinking from one button to
+                  the other. It is the same 220ms as the form swap beside it, so the two read as
+                  one movement — the indicator leads and the form follows. transform only, so it
+                  is composited rather than laid out on every frame. */}
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-1 left-1 rounded-lg bg-white shadow-[0_1px_3px_rgb(15_23_42_/_0.10)] transition-transform duration-[220ms] ease-[cubic-bezier(0.22,0.9,0.28,1)]"
+                style={{
+                  width: 'calc(50% - 0.25rem)',
+                  transform: `translateX(${activeIndex * 100}%)`,
+                }}
+              />
               {MODES.map((m) => {
                 const on = m.id === mode;
                 return (
@@ -94,12 +121,10 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
                     type="button"
                     role="tab"
                     aria-selected={on}
-                    onClick={() => setMode(m.id)}
+                    onClick={() => go(m.id)}
                     className={cn(
-                      'cursor-pointer rounded-lg border-0 px-3 py-2 text-note font-semibold transition-all duration-200',
-                      on
-                        ? 'bg-white text-azure-800 shadow-[0_1px_3px_rgb(15_23_42_/_0.10)]'
-                        : 'bg-transparent text-slate-500 hover:text-slate-800'
+                      'relative z-10 cursor-pointer rounded-lg border-0 bg-transparent px-3 py-2 text-note font-semibold transition-colors duration-150',
+                      on ? 'text-azure-800' : 'text-slate-500 hover:text-slate-800'
                     )}
                   >
                     {m.label}
@@ -109,12 +134,13 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
             </div>
 
             {/* Keyed on the mode, so the animation replays on the swap and only on the swap. */}
-            <div key={mode} className="animate-auth-swap">
+            <div key={mode} data-auth-dir={dir.current}>
               {mode === 'login' ? (
                 <LoginForm onNavigate={onNavigate} />
               ) : (
-                <RegisterForm onSwitchToLogin={() => setMode('login')} />
+                <RegisterForm onSwitchToLogin={() => go('login')} />
               )}
+            </div>
             </div>
           </div>
         </div>

@@ -62,9 +62,13 @@ const LoginForm = ({ onNavigate }) => {
     }
   };
 
+  // Bumped on every rejection so the alert remounts and the shake replays. A boolean would not:
+  // two wrong passwords in a row set the same error text, and React would keep the same element.
+  const [rejections, setRejections] = useState(0);
+
   // GSI renders once at the width it is given, so this is measured rather than styled.
   const googleSlot = useRef(null);
-  const [googleWidth, setGoogleWidth] = useState(320);
+  const [googleWidth, setGoogleWidth] = useState(240);
   useEffect(() => {
     const el = googleSlot.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
@@ -88,6 +92,7 @@ const LoginForm = ({ onNavigate }) => {
       }
       await googleLogin(credentialResponse.credential);
     } catch (err) {
+      setRejections((n) => n + 1);
       setError(typeof err === 'string' ? err : err?.message || 'Google login failed.');
     } finally {
       setSubmitting(false);
@@ -105,8 +110,13 @@ const LoginForm = ({ onNavigate }) => {
 
       <div className="mt-6 space-y-4">
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* The shake is a head-shake: a rejection, shown as one. It rides ALONGSIDE the red
+              border, the icon and the message — never instead of them, because motion says nothing
+              to a screen reader or to anyone with reduced motion on, and both still get the whole
+              message. Keyed on the rejection count so a second wrong password shakes again rather
+              than sitting there looking already-answered. */}
           {error && (
-            <div role="alert" className="alert alert-error">
+            <div key={rejections} role="alert" className="alert alert-error animate-shake">
               <AlertCircle />
               <span>{error}</span>
             </div>
@@ -188,8 +198,13 @@ const LoginForm = ({ onNavigate }) => {
           </div>
         )}
 
+        {/* `min-w-0` + `overflow-hidden` below are load-bearing, not tidiness. GSI renders at a
+            fixed pixel width, so without them an oversized button sets its own slot's min-content
+            width, which pushes the card, which pushes the page — and the measurement then reads
+            that inflated width back and can never converge. Clipped instead, the slot's width is
+            dictated by the card, the measurement is honest, and it self-corrects. */}
         {isGoogleAuthConfigured && (
-          <div ref={googleSlot} className="flex w-full justify-center">
+          <div ref={googleSlot} className="flex w-full min-w-0 justify-center overflow-hidden">
             {/* Google's Identity Services button takes a pixel width only — it rejects
                 percentages, which is why this cannot simply be the "100%" that matches the
                 form's full-width Sign In button above.
@@ -200,7 +215,7 @@ const LoginForm = ({ onNavigate }) => {
                 the next time the column's max-width changes. Google caps it at 400 regardless. */}
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
-              onError={() => setError('Google Sign In was cancelled or failed.')}
+              onError={() => { setRejections((n) => n + 1); setError('Google Sign In was cancelled or failed.'); }}
               useOneTap={false}
               shape="pill"
               theme="outline"

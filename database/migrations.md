@@ -1,5 +1,56 @@
 # Database Migration & Schema History
 
+## [1.44.0] - 2026-08-24 (The sign-in page, actually redesigned)
+
+No schema change. Frontend only.
+
+[1.43.0] recoloured this page and moved a toggle, and called that a redesign. It was not. This is
+the pass that reads published guidance first and then changes the structure.
+
+### The form had no surface, and that was the whole problem
+
+Established practice for an auth screen is a compact card with a soft shadow, so the task stands
+out from the page. This page deliberately had none — [1.23.0]'s reasoning was "the column IS the
+card" — and that single decision is why it read as unfinished no matter what the panel beside it
+did. A bare form on flat white gives the eye nothing to land on.
+
+So: `.auth-card`, a white card with a soft shadow, sitting on `.auth-ground` — a very lightly
+tinted surface carrying an azure and a green wash. White-on-white gave the card nothing to
+separate from.
+
+### The motion was wrong in three specific ways
+
+Micro-interactions read as responsive in the **120–220ms** band; past that they read as animation
+you are waiting for.
+
+- **The mode swap was 320ms and always slid in from the right.** Going *back* to Sign In therefore
+  travelled the same direction as leaving it, so the motion contradicted the navigation. It is
+  directional now (`authSwapFwd` / `authSwapBack`) and 260ms.
+- **The toggle blinked.** A white background jumped from one button to the other. It is one pill
+  that *travels*, 220ms, transform-only so it composites — the indicator leads, the form follows,
+  and the two read as a single movement.
+- **A rejection had no motion at all.** A wrong password now shakes the alert: horizontal
+  oscillation, which is physically a head-shake. It rides **alongside** the red border, the icon
+  and the message, never instead of them — motion says nothing to a screen reader or to anyone
+  with reduced motion on, and the blanket `prefers-reduced-motion` rule correctly kills it while
+  the border and text still carry the whole message. Keyed on a rejection *count*, because two
+  wrong passwords in a row set the same error string and React would otherwise keep the element
+  and not replay.
+
+### Focus is one colour and one idea, at two scales
+
+The global `:focus-visible` outline was green while the interactive colour is now azure. Both are
+azure now, and a text field draws a soft inner ring instead of an offset outline — a 2px outline
+*around* a bordered input plus the input's own focus border is two rings on one control.
+
+### A layout trap worth writing down
+
+The Google button takes a pixel width only. Without `min-w-0` and `overflow-hidden` on its slot,
+an oversized button sets that slot's min-content width, which pushes the card, which pushes the
+page — and the ResizeObserver then measures the *inflated* width and can never converge. Measured:
+a 390px phone scrolled 22px sideways. Clipped, the slot's width is dictated by the card, the
+measurement is honest, and it self-corrects. Verified at 1440, 768, 390 and 360, both modes.
+
 ## [1.43.0] - 2026-08-24 (A front door worth walking through)
 
 No schema change. Frontend only.
