@@ -1,49 +1,56 @@
 import React from 'react';
+import markSrc from '../assets/Enlogada_Mark.png';
+import lockupSrc from '../assets/Enlogada_Logo.png';
 
-const Logo = ({ className = 'w-10 h-10' }) => {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 100 100"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      {/* Outer Circle Ring */}
-      <circle cx="50" cy="50" r="46" stroke="#769046" strokeWidth="4" />
-      
-      {/* Central Medical Cross Shapes */}
-      {/* Top Left (Green) */}
-      <path
-        d="M32 46C32 38.268 38.268 32 46 32V46H32Z"
-        fill="#769046"
-      />
-      {/* Bottom Right (Green) */}
-      <path
-        d="M68 54C68 61.732 61.732 68 54 68V54H68Z"
-        fill="#769046"
-      />
-      {/* Top Right (Navy Blue) */}
-      <path
-        d="M54 32C61.732 32 68 38.268 68 46H54V32Z"
-        fill="#34466B"
-      />
-      {/* Bottom Left (Navy Blue) */}
-      <path
-        d="M46 68C38.268 68 32 61.732 32 54H46V68Z"
-        fill="#34466B"
-      />
+/**
+ * The clinic's actual logo, supplied by the owner.
+ *
+ * This replaced a hand-drawn SVG approximation of it. The real mark is four interlocking petals
+ * in the clinic's blue and green, and the file carries "2011" — the year the clinic opened —
+ * beneath the cross.
+ *
+ * ── Why there are two of these ────────────────────────────────────────────────────────────────
+ *
+ * The supplied file is 155x191 portrait with the "2011" baked in. Nearly every placement here is
+ * a small SQUARE — `h-9 w-9` in the public header, similar in the sidebar — and at 36px the year
+ * renders about six pixels tall: an illegible smudge that also squashes the cross to make room
+ * for it. So the file is split at the blank band the artwork already has between the two
+ * elements:
+ *
+ *   Logo      the cross alone, square, trimmed to its own bounding box so a square container
+ *             centres the mark instead of centring whitespace. This is what small placements get.
+ *   LogoFull  the complete lockup including the year, for somewhere it can be read at size.
+ *
+ * ── The white background was removed, and only the outer white ────────────────────────────────
+ *
+ * The original PNG had an alpha channel but a solid white field, which would have printed a white
+ * box around the mark on the dark sidebar, the footer and the hero. That was cleared by flood
+ * -filling inward from the border rather than deleting every white pixel, because the white cross
+ * between the petals and the counters inside "2011" are the logo's own negative space — a global
+ * removal would have punched holes through the artwork.
+ *
+ * `Logo` keeps the same props as the SVG it replaced, so all nine existing call sites are
+ * untouched.
+ */
+const Logo = ({ className = 'w-10 h-10', alt = 'Enlogada Ultrasound & Diagnostic Clinic' }) => (
+  <img
+    src={markSrc}
+    alt={alt}
+    // object-contain, not cover: the mark must never be cropped to fill a container whose
+    // aspect ratio does not match it.
+    className={`${className} object-contain select-none`}
+    draggable={false}
+  />
+);
 
-      {/* Styled Cross Extensions */}
-      {/* Left arm */}
-      <rect x="26" y="46" width="6" height="8" rx="3" fill="#34466B" />
-      {/* Right arm */}
-      <rect x="68" y="46" width="6" height="8" rx="3" fill="#769046" />
-      {/* Top arm */}
-      <rect x="46" y="26" width="8" height="6" rx="3" fill="#769046" stroke="#34466B" strokeWidth="0" />
-      {/* Bottom arm */}
-      <rect x="46" y="68" width="8" height="6" rx="3" fill="#34466B" stroke="#769046" strokeWidth="0" />
-    </svg>
-  );
-};
+/** The full lockup, cross over the year. For placements with room to read it. */
+export const LogoFull = ({ className = 'h-16', alt = 'Enlogada Ultrasound & Diagnostic Clinic, established 2011' }) => (
+  <img
+    src={lockupSrc}
+    alt={alt}
+    className={`${className} object-contain select-none`}
+    draggable={false}
+  />
+);
 
 export default Logo;
