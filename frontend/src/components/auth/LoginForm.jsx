@@ -156,13 +156,17 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
           </Button>
         </form>
 
-        {/* Only drawn when there is a working button beneath it. It used to render
-            unconditionally, so a hidden button left "Or continue with Google" heading an empty
-            gap — an offer the page could not honour. */}
+        {/* Gated on the same condition as the button below, so the two always appear together.
+            It used to render unconditionally, which left the divider heading an empty gap on any
+            deployment that does not configure Google at all. */}
         {isGoogleAuthConfigured && (
           <div className="relative flex py-2 items-center">
             <div className="flex-grow border-t border-[#e6ebf1]"></div>
-            <span className="mx-3 flex-shrink text-fine font-medium text-slate-400">Or continue with Google</span>
+            {/* Just "or". The button directly beneath already says "Continue with Google" — that
+                wording comes from GSI's `text="continue_with"` and is fixed by Google's branding
+                rules, so spelling it out here too printed the same sentence twice, stacked. The
+                divider's job is to separate the two ways in, not to name the second one. */}
+            <span className="mx-3 flex-shrink text-fine font-medium text-slate-400">or</span>
             <div className="flex-grow border-t border-[#e6ebf1]"></div>
           </div>
         )}
