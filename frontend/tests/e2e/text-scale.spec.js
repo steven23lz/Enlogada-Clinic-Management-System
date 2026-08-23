@@ -88,6 +88,43 @@ test.describe('Text size preference', () => {
     await setSize(page, 'Normal');
   });
 
+  // The token has to survive `cn()`, not just exist in the stylesheet.
+  //
+  // tailwind-merge resolves conflicting classes by parsing the class NAME against its own model of
+  // Tailwind, and it knows nothing about this project's @theme block. It read `text-micro` as a
+  // text COLOUR, found `text-slate-500` later in the same cn() call, and dropped the size
+  // entirely — so the cashier's metric labels rendered at 16px inherited instead of the 10px they
+  // ask for, and every card's label was louder than the figure it labels.
+  //
+  // Nothing catches this by reading the source: the class is right there in the JSX. It is only
+  // visible in the computed style of the rendered element, which is what this measures.
+  test('a type token survives cn() and reaches the DOM at its real size', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: /sign in/i }).first().click();
+    await page.fill('input[type="email"]', 'cashier@enlogada.com');
+    await page.fill('input[type="password"]', PASSWORD);
+    await page.locator('button[type="submit"]').click();
+
+    const label = page.getByText('Collected Today', { exact: true }).first();
+    await expect(label).toBeVisible({ timeout: 15000 });
+
+    const sizes = await label.evaluate((el) => {
+      const card = el.closest('div, button');
+      const value = card?.parentElement?.querySelector('[class*="text-stat"]');
+      return {
+        label: parseFloat(getComputedStyle(el).fontSize),
+        value: value ? parseFloat(getComputedStyle(value).fontSize) : null,
+      };
+    });
+
+    // text-micro is 0.625rem. Anything near 16 means the class was stripped and the element is
+    // inheriting the body size.
+    expect(sizes.label, 'metric label is not rendering at its token size').toBeCloseTo(10, 1);
+    // And the relationship the card exists to state: the figure dominates its label.
+    expect(sizes.value).not.toBeNull();
+    expect(sizes.value).toBeGreaterThan(sizes.label * 2);
+  });
+
   test('staff get the same control on their own console', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: /sign in/i }).first().click();

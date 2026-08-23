@@ -1,5 +1,59 @@
 # Database Migration & Schema History
 
+## [1.42.0] - 2026-08-24 (The type scale was being deleted on its way to the DOM)
+
+No schema change. Frontend only. One line of real change, and it moves every screen in the app.
+
+### What was wrong
+
+`cn()` is `twMerge(clsx(...))`. tailwind-merge decides which of two conflicting classes wins by
+parsing the class NAME against its own model of Tailwind — and it knows nothing about this
+project's `@theme` block. For the `text-*` prefix it guessed wrong in the worst available
+direction: `text-micro` is a font size, tailwind-merge cannot tell "micro" from a colour name,
+filed it under text-colour, and then
+
+    cn('… text-micro font-semibold …', 'text-slate-500')
+
+resolved the two as conflicting colours and **dropped the size entirely**.
+
+Measured on the cashier's Collections strip: the metric label asked for `text-micro` (10px) and
+rendered at **16px inherited**. That is why every metric card across every console had a label
+louder than the figure it labels — the component was correct, the class never arrived.
+
+All seven custom sizes behaved this way, in every component reaching for `cn()` alongside a text
+colour, which is most of `components/ui/`. Custom shadows had a quieter version of the same fault:
+unrecognised, so `shadow-float` and `shadow-sm` did not conflict and BOTH applied.
+
+### Why it appeared now
+
+Honest accounting: [1.38.0] introduced it. The app previously wrote these sizes as arbitrary
+values (`text-[13px]`), and tailwind-merge parses `[13px]` as a length and correctly files it as a
+font size. Converting 85 of those to named tokens is right — `rem` tokens scale with the reader's
+text-size setting and pinned pixels do not — but it walked straight into this, and the failure is
+silent in both directions: the class is right there in the JSX, and the build is happy.
+
+    text-[13px] text-slate-700   ->  text-[13px] text-slate-700    (kept)
+    text-note   text-slate-700   ->  text-slate-700                (size gone)
+
+### The fix
+
+`cn()` uses `extendTailwindMerge` with the theme keys registered, so tailwind-merge resolves them
+as what they are. Verified in both directions — `text-sm text-note` → `text-note`, and
+`text-note text-sm` → `text-sm`.
+
+Colours needed no entry: an unknown `bg-*`/`text-*`/`border-*` colour already merges correctly,
+because colour is tailwind-merge's fallback guess. That is the same fallback that broke the sizes.
+
+**Adding a token to a non-colour `@theme` namespace now means adding it to `lib/utils.js` in the
+same commit**, or it works everywhere except the components that use `cn()`.
+
+### The guard
+
+`text-scale.spec.js` gains a case that reads the *computed* size of a real metric label off a live
+console. Nothing catches this by reading source — the class is present in the JSX and absent from
+the DOM — so the only honest check is measuring what the browser ended up with. Verified by
+reverting `cn()` to plain `twMerge`: expected 10, received 16.
+
 ## [1.41.0] - 2026-08-23 (The palette comes off the logo)
 
 No schema change. Frontend only.
