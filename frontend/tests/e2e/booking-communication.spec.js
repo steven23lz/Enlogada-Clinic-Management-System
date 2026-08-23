@@ -173,6 +173,16 @@ test('the public services page tells you how to prepare, before you have an acco
   await page.getByRole('button', { name: 'Services', exact: true }).first().click();
 
   // The catalogue is fetched live, so wait for a real service rather than a fixed delay.
+  await expect(page.getByText('Blood Typing').first()).toBeVisible({ timeout: 15000 });
+
+  // Laboratory folds past 8 services [1.38.0], and FBS's position in an alphabetical list is not
+  // something this test should depend on — one service beginning with "A" would silently push it
+  // behind the fold and fail an assertion about preparation text. Expand if the control is there.
+  const seeAll = page.getByTestId('services-toggle-laboratory');
+  if (await seeAll.count()) {
+    await seeAll.click();
+    await page.waitForTimeout(200);
+  }
   await expect(page.getByText('Fasting Blood Sugar (FBS)').first()).toBeVisible({ timeout: 15000 });
 
   // Signed out, no account, no booking started.

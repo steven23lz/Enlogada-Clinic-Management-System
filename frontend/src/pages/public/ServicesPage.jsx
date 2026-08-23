@@ -4,9 +4,16 @@ import PublicFooter from '../../components/PublicFooter';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
-import { Activity, Stethoscope, FileText, Heart, Zap } from 'lucide-react';
+import { Activity, Stethoscope, FileText, Heart, Zap, ChevronRight } from 'lucide-react';
 import { categoryKey, categoryTint } from '../../lib/categories';
 import { useClinic } from '../../lib/clinic';
+
+// Rows shown before a category folds. See CategoryCard for why this number is load-bearing.
+const COLLAPSED_LIMIT = 8;
+
+/** A category name as something an id and a test selector can both hold. '2D Echo' -> '2d-echo'. */
+const slugify = (name) =>
+  String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'general';
 
 const ServicesPage = ({ onNavigate }) => {
   // The live identity, not the frozen defaults — the clinic may have configured a different
@@ -118,19 +125,60 @@ const ServicesPage = ({ onNavigate }) => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {categories.map((cat, idx) => {
-              const meta = getCategoryMeta(cat.title);
-              const Icon = meta.icon;
-              return (
-                <Card key={idx} className="border-[#e6ebf1] rounded-2xl overflow-hidden bg-white hover:shadow-raised transition-shadow">
+            {categories.map((cat, idx) => (
+              <CategoryCard key={idx} category={cat} meta={getCategoryMeta(cat.title)} />
+            ))}
+          </div>
+        )}
+      </main>
+
+      <PublicFooter onNavigate={onNavigate} />
+    </div>
+  );
+};
+
+/**
+ * One category, with the long ones folded. [1.38.0]
+ *
+ * Loading the clinic's real price list took Laboratory from 5 services to 22 while Ultrasound
+ * stayed at 4, Xray at 3, 2D Echo at 2 and ECG at 1. In a three-column grid that makes one column
+ * six times the height of its neighbours, and a visitor scrolls past the whole catalogue to reach
+ * anything below it.
+ *
+ * Folded per card and only past a threshold, rather than uniformly: collapsing a one-item ECG card
+ * behind a "see more" would add a click to reveal a single line, which is worse than the crowding
+ * being fixed. Nothing changes for four of the five categories.
+ *
+ * WHY EIGHT, and why that number is not cosmetic. booking-communication.spec.js asserts — on this
+ * page, signed out, with no interaction — that Fasting Blood Sugar, its price and its "nothing to
+ * eat for 8 hours" instruction are all visible, because this is the only screen somebody reads
+ * while still deciding whether to come. FBS is 8th alphabetically in Laboratory. A smaller
+ * threshold would hide the fasting instruction behind a click on the one page whose job is to
+ * carry it.
+ */
+const CategoryCard = ({ category, meta }) => {
+  const Icon = meta.icon;
+  const [expanded, setExpanded] = useState(false);
+
+  const hidden = Math.max(0, category.items.length - COLLAPSED_LIMIT);
+  const foldable = hidden > 0;
+  const shown = expanded || !foldable ? category.items : category.items.slice(0, COLLAPSED_LIMIT);
+  // aria-controls needs a real id, and a category name is not one: categoryKey returns
+  // 'Laboratory' capitalised and '2D Echo' with a space in it, which is not a valid id at all.
+  const slug = slugify(categoryKey(category.title) || category.title);
+  const listId = `services-${slug}`;
+
+  return (
+                <Card className="border-[#e6ebf1] rounded-2xl overflow-hidden bg-white hover:shadow-raised transition-shadow">
                   <CardHeader className="py-5 px-6 border-b border-[#e6ebf1] flex flex-row items-center space-x-3 space-y-0">
                     <div className={`p-2.5 rounded-xl ${meta.bg}`}>
                       <Icon className="w-5 h-5" />
                     </div>
-                    <CardTitle className="text-lg font-bold text-gray-900">{cat.title}</CardTitle>
+                    <CardTitle className="text-lg font-bold text-gray-900">{category.title}</CardTitle>
                   </CardHeader>
                   <CardContent className="p-6 space-y-3">
-                    {cat.items.map((item) => (
+                    <div id={listId} className="space-y-3">
+                    {shown.map((item) => (
                       <div key={item.id} className="text-xs py-1 border-b border-gray-50 last:border-0">
                         <div className="flex justify-between items-center gap-3">
                           <span className="text-gray-700 font-medium flex items-center space-x-1.5">
@@ -152,16 +200,36 @@ const ServicesPage = ({ onNavigate }) => {
                         )}
                       </div>
                     ))}
+                    </div>
+
+                    {/* Deliberately a real button, full width, in the brand ramp — not a quiet
+                        text link. Somebody deciding whether this clinic does the test they need
+                        has to be able to tell there is more without discovering it by accident,
+                        and a link that reads "see more" among 8 rows of prices does not do that.
+
+                        It names the count for the same reason the sidebar's collapsed groups do:
+                        "See all 22 laboratory services" says what it will produce, where
+                        "See more" only says that something exists. Shadow is deliberately absent
+                        — it means "this floats" in this codebase, and this does not. */}
+                    {foldable && (
+                      <button
+                        type="button"
+                        data-testid={`services-toggle-${slug}`}
+                        onClick={() => setExpanded((open) => !open)}
+                        aria-expanded={expanded}
+                        aria-controls={listId}
+                        className="mt-1 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2.5 text-[13px] font-bold text-brand-700 transition-colors hover:border-brand-300 hover:bg-brand-100"
+                      >
+                        <ChevronRight
+                          className={`h-3.5 w-3.5 transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
+                        />
+                        {expanded
+                          ? 'Show fewer'
+                          : `See all ${category.items.length} ${category.title.toLowerCase()} services`}
+                      </button>
+                    )}
                   </CardContent>
                 </Card>
-              );
-            })}
-          </div>
-        )}
-      </main>
-
-      <PublicFooter onNavigate={onNavigate} />
-    </div>
   );
 };
 

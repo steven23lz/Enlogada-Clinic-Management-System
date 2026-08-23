@@ -300,7 +300,9 @@ historical rows point at these ids. Laboratory only: **Ultrasound, X-Ray, 2D Ech
 carry demo prices** because that price list covers lab work alone. Do not assert a literal price
 in a spec — read it from `GET /api/tests`, as `booking-communication.spec.js` now does.
 
-**Statutory discounts are VAT-exempt, and the order matters.** The clinic is VAT-registered, so a Senior Citizen / PWD sale has the 12% VAT stripped **first** and the 20% applied to the VAT-exempt base (RA 9994 / RA 10754). A flat 20% off the shelf price overcharges the patient — 800.00 instead of 714.29 on a 1,000.00 service. `tests.price` is stored VAT-inclusive, so VAT is extracted rather than added. Only `is_statutory` discounts get this; a promo rate is an ordinary discount. See `discountService.computeBreakdown`.
+**Statutory discounts: whether VAT comes off first depends on the clinic, and Enlogada's answer is no.** The order only exists for a VAT-REGISTERED establishment, where a Senior Citizen / PWD sale has the 12% VAT stripped **first** and the 20% applied to the VAT-exempt base (RA 9994 / RA 10754) — 714.29 on a 1,000.00 service. Enlogada is not VAT-registered (see above), so nothing is stripped and the 20% comes off the full price: **800.00**. `discountService.computeBreakdown` branches on `CLINIC_VAT_REGISTERED` at one line and that is the only place the two treatments differ. Only `is_statutory` discounts get the VAT step at all; a promo rate is an ordinary discount either way. `tests.price` is stored VAT-inclusive, so where VAT does apply it is extracted rather than added.
+
+This paragraph asserted the opposite of the one above it for a day, having been written when the clinic was believed to be VAT-registered. If you change the registration, change both.
 
 **Dates: never use `toISOString()` for "today" — and that includes test code.**
 `ticket-release-gating.spec.js` computed tomorrow as `new Date(Date.now() + 86400000)

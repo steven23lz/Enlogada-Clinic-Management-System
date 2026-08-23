@@ -66,8 +66,12 @@ module.exports = {
   // Prices in `tests` are stored VAT-INCLUSIVE (that is the shelf price a patient is quoted), so
   // the VAT is extracted from them rather than added on top.
   //
-  // Defaults to true because that is Enlogada's registration. Set CLINIC_VAT_REGISTERED=false
-  // only for a non-VAT establishment — and confirm with your accountant before changing it.
+  // Defaults to true for a VAT-registered establishment, which ENLOGADA IS NOT — its
+  // BIR-registered invoice reads "Non VAT Reg. TIN : 412-980-963-00000", so `false` is what
+  // belongs in this clinic's .env. The default is left at true only because it is the safer
+  // assumption for an unknown deployment: claiming a VAT exemption you are not registered for is
+  // worse than not claiming one you are. Getting it wrong costs 85.71 per 1,000 on every senior
+  // and PWD sale, and no test catches it — the specs read this value and adapt. — and confirm with your accountant before changing it.
   CLINIC_VAT_REGISTERED: process.env.CLINIC_VAT_REGISTERED !== 'false',
   VAT_RATE: parseFloat(process.env.VAT_RATE || '0.12'),
 
