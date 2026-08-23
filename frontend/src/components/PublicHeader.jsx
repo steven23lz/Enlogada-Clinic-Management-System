@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import Logo from './Logo';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User, Menu, X } from 'lucide-react';
-import TextScaleControl from './ui/text-scale-control';
 
 const NAV_LINKS = [
   { id: 'home', label: 'Home' },
@@ -57,10 +56,6 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
               </button>
             ))}
           </nav>
-
-          {/* Offered before sign-in as well as after. A patient who needs larger text needs it on
-              the booking and sign-in screens most of all, which are the ones they reach first. */}
-          <TextScaleControl className="hidden lg:inline-flex" />
 
           {user ? (
             <div className="flex items-center space-x-3">
@@ -130,11 +125,6 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
               {link.label}
             </button>
           ))}
-
-          <div className="flex items-center justify-between pt-2 mt-2 border-t border-[#e6ebf1]">
-            <span className="text-fine font-semibold text-slate-500">Text size</span>
-            <TextScaleControl />
-          </div>
 
           <div className="pt-2 mt-2 border-t border-[#e6ebf1] space-y-2">
             {user ? (

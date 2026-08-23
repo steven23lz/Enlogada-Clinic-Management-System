@@ -1,5 +1,55 @@
 # Database Migration & Schema History
 
+## [1.43.0] - 2026-08-24 (A front door worth walking through)
+
+No schema change. Frontend only.
+
+### The sign-in panel was muddy, and that was a token being used out of place
+
+The dark column used `.rail-gradient`, which washes **green and azure** over near-black. That is
+correct for a hero band sitting under a page of white content — it is chrome, seen in a strip.
+Filling half the sign-in screen with it produced a large field where the two hues meet and go
+muddy, which is the opposite of what a clinic's front door should look like.
+
+`.auth-panel` is **one hue** — the logo's azure — walked from `#0a71a9` to `#052f47` along a single
+diagonal, with a soft white light-source high on the panel for depth. A single hue cannot go muddy;
+it only gets darker.
+
+### The mode switch was in the wrong place, so the transition had nothing to hold
+
+Getting from sign-in to register was a text link at the very bottom of the form, *below* the Google
+button — so somebody who arrived on the wrong one scrolled past an entire form before finding out
+there was another. The two modes are peers, so they are now a segmented control at the top: it
+states both, says which one you are on, and gives the swap something to actually transition
+between. The two bottom links are gone, being the same action said twice in the worse place.
+
+The swap animation is its own keyframe (`animate-auth-swap`, 320ms with a little lateral travel)
+rather than the generic panel fade. A form *replacing* another form is a different motion from a
+panel appearing.
+
+The panel content was trimmed too: it carried a headline, three paragraphs and a full address
+block, reading as a wall beside a five-field form. Contact details are a footnote now — and the
+address **wraps instead of truncating**, because "Misamis Orient…" is not a shorter address, it is
+a wrong one, and it is the only thing on the page telling somebody where to turn up.
+
+### Large is the default text size, and the public pages lost the control
+
+The size control was clutter on a marketing header — a utility toggle at full strength competing
+with the navigation and the primary call to action. But the *reason* it existed still applies to
+the people reading those pages, and they are the least likely to go hunting for a setting.
+
+So the control is off the public header entirely, and `DEFAULT_ID` is `large`: everyone gets the
+comfortable size until they say otherwise. Staff keep the control on their own consoles and the
+portal, where somebody working a full shift may want the denser layout back.
+
+Swept for overflow at the new default across Home, Services, About and sign-in at 1440 and 390,
+plus all five consoles: clean everywhere.
+
+`text-scale.spec.js` was rewritten to match — it drove the widget on a public page, which no longer
+has one. The hierarchy check now arrives with a stored preference instead, since what it tests is
+the CSS ramp and that has to hold where there is no widget. Its `cn()` guard is expressed against
+the root size rather than a fixed 10px, so it keeps testing the token rather than today's default.
+
 ## [1.42.0] - 2026-08-24 (The type scale was being deleted on its way to the DOM)
 
 No schema change. Frontend only. One line of real change, and it moves every screen in the app.

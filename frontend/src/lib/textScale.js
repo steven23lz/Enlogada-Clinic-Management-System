@@ -36,7 +36,14 @@ export const TEXT_SCALES = Object.freeze([
   { id: 'larger', label: 'Larger', percent: 125 },
 ]);
 
-const DEFAULT_ID = 'normal';
+// Large, not Normal.
+//
+// The size control was removed from the public pages because a utility toggle has no business
+// competing with the navigation on a marketing header — but the reason it existed still applies
+// to the people reading those pages, and they are the ones least likely to go looking for a
+// setting. So the comfortable size is what everybody gets until they say otherwise; staff who
+// want the denser layout back can still choose Normal from their own console.
+const DEFAULT_ID = 'large';
 const isValid = (id) => TEXT_SCALES.some((s) => s.id === id);
 
 const read = () => {

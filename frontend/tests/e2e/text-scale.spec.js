@@ -34,39 +34,62 @@ const measure = (page) =>
   });
 
 /** Open the size menu and pick one. The control is an icon button with a popover, not three
- *  visible buttons — a utility toggle should be quiet until somebody goes looking for it. */
+ *  visible buttons — a utility toggle should be quiet until somebody goes looking for it. It
+ *  lives on the staff consoles and the patient portal; the public pages deliberately have none. */
 const setSize = async (page, label) => {
   const control = page.getByTestId('text-scale').first();
   await control.getByRole('button', { name: /^Text size:/ }).click();
   await page.getByRole('menuitemradio', { name: `${label} text size` }).click();
 };
 
+/** Set the stored preference the way a returning visitor would arrive with it. */
+const arriveWith = async (page, id) => {
+  await page.addInitScript((v) => {
+    try { localStorage.setItem('enlogada:text-scale', v); } catch { /* private window */ }
+  }, id);
+};
+
 test.describe('Text size preference', () => {
-  test('a patient can enlarge the interface before signing in, and it sticks', async ({ page }) => {
+  test('a public visitor gets the comfortable size, and no control to fiddle with', async ({ page }) => {
     await page.goto('/');
 
-    const normal = await measure(page);
-    expect(normal.root).toBe(16);
-    expect(normal.applied).toBe('normal');
+    // Large is the default. The control was removed from the public header — a utility toggle has
+    // no business competing with the navigation on a marketing page — but the reason it existed
+    // still applies to the people reading those pages, and they are the least likely to go looking
+    // for a setting. So they get the comfortable size without having to ask for it.
+    const m = await measure(page);
+    expect(m.root).toBe(18);
+    expect(m.applied).toBe('large');
 
-    await setSize(page, 'Larger');
-    const larger = await measure(page);
-    expect(larger.root).toBe(20);
-    expect(larger.applied).toBe('larger');
+    await expect(page.getByTestId('text-scale')).toHaveCount(0);
 
-    // Chosen once, not once per page. A preference that resets on navigation is not a preference.
+    // Same on the other public pages, including the one every patient passes through.
+    await page.getByRole('button', { name: 'Services', exact: true }).first().click();
+    await expect(page.getByTestId('text-scale')).toHaveCount(0);
+    expect((await measure(page)).root).toBe(18);
+  });
+
+  test('a stored preference is honoured on arrival, before the first paint', async ({ page }) => {
+    await arriveWith(page, 'larger');
+    await page.goto('/');
+
+    // Applied from main.jsx before React mounts, so the page never paints at the default size and
+    // then jump — which would happen on every load, to exactly the people who chose a larger size
+    // because reading is hard.
+    const m = await measure(page);
+    expect(m.root).toBe(20);
+    expect(m.applied).toBe('larger');
+
     await page.reload();
     expect((await measure(page)).root).toBe(20);
-
-    await setSize(page, 'Normal');
-    expect((await measure(page)).root).toBe(16);
   });
 
   test('the type hierarchy survives being scaled up', async ({ page }) => {
-    await page.goto('/');
-
-    for (const label of ['Normal', 'Large', 'Larger']) {
-      await setSize(page, label);
+    for (const [label, id] of [['Normal', 'normal'], ['Large', 'large'], ['Larger', 'larger']]) {
+      // Driven through the stored preference rather than the widget: what is under test here is
+      // the CSS ramp, and it has to hold on the public pages too, where there is no widget.
+      await arriveWith(page, id);
+      await page.goto('/');
       const m = await measure(page);
 
       // Every step must be present on the page for the comparison to mean anything — a null here
@@ -84,8 +107,6 @@ test.describe('Text size preference', () => {
       // And they scale together, not just in order.
       expect(m.note).toBeCloseTo((13 / 16) * m.root, 1);
     }
-
-    await setSize(page, 'Normal');
   });
 
   // The token has to survive `cn()`, not just exist in the stylesheet.
@@ -112,14 +133,19 @@ test.describe('Text size preference', () => {
       const card = el.closest('div, button');
       const value = card?.parentElement?.querySelector('[class*="text-stat"]');
       return {
+        root: parseFloat(getComputedStyle(document.documentElement).fontSize),
         label: parseFloat(getComputedStyle(el).fontSize),
         value: value ? parseFloat(getComputedStyle(value).fontSize) : null,
       };
     });
 
-    // text-micro is 0.625rem. Anything near 16 means the class was stripped and the element is
-    // inheriting the body size.
-    expect(sizes.label, 'metric label is not rendering at its token size').toBeCloseTo(10, 1);
+    // text-micro is 0.625rem — expressed against the root rather than as a fixed pixel count, so
+    // this keeps testing the token and not the current default scale. A label equal to the root
+    // means the class was stripped and the element is inheriting the body size, which is the bug.
+    expect(sizes.label, 'metric label is not rendering at its token size')
+      .toBeCloseTo(0.625 * sizes.root, 1);
+    expect(sizes.label, 'metric label is inheriting, so the size class never arrived')
+      .toBeLessThan(sizes.root);
     // And the relationship the card exists to state: the figure dominates its label.
     expect(sizes.value).not.toBeNull();
     expect(sizes.value).toBeGreaterThan(sizes.label * 2);

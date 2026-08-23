@@ -365,6 +365,30 @@ h1, h2, h3, h4 {
     radial-gradient(95% 125% at 100% 0%, rgba(10, 113, 169, 0.40) 0%, rgba(10, 113, 169, 0) 62%);
 }
 
+/* The sign-in panel's surface.
+ *
+ * Deliberately NOT `.rail-gradient`. That one washes green and azure over near-black slate, which
+ * is right for a hero band sitting under a page of white content — it is chrome. Filling half the
+ * sign-in screen with it produced a large muddy field where the two hues meet, and "muddy" is the
+ * opposite of what a clinic's front door should look like.
+ *
+ * This is one hue, the logo's azure, walked from mid to deep along a single diagonal. A single
+ * hue cannot go muddy; it just gets darker. Clean, clinical, and unmistakably the brand's blue. */
+.auth-panel {
+  background-color: #07517a;
+  background-image: linear-gradient(152deg, #0a71a9 0%, #07517a 48%, #052f47 100%);
+}
+
+/* A soft light-source high on the panel, so the flat diagonal above gains some depth without
+   introducing a second colour. */
+.auth-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(70% 55% at 78% 8%, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 60%);
+}
+
 /* Hairline grid used behind hero panels at very low opacity — enough texture to stop a large
    dark area looking like a rendering error, not enough to compete with the text on it. */
 .rail-grid::before {
@@ -387,6 +411,15 @@ h1, h2, h3, h4 {
 
 .animate-fade-in {
   animation: fadeIn 0.25s ease-out forwards;
+}
+
+@keyframes authSwap {
+  from { opacity: 0; transform: translateX(14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.animate-auth-swap {
+  animation: authSwap 0.32s cubic-bezier(0.22, 0.9, 0.28, 1) both;
 }
 
 @keyframes pulseGlow {

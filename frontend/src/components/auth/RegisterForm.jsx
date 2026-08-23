@@ -166,16 +166,6 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           </Button>
         </form>
       </div>
-
-      <p className="mt-6 text-center text-note text-slate-500">
-        Already have an account?{' '}
-        <button
-          onClick={onSwitchToLogin}
-          className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-brand-600 hover:underline"
-        >
-          Sign in
-        </button>
-      </p>
     </div>
   );
 };

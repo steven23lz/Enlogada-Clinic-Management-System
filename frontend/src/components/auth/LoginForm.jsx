@@ -9,7 +9,7 @@ import { AlertCircle, ArrowRight } from 'lucide-react';
 
 // Card-only content, no shell/graphic — AuthPage.jsx owns the shared header/footer/graphic
 // panel and the login<->register crossfade.
-const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
+const LoginForm = ({ onNavigate }) => {
   const { login, googleLogin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -227,16 +227,6 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
         */}
 
       </div>
-
-      <p className="mt-6 text-center text-note text-slate-500">
-        New to Enlogada?{' '}
-        <button
-          onClick={onSwitchToRegister}
-          className="cursor-pointer border-0 bg-transparent p-0 font-semibold text-brand-600 hover:underline"
-        >
-          Create an account
-        </button>
-      </p>
     </div>
   );
 };
