@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Logo from './Logo';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User, Menu, X } from 'lucide-react';
+import { ThemeToggle } from './ui/theme-toggle';
 
 const NAV_LINKS = [
   { id: 'home', label: 'Home' },
@@ -96,6 +97,10 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
               </button>
             </div>
           )}
+          {/* Inside the desktop cluster, not beside it. As a sibling it became a third flex item
+              under justify-between and was pinned to the far edge, opening a hole next to the
+              Create Account button. [1.39.0] */}
+          <ThemeToggle />
         </div>
 
         {/* Mobile toggle */}
@@ -113,6 +118,14 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
       {/* Mobile panel */}
       {menuOpen && (
         <div className="md:hidden border-t border-[#e6ebf1] bg-white px-4 py-3 space-y-1 animate-fade-in">
+          {/* Dark mode was desktop-only, which on a site whose patients book from phones meant
+              most of them could not reach it at all. Inside this panel rather than beside it:
+              mobile-patient.spec.js selects `header div.md:hidden` and takes the LAST match, so a
+              new md:hidden div after this one would silently become the "menu". [1.39.0] */}
+          <div className="flex items-center justify-between gap-2 pb-2">
+            <span className="text-fine font-semibold text-slate-500">Appearance</span>
+            <ThemeToggle />
+          </div>
           {NAV_LINKS.map(link => (
             <button
               key={link.id}

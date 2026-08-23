@@ -19,6 +19,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { visibleMainNavItems, visibleOpsGroups, nativeRoleForNav, isBorrowedScreen } from '../config/navigation';
+import { ThemeToggle } from './ui/theme-toggle';
 
 // The shared shell for every staff and admin console.
 //
@@ -231,7 +232,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
           'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 py-2 pl-3 pr-2.5 text-left text-[13px] font-medium transition-colors',
           isActive
             ? 'bg-brand-500/[0.16] font-semibold text-white'
-            : 'bg-transparent text-slate-400 hover:bg-white/[0.05] hover:text-slate-100'
+            : 'bg-transparent text-rail-ink-muted hover:bg-white/[0.05] hover:text-rail-ink'
         )}
       >
         {isActive && (
@@ -240,7 +241,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
         <Icon
           className={cn(
             'h-[15px] w-[15px] flex-shrink-0 transition-colors',
-            isActive ? 'text-brand-400' : 'text-slate-500 group-hover:text-slate-300'
+            isActive ? 'text-brand-400' : 'text-rail-ink-faint group-hover:text-rail-ink-soft'
           )}
         />
         <span className="truncate">{item.label}</span>
@@ -257,7 +258,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
         <Logo className="h-8 w-8 flex-shrink-0" />
         <div className="flex min-w-0 flex-col leading-tight">
           <span className="truncate text-[13px] font-bold tracking-tight text-white">Enlogada</span>
-          <span className="truncate text-micro font-medium uppercase tracking-[0.12em] text-slate-500">
+          <span className="truncate text-micro font-medium uppercase tracking-[0.12em] text-rail-ink-faint">
             Diagnostic Clinic
           </span>
         </div>
@@ -267,7 +268,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
       <div className="scroll-dark min-h-0 flex-1 space-y-5 overflow-y-auto pb-2 pr-0.5">
         {mainNavItems.length > 0 && (
           <div>
-            <span className="mb-1.5 block px-3 text-micro font-semibold uppercase tracking-[0.14em] text-slate-600">
+            <span className="mb-1.5 block px-3 text-micro font-semibold uppercase tracking-[0.14em] text-rail-ink-dim">
               Management
             </span>
             <nav className="space-y-0.5">
@@ -287,14 +288,14 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
               <button
                 onClick={() => toggleGroup(group.label)}
                 aria-expanded={!collapsed}
-                className="mb-1.5 flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-3 text-micro font-semibold uppercase tracking-[0.14em] text-slate-600 transition-colors hover:text-slate-400"
+                className="mb-1.5 flex w-full cursor-pointer items-center gap-1 border-0 bg-transparent px-3 text-micro font-semibold uppercase tracking-[0.14em] text-rail-ink-dim transition-colors hover:text-rail-ink-muted"
               >
                 <ChevronRight
                   className={cn('h-3 w-3 transition-transform duration-150', !collapsed && 'rotate-90')}
                 />
                 <span>{group.label}</span>
                 {collapsed && (
-                  <span className="ml-auto rounded bg-white/5 px-1 text-micro tabular-nums text-slate-500">
+                  <span className="ml-auto rounded bg-white/5 px-1 text-micro tabular-nums text-rail-ink-faint">
                     {group.items.length}
                   </span>
                 )}
@@ -337,7 +338,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
         <span className="truncate text-fine font-semibold text-white">
           {user?.firstName} {user?.lastName}
         </span>
-        <span className="truncate text-micro text-slate-500">{userRoles.join(' · ') || 'No role assigned'}</span>
+        <span className="truncate text-micro text-rail-ink-faint">{userRoles.join(' · ') || 'No role assigned'}</span>
       </span>
     </button>
   );
@@ -357,12 +358,12 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setMobileOpen(false)} />
+          <div className="fixed inset-0 bg-scrim/60 backdrop-blur-[2px]" onClick={() => setMobileOpen(false)} />
           <div className="relative z-10 flex w-full max-w-[272px] flex-col bg-rail p-3 shadow-overlay">
             <button
               onClick={() => setMobileOpen(false)}
               aria-label="Close navigation"
-              className="absolute right-2.5 top-2.5 flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-0 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
+              className="absolute right-2.5 top-2.5 flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border-0 bg-white/5 text-rail-ink-muted hover:bg-white/10 hover:text-white"
             >
               <X className="h-4 w-4" />
             </button>
@@ -440,6 +441,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
           </div>
 
           <div className="flex flex-shrink-0 items-center gap-2">
+            <ThemeToggle />
             <span className="hidden items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-fine font-semibold text-slate-600 md:inline-flex">
               <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
               {todayLabel}

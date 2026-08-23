@@ -16,6 +16,11 @@ import { cn } from '../../lib/utils';
  *   actions      the screen's primary verb, hard right
  *   meta         small facts about the current view (date, count, last refresh)
  *
+ * The hero is a PERMANENTLY dark surface, so its ink comes from the rail tokens rather than the
+ * neutral and brand ramps. [1.39.0] It used `text-slate-300` and `text-brand-200` — fine while
+ * there was one theme, invisible the moment those ramps moved for dark mode, because both resolve
+ * dark there and this banner is dark in both. Same reason SidebarLayout's rail has its own ink.
+ *
  * `variant="hero"` is the dark treatment, kept for the two landing screens (Admin's console and
  * the Client's home) where the page opens on a welcome rather than on work. Every other screen
  * uses the light variant — a dark banner on top of a worklist is a decoration the person using
@@ -54,13 +59,13 @@ const PageHeader = ({
         <div className="relative flex flex-wrap items-end justify-between gap-5">
           <div className="min-w-0 max-w-2xl">
             {eyebrow && (
-              <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-micro font-semibold uppercase tracking-[0.14em] text-brand-200 ring-1 ring-inset ring-white/10">
+              <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-micro font-semibold uppercase tracking-[0.14em] text-rail-accent ring-1 ring-inset ring-white/10">
                 {Icon && <Icon className="h-3 w-3" />}
                 {eyebrow}
               </span>
             )}
             <h1 className="m-0 text-xl font-bold tracking-tight text-white sm:text-2xl">{title}</h1>
-            {description && <p className="m-0 mt-1.5 text-[13px] leading-relaxed text-slate-300">{description}</p>}
+            {description && <p className="m-0 mt-1.5 text-[13px] leading-relaxed text-rail-ink-soft">{description}</p>}
           </div>
           {actions && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{actions}</div>}
         </div>

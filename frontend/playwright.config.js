@@ -28,6 +28,11 @@ export default defineConfig({
   reporter: [['list']],
   timeout: 30000,
   use: {
+    // Pinned, not inherited. [1.39.0] Playwright happens to default to 'light', so the suite
+    // passed today by luck of a library default — a CI machine or a contributor with a dark
+    // OS preference would otherwise move all 191 specs onto a theme nothing has validated,
+    // and they would fail for a reason that looks nothing like the cause.
+    colorScheme: 'light',
     baseURL: FRONTEND_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

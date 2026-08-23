@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import './index.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import { ThemeProvider } from './contexts/ThemeContext.jsx'
 import api from './config/api'
 import { applyClinicIdentity } from './lib/clinic'
 
@@ -26,15 +27,20 @@ createRoot(document.getElementById('root')).render(
         classNames: {
           toast: 'rounded-xl border shadow-float font-sans',
           title: 'font-semibold text-sm',
-          success: '!bg-white !border-brand-300 !text-[#192534] [&_[data-icon]]:!text-brand-600',
-          error: '!bg-white !border-rose-200 !text-[#192534] [&_[data-icon]]:!text-rose-500',
+          /* Through the surface token, not a pinned white. These fire in the corner of whatever
+             screen the user is on, so a hardcoded white toast on a dark console is a small
+             flash-bang every time something succeeds. [1.39.0] */
+          success: '!bg-surface !border-brand-300 !text-ink [&_[data-icon]]:!text-brand-600',
+          error: '!bg-surface !border-rose-200 !text-ink [&_[data-icon]]:!text-rose-500',
         },
       }}
     />
     {/* Outermost backstop. The Toaster sits outside it deliberately, so error toasts still
         render if the app tree itself is the thing that failed. */}
     <ErrorBoundary>
-      <App />
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
     </ErrorBoundary>
   </StrictMode>,
 )

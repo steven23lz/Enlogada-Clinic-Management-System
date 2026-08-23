@@ -6,6 +6,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Enlogada Ultrasound & Diagnostic Clinic Management System — Appointments, billing, results, and patient management." />
     <title>Enlogada Clinic</title>
+    <meta name="color-scheme" content="light dark" />
+    <!--
+      Sets the theme before the first pixel. [1.39.0]
+
+      This is not a micro-optimisation. main.jsx fetches the clinic identity and AuthContext
+      resolves the session before anything renders, and App shows a full-screen light spinner
+      while it waits — so without this a dark-mode user gets a white flash for the length of an
+      auth round trip, not for a frame. On a clinic LAN that is a third of a second of white at
+      six in the morning.
+
+      Inline, blocking, and not a module: it has to run during head parse, before the stylesheet
+      resolves. The try/catch mirrors the sidebar's collapsed-groups key — a browser with storage
+      blocked must get a working app, not a blank one.
+    -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('enlogada.theme');
+          var dark = saved === 'dark'
+            || ((saved === 'system' || saved === null)
+                && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var t = dark ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-theme', t);
+          document.documentElement.style.colorScheme = t;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

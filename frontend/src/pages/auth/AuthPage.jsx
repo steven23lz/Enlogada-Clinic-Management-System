@@ -72,7 +72,7 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
                 </span>
                 <div className="leading-tight">
                   <p className="m-0 text-[15px] font-bold tracking-tight text-white">{CLINIC.shortName}</p>
-                  <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-brand-300">
+                  <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-rail-accent">
                     Ultrasound &amp; Diagnostic Clinic
                   </p>
                 </div>
@@ -85,20 +85,20 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
               <ul className="m-0 mt-8 list-none space-y-5 p-0">
                 {TRUST_POINTS.map(({ icon: Icon, title, body }) => (
                   <li key={title} className="flex gap-3">
-                    <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-brand-500/20 text-brand-300">
+                    <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-brand-500/20 text-rail-accent">
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0">
                       <span className="block text-[13px] font-semibold text-white">{title}</span>
-                      <span className="block text-fine leading-relaxed text-slate-400">{body}</span>
+                      <span className="block text-fine leading-relaxed text-rail-ink-muted">{body}</span>
                     </span>
                   </li>
                 ))}
               </ul>
 
-              <p className="m-0 mt-10 border-t border-white/10 pt-5 text-fine leading-relaxed text-slate-400">
+              <p className="m-0 mt-10 border-t border-white/10 pt-5 text-fine leading-relaxed text-rail-ink-muted">
                 {CLINIC.address}
-                <span className="mx-1.5 text-slate-600">·</span>
+                <span className="mx-1.5 text-rail-ink-dim">·</span>
                 {CLINIC.phone}
               </p>
             </div>

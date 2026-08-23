@@ -20,7 +20,7 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
       // clinical screen blacks the page out so completely that the dialog reads as a new page
       // rather than a step on top of the one behind it — staff lose their place in the queue
       // they were working through.
-      "fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-50 bg-scrim/50 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
     {...props} />

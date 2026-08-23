@@ -46,7 +46,7 @@ const Home = ({ onNavigate }) => {
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
               ENLOGADA - Your Trusted Diagnostic Partner
             </h1>
-            <p className="text-gray-300 text-sm sm:text-base leading-relaxed max-w-lg">
+            <p className="text-rail-ink-soft text-sm sm:text-base leading-relaxed max-w-lg">
               Professional ultrasound and diagnostic services with all the care and attention you deserve. We're experienced healthcare professionals dedicated to your well-being.
             </p>
 

@@ -36,7 +36,7 @@ const AboutUs = ({ onNavigate }) => {
       <section className="bg-primary-navy text-white py-10 sm:py-14 px-4 sm:px-6 lg:px-8 border-b border-gray-800">
         <div className="max-w-4xl mx-auto space-y-3">
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">About Enlogada</h1>
-          <p className="text-gray-300 text-sm max-w-2xl leading-relaxed">
+          <p className="text-rail-ink-soft text-sm max-w-2xl leading-relaxed">
             A diagnostic clinic in Bugo, Cagayan de Oro, focused on accurate results, fair pricing,
             and getting patients answers as quickly as good medicine allows.
           </p>

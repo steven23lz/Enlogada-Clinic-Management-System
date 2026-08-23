@@ -13,7 +13,7 @@ export default function WelcomeHero({ profiles, results, bookings, reference }) 
   return (
       <div className="rail-gradient rail-grid relative overflow-hidden rounded-2xl border border-[#2b3a4d] p-6 text-white sm:p-8">
         <div className="relative z-10 space-y-4">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-micro font-semibold uppercase tracking-[0.14em] text-brand-200 ring-1 ring-inset ring-white/10">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-micro font-semibold uppercase tracking-[0.14em] text-rail-accent ring-1 ring-inset ring-white/10">
             <Sparkles className="h-3 w-3" />
             <span>Patient Portal</span>
           </div>
@@ -23,7 +23,7 @@ export default function WelcomeHero({ profiles, results, bookings, reference }) 
               <h1 className="m-0 text-2xl font-bold tracking-tight text-white md:text-3xl">
                 {profiles.selected ? `Welcome, ${profiles.selected.first_name}` : 'Welcome to Enlogada'}
               </h1>
-              <p className="m-0 max-w-xl text-[13px] leading-relaxed text-slate-300">
+              <p className="m-0 max-w-xl text-[13px] leading-relaxed text-rail-ink-soft">
                 Book Laboratory, Ultrasound and X-Ray appointments, follow a visit as it moves through the clinic, and download your certified reports.
               </p>
             </div>

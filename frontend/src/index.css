@@ -118,6 +118,43 @@
   --color-rail-line: #2b3a4d;
   --color-dark-slate: #192534;
 
+  /* ── Ink ON the dark chrome, and the two fixed darks. [1.39.0] ──────────────────────────────
+   *
+   * The rail, the hero panels, the modal scrim and the `secondary` button have always been dark
+   * surfaces, and they were all styled with the SAME neutral ramp as the light ones —
+   * `text-slate-400` meaning "muted grey on white" in one place and "light grey on navy" in
+   * another, from one variable.
+   *
+   * That is fine while there is one theme and fatal the moment there are two: remapping the
+   * neutral ramp for a dark canvas turns the rail into dark-grey-on-dark-navy, the scrim into a
+   * white wash, and the `secondary` button into white-on-white. These tokens exist so the
+   * already-dark chrome stops borrowing a ramp that is about to move underneath it.
+   *
+   * The values are the EXACT oklch the slate ramp emits today, so naming them changes nothing —
+   * this is a rename, pixel for pixel, and it is meant to be reviewable as one. They are literals
+   * rather than `var(--color-slate-N)` on purpose: a reference would follow the ramp into dark
+   * mode, which is the whole thing being prevented.
+   */
+  --color-rail-ink: oklch(96.8% .007 247.896);       /* was text-slate-100 */
+  --color-rail-ink-soft: oklch(86.9% .022 252.894);  /* was text-slate-300 */
+  --color-rail-ink-muted: oklch(70.4% .04 256.788);  /* was text-slate-400 */
+  --color-rail-ink-faint: oklch(55.4% .046 257.417); /* was text-slate-500 */
+  --color-rail-ink-dim: oklch(44.6% .043 257.281);   /* was text-slate-600 */
+
+  /* The modal scrim is a FIXED dark, not a neutral — it must stay dark in both themes, or a dark
+   * dialog opens over a white wash. */
+  --color-scrim: oklch(20.8% .042 265.755);          /* was slate-900 */
+
+  /* The dark counterpart to the primary button (`secondary`). Inverts with the ground in dark
+   * mode, which a neutral-ramp class could never express. */
+  --color-emphasis: oklch(20.8% .042 265.755);       /* was slate-900 */
+  --color-emphasis-hover: oklch(27.9% .041 260.031); /* was slate-800 */
+  --color-emphasis-active: oklch(12.9% .042 264.695);/* was slate-950 */
+  /* The pale-green eyebrow on the hero banners. `text-brand-200` on a permanently dark surface,
+     so it must NOT follow the brand ramp into dark mode — brand-200 there is a dark olive and the
+     eyebrow disappeared into the banner. Same class of bug as the rail ink above. */
+  --color-rail-accent: #cfdcb5;
+
   /* shadcn compatibility aliases, kept so the vendored primitives keep resolving. */
   --color-muted: #f1f5f9;
   --color-muted-foreground: #64748b;
@@ -166,9 +203,12 @@ html {
 
 body {
   font-family: 'Outfit', sans-serif;
-  background-color: #f4f6f9;
+  /* Through the tokens, not the literals they used to hold. The inline script in index.html
+     stamps data-theme on <html> before first paint; if this stayed hardcoded the stylesheet would
+     undo that work a moment later and the page behind every panel would stay light. [1.39.0] */
+  background-color: var(--color-canvas);
   margin: 0;
-  color: #0f172a;
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* Outfit's default figures are proportional, so a queue counter ticking 9 → 10 nudges every
@@ -523,4 +563,194 @@ body.printing-receipt {
 }
 [data-datefield] input[type="date"]::-webkit-inner-spin-button {
   display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════
+ * DARK MODE [1.39.0]
+ *
+ * Everything below is wrapped in `@media screen`, and that wrapper is the print guarantee.
+ *
+ * The receipt is the reason. The print rules above toggle `visibility`, which does not touch
+ * `color` — and browsers drop background colours when printing. So a receipt printed while the
+ * app was dark would leave the 80mm thermal printer as near-white text on white paper: a blank
+ * slip, handed to a patient, that nobody would notice until they tried to read it. Scoping the
+ * dark selectors to `screen` means print can never match one, structurally, rather than because
+ * somebody remembered. The explicit forcing further down is a second layer, not the first.
+ *
+ * ── Why variables and not `dark:` classes ──────────────────────────────────────────────────
+ *
+ * There are ~1,100 colour utilities across 94 of the 106 component files. Adding a `dark:`
+ * sibling to each would be a diff nobody can review and would permanently double the cost of
+ * every future colour decision — the exact drift this file's header was written to end. In
+ * Tailwind v4 `bg-slate-100` compiles to `var(--color-slate-100)`, so redefining the variable
+ * under a scope reaches every call site at once, without touching a component.
+ *
+ * `--color-white` is deliberately NOT redefined. It carries two opposed meanings here: 100
+ * surface uses (`bg-white`) and 84 foreground uses (`text-white`, `ring-white`, and the rail's
+ * own `bg-white/[0.04]` hover surfaces). Flipping it would darken the primary button's label,
+ * the notification badge digits and the sidebar's hover states simultaneously. The class-selector
+ * rule below takes the 100 surface uses and leaves the 84 foreground uses alone.
+ * ═══════════════════════════════════════════════════════════════════════════════════════════ */
+
+@custom-variant dark {
+  @media screen {
+    &:where([data-theme="dark"], [data-theme="dark"] *) { @slot; }
+  }
+}
+
+@media screen {
+  html[data-theme="dark"] {
+    color-scheme: dark;
+
+    /* The neutral ramp, inverted in ROLE rather than mirrored in value. A dark UI needs a larger
+       step between canvas and surface than a light one — copy the light 2% delta and every panel
+       dissolves into the page. */
+    --color-slate-50:  #0f172a;  --color-gray-50:  #0f172a;
+    --color-slate-100: #16212e;  --color-gray-100: #16212e;
+    --color-slate-200: #26313f;  --color-gray-200: #26313f;
+    --color-slate-300: #3b4a5f;  --color-gray-300: #3b4a5f;
+    --color-slate-400: #64748b;  --color-gray-400: #64748b;
+    --color-slate-500: #8695a9;  --color-gray-500: #8695a9;
+    --color-slate-600: #a3b0c2;  --color-gray-600: #a3b0c2;
+    --color-slate-700: #c2ccd9;  --color-gray-700: #c2ccd9;
+    --color-slate-800: #dbe2ea;  --color-gray-800: #dbe2ea;
+    --color-slate-900: #eef2f6;  --color-gray-900: #eef2f6;
+
+    /* Semantic surfaces and the shadcn aliases that sit on them. */
+    --color-canvas: #0b1220;      --color-background: #0b1220;
+    --color-surface: #131c2b;     --color-card: #131c2b;      --color-popover: #16202f;
+    --color-sunken: #0f1726;      --color-muted: #1a2434;     --color-accent: #1a2434;
+    --color-line: #26313f;        --color-border: #26313f;    --color-input: #2f3b4b;
+    --color-line-strong: #34414f;
+    --color-ink: #eef2f6;         --color-foreground: #eef2f6;
+    --color-ink-soft: #a3b0c2;    --color-ink-muted: #8695a9;
+    --color-card-foreground: #eef2f6;   --color-popover-foreground: #eef2f6;
+    --color-muted-foreground: #8695a9;  --color-accent-foreground: #eef2f6;
+
+    /* Brand keeps its hue and lifts for a dark ground. #769046 on #0b1220 is 2.9:1 — under the
+       3:1 floor for a UI mark, and well under 4.5:1 as text — so the ramp shifts one way for
+       tints and the other for ink. brand-500 is left alone: it is the primary button's fill and
+       carries white text in both themes. */
+    --color-brand-50:  #1a2415;
+    --color-brand-100: #22301b;
+    --color-brand-200: #3f4d26;
+    --color-brand-600: #93ab63;
+    --color-brand-700: #b0c489;
+
+    /* The dark counterpart to the primary button inverts WITH the ground — a fixed dark would
+       vanish into a dark canvas. Set on the seam token, so no component changes. */
+    --color-emphasis: #eef2f6;
+    --color-emphasis-hover: #dbe2ea;
+    --color-emphasis-active: #ffffff;
+  }
+
+  /* ── The utilities no variable can reach ──────────────────────────────────────────────────
+   *
+   * Arbitrary values compile to literals and shadows are inlined at build time, so these are
+   * hand-written against Tailwind's generated class names. Unlayered author CSS beats @layer
+   * utilities regardless of specificity, so none of this needs !important.
+   *
+   * Each line carries its occurrence count. Nothing goes in this list without one — it is the
+   * only thing stopping it becoming forty rules nobody dares delete. */
+  html[data-theme="dark"] .border-\[\#e6ebf1\] { border-color: var(--color-line); }   /* 145 */
+  html[data-theme="dark"] .border-\[\#eef2f6\] { border-color: #1e2836; }             /*   8 */
+  html[data-theme="dark"] .bg-white              { background-color: var(--color-surface); } /* 100 */
+  /* Tailwind generates a SEPARATE class per variant, so `.bg-white` above does not match
+     `data-[state=active]:bg-white` or `hover:bg-white` — the selected tab on Reports and on
+     Super Admin Management stayed a white slab with light text on it. Two forms exist in this
+     codebase; both are listed rather than reached with a wildcard, because `[class*=bg-white]`
+     would also swallow the rail's bg-white/[0.04] hover surfaces. */
+  html[data-theme="dark"] .data-\[state\=active\]\:bg-white[data-state="active"] {
+    background-color: var(--color-surface);                                            /* 1 */
+  }
+  html[data-theme="dark"] .hover\:bg-white:hover {
+    background-color: var(--color-surface);                                            /* 6 */
+  }
+
+  /* Only the three sticky headers. The rail's bg-white/[0.04] hover surfaces are NOT touched:
+     they are white-on-dark by design and already correct. */
+  html[data-theme="dark"] .bg-white\/85 {
+    background-color: color-mix(in oklab, var(--color-surface) 85%, transparent);
+  }
+
+  /* ── Status colour, remapped as pairs ────────────────────────────────────────────────────
+   *
+   * These are used with real discipline across the app — `bg-{hue}-50` as the tint, `text-{hue}-
+   * 700/800` as the ink, `ring-{hue}-200` as the rim — so remapping the ramp is enough and no
+   * component changes. Left on their light values they read as bright pale chips on a dark row:
+   * a "-53% vs yesterday" badge glowed pink, and a purple caption sat at the edge of legible.
+   *
+   * The hue is preserved deliberately. An error must still read as an error and a warning as a
+   * warning — status-badge.jsx pairs colour with a glyph precisely because colour alone fails
+   * anyone with a colour vision deficiency, and that pairing only holds if the hue survives.
+   *
+   * WARNING, and it is not obvious: after this the ramp is NO LONGER MONOTONIC. `-50` is dark and
+   * `-800` is light, which is the inverse of every mental model of a Tailwind scale. Writing
+   * `text-rose-50` in a new component will produce dark-on-dark. Use the tint/ink pairing the
+   * rest of the app uses and it stays correct. */
+  html[data-theme="dark"] {
+    --color-rose-50: #2a1215;    --color-rose-100: #3b181d;   --color-rose-200: #4c1d24;
+    --color-rose-600: #fb7185;   --color-rose-700: #fda4af;   --color-rose-800: #fecdd3;
+    --color-red-50: #2a1215;     --color-red-100: #3b181d;    --color-red-200: #4c1d24;
+    --color-red-500: #f87171;    --color-red-600: #fb7185;    --color-red-700: #fda4af;
+
+    --color-emerald-50: #0d231b; --color-emerald-100: #123024; --color-emerald-200: #14532d;
+    --color-emerald-600: #34d399; --color-emerald-700: #6ee7b7; --color-emerald-800: #a7f3d0;
+    --color-green-50: #0d231b;   --color-green-100: #123024;   --color-green-200: #14532d;
+    --color-green-700: #6ee7b7;  --color-green-800: #a7f3d0;
+
+    --color-amber-50: #2a1f0b;   --color-amber-100: #3a2b0e;  --color-amber-200: #4a3410;
+    --color-amber-600: #fbbf24;  --color-amber-700: #fcd34d;  --color-amber-800: #fde68a;
+
+    --color-indigo-50: #171b3a;  --color-indigo-100: #1e2450; --color-indigo-200: #272f6b;
+    --color-indigo-600: #a5b4fc; --color-indigo-700: #c7d2fe; --color-indigo-800: #e0e7ff;
+
+    --color-violet-50: #1e1533;  --color-violet-100: #281c45; --color-violet-200: #35245c;
+    --color-violet-600: #c4b5fd; --color-violet-700: #ddd6fe; --color-violet-800: #ede9fe;
+
+    --color-sky-50: #0c1f2e;     --color-sky-100: #102a3d;    --color-sky-200: #14384f;
+    --color-sky-600: #7dd3fc;    --color-sky-700: #bae6fd;    --color-sky-800: #e0f2fe;
+  }
+
+  /* Elevation is compile-time inlined in v4 and cannot be re-themed, so a floating surface loses
+     its only separation. A rim replaces it — this file's rule is that shadow means "this
+     floats", and on a dark ground a border is the only way left to say so. */
+  html[data-theme="dark"] .shadow-float,
+  html[data-theme="dark"] .shadow-overlay {
+    box-shadow: 0 24px 48px -12px #000, 0 0 0 1px #ffffff14;
+  }
+
+  /* The hero's frosted panel. It hardcodes a white wash, so on a dark hero it renders as a pale
+     grey slab with the service labels barely legible — the first thing the eye lands on, on the
+     clinic's own front page. Frosted DARK is what the effect means here. */
+  html[data-theme="dark"] .glass-card {
+    background: rgba(19, 28, 43, 0.72);
+    border-color: rgba(255, 255, 255, 0.10);
+  }
+
+  /* Chrome that hardcodes hex in this file and would otherwise stay light under everything. */
+  html[data-theme="dark"] .field-label { color: var(--color-ink-muted); }
+  html[data-theme="dark"] ::selection { background: rgb(147 171 99 / 0.30); }
+  html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #2f3b4b; }
+  html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #3f4d5f; }
+
+  /* The four alert tones carry twelve literal hexes between them. They keep their hue — an error
+     must still read as an error — but the pale tint becomes a dark one so the text can invert. */
+  html[data-theme="dark"] .alert-error   { background: #2a1215; color: #fda4af; border-color: #4c1d24; }
+  html[data-theme="dark"] .alert-success { background: #0d231b; color: #6ee7b7; border-color: #14532d; }
+  html[data-theme="dark"] .alert-warning { background: #2a1f0b; color: #fcd34d; border-color: #4a3410; }
+  html[data-theme="dark"] .alert-info    { background: #1a2415; color: #b0c489; border-color: #3f4d26; }
+}
+
+/* The second layer of the print guarantee. The @media screen wrapper above already makes dark
+   unreachable in print; this states the outcome explicitly so a future `dark:` class added to a
+   printable component cannot quietly undo it. */
+@media print {
+  html { color-scheme: light; }
+  .print-area, .print-area * {
+    color: #0f172a !important;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

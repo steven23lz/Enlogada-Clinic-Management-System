@@ -130,11 +130,11 @@ const DashboardOverview = ({ onSelectNav }) => {
               <button
                 key={action.id}
                 onClick={() => onSelectNav && onSelectNav(action.id)}
-                className="group inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-2 text-fine font-semibold text-slate-200 transition-colors hover:bg-white/[0.13] hover:text-white"
+                className="group inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.07] px-3 py-2 text-fine font-semibold text-rail-ink transition-colors hover:bg-white/[0.13] hover:text-white"
               >
                 <Icon className="h-3.5 w-3.5 text-brand-300" />
                 {action.label}
-                <ArrowRight className="h-3 w-3 text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-300" />
+                <ArrowRight className="h-3 w-3 text-rail-ink-faint transition-transform group-hover:translate-x-0.5 group-hover:text-rail-ink-soft" />
               </button>
             );
           })}

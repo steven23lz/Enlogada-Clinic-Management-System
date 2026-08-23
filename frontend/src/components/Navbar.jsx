@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Logo from './Logo';
 import { Button } from './ui/button';
 import { LogOut, User } from 'lucide-react';
+import { ThemeToggle } from './ui/theme-toggle';
 
 const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
   const { user, logout } = useAuth();
@@ -64,7 +65,8 @@ const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
 
         {user && (
           <div className="flex items-center gap-2">
-            <span aria-hidden="true" className="hidden h-6 w-px bg-slate-200 sm:block" />
+            <ThemeToggle />
+        <span aria-hidden="true" className="hidden h-6 w-px bg-slate-200 sm:block" />
 
             {/* User Badge */}
             <button
