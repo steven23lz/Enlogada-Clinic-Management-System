@@ -4,7 +4,8 @@ import { Button } from '../ui/button';
 import SlotPicker from './SlotPicker';
 import api from '../../config/api';
 import { AlertCircle, ArrowRight, CalendarClock } from 'lucide-react';
-import { formatTime12 } from '../../lib/date';
+import { formatTime12, formatAppointmentDate } from '../../lib/date';
+import { toastSuccess } from '../../lib/toast';
 
 /**
  * Move an existing booking to a different slot.
@@ -66,6 +67,10 @@ const RescheduleDialog = ({ open, onOpenChange, appointment, onRescheduled }) =>
       });
       onRescheduled?.(res.data.data.appointment);
       onOpenChange(false);
+      // A dialog closing on success looks exactly like a dialog being cancelled, and this one
+      // moved a real appointment. Naming the new slot back is also the only confirmation the
+      // patient gets that it took the time they picked and not the one they first opened on.
+      toastSuccess(`Appointment moved to ${formatAppointmentDate(date)} at ${formatTime12(time)}.`);
     } catch (err) {
       // 409 is the interesting one and always means something the patient can act on — the slot
       // went while they were deciding, or the booking has since been checked in.
@@ -139,8 +144,8 @@ const RescheduleDialog = ({ open, onOpenChange, appointment, onRescheduled }) =>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
               Keep current time
             </Button>
-            <Button type="submit" disabled={submitting || !time || unchanged}>
-              {submitting ? 'Moving…' : 'Confirm new time'}
+            <Button type="submit" loading={submitting} disabled={!time || unchanged}>
+              Confirm new time
             </Button>
           </div>
         </form>

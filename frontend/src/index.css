@@ -358,6 +358,20 @@ h1, h2, h3, h4 {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* …except the one animation that IS the message.
+     The blanket rule above sets iteration-count to 1 at 0.01ms, which does not slow a spinner
+     down — it completes a single rotation instantly and then stops, permanently. Measured: with
+     reduce on, `animate-spin` computes to `1e-05s` / `1 iteration`. So every loading spinner in
+     the app — the boot screen, the portal, the services page, avatar upload — was a frozen ring
+     for these users, which reads as a hung app rather than a working one.
+     A progress indicator is not what the reduced-motion preference is asking about; the concern
+     is vestibular, and that means large-area movement, parallax and zoom, not a 16px ring. So it
+     keeps turning, at half speed. */
+  .animate-spin {
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 /* Print-one-element trick: mark the printable content with .print-area and everything else on

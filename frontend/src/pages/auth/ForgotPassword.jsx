@@ -85,11 +85,11 @@ const ForgotPassword = ({ onNavigate }) => {
 
                     <Button
                       type="submit"
-                      disabled={submitting}
+                      loading={submitting}
                       size="lg"
             className="w-full"
                     >
-                      <span>{submitting ? 'Sending...' : 'Send Reset Link'}</span>
+                      <span>Send Reset Link</span>
                       <ArrowRight className="w-4 h-4" />
                     </Button>
                   </>

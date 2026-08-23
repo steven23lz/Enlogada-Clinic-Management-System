@@ -121,8 +121,8 @@ const PatientRecordsOversight = () => {
               onChange={e => setQuery(e.target.value)}
               aria-label="Search patient records by name"
             />
-            <Button type="submit" disabled={searching}>
-              {searching ? 'Searching…' : 'Search'}
+            <Button type="submit" loading={searching}>
+              Search
             </Button>
           </form>
 

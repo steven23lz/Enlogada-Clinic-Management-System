@@ -33,12 +33,12 @@ export function ConfirmDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             {cancelLabel}
           </Button>
-          <Button
-            type="button"
-            onClick={onConfirm}
-            disabled={loading}
-          >
-            {loading ? "Please wait..." : confirmLabel}
+          {/* The label stays put. It used to become "Please wait...", which threw away the one
+              piece of information the person needed at that moment — this is the dialog that
+              confirms a refund, a cancellation or a released report, and after clicking they can
+              no longer see which of those they agreed to. */}
+          <Button type="button" onClick={onConfirm} loading={loading}>
+            {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -49,7 +49,7 @@ export default function WalkInPanel({ queue, lookup, checkIn, reference }) {
                 className="flex-1"
               />
               <Button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white" disabled={lookup.searching}>
-                {lookup.searching ? 'Searching...' : 'Search'}
+                {lookup.searching ? 'Searching…' : 'Search'}
               </Button>
             </form>
 

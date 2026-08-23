@@ -129,7 +129,7 @@ export default function ServiceFormDialog({ catalogue }) {
                 disabled={catalogue.submitting}
                 className="bg-brand-500 hover:bg-primary-hover text-white"
               >
-                {catalogue.submitting ? 'Saving...' : catalogue.editingTest ? 'Update Service' : 'Add Service'}
+                {catalogue.submitting ? 'Saving…' : catalogue.editingTest ? 'Update Service' : 'Add Service'}
               </Button>
             </div>
           </form>

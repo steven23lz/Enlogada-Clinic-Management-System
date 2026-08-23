@@ -8,6 +8,7 @@ import { validatePatientProfile } from '../../validations/patientValidation';
 import { AlertCircle, AlertTriangle } from 'lucide-react';
 import { DateField, BIRTHDATE_YEAR_RANGE } from '../ui/date-field';
 import { todayStr } from '../../lib/date';
+import { toastSuccess } from '../../lib/toast';
 
 /**
  * Correcting a patient's details. [1.24.0]
@@ -89,8 +90,13 @@ const PatientEditDialog = ({ open, onOpenChange, patient, patientTypes = [], onS
         contactNumber: form.contactNumber.trim(),
         emergencyContact: form.emergencyContact.trim(),
       });
-      onSaved?.(res.data.data.patient);
+      const saved = res.data.data.patient;
+      onSaved?.(saved);
       onOpenChange(false);
+      // Names the patient, because this dialog is opened from a list and the person who just
+      // corrected a record needs to know WHICH record took the change — a bare "Saved" on a
+      // screen of forty patients confirms nothing worth confirming.
+      toastSuccess(`${saved.first_name} ${saved.last_name}'s record updated.`);
     } catch (err) {
       // 404 here is the department scope, not a missing record: an out-of-scope patient answers
       // 404 rather than 403 precisely so the response does not confirm they exist.
@@ -222,8 +228,8 @@ const PatientEditDialog = ({ open, onOpenChange, patient, patientTypes = [], onS
               {/* Inert until something differs: a save that writes the same values still produces
                   a write, and on a record this sensitive an audit trail of no-op edits is noise
                   in the one log somebody will read during an investigation. */}
-              <Button type="submit" disabled={saving || changed.length === 0}>
-                {saving ? 'Saving…' : 'Save corrections'}
+              <Button type="submit" loading={saving} disabled={changed.length === 0}>
+                Save corrections
               </Button>
             </span>
           </div>

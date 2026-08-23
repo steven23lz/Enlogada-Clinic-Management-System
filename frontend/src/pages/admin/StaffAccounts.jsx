@@ -258,8 +258,8 @@ const StaffAccounts = () => {
               </div>
               <DialogFooter className="border-t border-[#e6ebf1] pt-3">
                 <Button type="button" variant="outline" onClick={() => setShowAddModal(false)} disabled={submitting}>Cancel</Button>
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? 'Creating…' : 'Create Account'}
+                <Button type="submit" loading={submitting}>
+                  Create Account
                 </Button>
               </DialogFooter>
             </form>

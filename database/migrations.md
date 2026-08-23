@@ -1,5 +1,66 @@
 # Database Migration & Schema History
 
+## [1.39.0] - 2026-08-23 (A button that says it is working, and a spinner that actually spins)
+
+No schema change. Frontend only.
+
+### The reduced-motion rule was freezing every loading spinner
+
+`prefers-reduced-motion: reduce` applied `animation-duration: 0.01ms` and
+`animation-iteration-count: 1` to `*`. On a spinner that is not a slowdown — it completes one
+rotation instantly and then **stops, permanently**. Measured with the preference on, `animate-spin`
+computed to `1e-05s` / `1 iteration`.
+
+So for anyone who had asked their OS for less motion, every loading indicator in the app — the boot
+screen, the patient portal, the services page, the admin panels, avatar upload — was a static ring.
+Which is the single worst thing a loading indicator can be, because a frozen spinner does not read
+as "loading", it reads as "hung".
+
+`.animate-spin` is now exempted and runs at half speed instead. The exemption is deliberately
+narrow and was verified as such: with `reduce` on, the spinner computes to `2s / infinite` while the
+decorative `pulse-glow` is still correctly killed at `1e-05s / 1`. A progress indicator is not what
+the preference is asking about — the concern is vestibular, which means large-area movement,
+parallax and zoom, not a 16px ring.
+
+### `<Button loading>`
+
+43 buttons were each hand-rolling `{submitting ? 'Saving...' : 'Save'}`. Three problems with that:
+
+- **The copy had drifted.** `'Saving...'` in eight places and `'Saving…'` in four — the same word
+  with two different ellipsis characters, rendering side by side on different screens. Plus a
+  `ConfirmDialog` that said "Please wait..." on every destructive action in the app.
+- **A static string gives no sign of life**, so a slow request and a hung one look identical.
+- **The label grew mid-click**, reflowing the row and moving whatever sat beside it out from under
+  the cursor at the exact moment somebody was clicking.
+
+`loading` now supplies a spinner, the disable and `aria-busy`, and **the label stays put**. It
+matters most on `ConfirmDialog`, used by nine screens: that dialog confirms a refund, a
+cancellation or a released report, and replacing its label with "Please wait..." threw away the one
+thing the person needed to still be able to read — which of those they had just agreed to.
+
+Converted the eight `<Button>` submit sites (sign in, register, forgot/reset password, reschedule,
+patient correction, patient search, staff account creation) and normalised the remaining
+hand-rolled labels onto one ellipsis character.
+
+### Success that was indistinguishable from cancelling
+
+A dialog that closes on success looks exactly like a dialog that was dismissed. Two did precisely
+that, and both had just written something real:
+
+- **Reschedule** now names the slot back — the only confirmation the patient gets that it took the
+  time they picked rather than the one the dialog opened on.
+- **Patient correction** now names the patient. It is opened from a list of forty; a bare "Saved"
+  confirms nothing worth confirming.
+
+The three HMO decisions on Service Requests also toast now. The panel did re-render with the new
+status, but this is a three-step handoff — reception raises the claim, an Admin decides it, the
+cashier bills on the outcome — and the person deciding needs to know the decision was *recorded*,
+not merely displayed.
+
+Left alone deliberately: `BookingDialog` already shows a confirmation screen carrying the reference
+code, `WalkInRegistration` already prints the queue ticket number, and marking a notification read
+should stay silent. Adding a toast to any of those is noise on top of better feedback.
+
 ## [1.38.0] - 2026-08-23 (The reader decides how big the text is)
 
 No schema change. Frontend only.

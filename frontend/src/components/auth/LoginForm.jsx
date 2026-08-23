@@ -147,11 +147,11 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
               than as "the brand's second color." */}
           <Button
             type="submit"
-            disabled={submitting}
+            loading={submitting}
             size="lg"
             className="w-full"
           >
-            <span>{submitting ? 'Signing in...' : 'Sign In'}</span>
+            <span>Sign In</span>
             <ArrowRight className="w-4 h-4" />
           </Button>
         </form>

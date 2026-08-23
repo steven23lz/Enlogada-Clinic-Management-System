@@ -376,6 +376,7 @@ and the copies had drifted apart:
 | `toolbar.jsx` | the filter row above a worklist. `attached` joins it to the panel below; also exports `SegmentedFilter` and `ToolbarField` |
 | `empty-state.jsx` | what a screen shows when there is nothing. `tone="error"` looks *deliberately* unlike empty — a failed request and a quiet morning must never be confusable |
 | `.field-label` / `.alert` | two component classes in `index.css`, for the form label and the inline alert. Leaf elements, so a class is the right unit |
+| `button.jsx` | `<Button loading>` for anything in flight — spinner, disable and `aria-busy`, and the **label stays put**. Never swap it for "Saving…": on `ConfirmDialog` that erased which of a refund, a cancellation or a release the person had just agreed to. `[1.39.0]` |
 | `date-field.jsx` / `calendar.jsx` | every date input. Keeps the native `<input type="date">` and replaces only the picker, so ISO values, `min`/`max`, `required` and the phone's OS picker all still work. Where the browser's glyph cannot be hidden — Firefox, measured, no CSS exists — it renders nothing custom rather than showing a second icon. `RANGE_PRESETS` for filters, `BIRTHDATE_YEAR_RANGE` for birthdates. See migrations.md [1.34.0] |
 
 - **The printed receipt is `components/Receipt.jsx`**, and the clinic's own identity is
@@ -384,6 +385,16 @@ and the copies had drifted apart:
   `no-print`. Second, `lib/clinic.js` leaves `tin` / `businessPermit` blank unless configured
   (`VITE_CLINIC_TIN`), and the receipt then says it is *not* a BIR-registered Official Receipt.
   Do not invent those numbers to make it look official — a patient may file it for reimbursement.
+- **A mutation that only closes a dialog has told the user nothing** — success looks identical to
+  cancelling. Reach for `toastSuccess` from `lib/toast.js` and **name the thing**: the patient, the
+  new slot, the decision. A bare "Saved" on a list of forty records confirms nothing. Skip it where
+  better feedback already exists (`BookingDialog` shows a reference code, `WalkInRegistration`
+  prints the queue ticket) — a toast on top of those is noise.
+- **A spinner is exempt from the reduced-motion kill, and must stay exempt.** `[1.39.0]` The
+  blanket `prefers-reduced-motion` rule sets `animation-iteration-count: 1` at `0.01ms`, which does
+  not slow a spinner — it stops it dead after one instant rotation, so every loading indicator in
+  the app read as a hang for those users. `.animate-spin` is re-declared inside that media query at
+  half speed. Keep the exemption narrow: decorative animation still gets killed.
 - **A sticky action bar cannot be the last child.** `position: sticky` is constrained by its
   containing block, so an element already at the end of one has no space to slide into and never
   moves. The cashier's Take Payment button was measured at y=904 on a 900px viewport that way. It

@@ -157,11 +157,11 @@ const RegisterForm = ({ onSwitchToLogin }) => {
 
           <Button
             type="submit"
-            disabled={submitting}
+            loading={submitting}
             size="lg"
             className="w-full mt-2"
           >
-            <span>{submitting ? 'Creating Account...' : 'Create Account'}</span>
+            <span>Create Account</span>
             <ArrowRight className="w-4 h-4" />
           </Button>
         </form>

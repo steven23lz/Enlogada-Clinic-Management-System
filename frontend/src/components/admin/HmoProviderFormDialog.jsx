@@ -44,7 +44,7 @@ export default function HmoProviderFormDialog({ hmoAdmin }) {
             <div className="flex justify-end space-x-2 pt-3 border-t border-[#e6ebf1]">
               <Button type="button" variant="outline" onClick={hmoAdmin.closeModal}>Cancel</Button>
               <Button type="submit" disabled={hmoAdmin.submitting} className="bg-brand-500 hover:bg-primary-hover text-white">
-                {hmoAdmin.submitting ? 'Saving...' : hmoAdmin.editing ? 'Save Changes' : 'Add Provider'}
+                {hmoAdmin.submitting ? 'Saving…' : hmoAdmin.editing ? 'Save Changes' : 'Add Provider'}
               </Button>
             </div>
           </form>

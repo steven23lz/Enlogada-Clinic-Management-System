@@ -313,7 +313,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, onRegistered }) => {
 
                   <div className="flex justify-end pt-3">
                     <Button type="submit" className="font-bold text-xs px-6 py-2 rounded-xl" disabled={isRegistering}>
-                      {isRegistering ? 'Registering...' : 'Register Walk-In & Issue Queue Ticket'}
+                      {isRegistering ? 'Registering…' : 'Register Walk-In & Issue Queue Ticket'}
                     </Button>
                   </div>
                 </form>
