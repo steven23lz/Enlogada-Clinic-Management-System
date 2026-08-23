@@ -1,5 +1,54 @@
 # Database Migration & Schema History
 
+## [1.38.0] - 2026-08-23 (The reader decides how big the text is)
+
+No schema change. Frontend only.
+
+### What was added
+
+A three-position text size control — Normal / Large / Larger — in the staff console header, the
+patient portal header and the public header, including the phone drawer. The choice is written to
+`localStorage` and applied to `<html>` as a root font size before React mounts, so it survives a
+reload and does not flash the default size first.
+
+It is offered before sign-in as well as after, because the screens a patient reaches first — the
+sign-in form and the booking pages — are the ones where they have no account to carry a preference
+on. Percentages of the browser's own root size, not fixed pixels, so somebody who has already
+raised their default in the OS keeps that as their baseline and this multiplies it instead of
+quietly overriding it.
+
+### The part that was actually load-bearing: 85 pixel-pinned font sizes
+
+Scaling the root only works because every size in the app is a `rem`. Eighty-five of them were
+not — `text-[13px]` in 46 places, `text-[15px]` in 17, and the rest — and those do not merely fail
+to grow. They **invert the hierarchy**, because 13px sits between `text-fine` (12px) and
+`text-sm` (14px):
+
+        token           at 100%      at 125%
+        text-fine        12px         15px      <- overtakes
+        text-[13px]      13px         13px      <- pinned, now the SMALLEST
+        text-sm          14px       17.5px
+
+Three tokens were added to cover the sizes that had none (`--text-nano` 9px, `--text-note` 13px,
+`--text-lead` 15px), the other pinned values already had exact token equivalents, and all 85 sites
+were swapped. Every swap is the same computed pixel size at the default root, so nothing about the
+app's current appearance changed — the diff is identity at 100% and only means something above it.
+
+Nine fixed-width containers that box scaling text were converted the same way (`w-[248px]` ->
+`w-[15.5rem]` for the sidebar rail, the date fields, the notification tray, the truncation caps).
+The sidebar was the visible one: at Larger its labels had truncated to "Walk-In Registr…" and
+"Appointment C…" because the rail was pinned while its own labels grew. Icon and divider sizes
+(`w-[3px]`, `w-[13px]`) stay in px deliberately — they are decoration, and growing them with the
+reading size makes the chrome heavier without making anything easier to read.
+
+### Why this has a spec
+
+`text-scale.spec.js`. The setting itself is easy to eyeball; the invariant is not. The 86th
+pixel-pinned size will look perfect in every screenshot taken at the default size and only misbehave
+for the users who changed it — which is to say, only for the people the feature exists for. The
+spec asserts `fine < note < sm` at all three scales, and it was verified by injecting both failures
+(a `text-[13px]` on a live element, and a px-valued token) and confirming it goes red on each.
+
 ## [1.37.0] - 2026-08-23 (Both halves of the gateway, or neither)
 
 No schema change.

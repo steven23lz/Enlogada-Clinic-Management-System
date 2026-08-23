@@ -75,7 +75,7 @@ const BookingPass = ({ reference, queueNumber, isPaid, canPayOnline = false }) =
         <div className="w-40 h-40 bg-gray-100 rounded-lg animate-pulse" aria-hidden="true" />
       )}
 
-      <span className="font-mono text-[13px] font-bold tracking-wide text-slate-900">{reference}</span>
+      <span className="font-mono text-note font-bold tracking-wide text-slate-900">{reference}</span>
       {queueNumber && (
         <span className="text-micro font-semibold text-slate-500">Queue Ticket {queueNumber}</span>
       )}

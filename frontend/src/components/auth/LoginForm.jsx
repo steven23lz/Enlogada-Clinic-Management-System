@@ -81,7 +81,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
     <div>
       <div className="space-y-1">
         <h1 className="m-0 text-2xl font-bold tracking-tight text-slate-900">Welcome Back</h1>
-        <p className="m-0 text-[13px] leading-relaxed text-slate-500">
+        <p className="m-0 text-note leading-relaxed text-slate-500">
           Sign in to your dashboard to manage records.
         </p>
       </div>
@@ -208,7 +208,7 @@ const LoginForm = ({ onSwitchToRegister, onNavigate }) => {
 
       </div>
 
-      <p className="mt-6 text-center text-[13px] text-slate-500">
+      <p className="mt-6 text-center text-note text-slate-500">
         New to Enlogada?{' '}
         <button
           onClick={onSwitchToRegister}

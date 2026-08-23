@@ -99,7 +99,7 @@ const TestPicker = ({
             ? 'No tests selected'
             : `${selected.length} test${selected.length === 1 ? '' : 's'} selected`}
         </span>
-        <span className="text-[13px] font-extrabold tabular-nums text-slate-900">{formatCurrency(total)}</span>
+        <span className="text-note font-extrabold tabular-nums text-slate-900">{formatCurrency(total)}</span>
       </div>
 
       {/* Preparation, at the desk. The person handing over the queue ticket saying "come back

@@ -70,7 +70,7 @@ class ErrorBoundary extends Component {
           {/* The message is shown in development only — in production it is noise to a
               receptionist, and can disclose internals. The console keeps the full detail. */}
           {import.meta.env.DEV && (
-            <pre className="mt-6 max-h-40 overflow-auto rounded-lg bg-slate-50 p-3 text-left text-[11px] text-slate-600">
+            <pre className="mt-6 max-h-40 overflow-auto rounded-lg bg-slate-50 p-3 text-left text-meta text-slate-600">
               {String(this.state.error?.message || this.state.error)}
             </pre>
           )}

@@ -27,9 +27,9 @@ export default function TransactionHistoryPanel({ history, receipt, refund, oper
   return (
       <div>
         <Toolbar attached>
-          <DateField presets={RANGE_PRESETS.start} value={history.startDate} onChange={e => history.setStartDate(e.target.value)} containerClassName="w-[150px]" aria-label="History start date" />
+          <DateField presets={RANGE_PRESETS.start} value={history.startDate} onChange={e => history.setStartDate(e.target.value)} containerClassName="w-[9.375rem]" aria-label="History start date" />
           <span className="text-fine text-slate-400">to</span>
-          <DateField presets={RANGE_PRESETS.end} value={history.endDate} onChange={e => history.setEndDate(e.target.value)} containerClassName="w-[150px]" aria-label="History end date" />
+          <DateField presets={RANGE_PRESETS.end} value={history.endDate} onChange={e => history.setEndDate(e.target.value)} containerClassName="w-[9.375rem]" aria-label="History end date" />
           <Button variant="outline" onClick={() => history.reload()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Apply

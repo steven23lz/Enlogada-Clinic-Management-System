@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Logo from './Logo';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User, Menu, X } from 'lucide-react';
+import TextScaleControl from './ui/text-scale-control';
 
 const NAV_LINKS = [
   { id: 'home', label: 'Home' },
@@ -40,7 +41,7 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
         >
           <Logo className="h-9 w-9 flex-shrink-0" />
           <div className="flex flex-col min-w-0">
-            <span className="text-[15px] font-bold leading-tight tracking-tight text-slate-900">ENLOGADA</span>
+            <span className="text-lead font-bold leading-tight tracking-tight text-slate-900">ENLOGADA</span>
             <span className="hidden truncate text-micro font-semibold uppercase tracking-[0.12em] text-slate-500 sm:block">
               Ultrasound &amp; Diagnostic Clinic
             </span>
@@ -56,6 +57,10 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
               </button>
             ))}
           </nav>
+
+          {/* Offered before sign-in as well as after. A patient who needs larger text needs it on
+              the booking and sign-in screens most of all, which are the ones they reach first. */}
+          <TextScaleControl className="hidden lg:inline-flex" />
 
           {user ? (
             <div className="flex items-center space-x-3">
@@ -83,7 +88,7 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
               <button
                 type="button"
                 onClick={() => go('login')}
-                className="cursor-pointer whitespace-nowrap border-0 bg-transparent text-[13px] font-semibold text-slate-600 transition-colors hover:text-brand-600"
+                className="cursor-pointer whitespace-nowrap border-0 bg-transparent text-note font-semibold text-slate-600 transition-colors hover:text-brand-600"
               >
                 Sign In
               </button>
@@ -125,6 +130,11 @@ const PublicHeader = ({ currentTab = '', onNavigate }) => {
               {link.label}
             </button>
           ))}
+
+          <div className="flex items-center justify-between pt-2 mt-2 border-t border-[#e6ebf1]">
+            <span className="text-fine font-semibold text-slate-500">Text size</span>
+            <TextScaleControl />
+          </div>
 
           <div className="pt-2 mt-2 border-t border-[#e6ebf1] space-y-2">
             {user ? (

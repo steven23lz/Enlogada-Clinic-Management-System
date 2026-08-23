@@ -71,7 +71,7 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
                   <Logo className="h-8 w-8" />
                 </span>
                 <div className="leading-tight">
-                  <p className="m-0 text-[15px] font-bold tracking-tight text-white">{CLINIC.shortName}</p>
+                  <p className="m-0 text-lead font-bold tracking-tight text-white">{CLINIC.shortName}</p>
                   <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-brand-300">
                     Ultrasound &amp; Diagnostic Clinic
                   </p>
@@ -89,7 +89,7 @@ const AuthPage = ({ initialMode = 'login', onNavigate }) => {
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-[13px] font-semibold text-white">{title}</span>
+                      <span className="block text-note font-semibold text-white">{title}</span>
                       <span className="block text-fine leading-relaxed text-slate-400">{body}</span>
                     </span>
                   </li>

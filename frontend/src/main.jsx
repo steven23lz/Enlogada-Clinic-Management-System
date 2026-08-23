@@ -6,6 +6,7 @@ import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 import api from './config/api'
 import { applyClinicIdentity } from './lib/clinic'
+import { applyStoredScale } from './lib/textScale'
 
 // The clinic's name, address and statutory identifiers, fetched once at start-up.
 //
@@ -17,6 +18,13 @@ import { applyClinicIdentity } from './lib/clinic'
 api.get('/clinic')
   .then((res) => applyClinicIdentity(res.data?.data?.clinic))
   .catch(() => { /* defaults stand */ })
+
+// The reader's chosen text size, applied to <html> BEFORE React mounts.
+//
+// Synchronous and local (localStorage, no request), unlike the clinic identity above, because the
+// cost of deferring it is visible: the app would paint at the default size and jump one frame
+// later, on every load, for exactly the people who chose a larger size because reading is hard.
+applyStoredScale()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

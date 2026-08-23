@@ -516,7 +516,7 @@ const ServiceRequests = () => {
                     <div key={t.id} className="rounded-lg border border-[#e6ebf1] p-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <span className="block truncate text-[13px] font-semibold text-slate-900">{t.test_name}</span>
+                          <span className="block truncate text-note font-semibold text-slate-900">{t.test_name}</span>
                           <span className="text-fine text-slate-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-1">

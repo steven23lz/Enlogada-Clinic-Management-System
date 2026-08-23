@@ -59,7 +59,7 @@ const PrivacyPolicy = ({ onNavigate }) => {
               <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center flex-shrink-0">
                 <Icon className="w-4.5 h-4.5" />
               </div>
-              <h2 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">{title}</h2>
+              <h2 className="m-0 text-lead font-bold tracking-tight text-slate-900">{title}</h2>
             </div>
             <p className="text-sm text-gray-600 leading-relaxed m-0">{body}</p>
           </div>

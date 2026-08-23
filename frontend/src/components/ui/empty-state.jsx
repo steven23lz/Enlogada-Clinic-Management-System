@@ -49,7 +49,7 @@ const EmptyState = ({
       >
         <Icon className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
       </span>
-      <p className={cn('m-0 text-[13px] font-semibold', isError ? 'text-rose-800' : 'text-slate-700')}>{title}</p>
+      <p className={cn('m-0 text-note font-semibold', isError ? 'text-rose-800' : 'text-slate-700')}>{title}</p>
       {description && (
         <p className={cn('m-0 mt-1 max-w-sm text-fine leading-relaxed', isError ? 'text-rose-700' : 'text-slate-500')}>
           {description}

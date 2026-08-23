@@ -99,7 +99,7 @@ export default function ServiceFormDialog({ catalogue }) {
                 placeholder="e.g. Nothing to eat or drink except water for 8 hours before your appointment."
                 value={catalogue.form.preparation}
                 onChange={e => catalogue.setForm({...catalogue.form, preparation: e.target.value})}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[13px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus-visible:border-brand-500"
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-note leading-relaxed text-slate-800 placeholder:text-slate-400 focus-visible:border-brand-500"
               />
               <p className="m-0 text-micro leading-relaxed text-slate-500">
                 Written straight to the patient — this text appears in their confirmation email

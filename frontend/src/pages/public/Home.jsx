@@ -35,7 +35,7 @@ const Home = ({ onNavigate }) => {
           }}
         />
         <div className="absolute -right-20 top-1/2 -translate-y-1/2 opacity-[0.08] pointer-events-none hidden md:block">
-          <Logo className="w-[480px] h-[480px]" />
+          <Logo className="w-[30rem] h-[480px]" />
         </div>
 
         {/* Gradient Overlay */}
@@ -106,7 +106,7 @@ const Home = ({ onNavigate }) => {
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">Licensed Diagnostics</h3>
+              <h3 className="m-0 text-lead font-bold tracking-tight text-slate-900">Licensed Diagnostics</h3>
               <p className="m-0 text-fine leading-relaxed text-slate-500">Certified laboratory tech & radiologists handling your medical tests.</p>
             </div>
           </div>
@@ -116,7 +116,7 @@ const Home = ({ onNavigate }) => {
               <Clock className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">Fast & Accurate Results</h3>
+              <h3 className="m-0 text-lead font-bold tracking-tight text-slate-900">Fast & Accurate Results</h3>
               <p className="m-0 text-fine leading-relaxed text-slate-500">Digital result releasing notified directly to your email inbox.</p>
             </div>
           </div>
@@ -126,7 +126,7 @@ const Home = ({ onNavigate }) => {
               <Award className="w-6 h-6" />
             </div>
             <div className="space-y-1">
-              <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">HMO & Private Support</h3>
+              <h3 className="m-0 text-lead font-bold tracking-tight text-slate-900">HMO & Private Support</h3>
               <p className="m-0 text-fine leading-relaxed text-slate-500">HMO verification integrated with manual authorization code tracking.</p>
             </div>
           </div>

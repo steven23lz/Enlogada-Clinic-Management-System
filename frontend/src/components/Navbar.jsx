@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Logo from './Logo';
 import { Button } from './ui/button';
 import { LogOut, User } from 'lucide-react';
+import TextScaleControl from './ui/text-scale-control';
 
 const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
   const { user, logout } = useAuth();
@@ -24,7 +25,7 @@ const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
             portal. The logo carries the identity on a phone; the patient knows what site they
             signed in to. */}
         <div className="hidden min-w-0 flex-col leading-tight sm:flex">
-          <span className="truncate text-[15px] font-bold tracking-tight text-slate-900">ENLOGADA</span>
+          <span className="truncate text-lead font-bold tracking-tight text-slate-900">ENLOGADA</span>
           <span className="truncate text-micro font-semibold uppercase tracking-[0.12em] text-slate-500">
             Ultrasound &amp; Diagnostic Clinic
           </span>
@@ -64,6 +65,12 @@ const Navbar = ({ onNavigate, activeTab = 'dashboard' }) => {
 
         {user && (
           <div className="flex items-center gap-2">
+            {/* The portal is the screen a patient reads their own results on, so the size control
+                belongs here and not only on the public pages they pass through once. Hidden below
+                `sm` because the bar is already tight there — phone users get the browser's own
+                text-size setting, which this deliberately multiplies rather than overrides. */}
+            <TextScaleControl className="hidden sm:inline-flex" />
+
             <span aria-hidden="true" className="hidden h-6 w-px bg-slate-200 sm:block" />
 
             {/* User Badge */}

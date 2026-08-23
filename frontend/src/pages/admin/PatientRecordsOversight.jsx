@@ -194,7 +194,7 @@ const PatientRecordsOversight = () => {
                       className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 border-0 bg-transparent px-5 py-3 text-left"
                     >
                       <span className="min-w-0">
-                        <span className="block text-[13px] font-semibold text-slate-900">
+                        <span className="block text-note font-semibold text-slate-900">
                           {patient.first_name} {patient.last_name}
                           <span className="ml-1.5 font-mono text-micro font-normal text-slate-400">PT-{patient.id}</span>
                         </span>
@@ -276,7 +276,7 @@ const PatientRecordsOversight = () => {
                 {patientHistory.map(item => (
                   <div key={item.visit_test_id} className="rounded-lg border border-[#e6ebf1] p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-semibold text-slate-900">
+                      <span className="text-note font-semibold text-slate-900">
                         {item.test_name} <span className="text-fine font-normal text-slate-400">({item.category_name})</span>
                       </span>
                       <StatusBadge status={item.test_status} />

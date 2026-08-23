@@ -102,7 +102,7 @@ const ActivityLog = () => {
               {entries.map(entry => (
                 <li key={entry.id} className="flex items-start justify-between gap-3 px-5 py-3">
                   <div className="min-w-0">
-                    <p className="m-0 text-[13px] font-medium text-slate-800">{entry.description}</p>
+                    <p className="m-0 text-note font-medium text-slate-800">{entry.description}</p>
                     <p className="m-0 mt-0.5 text-fine text-slate-500">
                       {entry.actor_name} &middot; {formatDateTime(entry.created_at)}
                     </p>

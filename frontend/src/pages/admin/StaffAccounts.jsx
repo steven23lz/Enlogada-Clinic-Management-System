@@ -318,8 +318,8 @@ const StaffAccounts = () => {
               ) : pagedStaff.length > 0 ? (
                 pagedStaff.map(s => (
                   <TableRow key={s.id}>
-                    <TableCell label="Name" className="max-w-[180px] truncate font-semibold text-slate-900" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
-                    <TableCell label="Email" className="max-w-[220px] truncate text-slate-500" title={s.email}>{s.email}</TableCell>
+                    <TableCell label="Name" className="max-w-[11.25rem] truncate font-semibold text-slate-900" title={`${s.first_name} ${s.last_name}`}>{s.first_name} {s.last_name}</TableCell>
+                    <TableCell label="Email" className="max-w-[13.75rem] truncate text-slate-500" title={s.email}>{s.email}</TableCell>
                     {/* Every role this account holds. This rendered `roles[0]` only, so the
                         combined Receptionist+Cashier account appeared in the staff list as a
                         plain Cashier — the screen that exists to tell an administrator what

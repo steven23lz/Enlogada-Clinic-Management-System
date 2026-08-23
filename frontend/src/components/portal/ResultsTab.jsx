@@ -32,7 +32,7 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
 
           {/* Filter & Search Header */}
           <Toolbar>
-            <span className="flex items-center gap-2 text-[13px] font-semibold text-slate-900">
+            <span className="flex items-center gap-2 text-note font-semibold text-slate-900">
               <Activity className="h-4 w-4 text-brand-600" />
               Diagnostic History
             </span>

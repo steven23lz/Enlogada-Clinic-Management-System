@@ -20,7 +20,7 @@ export default function WalkInPanel({ queue, lookup, checkIn, reference }) {
           {/* Existing Patient Lookup (Module 7: patient record lookup) */}
           <Panel className="max-w-3xl p-6">
             <div className="border-b border-[#e6ebf1] pb-3 mb-4">
-              <h2 className="m-0 flex items-center gap-2 text-[15px] font-bold tracking-tight text-slate-900">
+              <h2 className="m-0 flex items-center gap-2 text-lead font-bold tracking-tight text-slate-900">
                 <Users className="h-4 w-4 text-brand-600" />
                 <span>Find Existing Patient</span>
               </h2>

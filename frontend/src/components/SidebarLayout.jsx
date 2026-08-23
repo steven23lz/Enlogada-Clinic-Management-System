@@ -19,6 +19,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { visibleMainNavItems, visibleOpsGroups, nativeRoleForNav, isBorrowedScreen } from '../config/navigation';
+import TextScaleControl from './ui/text-scale-control';
 
 // The shared shell for every staff and admin console.
 //
@@ -228,7 +229,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
         data-testid="nav-item"
         data-nav-id={item.id}
         className={cn(
-          'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 py-2 pl-3 pr-2.5 text-left text-[13px] font-medium transition-colors',
+          'group relative flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 py-2 pl-3 pr-2.5 text-left text-note font-medium transition-colors',
           isActive
             ? 'bg-brand-500/[0.16] font-semibold text-white'
             : 'bg-transparent text-slate-400 hover:bg-white/[0.05] hover:text-slate-100'
@@ -256,7 +257,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
       <div className="flex flex-shrink-0 items-center gap-2.5 px-3 pb-4 pt-1">
         <Logo className="h-8 w-8 flex-shrink-0" />
         <div className="flex min-w-0 flex-col leading-tight">
-          <span className="truncate text-[13px] font-bold tracking-tight text-white">Enlogada</span>
+          <span className="truncate text-note font-bold tracking-tight text-white">Enlogada</span>
           <span className="truncate text-micro font-medium uppercase tracking-[0.12em] text-slate-500">
             Diagnostic Clinic
           </span>
@@ -349,7 +350,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
     // until they scrolled back to the top. The rail is the one element that must never leave.
     <div className="flex h-screen overflow-hidden bg-canvas font-sans text-slate-800">
       {/* Desktop rail */}
-      <aside className="z-20 hidden h-full w-[248px] flex-shrink-0 flex-col border-r border-white/[0.06] bg-rail p-3 lg:flex">
+      <aside className="z-20 hidden h-full w-[15.5rem] flex-shrink-0 flex-col border-r border-white/[0.06] bg-rail p-3 lg:flex">
         {renderNavContent()}
         {accountButton}
       </aside>
@@ -358,7 +359,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
       {mobileOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-[2px]" onClick={() => setMobileOpen(false)} />
-          <div className="relative z-10 flex w-full max-w-[272px] flex-col bg-rail p-3 shadow-overlay">
+          <div className="relative z-10 flex w-full max-w-[17rem] flex-col bg-rail p-3 shadow-overlay">
             <button
               onClick={() => setMobileOpen(false)}
               aria-label="Close navigation"
@@ -410,19 +411,19 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
               <ol className="m-0 flex list-none items-center gap-1.5 p-0">
                 {activeOpsItem ? (
                   <>
-                    <li className="min-w-0 truncate text-[13px] font-semibold text-slate-800 sm:font-normal sm:text-slate-400">
+                    <li className="min-w-0 truncate text-note font-semibold text-slate-800 sm:font-normal sm:text-slate-400">
                       {activeOpsItem.groupLabel}
                     </li>
                     <li aria-hidden="true" className="hidden text-slate-300 sm:block">/</li>
                     <li
-                      className="hidden min-w-0 truncate text-[13px] font-semibold text-slate-800 sm:block"
+                      className="hidden min-w-0 truncate text-note font-semibold text-slate-800 sm:block"
                       aria-current="page"
                     >
                       {title}
                     </li>
                   </>
                 ) : (
-                  <li className="min-w-0 truncate text-[13px] font-semibold text-slate-800" aria-current="page">
+                  <li className="min-w-0 truncate text-note font-semibold text-slate-800" aria-current="page">
                     {title}
                   </li>
                 )}
@@ -440,6 +441,11 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
           </div>
 
           <div className="flex flex-shrink-0 items-center gap-2">
+            {/* Text size sits in the chrome, not buried in account settings: a shared reception
+                terminal is used by different people through the day and each needs it reachable
+                in one press. */}
+            <TextScaleControl className="hidden lg:inline-flex" />
+
             <span className="hidden items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-fine font-semibold text-slate-600 md:inline-flex">
               <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
               {todayLabel}
@@ -460,16 +466,16 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
                 {unreadCount > 0 && (
                   // A count, not a dot. "There is something" is barely more useful than nothing;
                   // "there are eleven" tells staff whether to open it now or after this patient.
-                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold tabular-nums text-white ring-2 ring-white">
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-nano font-bold tabular-nums text-white ring-2 ring-white">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </button>
 
               {showNotifications && (
-                <div className="animate-fade-in absolute right-0 mt-2 w-[340px] overflow-hidden rounded-xl border border-[#e6ebf1] bg-white shadow-float">
+                <div className="animate-fade-in absolute right-0 mt-2 w-[21.25rem] overflow-hidden rounded-xl border border-[#e6ebf1] bg-white shadow-float">
                   <div className="flex items-center justify-between border-b border-[#e6ebf1] px-4 py-2.5">
-                    <span className="text-[13px] font-bold text-slate-900">
+                    <span className="text-note font-bold text-slate-900">
                       Notifications
                       {unreadCount > 0 && (
                         <span className="ml-1.5 rounded bg-rose-50 px-1.5 py-0.5 text-micro font-bold text-rose-700">

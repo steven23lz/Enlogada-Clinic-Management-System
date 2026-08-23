@@ -25,7 +25,7 @@ export default function ElevatedAccountsPanel({ elevated }) {
   <div className="space-y-4">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
-        <h3 className="m-0 text-[15px] font-bold tracking-tight text-slate-900">Elevated Accounts (Admin / SuperAdmin)</h3>
+        <h3 className="m-0 text-lead font-bold tracking-tight text-slate-900">Elevated Accounts (Admin / SuperAdmin)</h3>
         <p className="m-0 mt-1 text-fine leading-relaxed text-slate-500">Select a status chip to activate or deactivate an account — the same gesture as Staff Accounts. You cannot deactivate your own, to prevent locking the clinic out of elevated administration.</p>
       </div>
       <Dialog open={elevated.showAdd} onOpenChange={(open) => { if (!open) elevated.closeAdd(); }}>

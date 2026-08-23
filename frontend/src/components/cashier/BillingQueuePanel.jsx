@@ -86,7 +86,7 @@ export default function BillingQueuePanel({ queue, checkout }) {
                     >
                       <span className="flex items-start justify-between gap-2">
                         <span className="min-w-0">
-                          <span className="block truncate text-[13px] font-semibold text-slate-900">{visit.first_name} {visit.last_name}</span>
+                          <span className="block truncate text-note font-semibold text-slate-900">{visit.first_name} {visit.last_name}</span>
                           <span className="block font-mono text-micro font-medium text-slate-400">{visit.queue_number || `V-${visit.id}`}</span>
                         </span>
                         <span className="flex flex-shrink-0 flex-col items-end gap-1">

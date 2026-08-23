@@ -62,7 +62,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
     <div>
       <div className="space-y-1">
         <h1 className="m-0 text-2xl font-bold tracking-tight text-slate-900">Create an Account</h1>
-        <p className="m-0 text-[13px] leading-relaxed text-slate-500">
+        <p className="m-0 text-note leading-relaxed text-slate-500">
           Register to access your clinic account
         </p>
       </div>
@@ -167,7 +167,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
         </form>
       </div>
 
-      <p className="mt-6 text-center text-[13px] text-slate-500">
+      <p className="mt-6 text-center text-note text-slate-500">
         Already have an account?{' '}
         <button
           onClick={onSwitchToLogin}

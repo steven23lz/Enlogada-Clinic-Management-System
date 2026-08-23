@@ -46,7 +46,7 @@ export default function CheckoutTerminal({ checkout, queue }) {
                 <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-[#e6ebf1] bg-white/95 px-6 py-4 backdrop-blur-sm">
                   <div className="min-w-0">
                     <span className="field-label">Now billing</span>
-                    <h2 className="m-0 truncate text-[15px] font-bold tracking-tight text-slate-900">
+                    <h2 className="m-0 truncate text-lead font-bold tracking-tight text-slate-900">
                       {checkout.bill.patientName}
                     </h2>
                     <span className="text-fine text-slate-500">

@@ -220,10 +220,10 @@ const DateRangeReports = () => {
 
       <Toolbar>
         <ToolbarField label="From" htmlFor="rep-from">
-          <DateField id="rep-from" presets={RANGE_PRESETS.start} value={startDate} onChange={(e) => setStartDate(e.target.value)} containerClassName="w-[150px]" />
+          <DateField id="rep-from" presets={RANGE_PRESETS.start} value={startDate} onChange={(e) => setStartDate(e.target.value)} containerClassName="w-[9.375rem]" />
         </ToolbarField>
         <ToolbarField label="To" htmlFor="rep-to">
-          <DateField id="rep-to" presets={RANGE_PRESETS.end} value={endDate} onChange={(e) => setEndDate(e.target.value)} containerClassName="w-[150px]" />
+          <DateField id="rep-to" presets={RANGE_PRESETS.end} value={endDate} onChange={(e) => setEndDate(e.target.value)} containerClassName="w-[9.375rem]" />
         </ToolbarField>
         <div className="flex items-end self-stretch">
           <Button variant="outline" onClick={() => fetchReport(startDate, endDate)}>
@@ -255,7 +255,7 @@ const DateRangeReports = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
           <CardHeader className="space-y-0.5 border-b border-[#e6ebf1] px-5 py-3.5">
-            <CardTitle className="text-[13px] font-semibold text-slate-900">Revenue Trend</CardTitle>
+            <CardTitle className="text-note font-semibold text-slate-900">Revenue Trend</CardTitle>
             <p className="text-fine text-gray-500 m-0">Total for range: <span className="font-bold text-slate-900">{formatCurrency(totalRevenue)}</span></p>
           </CardHeader>
           <CardContent className="p-5">
@@ -271,7 +271,7 @@ const DateRangeReports = () => {
 
         <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
           <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
-            <CardTitle className="text-[13px] font-semibold text-slate-900">Service Volume by Category</CardTitle>
+            <CardTitle className="text-note font-semibold text-slate-900">Service Volume by Category</CardTitle>
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
@@ -288,7 +288,7 @@ const DateRangeReports = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
           <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
-            <CardTitle className="text-[13px] font-semibold text-slate-900">Visit Status Breakdown</CardTitle>
+            <CardTitle className="text-note font-semibold text-slate-900">Visit Status Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
@@ -309,7 +309,7 @@ const DateRangeReports = () => {
 
         <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
           <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
-            <CardTitle className="text-[13px] font-semibold text-slate-900">Payment Method Breakdown</CardTitle>
+            <CardTitle className="text-note font-semibold text-slate-900">Payment Method Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
             <Table>
@@ -371,7 +371,7 @@ const RbacMatrixReport = () => {
     <div className="space-y-3">
       <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
         <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
-          <CardTitle className="flex items-center gap-2 text-[13px] font-semibold text-slate-900">
+          <CardTitle className="flex items-center gap-2 text-note font-semibold text-slate-900">
             <ShieldCheck className="w-4 h-4 text-brand-600" />
             <span>Roles &amp; Their Assigned Permissions</span>
           </CardTitle>
@@ -495,7 +495,7 @@ const StaffWorkload = () => {
         <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
           <CardHeader className="flex flex-row items-center gap-2.5 border-b border-[#e6ebf1] px-5 py-3.5">
             <Users className="w-4 h-4 text-brand-600" />
-            <CardTitle className="text-[13px] font-semibold text-slate-900">Reception — Check-Ins by Staff</CardTitle>
+            <CardTitle className="text-note font-semibold text-slate-900">Reception — Check-Ins by Staff</CardTitle>
           </CardHeader>
           <CardContent className="p-5 space-y-3">
             {loading ? (
@@ -526,7 +526,7 @@ const StaffWorkload = () => {
         <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
           <CardHeader className="flex flex-row items-center gap-2.5 border-b border-[#e6ebf1] px-5 py-3.5">
             <FlaskConical className="w-4 h-4 text-brand-600" />
-            <CardTitle className="text-[13px] font-semibold text-slate-900">Diagnostic — Results Released by Staff</CardTitle>
+            <CardTitle className="text-note font-semibold text-slate-900">Diagnostic — Results Released by Staff</CardTitle>
           </CardHeader>
           <CardContent className="p-5 space-y-3">
             {loading ? (
@@ -594,7 +594,7 @@ const OperationsReport = () => {
             presets={RANGE_PRESETS.start}
             value={range.startDate}
             onChange={(e) => setRange((r) => ({ ...r, startDate: e.target.value }))}
-            containerClassName="w-[150px]"
+            containerClassName="w-[9.375rem]"
           />
         </ToolbarField>
         <ToolbarField label="To" htmlFor="ops-to">
@@ -603,7 +603,7 @@ const OperationsReport = () => {
             presets={RANGE_PRESETS.end}
             value={range.endDate}
             onChange={(e) => setRange((r) => ({ ...r, endDate: e.target.value }))}
-            containerClassName="w-[150px]"
+            containerClassName="w-[9.375rem]"
           />
         </ToolbarField>
         <div className="flex items-end self-stretch">

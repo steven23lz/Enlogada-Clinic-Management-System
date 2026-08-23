@@ -42,7 +42,7 @@ import { formatCurrency } from '../lib/currency';
  */
 
 const Row = ({ label, value, strong = false, tone = 'default', small = false }) => (
-  <div className={`flex items-baseline justify-between gap-3 ${small ? 'text-[10px]' : 'text-[11px]'}`}>
+  <div className={`flex items-baseline justify-between gap-3 ${small ? 'text-micro' : 'text-meta'}`}>
     <span className={strong ? 'font-bold text-slate-900' : 'text-slate-500'}>{label}</span>
     <span
       className={`tabular-nums ${
@@ -84,7 +84,7 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
   const sampleIdentity = isSampleIdentity(CLINIC);
 
   return (
-    <div className="print-area mx-auto w-full max-w-[320px] bg-white p-4 font-sans text-slate-900">
+    <div className="print-area mx-auto w-full max-w-[20rem] bg-white p-4 font-sans text-slate-900">
       {/* Sample configuration, said before anything else and impossible to miss.
           The sample block exists so the layout can be reviewed with every field populated, which
           means at some point a real receipt will be printed from a machine still carrying it. The
@@ -92,22 +92,22 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
           that way too — it is inside .print-area, not marked no-print. */}
       {sampleIdentity && (
         <div className="mb-2 border-2 border-dashed border-rose-400 px-2 py-1 text-center">
-          <p className="m-0 text-[10px] font-extrabold uppercase tracking-widest text-rose-600">
+          <p className="m-0 text-micro font-extrabold uppercase tracking-widest text-rose-600">
             Sample configuration
           </p>
-          <p className="m-0 text-[9px] leading-snug text-rose-600">
+          <p className="m-0 text-nano leading-snug text-rose-600">
             Placeholder TIN / permit. Not valid for issue to a patient.
           </p>
         </div>
       )}
 
       <header className="text-center">
-        <h2 className="m-0 text-[13px] font-extrabold uppercase tracking-wide">{CLINIC.shortName}</h2>
-        <p className="m-0 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+        <h2 className="m-0 text-note font-extrabold uppercase tracking-wide">{CLINIC.shortName}</h2>
+        <p className="m-0 text-micro font-semibold uppercase tracking-wide text-slate-600">
           Ultrasound &amp; Diagnostic Clinic
         </p>
-        <p className="m-0 mt-1 text-[10px] leading-snug text-slate-500">{CLINIC.address}</p>
-        <p className="m-0 text-[10px] leading-snug text-slate-500">
+        <p className="m-0 mt-1 text-micro leading-snug text-slate-500">{CLINIC.address}</p>
+        <p className="m-0 text-micro leading-snug text-slate-500">
           {CLINIC.phone} · {CLINIC.email}
         </p>
         {/* Printed whenever set, independent of whether this qualifies as an Official Receipt —
@@ -116,31 +116,31 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
         {/* A sole proprietorship's receipts name the person behind the trade name, as the
             clinic's own booklet does ("JESIE B. ENLOGADA - Prop."). */}
         {CLINIC.proprietor && (
-          <p className="m-0 text-[10px] text-slate-500">{CLINIC.proprietor} &mdash; Prop.</p>
+          <p className="m-0 text-micro text-slate-500">{CLINIC.proprietor} &mdash; Prop.</p>
         )}
         {/* The Non-VAT designation travels WITH the TIN rather than sitting elsewhere, because
             that is how it appears on the registered booklet — "Non VAT Reg. TIN: ..." — and
             because the two facts are only meaningful together. */}
         {CLINIC.tin && (
-          <p className="m-0 text-[10px] font-semibold text-slate-600">
+          <p className="m-0 text-micro font-semibold text-slate-600">
             {isVatRegistered(CLINIC) ? 'TIN' : 'Non-VAT Reg. TIN'} {CLINIC.tin}
           </p>
         )}
         {CLINIC.businessPermit && (
-          <p className="m-0 text-[10px] text-slate-600">ATP/PTU {CLINIC.businessPermit}</p>
+          <p className="m-0 text-micro text-slate-600">ATP/PTU {CLINIC.businessPermit}</p>
         )}
         {CLINIC.accreditation && (
-          <p className="m-0 text-[10px] text-slate-600">PhilHealth {CLINIC.accreditation}</p>
+          <p className="m-0 text-micro text-slate-600">PhilHealth {CLINIC.accreditation}</p>
         )}
       </header>
 
       <Rule />
 
-      <p className="m-0 text-center text-[11px] font-bold uppercase tracking-[0.12em]">
+      <p className="m-0 text-center text-meta font-bold uppercase tracking-[0.12em]">
         {hasStatutoryIdentity(CLINIC) ? 'Official Receipt' : 'Payment Receipt'}
       </p>
       {reprint && (
-        <p className="m-0 mt-0.5 text-center text-[10px] font-bold uppercase tracking-widest text-rose-600">
+        <p className="m-0 mt-0.5 text-center text-micro font-bold uppercase tracking-widest text-rose-600">
           Reprint — duplicate copy
         </p>
       )}
@@ -160,10 +160,10 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
 
       {bill?.items?.length > 0 && (
         <>
-          <p className="m-0 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Services</p>
+          <p className="m-0 mb-1 text-micro font-bold uppercase tracking-wider text-slate-500">Services</p>
           <div className="space-y-0.5">
             {bill.items.map((item, i) => (
-              <div key={i} className="flex items-baseline justify-between gap-3 text-[11px]">
+              <div key={i} className="flex items-baseline justify-between gap-3 text-meta">
                 <span className="min-w-0 flex-1 truncate text-slate-700">{item.name}</span>
                 <span className="tabular-nums font-medium">{formatCurrency(item.price)}</span>
               </div>
@@ -206,8 +206,8 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
       <Rule />
 
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[12px] font-extrabold uppercase tracking-wide">Amount paid</span>
-        <span className="text-[15px] font-extrabold tabular-nums">{formatCurrency(net)}</span>
+        <span className="text-fine font-extrabold uppercase tracking-wide">Amount paid</span>
+        <span className="text-lead font-extrabold tabular-nums">{formatCurrency(net)}</span>
       </div>
 
       <Rule dashed />
@@ -229,7 +229,7 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
       <Rule />
 
       <footer className="space-y-1 text-center">
-        <p className="m-0 text-[10px] leading-snug text-slate-600">
+        <p className="m-0 text-micro leading-snug text-slate-600">
           Thank you. Please keep this receipt — it is required for any refund, and for claiming
           your results.
         </p>
@@ -238,7 +238,7 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
             tax against a document that cannot support it. Independent of the Official Receipt
             question below: this is about VAT status, that is about authority to issue. */}
         {!isVatRegistered(CLINIC) && (
-          <p className="m-0 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+          <p className="m-0 text-nano font-semibold uppercase tracking-wide text-slate-500">
             This document is not valid for claiming input taxes.
           </p>
         )}
@@ -249,11 +249,11 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
           // Reached when the TIN is missing, when the ATP/PTU is missing, or when either is still
           // a placeholder — a registered taxpayer without an authority to print cannot issue an
           // Official Receipt, so a TIN alone is not enough to drop this line.
-          <p className="m-0 text-[9px] leading-snug text-slate-400">
+          <p className="m-0 text-nano leading-snug text-slate-400">
             This is a payment acknowledgement, not a BIR-registered Official Receipt.
           </p>
         )}
-        <p className="m-0 text-[9px] text-slate-400">
+        <p className="m-0 text-nano text-slate-400">
           Printed {new Date().toLocaleString(undefined, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
         </p>
       </footer>
