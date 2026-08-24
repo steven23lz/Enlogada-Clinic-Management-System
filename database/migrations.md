@@ -1,5 +1,20 @@
 # Database Migration & Schema History
 
+## [1.47.1] - 2026-08-25 (The demo seeder outlived the departments it named)
+
+`seedDemoScenario.js` hardcoded all five categories in four places. Retiring 2D Echo and ECG in
+[1.47.0] therefore left `catalogue['2D Echo'][0].id` reading a property of `undefined`, and the
+seeder died with "Cannot read properties of undefined" — so the documented pre-demo step
+(`resetDemoData.js --confirm` then `seedDemoScenario.js`) was broken by the change and nothing in
+the suite covers it, because the seeder is tooling rather than app code.
+
+It derives the list now: `OFFERED` is whichever categories actually have active priced services,
+and the two places that named a specific one fall back to a category that exists. A demo seeder
+that cannot run is worse than one covering fewer departments, and which departments the clinic
+sells is not this script's fact to assert.
+
+Found by running it, not by reading it — the same reason the pre-demo step is documented at all.
+
 ## [1.47.0] - 2026-08-25 (2D Echo and ECG retired; packages become editable)
 
 No schema change.

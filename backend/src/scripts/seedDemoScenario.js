@@ -94,6 +94,17 @@ async function main() {
     ECG: byCategory('ECG'),
   };
 
+  // What the clinic ACTUALLY sells today, derived rather than restated.
+  //
+  // These five were hardcoded in four places, and [1.47.0] retired 2D Echo and ECG — so
+  // `catalogue['2D Echo'][0].id` became a read of undefined and the whole seeder died with
+  // "Cannot read properties of undefined". A demo seeder that cannot run is worse than one that
+  // covers fewer departments, and the clinic's offering is not this script's to assert.
+  const OFFERED = Object.keys(catalogue).filter((c) => catalogue[c].length > 0);
+  if (OFFERED.length === 0) throw new Error('No active priced services — run seedRealCatalogue.js first.');
+  /** A category that definitely has services, preferring the one asked for. */
+  const offered = (preferred) => (catalogue[preferred]?.length ? preferred : OFFERED[0]);
+
   // Preparation instructions on the tests that really need them [1.24.0], so a demo shows the
   // amber note in the booking wizard and the "Before your appointment" block in the confirmation
   // email. Matched by name fragment rather than by id — the catalogue is clinic-edited and ids
@@ -284,7 +295,7 @@ async function main() {
   // 2. A senior citizen and a PWD awaiting payment, so the statutory discount and its
   //    VAT-exempt arithmetic are visible on the cashier screen rather than hypothetical.
   for (const [d, label] of [[senior, 'Senior Citizen'], [pwd, 'PWD']]) {
-    const v = await makeVisit({ category: '2D Echo' });
+    const v = await makeVisit({ category: offered('2D Echo') });
     await call(`/discounts/visit/${v.visit.id}`, {
       method: 'POST', token: tok.cashier,
       body: { discountTypeId: d.id, idNumber: label === 'PWD' ? 'PWD-2026-0042' : 'OSCA-2026-0117' },
@@ -315,7 +326,7 @@ async function main() {
   // the worklist now shows "Ref: Dr. …" beside the test — without one on any live ticket the
   // column is permanently blank and the feature is invisible in a demo. Varied by index so the
   // screen shows more than one name.
-  for (const [i, category] of ['Laboratory', 'Xray', 'Ultrasound', 'ECG'].entries()) {
+  for (const [i, category] of ['Laboratory', 'Xray', 'Ultrasound', 'ECG'].filter((c) => catalogue[c].length).entries()) {
     const v = await makeVisit({ category, testIndex: 1, referrerIndex: i });
     await payFor(v, pick(COUNTER_METHODS, today.length));
     today.push(v);
@@ -394,7 +405,7 @@ async function main() {
   // Without this the revenue trend, staff workload and every date-range report are empty, which
   // reads as broken rather than new.
   const historical = [];
-  const CATEGORIES = ['Laboratory', 'Xray', 'Ultrasound', '2D Echo', 'ECG'];
+  const CATEGORIES = OFFERED;
   for (let daysAgo = 14; daysAgo >= 1; daysAgo--) {
     // Two or three visits a day, varying so the trend line is not a flat bar.
     const perDay = 2 + (daysAgo % 2);
