@@ -27,7 +27,6 @@ const PublicFooter = ({ onNavigate }) => {
             <li className="hover:text-white cursor-pointer transition-colors" onClick={() => onNavigate && onNavigate('services')}>Ultrasound Services</li>
             <li className="hover:text-white cursor-pointer transition-colors" onClick={() => onNavigate && onNavigate('services')}>Laboratory Testing</li>
             <li className="hover:text-white cursor-pointer transition-colors" onClick={() => onNavigate && onNavigate('services')}>Digital X-Ray</li>
-            <li className="hover:text-white cursor-pointer transition-colors" onClick={() => onNavigate && onNavigate('services')}>2D Echo & ECG</li>
           </ul>
         </div>
 

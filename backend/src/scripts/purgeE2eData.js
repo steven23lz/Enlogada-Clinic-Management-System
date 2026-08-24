@@ -186,6 +186,23 @@ async function main() {
         AND NOT EXISTS (SELECT 1 FROM test_package_items pi WHERE pi.test_id = t.id)`
   );
 
+  // Package fixtures, for the same reason and with the same rule: only ones nothing references.
+  // packages.spec.js creates a bundle to prove who may price one, and a package left behind is a
+  // fake deal sitting in the admin catalogue and, if it were still active, on the public price
+  // list. Items go first — they are the child rows.
+  await db.query(
+    `DELETE FROM test_package_items
+      WHERE package_id IN (
+        SELECT p.id FROM test_packages p
+         WHERE p.name LIKE 'E2E %'
+           AND NOT EXISTS (SELECT 1 FROM visit_tests vt WHERE vt.package_id = p.id))`
+  );
+  await db.query(
+    `DELETE FROM test_packages p
+      WHERE p.name LIKE 'E2E %'
+        AND NOT EXISTS (SELECT 1 FROM visit_tests vt WHERE vt.package_id = p.id)`
+  );
+
   // Notifications the run itself generated. These are addressed to the seeded STAFF accounts —
   // a test payment notifies the real cashier and superadmin — so deleting the throwaway client
   // accounts above leaves them behind entirely. That was the last remaining leak: ~200 rows per

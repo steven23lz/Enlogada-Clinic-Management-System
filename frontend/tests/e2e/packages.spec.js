@@ -199,6 +199,80 @@ test.describe('Package deals', () => {
     await api.dispose();
   });
 
+  test('only staff who may price a test may price a package', async () => {
+    const api = await request.newContext();
+    const superadmin = await loginAs(api, { email: 'admin@enlogada.com', password: 'Password123!' });
+    const reception = await loginAs(api, RECEPTIONIST);
+
+    const tests = (await (await api.get(`${API}/tests`)).json()).data.tests;
+    const two = [tests[0].id, tests[1].id];
+    // 'E2E ' prefix so purgeE2eData.js removes it — a package this spec creates would otherwise
+    // accumulate in the catalogue one per run, which is the bug [1.46.0] fixed for test rows.
+    const body = { name: 'E2E Package Probe', price: 100, testIds: two };
+
+    // Reception books packages all day and must not be able to reprice one — that is the same
+    // authority as changing a test's price, and it is deliberately the same permission.
+    const refused = await api.post(`${API}/packages`, {
+      headers: { Authorization: `Bearer ${reception}` },
+      data: { ...body, code: `RX${Date.now()}`.slice(0, 12) },
+    });
+    expect(refused.status()).toBe(403);
+
+    // Anonymous cannot even read the management list, which exposes retired packages.
+    expect((await api.get(`${API}/packages/manage`)).status()).toBe(401);
+    expect((await api.get(`${API}/packages/manage`, {
+      headers: { Authorization: `Bearer ${reception}` },
+    })).status()).toBe(403);
+
+    const code = `SP${Date.now()}`.slice(0, 12);
+    const created = await api.post(`${API}/packages`, {
+      headers: { Authorization: `Bearer ${superadmin}` },
+      data: { ...body, code },
+    });
+    expect(created.status()).toBe(201);
+    const id = (await created.json()).data.package.id;
+
+    // Reprice and retire, which is the whole point of the screen.
+    const updated = await api.patch(`${API}/packages/${id}`, {
+      headers: { Authorization: `Bearer ${superadmin}` },
+      data: { price: 250, isActive: false },
+    });
+    expect(updated.status()).toBe(200);
+    expect(Number((await updated.json()).data.package.price)).toBe(250);
+
+    // A retired package must not be offered to patients, and must still be visible to whoever
+    // retired it — otherwise it cannot be brought back.
+    const publicCodes = (await (await api.get(`${API}/packages`)).json()).data.packages.map((p) => p.code);
+    expect(publicCodes).not.toContain(code);
+    const mgmtCodes = (await (await api.get(`${API}/packages/manage`, {
+      headers: { Authorization: `Bearer ${superadmin}` },
+    })).json()).data.packages.map((p) => p.code);
+    expect(mgmtCodes).toContain(code);
+
+    // A retired package cannot be booked either — the check is on the server, not the screen.
+    const visit = await makeWalkIn(api, await loginAs(api, RECEPTIONIST));
+    const attach = await api.post(`${API}/tests/visit-tests`, {
+      headers: { Authorization: `Bearer ${reception}` },
+      data: { patientVisitId: visit.id, packageIds: [id] },
+    });
+    expect(attach.status()).toBe(400);
+
+    await api.dispose();
+  });
+
+  test('a bundle of one test is refused — that is just a test', async () => {
+    const api = await request.newContext();
+    const superadmin = await loginAs(api, { email: 'admin@enlogada.com', password: 'Password123!' });
+    const tests = (await (await api.get(`${API}/tests`)).json()).data.tests;
+
+    const res = await api.post(`${API}/packages`, {
+      headers: { Authorization: `Bearer ${superadmin}` },
+      data: { code: `X${Date.now()}`.slice(0, 12), name: 'E2E Solo Probe', price: 100, testIds: [tests[0].id] },
+    });
+    expect(res.status()).toBe(400);
+    await api.dispose();
+  });
+
   test('a bad package id is refused, and nothing is half-attached', async () => {
     const api = await request.newContext();
     const token = await loginAs(api, RECEPTIONIST);

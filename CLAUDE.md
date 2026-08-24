@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Enlogada Clinic Management System — an enterprise diagnostic healthcare platform for human diagnostic services only (Ultrasound, Laboratory, Digital X-Ray, 2D Echo, ECG). Veterinary/pet functionality was fully removed; do not reintroduce it.
+Enlogada Clinic Management System — an enterprise diagnostic healthcare platform for human diagnostic services only (**Ultrasound, Laboratory, Digital X-Ray**). Veterinary/pet functionality was fully removed; do not reintroduce it.
+
+**2D Echo and ECG are not offered.** `[1.47.0]` The clinic confirmed this. Their tests are
+deactivated and they are gone from all public copy — but the `test_categories` rows, the
+`modality.js` mappings, the category colours and the portal's result filters all REMAIN, because 18
+historical `visit_tests` point at them and a past visit has to keep being able to say what it was
+for. Do not "finish the job" by deleting the categories.
 
 Stack: React 19 (Vite, Tailwind CSS v4) frontend + Node.js/Express 5 backend + PostgreSQL.
 
@@ -116,7 +122,7 @@ The E2E suite creates a throwaway client, patient, visit and payment on every ru
 
 The worst of it is `notification_reads`, which is a **fan-out** table: `notifyRoles` writes one row per recipient per event, so its size is events × staff, not events. Because the suite also created staff and elevated accounts that were never cleaned up (137 Cashiers, 89 Admins, 45 SuperAdmins had accumulated), both factors grew at once and the table reached 255,540 rows across 4,309 events in five days — average fan-out 60, peak 181, with 99.4% never read by anyone. After a reset the same fan-out is 3. Production will not see the runaway staff count, but it has no retention either: 20 staff × 200 events/day is ~1.5M rows a year, growing forever. Schedule `pruneNotifications.js` (default: read 30d, unread 90d) in any environment that runs longer than a demo.
 
-There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 34 Playwright specs (205 tests, ~255s) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
+There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 34 Playwright specs (207 tests, ~260s) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
 
 The suite is a deliberately small demo-and-regression net, not exhaustive coverage: smoke, security boundaries (`api-authorization.spec.js` — Admin-vs-SuperAdmin separation of duties, combined-role access, and the cross-role PHI boundaries), ticket-release gating, payments, laboratory results, statutory discounts (`discounts.spec.js`), result amendment history and critical values (`result-versioning.spec.js`), password-change session revocation (`session-revocation.spec.js`), account lockout and PHI read auditing (`login-protection.spec.js`), permission-matrix enforcement (`rbac-enforcement.spec.js`), department-scoped patient records (`department-scoping.spec.js`), the per-department operations report (`operations-report.spec.js`), atomic online booking with its HMO card evidence rule (`booking-atomicity.spec.js`), the two dialogs that feature added (`hmo-card-review.spec.js` — because a card that uploads correctly and then renders as a broken image on the approval screen is a working feature failing at its job), moving a booking rather than cancelling it (`appointment-reschedule.spec.js`, plus `reschedule-ui.spec.js` for the dialog), when a visit must name the doctor who requested the test (`referring-physician.spec.js`), correcting a patient record (`patient-edit.spec.js` / `patient-edit-ui.spec.js`), what the patient is told about their own booking (`booking-communication.spec.js`), that the ETag revalidation cache never hides a change (`revalidation.spec.js`), that each role can see what it needs on the screen where it acts (`workflow-context.spec.js`), registering a walk-in in one pass (`walkin-registration.spec.js`), the patient journey at phone width (`mobile-patient.spec.js`), what an HMO decision has to record before it counts as one (`hmo-decision-trail.spec.js` — a refusal that names no reason leaves the cashier explaining a charge nobody wrote down), the three-step claim workflow itself (`hmo-claim-handoff.spec.js` — reception raises it, an Admin decides it, and the cashier has to be TOLD), and that a failed request never renders as an empty one (`failure-states.spec.js` — six screens shipped without an error branch, so a 500 fell through to the empty state and the app stated "Today's Revenue ₱0.00" over a day that took ₱8,344), and that a reversed receipt is both still listed and not counted (`cashup-reversals.spec.js` — see the note under Architecture; the log and the money are two different questions, and this spec fails if either half is answered with the other), and that the reader's chosen text size scales the whole interface without inverting its own type ramp (`text-scale.spec.js` — a pixel-pinned font size looks perfect at the default and misbehaves only for the people who changed it), and that a package deal bills its own fixed price rather than the sum of its parts, with every component reaching its own department (`packages.spec.js` — a bundle that costs more than buying the parts separately is a surcharge wearing the word "package"), and that updating a service does not delete the fields the caller did not mention (`catalogue-partial-update.spec.js` — the status toggle used to wipe a test's patient preparation, which is the sentence the day-before reminder carries). It was cut down from ~200 tests once the module-by-module build-out finished; the rest asserted UI copy that legitimately keeps changing. Prefer adding a focused spec over reviving deleted ones from git history.
 
@@ -296,12 +302,20 @@ not.
 
 **The catalogue holds the clinic's real prices** — loaded by `node src/scripts/seedRealCatalogue.js`
 (dry-run by default, `--confirm` to write) from the printed price lists. `[1.45.0]` covers
-Laboratory, Ultrasound and X-Ray plus the five package deals; **2D Echo and ECG still carry demo
-prices**, because no sheet for them has been supplied. It updates rows in place rather than
+Laboratory, Ultrasound and X-Ray plus the five package deals. **2D Echo and ECG are deactivated**
+— the clinic does not offer them. It updates rows in place rather than
 replacing them, because `visit_tests.price_at_time` snapshots the sale price and historical rows
 point at these ids; a demo row with no equivalent on a sheet is **deactivated, never deleted**.
 Do not assert a literal price in a spec — read it from `GET /api/tests`, as
 `booking-communication.spec.js` does.
+
+**Packages are managed on Services Catalog, behind `tests:manage`.** `[1.47.0]` Deliberately the
+same permission that governs pricing a test, because a package IS a price — a separate one would
+have to be granted alongside it every time, and the first omission produces an admin who can
+reprice a test but not the bundle containing it. `GET /packages` is public and active-only;
+`GET /packages/manage` is staff-only and includes retired ones. Retiring is not deleting: the rows
+stay so booked visits keep their price, it just stops being offered. The server refuses a bundle of
+fewer than two tests and refuses to book a retired one.
 
 **A package is not a `tests` row, and cannot be.** `[1.45.0]` A row has one `category_id` and that
 is what routes work to a department worklist — every bundle spans Laboratory *and* Ultrasound, so
@@ -331,7 +345,7 @@ that quietly does not run reads exactly like one that passed. Use the local-date
 
 **Numbers that must be unique** (queue tickets, receipt numbers) come from `daily_counters` via `INSERT … ON CONFLICT DO UPDATE … RETURNING`, never from `SELECT COUNT(*) + 1`. Counting rows is not a sequence: it races under concurrency, and it rewinds when a row is cancelled or refunded, reissuing a number already handed to a patient. Unique indexes back all three invariants. Core flow through the tables:
 
-`users` → `patients` (1:N via `user_id` — one account owns several profiles, e.g. a parent booking for dependents; `GET /patients/my-profiles` is plural for this reason, and ownership checks must compare per-patient rather than resolving a user to a single patient) → `patient_visits` (a clinic visit/queue entry) → `visit_tests` (tests attached to a visit, priced via `price_at_time`) → `test_results` (findings/file per visit_test, released by staff) and `payments` (billed against a visit). `appointments` link to a `patient_visit`. `hmo_requests` link a visit to an `hmo_providers` approval flow. `tests` belong to a `test_categories` row (Laboratory/Xray/Ultrasound/2D Echo/ECG) and have an `is_active` flag that controls public visibility.
+`users` → `patients` (1:N via `user_id` — one account owns several profiles, e.g. a parent booking for dependents; `GET /patients/my-profiles` is plural for this reason, and ownership checks must compare per-patient rather than resolving a user to a single patient) → `patient_visits` (a clinic visit/queue entry) → `visit_tests` (tests attached to a visit, priced via `price_at_time`) → `test_results` (findings/file per visit_test, released by staff) and `payments` (billed against a visit). `appointments` link to a `patient_visit`. `hmo_requests` link a visit to an `hmo_providers` approval flow. `tests` belong to a `test_categories` row (Laboratory/Xray/Ultrasound, plus the retired 2D Echo/ECG that only history uses) and have an `is_active` flag that controls public visibility.
 
 **Polling revalidates rather than refetching.** Four screens poll to stay live, and a measured
 idle reception terminal made 240 requests and pulled ~1.5 MB an hour — roughly 500,000 requests

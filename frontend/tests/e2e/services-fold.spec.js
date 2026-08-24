@@ -33,8 +33,10 @@ test('every department is listed, and a long one is not truncated', async ({ pag
     await expect(lab.getByText(name, { exact: true }).first(), `${name} must be listed`).toBeVisible();
   }
 
-  // And the small departments are still there — a layout tuned for the long one must not drop them.
-  await expect(page.locator('section[aria-labelledby="cat-ECG"]')).toBeVisible();
+  // And the other departments are still there — a layout tuned for the long one must not drop
+  // them. This was ECG, the one-test department, until [1.47.0] retired 2D Echo and ECG because
+  // the clinic does not offer them; Ultrasound is the shortest list now.
+  await expect(page.locator('section[aria-labelledby="cat-Ultrasound"]')).toBeVisible();
 });
 
 test('search narrows the catalogue and can be cleared', async ({ page }) => {
@@ -46,7 +48,8 @@ test('search narrows the catalogue and can be cleared', async ({ page }) => {
 
   await expect(page.getByText('Urinalysis', { exact: true }).first()).toBeVisible();
   // A department with no match should drop out entirely rather than render an empty shell.
-  await expect(page.locator('section[aria-labelledby="cat-ECG"]')).toHaveCount(0);
+  // No ultrasound service contains the string "urinalysis", so the whole section must go.
+  await expect(page.locator('section[aria-labelledby="cat-Ultrasound"]')).toHaveCount(0);
 
   // A search that matches nothing must say so — an empty page and a broken page look identical.
   await search.fill('zzzznotathing');
@@ -55,7 +58,7 @@ test('search narrows the catalogue and can be cleared', async ({ page }) => {
 
   await search.fill('');
   await page.waitForTimeout(300);
-  await expect(page.locator('section[aria-labelledby="cat-ECG"]')).toBeVisible();
+  await expect(page.locator('section[aria-labelledby="cat-Ultrasound"]')).toBeVisible();
 });
 
 test('preparation instructions travel with the test', async ({ page }) => {

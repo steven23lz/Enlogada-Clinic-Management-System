@@ -54,7 +54,7 @@ const AboutUs = ({ onNavigate }) => {
             <h2 className="text-xl font-bold text-slate-900 m-0">Our Story</h2>
             <p className="text-sm text-gray-600 leading-relaxed m-0">
               Enlogada Ultrasound &amp; Diagnostic Clinic was founded to bring hospital-grade diagnostic
-              services — laboratory testing, digital X-ray, ultrasound, 2D Echo, and ECG — to patients
+              services — laboratory testing, digital X-ray, and ultrasound — to patients
               without the wait times and overhead of a full hospital visit. We serve walk-in patients,
               scheduled appointments, and HMO-referred cases side by side, under one roof.
             </p>

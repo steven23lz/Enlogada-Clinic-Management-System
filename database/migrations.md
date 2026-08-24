@@ -1,5 +1,63 @@
 # Database Migration & Schema History
 
+## [1.47.0] - 2026-08-25 (2D Echo and ECG retired; packages become editable)
+
+No schema change.
+
+### 2D Echo and ECG are not offered
+
+The clinic confirmed it does not do them. Their three tests are **deactivated**, not deleted, and
+the `test_categories` rows stay — 18 historical `visit_tests` point at them, and a past visit has to
+keep being able to say what it was for. `modality.js`, the category colours and the portal's result
+filters all keep their entries for the same reason. Removed from the public copy that advertised
+them: the Home hero's service list, the About Us founding sentence, and the footer's services
+column. The public price list and the booking picker read only active rows, so both dropped them on
+their own.
+
+`services-fold.spec.js` used ECG as its "small department" example in three assertions. Repointed to
+Ultrasound — the property it tests (a layout tuned for the long department must not drop the others)
+is unchanged; only the example was retired.
+
+### Packages were read-only, which made them half a feature
+
+`[1.45.0]` shipped `GET /api/packages` and nothing else. An admin who could already reprice every
+individual test could not touch the bundle those tests are sold in — the only way to change a
+package price or its contents was to edit `seedRealCatalogue.js` and re-run it.
+
+Now `POST /packages`, `PUT/PATCH /packages/:id`, and `GET /packages/manage`, all behind
+**`tests:manage`** — deliberately the same permission that governs pricing a test, because a package
+IS a price. A separate permission would have to be granted alongside it every time, and the first
+time somebody forgot there would be an admin who could reprice a test but not the bundle containing
+it. Admin and SuperAdmin hold it; Reception and Client get 403.
+
+Two guards on the server, not just the screen: a bundle of fewer than two tests is refused (that is
+just a test), and a retired package cannot be booked.
+
+### One bug caught before it shipped
+
+The management listing was first a `?includeInactive=true` flag on the public route. That route runs
+no `verifyToken`, so `req.user` is undefined even when a caller sends a perfectly good token — the
+flag was **silently always false**, and the management screen would have shown an incomplete list
+with nothing to indicate why. An authorisation decision needs middleware that actually runs, so it
+is its own route now.
+
+`packageRepository.update` COALESCEs per column, so a caller sending only `isActive` cannot blank
+the description — the `testRepository.updateTest` trap, avoided in advance rather than after.
+
+### The purge grew again
+
+`packages.spec.js` creates a bundle to prove who may price one. Named `E2E …` and removed by
+`purgeE2eData.js`, exactly as the catalogue fixtures now are — a package left behind is a fake deal
+sitting in the admin catalogue and, if it were still active, on the public price list.
+
+### A correction
+
+The handwriting beside the package panel is a list of **individual prices**, not a breakdown of
+Package E — this repo had it the wrong way round. Package E keeps its printed ₱2,050. "HIV 500" is
+loaded. Two remain open and are printed by the seed script every run: "TVS-300" contradicts the 2025
+ultrasound sheet's printed ₱700 (the printed figure was loaded), and "PB-1,200" is an abbreviation
+this repo cannot resolve.
+
 ## [1.46.0] - 2026-08-24 (Test data that looks like a clinic)
 
 No schema change. Test tooling only.

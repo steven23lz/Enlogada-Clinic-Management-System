@@ -1,5 +1,6 @@
 const packageRepository = require('../repositories/packageRepository');
 const testRepository = require('../repositories/testRepository');
+const db = require('../config/database');
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
@@ -30,28 +31,79 @@ const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 class PackageService {
   /** Active packages, shaped one object per package with a `tests` array. */
   async listActive() {
-    const rows = await packageRepository.findActiveWithItems();
+    return this.shape(await packageRepository.findActiveWithItems());
+  }
+
+  /** Every package, retired ones included, for the management screen. */
+  async listAll() {
+    return this.shape(await packageRepository.findAllWithItems(), true);
+  }
+
+  /** Rows (one per component) -> one object per package with a `tests` array. */
+  shape(rows, includeInactive = false) {
     const byId = new Map();
     for (const r of rows) {
       if (!byId.has(r.id)) {
         byId.set(r.id, {
-          id: r.id,
-          code: r.code,
-          name: r.name,
-          price: r.price,
+          id: r.id, code: r.code, name: r.name, price: r.price,
           description: r.description,
+          ...(includeInactive ? { isActive: r.is_active } : {}),
           tests: [],
         });
       }
-      byId.get(r.id).tests.push({
-        id: r.test_id,
-        name: r.test_name,
-        price: r.test_price,
-        preparation: r.test_preparation,
-        categoryName: r.category_name,
-      });
+      // LEFT JOIN: a package with no components yet yields one row of nulls, and it is a real
+      // package that the screen has to be able to show and finish.
+      if (r.test_id) {
+        byId.get(r.id).tests.push({
+          id: r.test_id, name: r.test_name, price: r.test_price,
+          preparation: r.test_preparation, categoryName: r.category_name,
+        });
+      }
     }
     return [...byId.values()];
+  }
+
+  /**
+   * Create or update a package and its component list together, in one transaction.
+   *
+   * Together, because a package IS its price plus its components: committing one without the other
+   * leaves a bundle that charges for work it no longer contains, or contains work it does not
+   * charge for. Both are wrong in a way that reaches a patient's bill.
+   */
+  async save(id, { code, name, price, description, isActive, testIds }) {
+    if (testIds !== undefined) {
+      const unique = [...new Set(testIds.map((t) => parseInt(t, 10)))];
+      if (unique.length < 2) {
+        const error = new Error('A package needs at least two tests — otherwise it is just a test.');
+        error.statusCode = 400;
+        throw error;
+      }
+      const found = await testRepository.findTestsByIds(unique);
+      const missing = unique.filter((tid) => !found.some((t) => t.id === tid));
+      if (missing.length) {
+        const error = new Error(`Test${missing.length > 1 ? 's' : ''} with ID ${missing.join(', ')} not found`);
+        error.statusCode = 404;
+        throw error;
+      }
+    }
+
+    return await db.withTransaction(async () => {
+      let pkg;
+      if (id) {
+        pkg = await packageRepository.update(id, { code, name, price, description, isActive });
+        if (!pkg) {
+          const error = new Error(`Package ${id} not found`);
+          error.statusCode = 404;
+          throw error;
+        }
+      } else {
+        pkg = await packageRepository.create({ code, name, price, description });
+      }
+      if (testIds !== undefined) {
+        await packageRepository.setItems(pkg.id, [...new Set(testIds.map((t) => parseInt(t, 10)))]);
+      }
+      return pkg;
+    });
   }
 
   /**

@@ -60,9 +60,10 @@ const CATALOGUE = {
     ['FT3', 800.00, ''],
     ['FT4', 800.00, ''],
 
-    // Not on the PRINTED list, but handwritten on the package panel: "HIV 500". Confirmed by the
-    // clinic, and it is what makes the five bundles coherent — at 0.00 four of them totalled MORE
-    // than their own components, which is not a package deal.
+    // Not on the PRINTED list. Handwritten beside the package panel as "HIV 500" — which the
+    // clinic confirmed is an INDIVIDUAL price noted there, not a component breakdown of Package E.
+    // It is also what makes the five bundles coherent: at 0.00 four of them totalled MORE than
+    // their own components, which is not a package deal.
     ['HIV Screening', 500.00, ''],
   ],
 
@@ -134,6 +135,15 @@ const SUPERSEDE = {
   'Abdominal Ultrasound': 'the sheet splits this into Upper / Lower / Whole Abdomen at different prices',
   'Breast Ultrasound': 'not on the 2025 ultrasound sheet — carried a demo price',
   'Abdominal X-Ray': 'the sheet distinguishes Supine & Upright (1300) from Flat Plate & Upright (1200)',
+
+  // The clinic does not offer these. Deactivated rather than deleted, and the '2D Echo' and 'ECG'
+  // CATEGORIES stay: 18 historical visit_tests point at these rows, and dropping the category would
+  // leave those visits unable to say what they were for. Deactivating is enough to achieve what was
+  // actually asked — nothing new can be booked, and they disappear from the public price list and
+  // the booking picker, both of which read only active rows.
+  'Pediatric 2D Echo': 'the clinic does not offer 2D Echo',
+  'Plain 2D Echo with Doppler': 'the clinic does not offer 2D Echo',
+  '12 Lead ECG': 'the clinic does not offer ECG',
 };
 
 // code, name, price, [component test names]. Component names must match CATALOGUE exactly.
@@ -254,10 +264,10 @@ async function main() {
     console.log(`
   !! ${upsideDown.length} of ${PACKAGES.length} packages cost MORE than their components at list price:`);
     upsideDown.forEach(([n, by]) => console.log(`       ${n} is ${money(by)} more expensive than buying the parts`));
-    console.log('     Every one of them contains HIV Screening, loaded at 0.00 because no sheet');
-    console.log('     gives it a standalone price. The Package E panel carries a handwritten');
-    console.log('     "HIV 500" — and at 500 all five become real savings (A +200, B +190, C +190,');
-    console.log('     D +50, E +590). Strong corroboration, but still the clinic to confirm.');
+    console.log('     Every one of them contains HIV Screening. If it is loaded at 0.00 this is');
+    console.log('     what you see: the clinic gives HIV an individual price of 500 (handwritten');
+    console.log('     beside the package panel), and at 500 all five become real savings');
+    console.log('     (A +200, B +190, C +190, D +50, E +590).');
     console.log('     PRICING HIV RESOLVES THIS. No patient is affected meanwhile: a package sells');
     console.log('     at its own fixed price, never at the sum of its parts.');
   }
@@ -340,9 +350,13 @@ async function main() {
   console.log(`  ${'Packages'.padEnd(12)} ${String(pkgCount[0].n).padStart(3)} active`);
 
   console.log('\nSTILL NEEDED FROM THE CLINIC:');
-  console.log('  * Package E is PRINTED at 2050, with handwriting beside it totalling 2000');
-  console.log('    (PB 1,200 + HIV 500 + TVS 300). The PRINTED price is what was loaded —');
-  console.log('    confirm whether 2000 is a revised price or a one-off quote.');
+  console.log('  * The handwriting beside the package panel is a list of INDIVIDUAL prices, not a');
+  console.log('    breakdown of Package E — confirmed by the clinic. Package E keeps its printed');
+  console.log('    2050. Two of the three are still open:');
+  console.log('      - "TVS-300" contradicts the 2025 ultrasound sheet, which prints');
+  console.log('        Trans-vaginal (TVS) at 700. The PRINTED 700 was loaded. Which is current?');
+  console.log('      - "PB-1,200" is an abbreviation this repo cannot resolve. Nothing loaded.');
+  console.log('    ("HIV 500" is the third, and is loaded.)');
   console.log('  * The three deactivated demo services listed above — re-enable with a real price');
   console.log('    if the clinic does offer them.');
   console.log('  * "FOOT APL / APOL-200 ... 400/200 = 600" is handwritten on the X-ray sheet.');
@@ -350,7 +364,8 @@ async function main() {
   console.log('  * "CHEST PAL" and "CHEST APL" are both printed at 500 and look like the same view.');
   console.log('    Both loaded as printed — confirm whether one should go.');
   console.log('  * Package C reads "FBS/RBS"; FBS was carried (both are 190).');
-  console.log('  * 2D Echo and ECG are on no sheet supplied, so they keep their current prices.');
+  console.log('  * 2D Echo and ECG are DEACTIVATED — the clinic does not offer them. The');
+  console.log('    categories remain so historical results can still say what they were.');
   process.exit(0);
 }
 

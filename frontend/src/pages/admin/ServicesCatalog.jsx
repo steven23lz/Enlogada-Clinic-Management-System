@@ -6,10 +6,13 @@ import { Layers, Plus, RefreshCw } from 'lucide-react';
 import ServicesTablePanel from '../../components/admin/ServicesTablePanel';
 import ServiceFormDialog from '../../components/admin/ServiceFormDialog';
 import HmoProvidersPanel from '../../components/admin/HmoProvidersPanel';
+import PackagesPanel from '../../components/admin/PackagesPanel';
+import PackageFormDialog from '../../components/admin/PackageFormDialog';
 import HmoProviderFormDialog from '../../components/admin/HmoProviderFormDialog';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { useTestCatalogue } from '../../hooks/useTestCatalogue';
 import { useHmoProviderAdmin } from '../../hooks/useHmoProviderAdmin';
+import { usePackageAdmin } from '../../hooks/usePackageAdmin';
 
 /**
  * What the clinic sells, and who it bills.
@@ -20,6 +23,7 @@ import { useHmoProviderAdmin } from '../../hooks/useHmoProviderAdmin';
 const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
   const catalogue = useTestCatalogue();
   const hmoAdmin = useHmoProviderAdmin();
+  const packageAdmin = usePackageAdmin();
 
   return (
     <SidebarLayout title="Services Catalog Management" activeNav={activeNav} onSelectNav={onSelectNav}>
@@ -45,7 +49,24 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
         />
 
         <ServicesTablePanel catalogue={catalogue} />
+        <PackagesPanel packageAdmin={packageAdmin} />
         <HmoProvidersPanel hmoAdmin={hmoAdmin} />
+
+        <PackageFormDialog packageAdmin={packageAdmin} />
+        <ConfirmDialog
+          open={!!packageAdmin.confirmTarget}
+          onOpenChange={(open) => { if (!open) packageAdmin.dismissToggle(); }}
+          title={packageAdmin.confirmTarget?.isActive ? 'Retire Package' : 'Offer Package Again'}
+          description={packageAdmin.confirmTarget && (
+            packageAdmin.confirmTarget.isActive
+              ? `Stop offering "${packageAdmin.confirmTarget.name}"? It disappears from the public price list and the booking form immediately. Visits already booked against it are untouched and keep their price.`
+              : `Offer "${packageAdmin.confirmTarget.name}" again? It reappears on the public price list and the booking form.`
+          )}
+          confirmLabel={packageAdmin.confirmTarget?.isActive ? 'Retire' : 'Offer again'}
+          onConfirm={packageAdmin.confirmToggle}
+          loading={packageAdmin.toggling}
+          error={packageAdmin.toggleError}
+        />
 
         <HmoProviderFormDialog hmoAdmin={hmoAdmin} />
         <ConfirmDialog

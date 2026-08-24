@@ -4,17 +4,18 @@ import PublicFooter from '../../components/PublicFooter';
 import PageShell from '../../components/ui/page-shell';
 import Logo from '../../components/Logo';
 import { Button } from '../../components/ui/button';
-import { ShieldCheck, Clock, Award, ChevronRight, Stethoscope, FlaskConical, Scan, HeartPulse, Activity } from 'lucide-react';
+import { ShieldCheck, Clock, Award, ChevronRight, Stethoscope, FlaskConical, Scan } from 'lucide-react';
 
 // Mirrors the 5 seeded test_categories rows exactly (database/schema.sql), same icon mapping
 // ClientDashboard.jsx already uses per category — static/decorative, not live data, so the
 // hero's right column doesn't need a fabricated stat to fill the space.
+// 2D Echo and ECG were removed here when the clinic confirmed it does not offer them. Their
+// test_categories rows still exist, because historical results point at them and a past visit has
+// to keep being able to say what it was for — but nothing advertises or sells them.
 const SERVICE_PREVIEW = [
   { label: 'Ultrasound', icon: Stethoscope },
   { label: 'Laboratory', icon: FlaskConical },
   { label: 'Digital X-Ray', icon: Scan },
-  { label: '2D Echo', icon: HeartPulse },
-  { label: 'ECG', icon: Activity },
 ];
 
 const Home = ({ onNavigate }) => {

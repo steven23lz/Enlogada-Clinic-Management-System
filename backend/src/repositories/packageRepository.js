@@ -34,6 +34,73 @@ class PackageRepository {
     return result.rows;
   }
 
+  /** Every package including retired ones, for the management screen. */
+  async findAllWithItems() {
+    const queryText = `
+      SELECT p.id, p.code, p.name, p.price, p.description, p.is_active,
+             t.id           AS test_id,
+             t.name         AS test_name,
+             t.price        AS test_price,
+             t.preparation  AS test_preparation,
+             tc.name        AS category_name
+        FROM test_packages p
+        LEFT JOIN test_package_items pi ON pi.package_id = p.id
+        LEFT JOIN tests t               ON t.id = pi.test_id
+        LEFT JOIN test_categories tc    ON tc.id = t.category_id
+       ORDER BY p.code, tc.name, t.name
+    `;
+    const result = await db.query(queryText);
+    return result.rows;
+  }
+
+  async create({ code, name, price, description }) {
+    const result = await db.query(
+      `INSERT INTO test_packages (code, name, price, description, is_active)
+       VALUES ($1, $2, $3, $4, TRUE) RETURNING *`,
+      [code, name, price, description || null]
+    );
+    return result.rows[0];
+  }
+
+  /**
+   * COALESCE per column, so a caller that sends only a price does not blank the description.
+   *
+   * This is the `testRepository.updateTest` lesson, applied before it could bite: that one writes
+   * every column unconditionally, and the Services Catalogue's status toggle therefore wiped each
+   * test's patient preparation on every activate/deactivate. See CLAUDE.md.
+   */
+  async update(id, { code, name, price, description, isActive }) {
+    const result = await db.query(
+      `UPDATE test_packages
+          SET code        = COALESCE($2, code),
+              name        = COALESCE($3, name),
+              price       = COALESCE($4, price),
+              description = COALESCE($5, description),
+              is_active   = COALESCE($6, is_active),
+              updated_at  = CURRENT_TIMESTAMP
+        WHERE id = $1
+      RETURNING *`,
+      [id, code ?? null, name ?? null, price ?? null, description ?? null, isActive ?? null]
+    );
+    return result.rows[0];
+  }
+
+  async findById(id) {
+    const result = await db.query('SELECT * FROM test_packages WHERE id = $1', [id]);
+    return result.rows[0];
+  }
+
+  /** Replaces the membership wholesale — the caller states what the package IS, not a delta. */
+  async setItems(packageId, testIds) {
+    await db.query('DELETE FROM test_package_items WHERE package_id = $1', [packageId]);
+    for (const testId of testIds) {
+      await db.query(
+        'INSERT INTO test_package_items (package_id, test_id) VALUES ($1, $2)',
+        [packageId, testId]
+      );
+    }
+  }
+
   /** One package and its components, by id. Same non-filtering of `t.is_active` as above. */
   async findByIdsWithItems(packageIds) {
     if (!packageIds || packageIds.length === 0) return [];
