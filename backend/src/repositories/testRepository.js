@@ -89,23 +89,25 @@ class TestRepository {
   // ON CONFLICT DO NOTHING against uq_visit_tests_visit_test: a retried booking re-sending the
   // same tests converges on the same rows instead of failing on the unique constraint. Returns
   // undefined for a row that already existed, so callers re-read rather than trusting RETURNING.
-  async addTestToVisit({ patientVisitId, testId, priceAtTime }) {
+  async addTestToVisit({ patientVisitId, testId, priceAtTime, packageId = null }) {
     const queryText = `
-      INSERT INTO visit_tests (patient_visit_id, test_id, price_at_time)
-      VALUES ($1, $2, $3)
+      INSERT INTO visit_tests (patient_visit_id, test_id, price_at_time, package_id)
+      VALUES ($1, $2, $3, $4)
       ON CONFLICT (patient_visit_id, test_id) DO NOTHING
       RETURNING *
     `;
-    const result = await db.query(queryText, [patientVisitId, testId, priceAtTime]);
+    const result = await db.query(queryText, [patientVisitId, testId, priceAtTime, packageId]);
     return result.rows[0];
   }
 
   async findTestsByVisitId(patientVisitId) {
     const queryText = `
-      SELECT vt.*, t.name as test_name, tc.name as category_name
+      SELECT vt.*, t.name as test_name, tc.name as category_name,
+             tp.code AS package_code, tp.name AS package_name, tp.price AS package_price
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
+      LEFT JOIN test_packages tp ON tp.id = vt.package_id
       WHERE vt.patient_visit_id = $1
       ORDER BY tc.name, t.name
     `;

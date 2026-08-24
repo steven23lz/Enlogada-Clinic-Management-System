@@ -4,7 +4,7 @@ import PublicFooter from '../../components/PublicFooter';
 import PageShell from '../../components/ui/page-shell';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
-import { Activity, Stethoscope, FileText, Heart, Zap, Search, Info, Phone, CalendarCheck, X } from 'lucide-react';
+import { Activity, Stethoscope, FileText, Heart, Zap, Search, Info, Phone, CalendarCheck, X, Package, Check } from 'lucide-react';
 import { categoryKey, categoryTint } from '../../lib/categories';
 import { useClinic } from '../../lib/clinic';
 
@@ -33,6 +33,7 @@ const ServicesPage = ({ onNavigate }) => {
   // number, and the whole value of showing one here is that somebody can actually ring it.
   const CLINIC = useClinic();
   const [categories, setCategories] = useState([]);
+  const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   // The public catalogue, on the page a prospective patient reads to decide whether to come at
@@ -59,6 +60,16 @@ const ServicesPage = ({ onNavigate }) => {
           title: catName,
           items: groupedMap[catName],
         })));
+
+        // Fetched separately and allowed to fail on its own: the packages are an addition to the
+        // price list, not a precondition for it. A patient who cannot see the bundles can still
+        // read every individual price, which is the page's actual job.
+        try {
+          const pkgRes = await api.get('/packages');
+          setPackages(pkgRes.data.data.packages || []);
+        } catch {
+          setPackages([]);
+        }
       } catch (err) {
         console.error('Failed to fetch services:', err);
         setLoadError(true);
@@ -206,6 +217,65 @@ const ServicesPage = ({ onNavigate }) => {
             </div>
           ) : (
             <div className="space-y-12">
+              {/* Packages first, because that is how the clinic's own sheet leads and because a
+                  bundle is the cheaper way to buy the same work. Hidden while a search is running:
+                  the search is for finding one named test, and a package is not one. */}
+              {!query && packages.length > 0 && (
+                <section aria-labelledby="packages-heading">
+                  <div className="mb-5 flex items-center gap-3 border-b border-line pb-3.5">
+                    <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-azure-100 text-azure-700">
+                      <Package className="h-5 w-5" />
+                    </span>
+                    <h2 id="packages-heading" className="m-0 text-xl font-bold tracking-tight text-slate-900">
+                      Package Deals
+                    </h2>
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-meta font-semibold text-slate-500">
+                      {packages.length}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {packages.map((pkg) => {
+                      // What the same tests cost bought one at a time. Shown only when it is a
+                      // real saving — a "save ₱0" badge, or a negative one, advertises the
+                      // opposite of what it is trying to say.
+                      const listTotal = pkg.tests.reduce((sum, t) => sum + Number(t.price || 0), 0);
+                      const saving = listTotal - Number(pkg.price);
+                      return (
+                      <article
+                        key={pkg.id}
+                        className="flex flex-col rounded-xl border border-azure-200 bg-azure-50/40 p-5 transition-all duration-150 hover:-translate-y-0.5 hover:border-azure-300 hover:shadow-raised"
+                      >
+                        <div className="flex items-baseline justify-between gap-3">
+                          <h3 className="m-0 text-base font-bold tracking-tight text-slate-900">
+                            {pkg.name}
+                          </h3>
+                          <span className="flex-shrink-0 whitespace-nowrap text-lg font-extrabold tabular-nums text-azure-700">
+                            {formatCurrency(pkg.price)}
+                          </span>
+                        </div>
+
+                        {saving > 0 && (
+                          <p className="m-0 mt-1.5 text-fine font-semibold text-brand-700">
+                            Save {formatCurrency(saving)} against booking these separately
+                          </p>
+                        )}
+
+                        <ul className="m-0 mt-3.5 list-none space-y-1.5 p-0">
+                          {pkg.tests.map((t) => (
+                            <li key={t.id} className="flex items-start gap-2 text-fine leading-relaxed text-slate-600">
+                              <Check className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-brand-600" aria-hidden="true" />
+                              <span>{t.name}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
               {visible.map((cat) => {
                 const meta = getCategoryMeta(cat.title);
                 const Icon = meta.icon;

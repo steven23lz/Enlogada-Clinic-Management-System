@@ -21,19 +21,22 @@ import api from '../config/api';
  */
 export function useClinicReferenceData() {
   const [testCatalog, setTestCatalog] = useState([]);
+  const [packages, setPackages] = useState([]);
   const [patientTypes, setPatientTypes] = useState([]);
   const [hmoProviders, setHmoProviders] = useState([]);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     setError('');
-    const [tests, types, hmo] = await Promise.allSettled([
+    const [tests, types, hmo, pkgs] = await Promise.allSettled([
       api.get('/tests'),
       api.get('/patients/types'),
       api.get('/hmo/providers'),
+      api.get('/packages'),
     ]);
 
     if (tests.status === 'fulfilled') setTestCatalog(tests.value.data.data.tests || []);
+    if (pkgs.status === 'fulfilled') setPackages(pkgs.value.data.data.packages || []);
     if (types.status === 'fulfilled') setPatientTypes(types.value.data.data.patientTypes || []);
     if (hmo.status === 'fulfilled') {
       setHmoProviders((hmo.value.data.data.providers || []).filter((p) => p.is_active));
@@ -43,12 +46,13 @@ export function useClinicReferenceData() {
       tests.status === 'rejected' && 'test catalog',
       types.status === 'rejected' && 'patient types',
       hmo.status === 'rejected' && 'HMO providers',
+      pkgs.status === 'rejected' && 'package deals',
     ].filter(Boolean);
 
     if (failed.length) {
       // Names what is missing. "Some forms may be incomplete" alone leaves a receptionist
       // guessing which dropdown to distrust.
-      console.error('Failed to fetch reference data:', { tests, types, hmo });
+      console.error('Failed to fetch reference data:', { tests, types, hmo, pkgs });
       setError(`Could not load ${failed.join(', ')}. Some forms below may be incomplete.`);
     }
   }, []);
@@ -57,7 +61,7 @@ export function useClinicReferenceData() {
     load();
   }, [load]);
 
-  return { testCatalog, patientTypes, hmoProviders, error, reload: load };
+  return { testCatalog, packages, patientTypes, hmoProviders, error, reload: load };
 }
 
 export default useClinicReferenceData;

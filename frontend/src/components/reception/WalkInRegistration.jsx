@@ -28,13 +28,14 @@ import { todayStr } from '../../lib/date';
  * referring doctor, and whether a submit is in flight. `onRegistered` is the only thing that
  * crosses back, so the queue behind this screen refreshes once the visit exists.
  */
-const WalkInRegistration = ({ patientTypes, testCatalog, onRegistered }) => {
+const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegistered }) => {
   // The requesting doctor, captured alongside the visit rather than the patient: a referral
   // belongs to one episode of care, not to the person forever.
   const [referringPhysician, setReferringPhysician] = useState('');
   const [referringPhysicianPrc, setReferringPhysicianPrc] = useState('');
   // Tests chosen during walk-in registration, attached in the same flow as the visit. [1.26.0]
   const [walkInTestIds, setWalkInTestIds] = useState([]);
+  const [walkInPackageIds, setWalkInPackageIds] = useState([]);
   const [newPatient, setNewPatient] = useState({
     firstName: '',
     lastName: '',
@@ -91,13 +92,25 @@ const WalkInRegistration = ({ patientTypes, testCatalog, onRegistered }) => {
       // "tests still to add", not "registration failed" — and telling them to queue again would
       // be the worse outcome.
       let attachedNote = '';
-      if (walkInTestIds.length > 0) {
+      if (walkInTestIds.length > 0 || walkInPackageIds.length > 0) {
         try {
+          // One call carrying both, so the server attaches them in a single transaction. Sending
+          // two requests would let the tests land and the package fail, leaving a visit billed for
+          // half a workup with the patient already holding a queue ticket.
           await api.post('/tests/visit-tests', {
             patientVisitId: visit.id,
             testIds: walkInTestIds.map((id) => parseInt(id, 10)),
+            packageIds: walkInPackageIds.map((id) => parseInt(id, 10)),
           });
-          attachedNote = ` ${walkInTestIds.length} test${walkInTestIds.length === 1 ? '' : 's'} attached.`;
+          const parts = [
+            walkInPackageIds.length
+              ? `${walkInPackageIds.length} package${walkInPackageIds.length === 1 ? '' : 's'}`
+              : null,
+            walkInTestIds.length
+              ? `${walkInTestIds.length} test${walkInTestIds.length === 1 ? '' : 's'}`
+              : null,
+          ].filter(Boolean);
+          attachedNote = ` ${parts.join(' and ')} attached.`;
         } catch {
           attachedNote = ' Tests could not be attached — add them from the Active Queue.';
         }
@@ -124,6 +137,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, onRegistered }) => {
       setReferringPhysicianPrc('');
       // Cleared with the rest: a test list left in state would follow the next patient registered.
       setWalkInTestIds([]);
+      setWalkInPackageIds([]);
       onRegistered?.();
     } catch (err) {
       setRegistrationError(err.response?.data?.message || 'Failed to register walk-in patient');
@@ -267,6 +281,11 @@ const WalkInRegistration = ({ patientTypes, testCatalog, onRegistered }) => {
                       tests={testCatalog}
                       selectedIds={walkInTestIds}
                       onToggle={(id) => setWalkInTestIds((prev) => (
+                        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+                      ))}
+                      packages={packages}
+                      selectedPackageIds={walkInPackageIds}
+                      onTogglePackage={(id) => setWalkInPackageIds((prev) => (
                         prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
                       ))}
                       disabled={isRegistering}

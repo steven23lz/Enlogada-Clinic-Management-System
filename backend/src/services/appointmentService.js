@@ -11,6 +11,7 @@ const testRepository = require('../repositories/testRepository');
 const patientService = require('./patientService');
 const notificationService = require('./notificationService');
 const testService = require('./testService');
+const packageService = require('./packageService');
 const hmoService = require('./hmoService');
 const { discardHmoCard } = require('../config/upload');
 const visitService = require('./visitService');
@@ -190,7 +191,7 @@ class AppointmentService {
   // not at all.
   async createAppointment({
     patientId, scheduledDate, scheduledTime, notes, createdBy, requestingUser,
-    testIds = [], hmo = null, hmoCardFile = null, referral = null
+    testIds = [], packageIds = [], hmo = null, hmoCardFile = null, referral = null
   }) {
     // db.withTransaction rather than a hand-managed db.pool.connect(). Everything underneath —
     // testService.attachTests, hmoService.createRequest and the auditService.log inside it — runs
@@ -255,9 +256,15 @@ class AppointmentService {
           { patientId, scheduledDate, scheduledTime }
         );
         if (existing) {
-          const visitTests = testIds.length
-            ? await testService.attachTests(existing.patient_visit_id, testIds)
-            : await testRepository.findTestsByVisitId(existing.patient_visit_id);
+          let visitTests;
+          if (packageIds.length) {
+            await packageService.attachPackages(existing.patient_visit_id, packageIds);
+          }
+          if (testIds.length) {
+            visitTests = await testService.attachTests(existing.patient_visit_id, testIds);
+          } else {
+            visitTests = await testRepository.findTestsByVisitId(existing.patient_visit_id);
+          }
 
           return { appointment: existing, visitTests, hmoRequest: null, alreadyBooked: true };
         }
@@ -316,9 +323,16 @@ class AppointmentService {
 
         // 6. Attach the chosen tests, and the HMO claim if one was made. Order matters:
         //    hmo_request_tests references visit_tests.
+        // Packages first: both writes are ON CONFLICT DO NOTHING against
+        // uq_visit_tests_visit_test, so for a test that is both inside a bundle and picked
+        // individually, whichever lands first sets the price. The package's allocated share is
+        // the one that must survive, or the bundle quietly costs more than its fixed price.
+        if (packageIds.length) {
+          await packageService.attachPackages(visit.id, packageIds);
+        }
         const visitTests = testIds.length
           ? await testService.attachTests(visit.id, testIds)
-          : [];
+          : (packageIds.length ? await testRepository.findTestsByVisitId(visit.id) : []);
 
         let hmoRequest = null;
         if (hmo && visitTests.length) {

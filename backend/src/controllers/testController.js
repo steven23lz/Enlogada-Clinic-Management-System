@@ -119,16 +119,20 @@ class TestController {
 
   async addTestsToVisit(req, res, next) {
     try {
-      const { patientVisitId, testIds } = req.body;
+      const { patientVisitId, testIds, packageIds } = req.body;
 
-      if (!patientVisitId || !testIds || !Array.isArray(testIds) || testIds.length === 0) {
+      const tests = Array.isArray(testIds) ? testIds : [];
+      const packages = Array.isArray(packageIds) ? packageIds : [];
+
+      // Either is enough on its own — a patient can book Package A and nothing else.
+      if (!patientVisitId || (tests.length === 0 && packages.length === 0)) {
         return res.status(400).json({
           status: 'error',
-          message: 'Patient visit ID and an array of test IDs are required.'
+          message: 'Patient visit ID and at least one test or package are required.'
         });
       }
 
-      const visitTests = await testService.addTestsToVisit(patientVisitId, testIds, req.user);
+      const visitTests = await testService.addTestsToVisit(patientVisitId, tests, req.user, packages);
       return res.status(201).json({
         status: 'success',
         message: `${visitTests.length} test(s) added to visit.`,

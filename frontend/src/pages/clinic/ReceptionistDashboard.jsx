@@ -210,6 +210,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 tests={reference.testCatalog}
                 selectedIds={testAssignment.selectedTestIds}
                 onToggle={testAssignment.toggleTest}
+                packages={reference.packages}
+                selectedPackageIds={testAssignment.selectedPackageIds}
+                onTogglePackage={testAssignment.togglePackage}
                 disabled={testAssignment.submitting}
               />
 
@@ -217,10 +220,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 <Button type="button" variant="outline" onClick={testAssignment.close}>Cancel</Button>
                 <Button
                   type="submit"
-                  disabled={testAssignment.submitting || testAssignment.selectedTestIds.length === 0}
+                  loading={testAssignment.submitting}
+                  disabled={
+                    testAssignment.selectedTestIds.length === 0
+                    && testAssignment.selectedPackageIds.length === 0
+                  }
                   className="font-bold"
                 >
-                  {testAssignment.submitting ? 'Attaching…' : 'Attach Selected Tests'}
+                  Attach Selected
                 </Button>
               </div>
             </form>

@@ -16,6 +16,7 @@ import { toastError } from '../lib/toast';
 export function useTestAssignment({ onAssigned } = {}) {
   const [visitId, setVisitId] = useState(null);
   const [selectedTestIds, setSelectedTestIds] = useState([]);
+  const [selectedPackageIds, setSelectedPackageIds] = useState([]);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -23,12 +24,21 @@ export function useTestAssignment({ onAssigned } = {}) {
   const openFor = (id) => {
     setVisitId(id);
     setSelectedTestIds([]);
+    // Packages clear here for exactly the reason above. A bundle left in state would be attached
+    // to the NEXT patient opened, and a package is ₱1,450 of tests they never asked for.
+    setSelectedPackageIds([]);
     setOpen(true);
   };
 
   const close = () => {
     if (submitting) return;
     setOpen(false);
+  };
+
+  const togglePackage = (packageId) => {
+    setSelectedPackageIds((prev) => (
+      prev.includes(packageId) ? prev.filter((id) => id !== packageId) : [...prev, packageId]
+    ));
   };
 
   const toggleTest = (testId) => {
@@ -39,7 +49,7 @@ export function useTestAssignment({ onAssigned } = {}) {
 
   const submit = async (e) => {
     e?.preventDefault();
-    if (!visitId || selectedTestIds.length === 0) return;
+    if (!visitId || (selectedTestIds.length === 0 && selectedPackageIds.length === 0)) return;
     if (submitting) return; // the guard that keeps a slow connection from billing twice
     setSubmitting(true);
 
@@ -47,6 +57,7 @@ export function useTestAssignment({ onAssigned } = {}) {
       await api.post('/tests/visit-tests', {
         patientVisitId: visitId,
         testIds: selectedTestIds.map((id) => parseInt(id, 10)),
+        packageIds: selectedPackageIds.map((id) => parseInt(id, 10)),
       });
       setOpen(false);
     } catch (err) {
@@ -59,7 +70,11 @@ export function useTestAssignment({ onAssigned } = {}) {
     onAssigned?.();
   };
 
-  return { visitId, selectedTestIds, open, submitting, openFor, close, toggleTest, submit };
+  return {
+    visitId, open, submitting, openFor, close, submit,
+    selectedTestIds, toggleTest,
+    selectedPackageIds, togglePackage,
+  };
 }
 
 export default useTestAssignment;

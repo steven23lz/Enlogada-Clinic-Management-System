@@ -47,9 +47,15 @@ test('reception registers a walk-in and attaches tests in one pass', async ({ pa
 
   // The new part: pick tests here rather than on a second screen.
   await expect(page.getByText('Tests Requested')).toBeVisible();
-  await expect(page.getByText('No tests selected')).toBeVisible();
+  // "Nothing selected" rather than "No tests selected" since [1.45.0] — the same control now
+  // offers the clinic's package deals as well as individual tests, so the empty state has to
+  // speak for both.
+  await expect(page.getByText('Nothing selected')).toBeVisible();
 
-  const checkboxes = page.locator('form input[type="checkbox"]:visible');
+  // Scoped to the scrolling test list on purpose. The package checkboxes sit ABOVE it in the same
+  // form, so an unscoped `first()` would tick Package A — a ₱1,450 bundle — and this test would
+  // quietly stop covering the thing it is named after.
+  const checkboxes = page.locator('form .overflow-y-auto input[type="checkbox"]:visible');
   await checkboxes.first().check();
 
   // The running total is what lets reception quote a price at the desk.

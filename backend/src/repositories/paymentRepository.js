@@ -285,6 +285,11 @@ class PaymentRepository {
     const itemsQuery = `
       SELECT vt.id as visit_test_id, vt.price_at_time, vt.status,
              t.name as test_name, tc.name as category_name,
+             -- The bundle a line came from, so the cashier and the receipt can say "Package A"
+             -- once instead of listing six components at prices that look arbitrary alone.
+             -- ₱226.96 for a CBC invites a question at the counter that nobody can answer.
+             vt.package_id, tp.code as package_code, tp.name as package_name,
+             tp.price as package_price,
              (
                SELECT hrt.approval_status
                FROM hmo_request_tests hrt
@@ -308,8 +313,10 @@ class PaymentRepository {
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
+      LEFT JOIN test_packages tp ON tp.id = vt.package_id
       WHERE vt.patient_visit_id = $1
-      ORDER BY tc.name, t.name
+      -- Package lines group together and lead, because that is how the patient bought them.
+      ORDER BY tp.code NULLS LAST, tc.name, t.name
     `;
     const itemsResult = await db.query(itemsQuery, [patientVisitId]);
 

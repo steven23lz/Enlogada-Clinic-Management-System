@@ -46,6 +46,26 @@ class AppointmentController {
         }
       }
 
+      // Packages, normalised exactly as testIds are and for the same reasons — multipart sends
+      // strings, and a malformed value must be rejected before the transaction takes the slot lock.
+      let packageIds = req.body.packageIds;
+      if (typeof packageIds === 'string') packageIds = [packageIds];
+      let normalisedPackageIds = [];
+      if (packageIds !== undefined) {
+        if (!Array.isArray(packageIds)) {
+          return reject('packageIds must be an array.');
+        }
+        normalisedPackageIds = [...new Set(packageIds.map(Number))];
+        if (normalisedPackageIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+          return reject('packageIds must be positive whole numbers.');
+        }
+        // A package expands into up to a dozen tests, so the ceiling is lower than the 20 for
+        // loose tests — the bound exists to cap work done under the slot lock, not to count rows.
+        if (normalisedPackageIds.length > 5) {
+          return reject('A booking may include at most 5 packages.');
+        }
+      }
+
       let normalisedHmo = null;
       if (hmo !== undefined && hmo !== null) {
         const providerId = Number(hmo.providerId);
@@ -54,8 +74,8 @@ class AppointmentController {
         if (!Number.isInteger(providerId) || providerId <= 0) {
           return reject('Select a valid HMO provider, or choose Self-Pay.');
         }
-        if (!normalisedTestIds.length) {
-          return reject('An HMO claim needs at least one test on the booking.');
+        if (!normalisedTestIds.length && !normalisedPackageIds.length) {
+          return reject('An HMO claim needs at least one test or package on the booking.');
         }
         normalisedHmo = { providerId, approvalCode: hmo.approvalCode || null };
       }
@@ -88,6 +108,7 @@ class AppointmentController {
         createdBy,
         requestingUser: req.user,
         testIds: normalisedTestIds,
+        packageIds: normalisedPackageIds,
         hmo: normalisedHmo,
         hmoCardFile: req.file || null,
         referral

@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const testRepository = require('../repositories/testRepository');
+const packageService = require('./packageService');
 const visitRepository = require('../repositories/visitRepository');
 const patientService = require('./patientService');
 
@@ -152,12 +153,28 @@ class TestService {
     return await testRepository.findTestsByVisitId(patientVisitId);
   }
 
-  async addTestsToVisit(patientVisitId, testIds, requestingUser) {
+  async addTestsToVisit(patientVisitId, testIds, requestingUser, packageIds = []) {
     await assertClientOwnsVisit(requestingUser, patientVisitId);
 
     // Standalone callers (Reception's walk-in flow) get their own transaction. Previously this
     // looped bare db.query calls, so a failure partway through left a half-attached visit.
-    return await db.withTransaction(() => this.attachTests(patientVisitId, testIds));
+    //
+    // Packages ride inside the SAME transaction as the individual tests. A visit that took the
+    // loose tests and then failed on the bundle would be billed for half a workup, and the patient
+    // would be told the booking succeeded.
+    //
+    // Packages go in FIRST, deliberately. Both writes are ON CONFLICT DO NOTHING against
+    // uq_visit_tests_visit_test, so whichever lands first sets the price for a test that appears
+    // in both. The package's allocated share is the one to keep: a component inside a fixed-price
+    // bundle must not silently revert to its list price and inflate the bundle.
+    return await db.withTransaction(async () => {
+      await packageService.attachPackages(patientVisitId, packageIds);
+      await this.attachTests(patientVisitId, testIds);
+      // Re-read rather than returning attachTests' value: it short-circuits to [] when there are
+      // no loose tests, which for a package-only booking discarded the rows the line above had
+      // just written and reported "0 test(s) added" for a visit carrying six.
+      return await testRepository.findTestsByVisitId(patientVisitId);
+    });
   }
 
   async getVisitTests(patientVisitId) {

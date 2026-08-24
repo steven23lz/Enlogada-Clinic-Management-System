@@ -97,6 +97,7 @@ export default function WalkInPanel({ queue, lookup, checkIn, reference }) {
           <WalkInRegistration
             patientTypes={reference.patientTypes}
             testCatalog={reference.testCatalog}
+            packages={reference.packages}
             onRegistered={() => queue.refresh()}
           />
         </div>

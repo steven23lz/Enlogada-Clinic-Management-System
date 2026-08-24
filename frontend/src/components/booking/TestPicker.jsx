@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { SearchInput } from '../ui/search-input';
 import { formatCurrency } from '../../lib/currency';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Package } from 'lucide-react';
 
 /**
  * Choosing which tests a visit is for. [1.26.0]
@@ -18,11 +18,25 @@ import { AlertTriangle } from 'lucide-react';
  * tests in arbitrary order is a scan every single time. And it surfaces the preparation note for
  * anything selected, so the person handing over the queue ticket is the one who says "come back
  * fasting" — which is far more likely to land than an email.
+ *
+ * ── Packages [1.45.0] ─────────────────────────────────────────────────────────────────────────
+ *
+ * The clinic sells five fixed-price bundles, and they sit ABOVE the individual tests here for the
+ * same reason they lead the printed sheet: a bundle is the cheaper way to buy the same work, and
+ * reception should see it before pricing the components one at a time.
+ *
+ * A package contributes its own fixed price to the running total, not the sum of its parts — that
+ * is the whole point of it, and the total at this desk has to be the number the cashier will ask
+ * for. Its components' preparation notes still surface below, because a patient booking Package A
+ * needs the full-bladder instruction exactly as much as one booking the ultrasound alone.
  */
 const TestPicker = ({
   tests = [],
   selectedIds = [],
   onToggle,
+  packages = [],
+  selectedPackageIds = [],
+  onTogglePackage,
   disabled = false,
   maxHeight = 'max-h-56',
 }) => {
@@ -44,8 +58,23 @@ const TestPicker = ({
   }, [tests, query]);
 
   const selected = tests.filter((t) => selectedIds.includes(t.id.toString()));
-  const total = selected.reduce((sum, t) => sum + parseFloat(t.price || 0), 0);
-  const preparation = selected.filter((t) => t.preparation);
+  const selectedPackages = packages.filter((p) => selectedPackageIds.includes(p.id.toString()));
+
+  // The package contributes its fixed price, never the sum of its components.
+  const total =
+    selected.reduce((sum, t) => sum + parseFloat(t.price || 0), 0) +
+    selectedPackages.reduce((sum, p) => sum + parseFloat(p.price || 0), 0);
+
+  // Preparation from both, de-duplicated by test id: booking Package A and a Pelvic Ultrasound
+  // separately must not print the same "do not empty your bladder" line twice.
+  const preparation = useMemo(() => {
+    const byId = new Map();
+    for (const t of selected) if (t.preparation) byId.set(t.id, t);
+    for (const p of selectedPackages) {
+      for (const t of p.tests || []) if (t.preparation) byId.set(t.id, t);
+    }
+    return [...byId.values()];
+  }, [selected, selectedPackages]);
 
   return (
     <div className="space-y-2">
@@ -57,6 +86,44 @@ const TestPicker = ({
           onChange={(e) => setQuery(e.target.value)}
           disabled={disabled}
         />
+      )}
+
+      {/* Packages lead, as they do on the clinic's own sheet. Outside the scrolling list so a
+          bundle is never scrolled past on the way to pricing its parts individually. */}
+      {packages.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="m-0 px-1 text-micro font-semibold uppercase tracking-[0.08em] text-slate-500">
+            Package deals
+          </p>
+          {packages.map((p) => (
+            <label
+              key={p.id}
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-azure-200 bg-azure-50/50 p-2.5 transition-colors hover:border-azure-300"
+            >
+              <input
+                type="checkbox"
+                checked={selectedPackageIds.includes(p.id.toString())}
+                onChange={() => onTogglePackage?.(p.id.toString())}
+                disabled={disabled}
+                className="mt-0.5 rounded text-azure-600 focus:ring-azure-500"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                    <Package className="h-3.5 w-3.5 flex-shrink-0 text-azure-600" aria-hidden="true" />
+                    {p.name}
+                  </span>
+                  <span className="text-xs font-extrabold tabular-nums text-azure-700">
+                    {formatCurrency(p.price)}
+                  </span>
+                </span>
+                <span className="mt-0.5 block text-fine leading-snug text-slate-500">
+                  {(p.tests || []).map((t) => t.name).join(', ')}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
       )}
 
       <div className={`${maxHeight} space-y-3 overflow-y-auto rounded-xl border border-[#e6ebf1] bg-slate-50/70 p-3`}>
@@ -95,9 +162,16 @@ const TestPicker = ({
           discovering the number at the till. */}
       <div className="flex items-center justify-between rounded-lg bg-sunken px-3 py-2">
         <span className="text-fine font-medium text-slate-500">
-          {selected.length === 0
-            ? 'No tests selected'
-            : `${selected.length} test${selected.length === 1 ? '' : 's'} selected`}
+          {selected.length === 0 && selectedPackages.length === 0
+            ? 'Nothing selected'
+            : [
+                selectedPackages.length
+                  ? `${selectedPackages.length} package${selectedPackages.length === 1 ? '' : 's'}`
+                  : null,
+                selected.length
+                  ? `${selected.length} test${selected.length === 1 ? '' : 's'}`
+                  : null,
+              ].filter(Boolean).join(' + ') + ' selected'}
         </span>
         <span className="text-note font-extrabold tabular-nums text-slate-900">{formatCurrency(total)}</span>
       </div>

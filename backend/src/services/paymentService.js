@@ -55,7 +55,13 @@ class PaymentService {
       // Only meaningful on a refusal, and null everywhere else — including on claims decided
       // before [1.27.0], which have no honest answer to give.
       hmoRejected: item.hmo_approval_status === 'Rejected',
-      hmoDecisionReason: item.hmo_decision_reason || null
+      hmoDecisionReason: item.hmo_decision_reason || null,
+      // The bundle this line belongs to, so the terminal and the receipt can group it. [1.45.0]
+      // Null for a test picked on its own, which is most of them.
+      packageId: item.package_id || null,
+      packageCode: item.package_code || null,
+      packageName: item.package_name || null,
+      packagePrice: item.package_price || null
     }));
 
     // Tests on this visit whose HMO claim has not been decided yet. [1.27.0]

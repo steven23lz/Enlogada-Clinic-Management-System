@@ -1,5 +1,85 @@
 # Database Migration & Schema History
 
+## [1.45.0] - 2026-08-24 (The real price list, and the package deals)
+
+`node src/scripts/migrateTestPackages.js` — additive, idempotent, `--rollback` reverses it.
+Then `node src/scripts/seedRealCatalogue.js --confirm` to load the data.
+
+### The rest of the price list
+
+The catalogue held real prices for Laboratory only; Ultrasound and X-Ray were still demo figures.
+Transcribed from the clinic's own laminated sheets, including the handwritten amendments:
+
+    Ultrasound   4 demo rows  ->  14 real services   (2025 sheet)
+    Xray         3 demo rows  ->  24 real services   (both printed pages)
+    Laboratory  22 unchanged, + HIV Screening
+
+Demo rows whose real equivalent is on a sheet were **renamed and repriced in place**, because
+`visit_tests.price_at_time` snapshots the sale price and historical rows point at those ids. Demo
+rows with no equivalent were **deactivated, never deleted** — deleting orphans the visits that used
+them, and leaving them bookable sells a service at a price the clinic never set. Three were
+deactivated (Abdominal Ultrasound, Breast Ultrasound, Abdominal X-Ray) and each is named in the
+script's summary so the clinic can re-enable it with a real price.
+
+### Packages: why they are not a `tests` row
+
+The five bundles (A–E, ₱1,450–₱2,400) had never existed in the system, so reception was adding the
+components one at a time and the patient paid the **sum of the parts** — always more than the
+package. Package A is ₱1,450; its components at list are ₱1,650.
+
+A package cannot be a `tests` row, because a row has one `category_id` and that is what routes work
+to a department worklist. Every one of these spans Laboratory *and* Ultrasound, so as a single row
+half the work would never reach the department that has to do it.
+
+So `test_packages` + `test_package_items`, and at booking a package **expands into one
+`visit_tests` row per component** — exactly as if reception had added them individually. Every
+downstream screen keeps working unchanged, because it is looking at ordinary visit_tests.
+
+### The allocation, which is the only real logic
+
+The fixed price is spread across the components in proportion to their list prices, with the
+rounding remainder placed on the largest, so the parts sum to the whole **exactly**:
+
+    Package A ₱1,450, components at list ₱1,650
+      Pelvic Ultrasound 500 -> 439.39     CBC              180 -> 158.18
+      HIV Screening     500 -> 439.39     Hepa B Screening 190 -> 166.97
+      Blood Typing      190 -> 166.97     Urinalysis        90 ->  79.10
+                                                           sum = 1450.00
+
+Exactness matters because `price_at_time` is what every downstream total reads — the visit
+subtotal, the statutory discount base, the cashier's drawer, and `reportRepository`'s per-department
+revenue share. Proportional rather than even, so the department that did the ₱500 of work is
+credited with it.
+
+The alternative — one line at the package price plus a discount line — was rejected: it puts the
+whole bundle in one department's revenue and leaves the other showing work it did for nothing.
+
+`visit_tests.package_id` records which bundle a line came from, so the terminal and the receipt can
+say "Package A" once rather than listing six components at prices that look arbitrary alone
+(₱158.18 for a CBC invites a question the cashier cannot answer).
+
+### HIV, and the arithmetic that caught the error
+
+HIV Screening is on no printed sheet. Loaded first at ₱0.00, which made the totals absurd — **four
+of the five packages cost MORE than their own components**. The clinic confirmed the handwritten
+"HIV 500" on the package panel, and at ₱500 every bundle becomes a real saving (A +200, B +190,
+C +190, D +50, E +590). The seed script now refuses to be quiet about this: it totals every package
+against its components and prints a loud warning for any that is upside down.
+
+### Two bugs found by testing rather than by reading
+
+- **`attachTests` short-circuits to `[]` on an empty `testIds`**, which for a package-only booking
+  discarded the rows just written and reported "0 test(s) added" for a visit carrying six. The
+  attach path re-reads the visit now instead of trusting what it inserted.
+- **The seed script was not idempotent.** The first run renames "Chest X-Ray (PA)" to "Chest PA";
+  the second looks up the old alias, fails, plans an INSERT and dies on `uq_tests_category_name` —
+  rolling back the whole run. It looks up the canonical name first and falls back to the alias.
+
+Packages attach BEFORE loose tests in both booking paths. Both writes are `ON CONFLICT DO NOTHING`
+against `uq_visit_tests_visit_test`, so for a test that is both inside a bundle and picked
+individually, whichever lands first sets the price — and the package's allocated share is the one
+that must survive, or the bundle quietly costs more than its fixed price.
+
 ## [1.45.0] - 2026-08-24 (A ramp remapped for one role is still live in the other)
 
 No schema change. Frontend only. Follows [1.44.0]; fixes defects in [1.40.0]'s dark mode found by
