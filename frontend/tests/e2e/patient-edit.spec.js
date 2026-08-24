@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { patientTypeId } from './helpers/patients.js';
+import { fixturePerson } from './helpers/people.js';
 
 // Correcting a patient's details. [1.24.0]
 //
@@ -34,12 +35,13 @@ test.describe('Patient record corrections', () => {
     return (await res.json()).data.token;
   };
 
-  const makePatient = async (tag) => {
+  const makePatient = async () => {
     const res = await ctx.post(`${API}/patients`, {
       headers: auth(recToken),
       data: {
         patientTypeId: await patientTypeId(ctx, API, recToken, 'Self Pay'),
-        firstName: `Edit${tag}`, lastName: `Probe${stamp}`,
+        // A fresh person per call, so no test depends on another's leftovers.
+        ...fixturePerson(),
         birthdate: '1990-01-01', sex: 'Male', contactNumber: '09170000000',
       },
     });
@@ -84,15 +86,15 @@ test.describe('Patient record corrections', () => {
   test.afterAll(async () => ctx.dispose());
 
   test('reception corrects a misspelt name', async () => {
-    const patient = await makePatient('Name');
-    const res = await put(patient.id, asPayload(patient, { lastName: `Corrected${stamp}` }));
+    const patient = await makePatient();
+    const res = await put(patient.id, asPayload(patient, { lastName: `Villaruel${stamp}` }));
 
     expect(res.status()).toBe(200);
-    expect((await res.json()).data.patient.last_name).toBe(`Corrected${stamp}`);
+    expect((await res.json()).data.patient.last_name).toBe(`Villaruel${stamp}`);
   });
 
   test('a birthdate correction sticks, because reference ranges depend on it', async () => {
-    const patient = await makePatient('Dob');
+    const patient = await makePatient();
     const res = await put(patient.id, asPayload(patient, { birthdate: '1975-06-30' }));
 
     expect(res.status()).toBe(200);
@@ -105,7 +107,7 @@ test.describe('Patient record corrections', () => {
     // The trap this guard exists for: reading a patient and writing it straight back used to
     // re-submit the UTC instant, which Postgres re-parsed a day earlier. Every round trip moved
     // the birthdate, silently, on the field diagnostic reference ranges are banded by.
-    const patient = await makePatient('IsoDate');
+    const patient = await makePatient();
     const res = await put(patient.id, {
       ...asPayload(patient),
       birthdate: '1989-12-31T16:00:00.000Z',
@@ -119,7 +121,7 @@ test.describe('Patient record corrections', () => {
     // The sharp edge. A lab account holds patients:read so it can see whose result it is looking
     // at, and deliberately not patients:update — birthdate and sex decide how that result is
     // interpreted, and the person running the analyser is not the person who corrects the record.
-    const patient = await makePatient('LabDeny');
+    const patient = await makePatient();
 
     const read = await ctx.get(`${API}/patients/${patient.id}`, { headers: auth(labToken) });
     expect([200, 404]).toContain(read.status()); // 404 if outside the lab's department scope
@@ -129,13 +131,13 @@ test.describe('Patient record corrections', () => {
   });
 
   test('required fields are still required', async () => {
-    const patient = await makePatient('Blank');
+    const patient = await makePatient();
     const res = await put(patient.id, asPayload(patient, { firstName: '' }));
     expect(res.status()).toBe(400);
   });
 
   test('the correction is audited with what the record said before', async () => {
-    const patient = await makePatient('Audit');
+    const patient = await makePatient();
     const res = await put(patient.id, asPayload(patient, { birthdate: '1968-02-11', sex: 'Female' }));
     expect(res.status()).toBe(200);
 
@@ -158,7 +160,7 @@ test.describe('Patient record corrections', () => {
   test('saving an unchanged record writes no audit entry', async () => {
     // A no-op edit is not an event. Logging it anyway fills the one log somebody reads during an
     // investigation with rows that say nothing happened.
-    const patient = await makePatient('NoOp');
+    const patient = await makePatient();
 
     const before = await ctx.get(`${API}/admin/activity?limit=50`, { headers: auth(adminToken) });
     const countBefore = ((await before.json()).data.entries || [])

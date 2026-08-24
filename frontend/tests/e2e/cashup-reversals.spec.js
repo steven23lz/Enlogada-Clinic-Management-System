@@ -3,6 +3,7 @@ import { test, expect, request } from 'playwright/test';
 import { backdatePayment } from './helpers/backdate.js';
 import { todayStr, daysAgoStr } from '../../src/lib/date.js';
 import { COUNTER_PAYMENT_METHODS } from '../../src/lib/paymentMethods.js';
+import { fixturePerson } from './helpers/people.js';
 
 /**
  * A reversed receipt must stay in the cash-up log, and must stay out of the total.
@@ -44,8 +45,9 @@ async function loginAs(apiContext, creds) {
 async function registerClientWithPatient(apiContext, prefix) {
   const email = `${uniqueName(prefix)}@enlogada-e2e.test`;
   const password = 'TestPass123!';
+  const person = fixturePerson();
   await apiContext.post(`${API}/auth/register`, {
-    data: { firstName: 'E2E', lastName: prefix, email, password, contactNumber: '' },
+    data: { ...person, email, password, contactNumber: '' },
   });
   const loginRes = await apiContext.post(`${API}/auth/login`, { data: { email, password } });
   const token = (await loginRes.json()).data.token;
@@ -56,7 +58,7 @@ async function registerClientWithPatient(apiContext, prefix) {
   const patientRes = await apiContext.post(`${API}/patients`, {
     headers: { Authorization: `Bearer ${token}` },
     data: {
-      patientTypeId: patientType.id, firstName: 'E2E', lastName: `${prefix}Patient`,
+      patientTypeId: patientType.id, ...person,
       birthdate: '1990-01-01', sex: 'Male', address: 'Addr', contactNumber: '', emergencyContact: '',
     },
   });

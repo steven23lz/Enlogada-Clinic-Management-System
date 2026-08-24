@@ -1,5 +1,60 @@
 # Database Migration & Schema History
 
+## [1.46.0] - 2026-08-24 (Test data that looks like a clinic)
+
+No schema change. Test tooling only.
+
+### The catalogue was silting up, in a place people look
+
+`catalogue-partial-update.spec.js` mints a throwaway test to prove a status toggle does not wipe a
+test's preparation text, and **deactivates** it rather than deleting. `purgeE2eData.js` scopes by
+the throwaway email domain and the run window — it never touched `tests` — so one row was left
+behind on **every single run, forever**.
+
+They are not hidden either. They sit in the admin Services Catalogue as
+`E2E Preparation Guard 1787594770405`, which is what somebody sees when they open that screen to
+change a price. Twenty-one had accumulated before this was noticed; five more appeared during the
+day's work. The purge now removes them, and only ever removes rows nothing references — a fixture a
+surviving visit still points at stays, because deleting it would change what a past bill says it
+was for.
+
+### Fixtures are named after people now
+
+`E2E Pkg1786480428`, `Reyes-17863726459464828`, `M9 Fixture1786…`. Those are real rows in a real
+database while the suite runs — they sit in the Active Queue, the billing queue and patient search,
+so anyone opening the app mid-run sees a clinic full of garbage, and a demo that overlaps a test
+run looks broken. It also made the seeded demo data and the test data look like two different
+products.
+
+`tests/e2e/helpers/people.js` hands out realistic Filipino names from a ~2,500-combination pool,
+remembering what it has issued and re-rolling on a repeat, falling back to a compound surname
+("Santos-Villanueva") rather than a visible escape hatch. The uniqueness that used to live in the
+NAME now lives in the **email**, where nobody has to read it.
+
+### What identifies a fixture, now that the name does not
+
+Nothing in the automatic teardown ever used the name — `purgeE2eData.js` scopes by the
+`@enlogada-e2e.test` domain and the run's start timestamp, and walk-in fixtures (which have no
+account) are caught as parentless patients created inside that window. Both are name-independent.
+
+`cleanE2eData.js` is the exception: it is the manual tool for a database that has already silted
+up, and it **did** match on the old name shapes. It gained the reserved contact number `09000000000`
+(no Philippine mobile prefix is 0900, so no live patient can collide) and keeps the old patterns
+for the historical rows — removing them would strand those permanently.
+
+### One spec deliberately keeps a synthetic name
+
+`revalidation.spec.js` filters the queue to a surname that **must not exist yet**, so the empty
+result can be cached with its ETag and then overturned. A realistic surname drawn from a pool could
+already belong to a seeded demo patient, and the precondition would silently not hold. It keeps
+`Revalidate<timestamp>`, with the reason recorded beside it.
+
+### A trap this surfaced
+
+`laboratory.spec.js` asserted `` `M9 ${patient.last_name}` `` — the fixture's first name hard-coded
+into five assertions, a second source of truth for a fact the fixture already carries. It broke the
+moment the fixture stopped being called "M9". They read `patient.first_name` now.
+
 ## [1.45.0] - 2026-08-24 (The real price list, and the package deals)
 
 `node src/scripts/migrateTestPackages.js` — additive, idempotent, `--rollback` reverses it.

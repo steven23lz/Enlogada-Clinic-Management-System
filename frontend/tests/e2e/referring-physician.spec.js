@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { patientTypeId } from './helpers/patients.js';
+import { fixturePerson } from './helpers/people.js';
 
 // Who requested the test. [1.23.0]
 //
@@ -31,7 +32,6 @@ test.describe('Referring physician', () => {
   let providerId;
 
   const auth = (t) => ({ Authorization: `Bearer ${t}` });
-  const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
   const login = async (email) => {
     const res = await ctx.post(`${API}/auth/login`, { data: { email, password: PASSWORD } });
@@ -40,12 +40,12 @@ test.describe('Referring physician', () => {
   };
 
   /** A fresh patient of the given type, so no test depends on another's leftovers. */
-  const makePatient = async (typeName, tag) => {
+  const makePatient = async (typeName) => {
     const res = await ctx.post(`${API}/patients`, {
       headers: auth(recToken),
       data: {
         patientTypeId: await patientTypeId(ctx, API, recToken, typeName),
-        firstName: `Ref${tag}`, lastName: `Probe${stamp}`,
+        ...fixturePerson(),
         birthdate: '1988-04-02', sex: 'Female', contactNumber: '09170000000',
       },
     });
@@ -75,14 +75,14 @@ test.describe('Referring physician', () => {
   test.afterAll(async () => ctx.dispose());
 
   test('a Self Pay walk-in needs no referring physician', async () => {
-    const patient = await makePatient('Self Pay', 'Self');
+    const patient = await makePatient('Self Pay');
     const res = await registerVisit(patient.id);
     expect(res.status()).toBe(201);
     expect((await res.json()).data.visit.referring_physician).toBeNull();
   });
 
   test('a Private walk-in is refused without one, and accepted with one', async () => {
-    const patient = await makePatient('Private', 'Priv');
+    const patient = await makePatient('Private');
 
     const without = await registerVisit(patient.id);
     expect(without.status()).toBe(400);
@@ -99,7 +99,7 @@ test.describe('Referring physician', () => {
   });
 
   test('whitespace is not a doctor', async () => {
-    const patient = await makePatient('Private', 'Blank');
+    const patient = await makePatient('Private');
     const res = await registerVisit(patient.id, { referringPhysician: '   ' });
     expect(res.status()).toBe(400);
   });
@@ -107,14 +107,14 @@ test.describe('Referring physician', () => {
   test('a licence number without a name is discarded rather than stored alone', async () => {
     // A PRC number identifies nobody on its own, and a visit carrying one with no name reads as
     // though the name were lost rather than never given.
-    const patient = await makePatient('Self Pay', 'PrcOnly');
+    const patient = await makePatient('Self Pay');
     const res = await registerVisit(patient.id, { referringPhysicianPrc: '0999999' });
     expect(res.status()).toBe(201);
     expect((await res.json()).data.visit.referring_physician_prc).toBeNull();
   });
 
   test('an HMO claim is refused unless the visit names a physician', async () => {
-    const patient = await makePatient('Self Pay', 'Claim');
+    const patient = await makePatient('Self Pay');
     const visit = (await (await registerVisit(patient.id)).json()).data.visit;
 
     const attached = await ctx.post(`${API}/tests/visit-tests`, {
@@ -148,7 +148,7 @@ test.describe('Referring physician', () => {
   test('a later claim does not overwrite a physician the visit already names', async () => {
     // The first name may already be on a released report. Two documents naming different doctors
     // for one episode is worse than either of them being wrong.
-    const patient = await makePatient('Private', 'NoClobber');
+    const patient = await makePatient('Private');
     const visit = (await (await registerVisit(patient.id, {
       referringPhysician: 'Dr. First Recorded',
     })).json()).data.visit;
@@ -173,7 +173,7 @@ test.describe('Referring physician', () => {
   });
 
   test('the physician reaches the report the department and the patient read', async () => {
-    const patient = await makePatient('Private', 'Report');
+    const patient = await makePatient('Private');
     const visit = (await (await registerVisit(patient.id, {
       referringPhysician: 'Dr. Corazon Villanueva', referringPhysicianPrc: '0176520',
     })).json()).data.visit;

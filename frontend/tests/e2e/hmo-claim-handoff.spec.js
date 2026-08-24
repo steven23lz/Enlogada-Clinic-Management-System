@@ -14,6 +14,10 @@ import { test, expect, request } from 'playwright/test';
 // happened, so the patient sat in the lobby while the cashier reloaded the bill on a hunch — or
 // charged them in full because nothing said otherwise and the approval landed an hour later.
 
+// Named like a person, because this row sits in the Active Queue and the billing queue while
+// the suite runs — see tests/e2e/helpers/people.js.
+const PATIENT_SURNAME = 'Gatchalian';
+
 const BACKEND_URL = process.env.E2E_API_URL || 'http://localhost:5000';
 const API = `${BACKEND_URL}/api`;
 const PASSWORD = 'Password123!';
@@ -36,7 +40,7 @@ test.describe('HMO claim handoff', () => {
     const patient = await (await apiContext.post(`${API}/patients`, {
       headers: auth(reception),
       data: {
-        patientTypeId: hmoTypeId, firstName: 'E2E', lastName: 'ClaimHandoff',
+        patientTypeId: hmoTypeId, firstName: 'Fernando', lastName: PATIENT_SURNAME,
         birthdate: '1981-07-04', sex: 'Male',
       },
     })).json();
@@ -125,7 +129,7 @@ test.describe('HMO claim handoff', () => {
     // The handoff. Without it the cashier learns nothing and the patient waits.
     const alert = (await notificationsFor(cashier)).find((n) => /turned down/i.test(n.title));
     expect(alert, 'the cashier must be told the claim was refused').toBeTruthy();
-    expect(alert.message, 'and told who it is about').toContain('ClaimHandoff');
+    expect(alert.message, 'and told who it is about').toContain(PATIENT_SURNAME);
     expect(alert.type).toBe('warning');
   });
 
@@ -168,7 +172,7 @@ test.describe('HMO claim handoff', () => {
     // Every one of these was absent. The worklist carried provider, date and a count, so several
     // claims from one provider on one day rendered as identical rows and the only way to learn
     // whose insurance you were approving was to open each in turn.
-    expect(row.patient_last_name).toBe('ClaimHandoff');
+    expect(row.patient_last_name).toBe(PATIENT_SURNAME);
     expect(row.queue_number).toBeTruthy();
     // memberNumber was accepted by the API and written nowhere — the number lived only inside the
     // card photo, which pruneHmoCards deletes after 180 days.

@@ -58,8 +58,8 @@ test.describe('Statutory discounts (Senior Citizen / PWD)', () => {
       headers: auth(reception),
       data: {
         patientTypeId: priv.id,
-        firstName: 'E2E',
-        lastName: 'DiscountProbe',
+        firstName: 'Teresita',
+        lastName: 'Salcedo',
         birthdate: '1950-01-01',
         sex: 'Female',
       },

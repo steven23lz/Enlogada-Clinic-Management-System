@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { selfPayTypeId } from './helpers/patients.js';
+import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
 
 // Backend API-level authorization tests. These hit the Express API directly (no browser),
 // exercising a real end-to-end workflow and regression-testing the five ownership/IDOR
@@ -24,14 +25,16 @@ function uniqueEmail(prefix) {
 async function registerAndLoginClient(apiContext, prefix) {
   const email = uniqueEmail(prefix);
   const password = 'TestPass123!';
+  // `prefix` still names the EMAIL, which is where the uniqueness belongs — invisible on every
+  // clinic screen. The person is a person. See tests/e2e/helpers/people.js.
+  const person = fixturePerson();
 
   const registerRes = await apiContext.post(`${API}/auth/register`, {
     data: {
-      firstName: 'E2E',
-      lastName: prefix,
+      ...person,
       email,
       password,
-      contactNumber: '09170000000',
+      contactNumber: FIXTURE_CONTACT,
     },
   });
   expect(registerRes.ok()).toBeTruthy();
@@ -49,13 +52,13 @@ async function registerAndLoginClient(apiContext, prefix) {
       // Self Pay by name. Was `2` — 'Private' — which [1.23.0] turned into "a physician referred
       // them", so it began demanding a referring physician this fixture has no reason to carry.
       patientTypeId: await selfPayTypeId(apiContext, API, token),
-      firstName: 'E2E',
-      lastName: `${prefix}Patient`,
+      // The account holder is the patient here, so the same person, not a second invented one.
+      ...person,
       birthdate: '1990-01-01',
       sex: 'Male',
-      address: 'Test Address',
-      contactNumber: '09170000000',
-      emergencyContact: '09171111111',
+      address: 'Bugo, Cagayan de Oro City',
+      contactNumber: FIXTURE_CONTACT,
+      emergencyContact: FIXTURE_CONTACT,
     },
   });
   expect(patientRes.ok()).toBeTruthy();
@@ -328,8 +331,8 @@ test.describe('Cross-role PHI boundaries', () => {
       headers: { Authorization: `Bearer ${labToken}` },
       data: {
         patientTypeId: 2,
-        firstName: 'Overwritten',
-        lastName: 'ByLab',
+        firstName: 'Soledad',
+        lastName: 'Nakpil',
         birthdate: '1970-01-01',
         sex: 'Female',
       },
@@ -430,7 +433,7 @@ test.describe('A refusal must not reveal whether the record exists', () => {
     const made = await (await ctx.post(`${API}/patients`, {
       headers: auth(reception),
       data: {
-        patientTypeId: types[0].id, firstName: 'E2E', lastName: 'OracleProbe',
+        patientTypeId: types[0].id, firstName: 'Benigno', lastName: 'Quintos',
         birthdate: '1975-02-02', sex: 'Male',
       },
     })).json();
@@ -445,7 +448,7 @@ test.describe('A refusal must not reveal whether the record exists', () => {
 
     // The write path too, with a complete body so validation cannot be what answers.
     const body = {
-      patientTypeId: types[0].id, firstName: 'X', lastName: 'Y',
+      patientTypeId: types[0].id, firstName: 'Amihan', lastName: 'Zulueta',
       birthdate: '1990-01-01', sex: 'Female', contactNumber: '09999999999',
     };
     const putExists = await ctx.put(`${API}/patients/${strangerId}`, { headers: auth(client), data: body });

@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
 
 /**
  * The clinic's package deals. [1.45.0]
@@ -28,8 +29,6 @@ const API = `${BACKEND_URL}/api`;
 const RECEPTIONIST = { email: 'receptionist@enlogada.com', password: 'Password123!' };
 const CASHIER = { email: 'cashier@enlogada.com', password: 'Password123!' };
 
-const uniqueName = (prefix) => `${prefix}${Date.now()}${Math.floor(Math.random() * 10000)}`;
-
 async function loginAs(apiContext, creds) {
   const res = await apiContext.post(`${API}/auth/login`, { data: creds });
   return (await res.json()).data.token;
@@ -45,8 +44,9 @@ async function makeWalkIn(api, token) {
   const patientRes = await api.post(`${API}/patients`, {
     headers: H,
     data: {
-      firstName: 'E2E', lastName: uniqueName('Pkg'), birthdate: '1990-01-01', sex: 'Female',
-      address: 'E2E', contactNumber: '09170000000', patientTypeId: selfPay.id,
+      ...fixturePerson(), birthdate: '1990-01-01', sex: 'Female',
+      address: 'Bugo, Cagayan de Oro City', contactNumber: FIXTURE_CONTACT,
+      patientTypeId: selfPay.id,
     },
   });
   const patient = (await patientRes.json()).data.patient;

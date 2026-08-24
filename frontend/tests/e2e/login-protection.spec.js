@@ -34,7 +34,7 @@ test.describe('Account lockout after repeated failures', () => {
     apiContext = await request.newContext();
     email = `lockout_${Date.now()}_${Math.floor(Math.random() * 10000)}@enlogada-e2e.test`;
     const registered = await apiContext.post(`${API}/auth/register`, {
-      data: { firstName: 'E2E', lastName: 'Lockout', email, password: PASSWORD, contactNumber: '09170000000' },
+      data: { firstName: 'Perlita', lastName: 'Ilagan', email, password: PASSWORD, contactNumber: '09170000000' },
     });
     expect(registered.ok()).toBeTruthy();
   });

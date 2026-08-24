@@ -445,6 +445,23 @@ convention for a deliberate code reference. Its `HOOKS` list is its eyesight: **
 from it is damage it cannot see**, which is how the RBAC copy survived a run reporting clean. Add
 each new hook's binding name to that list in the same commit that introduces the hook.
 
+**Fixtures are named after people, and the uniqueness lives in the email.** `[1.46.0]`
+`tests/e2e/helpers/people.js` — the rows a run creates are real rows in a real database while it
+runs, sitting in the Active Queue and patient search, so `E2E Pkg1786480428` means anyone who opens
+the app mid-run sees a clinic full of garbage. Nothing in the automatic teardown ever keyed on the
+name (`purgeE2eData.js` scopes by the `@enlogada-e2e.test` domain and the run window), but the
+manual `cleanE2eData.js` did — it keys on the reserved contact number `09000000000` now, and keeps
+the old name patterns for historical rows. Two deliberate exceptions: `revalidation.spec.js` needs
+a surname that provably does not exist yet, and a pool name could collide with a demo patient. And
+never hard-code a fixture's name into an assertion — `laboratory.spec.js` had `M9` in five of them,
+a second source of truth for something the fixture already carries.
+
+**A spec that creates a catalogue row must expect the purge to remove it.** `[1.46.0]`
+`purgeE2eData.js` deletes unreferenced `tests` rows named `E2E %`. Before that it only cleaned
+visits, patients and notifications, so `catalogue-partial-update.spec.js` — which deactivates its
+fixture rather than deleting — left one row behind on every run, forever, visible in the admin
+Services Catalogue.
+
 **Don't couple a test to a class name.** `payment.spec.js` used to scope itself with
   `ancestor::div[contains(@class,"rounded-2xl")]`, so changing a corner radius failed a payment
   assertion. Add a `data-testid` instead.

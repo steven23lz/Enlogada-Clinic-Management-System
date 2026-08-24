@@ -33,7 +33,7 @@ test.describe('Password change ends older sessions', () => {
     apiContext = await request.newContext();
     email = `revoke_${Date.now()}_${Math.floor(Math.random() * 10000)}@enlogada-e2e.test`;
     const registered = await apiContext.post(`${API}/auth/register`, {
-      data: { firstName: 'E2E', lastName: 'Revoke', email, password: firstPassword, contactNumber: '09170000000' },
+      data: { firstName: 'Isagani', lastName: 'Cadiz', email, password: firstPassword, contactNumber: '09170000000' },
     });
     expect(registered.ok()).toBeTruthy();
   });

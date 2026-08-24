@@ -44,13 +44,26 @@ const REAL_SLOT_CAPACITY = 1;
 
 const E2E_EMAIL = `'%@enlogada-e2e.test'`;
 
-// Walk-in patients (user_id IS NULL) carry no email, so they are identified by the naming
-// shapes the specs generate: a trailing epoch-ms stamp (Fixture17863654052789542,
-// Reyes-17863726459464828, Lookup1786480428…), a spec-prefixed first name (M8/M18/E2E/
-// ToastTest/Search/Audit/Returning/Hmo/Appt), or a fixture-suffixed surname (PayWalkin,
-// Tamper, Verify). Verified to cover 1063/1063 walk-ins with 0 unmatched.
+// Walk-in patients (user_id IS NULL) carry no email, so they need another signal.
+//
+// The reserved contact number is the one that matters going forward. Fixtures are named after
+// real-sounding people now (see tests/e2e/helpers/people.js) precisely so that a run in progress
+// does not fill the clinic's screens with `E2E Pkg1786480428` — which means the NAME can no longer
+// identify them, and must not be relied on. 0900 is not a Philippine mobile prefix, so no live
+// patient can collide with it.
+//
+// The old name shapes are kept below, and only for history: a database that silted up before this
+// changed is full of them (a trailing epoch-ms stamp — Fixture17863654052789542,
+// Reyes-17863726459464828 — a spec-prefixed first name, or a fixture-suffixed surname). Verified
+// at the time to cover 1063/1063 walk-ins with 0 unmatched. Removing them would strand those rows
+// permanently, so they stay until a database is known to be clean.
+//
+// Note that the AUTOMATIC teardown never used any of this: purgeE2eData.js scopes by the
+// throwaway email domain and by the run's start timestamp, both name-independent. This script is
+// the manual tool for a database that is already dirty.
 const WALKIN_FIXTURE = `(
-  p.last_name ~ '[0-9]{8,}$'
+  p.contact_number = '09000000000'
+  OR p.last_name ~ '[0-9]{8,}$'
   OR p.first_name ~ '^(M[0-9]+|E2E|Toast|Hmo|Returning|Search|Audit|Appt|Walkin)'
   OR p.last_name ~ '(Walkin|Tamper|Verify)$'
 )`;

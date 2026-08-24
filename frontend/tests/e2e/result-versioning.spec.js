@@ -60,7 +60,7 @@ test.describe('Result versioning and critical values', () => {
     const patient = await (await apiContext.post(`${API}/patients`, {
       headers: auth(reception),
       data: {
-        patientTypeId: priv.id, firstName: 'E2E', lastName: 'VersionProbe',
+        patientTypeId: priv.id, firstName: 'Clarita', lastName: 'Hidalgo',
         birthdate: '1985-06-15', sex: 'Male',
       },
     })).json();
@@ -244,7 +244,7 @@ test.describe('Amending an already-released result', () => {
     const patient = await (await apiContext.post(`${API}/patients`, {
       headers: auth(reception),
       data: {
-        patientTypeId: selfPay.id, firstName: 'E2E', lastName: 'AmendProbe',
+        patientTypeId: selfPay.id, firstName: 'Mariano', lastName: 'Escalona',
         birthdate: '1979-03-02', sex: 'Female',
       },
     })).json();

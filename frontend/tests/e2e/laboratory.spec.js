@@ -2,6 +2,7 @@
 import { test, expect, request } from 'playwright/test';
 import { payAndReleaseWalkIn } from './helpers/ticketRelease.js';
 import { selfPayTypeId } from './helpers/patients.js';
+import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
 
 // Module 9 (Laboratory Staff) coverage. The worklist UI (start-processing, template-assisted
 // findings entry, confirm-before-release) was already built; the real gap found on inspection
@@ -24,9 +25,6 @@ const RECEPTIONIST = { email: 'receptionist@enlogada.com', password: 'Password12
 const LAB_STAFF = { email: 'lab@enlogada.com', password: 'Password123!' };
 const CLIENT = { email: 'client@enlogada.com', password: 'Password123!' };
 
-function uniqueName(prefix) {
-  return `${prefix}${Date.now()}${Math.floor(Math.random() * 10000)}`;
-}
 
 async function loginAs(apiContext, creds) {
   const res = await apiContext.post(`${API}/auth/login`, { data: creds });
@@ -37,7 +35,7 @@ async function createLabVisitTest(apiContext, recToken) {
   const patientRes = await apiContext.post(`${API}/patients`, {
     headers: { Authorization: `Bearer ${recToken}` },
     // Self Pay by name — see the note in helpers/patients.js on why the old hardcoded `2` broke.
-    data: { patientTypeId: await selfPayTypeId(apiContext, API, recToken), firstName: 'M9', lastName: uniqueName('Fixture'), birthdate: '1990-01-01', sex: 'Male', address: 'Addr', contactNumber: '09170000000', emergencyContact: '' },
+    data: { patientTypeId: await selfPayTypeId(apiContext, API, recToken), ...fixturePerson(), birthdate: '1990-01-01', sex: 'Male', address: 'Bugo, Cagayan de Oro City', contactNumber: FIXTURE_CONTACT, emergencyContact: '' },
   });
   const patient = (await patientRes.json()).data.patient;
 
@@ -154,9 +152,9 @@ test.describe('Laboratory — browser flow', () => {
     // entry isn't guaranteed to land on page 1 — search narrows it down first, same as a real
     // user would.
     await page.getByPlaceholder('Search patient, test, queue...').fill(patient.last_name);
-    await expect(page.getByText(`M9 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(`${patient.first_name} ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
-    const row1 = page.getByText(`M9 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
+    const row1 = page.getByText(`${patient.first_name} ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
     await row1.getByRole('button', { name: 'Record Findings' }).click();
     await page.locator('textarea').fill('Findings text.');
 
@@ -186,9 +184,9 @@ test.describe('Laboratory — browser flow', () => {
     await page.locator('button[type="submit"]').click();
     // UI/UX Phase 2: search narrows the paginated worklist down to this specific patient.
     await page.getByPlaceholder('Search patient, test, queue...').fill(patient.last_name);
-    await expect(page.getByText(`M9 ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(`${patient.first_name} ${patient.last_name}`)).toBeVisible({ timeout: 10000 });
 
-    const row2 = page.getByText(`M9 ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
+    const row2 = page.getByText(`${patient.first_name} ${patient.last_name}`).locator('xpath=ancestor::tr[1]');
     await row2.getByRole('button', { name: 'Record Findings' }).click();
     await page.locator('textarea').fill('Normal CBC findings.');
     await page.getByRole('button', { name: 'Authorize & Release Result' }).click();
@@ -197,7 +195,7 @@ test.describe('Laboratory — browser flow', () => {
     // Scoped to the worklist table, not the page: releasing opens the printable
     // certificate dialog, which legitimately still shows the patient's name.
     await expect(
-      page.locator('table').getByText(`M9 ${patient.last_name}`)
+      page.locator('table').getByText(`${patient.first_name} ${patient.last_name}`)
     ).toHaveCount(0, { timeout: 10000 });
   });
 });

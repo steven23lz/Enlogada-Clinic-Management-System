@@ -62,7 +62,7 @@ test.describe('HMO decision trail', () => {
     const patient = await (await apiContext.post(`${API}/patients`, {
       headers: auth(reception),
       data: {
-        patientTypeId: hmoType.id, firstName: 'E2E', lastName: 'HmoDecision',
+        patientTypeId: hmoType.id, firstName: 'Rodrigo', lastName: 'Panganiban',
         birthdate: '1982-11-30', sex: 'Female',
       },
     })).json();

@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { fixturePerson } from './helpers/people.js';
 
 // Module 14 (Payment) coverage — the shared data/logic layer behind Module 8 (Cashier) and
 // Client-side payment visibility. Three real gaps found on inspection, all fixed here (this
@@ -40,7 +41,8 @@ async function loginAs(apiContext, creds) {
 async function registerClientWithPatient(apiContext, prefix, patientTypeName = 'Self Pay') {
   const email = uniqueName(prefix) + '@enlogada-e2e.test';
   const password = 'TestPass123!';
-  await apiContext.post(`${API}/auth/register`, { data: { firstName: 'E2E', lastName: prefix, email, password, contactNumber: '' } });
+  const person = fixturePerson();
+  await apiContext.post(`${API}/auth/register`, { data: { ...person, email, password, contactNumber: '' } });
   const loginRes = await apiContext.post(`${API}/auth/login`, { data: { email, password } });
   const token = (await loginRes.json()).data.token;
 
@@ -49,7 +51,7 @@ async function registerClientWithPatient(apiContext, prefix, patientTypeName = '
 
   const patientRes = await apiContext.post(`${API}/patients`, {
     headers: { Authorization: `Bearer ${token}` },
-    data: { patientTypeId: patientType.id, firstName: 'E2E', lastName: `${prefix}Patient`, birthdate: '1990-01-01', sex: 'Male', address: 'Addr', contactNumber: '', emergencyContact: '' },
+    data: { patientTypeId: patientType.id, ...person, birthdate: '1990-01-01', sex: 'Male', address: 'Bugo, Cagayan de Oro City', contactNumber: '', emergencyContact: '' },
   });
   const patient = (await patientRes.json()).data.patient;
 

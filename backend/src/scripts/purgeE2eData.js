@@ -168,6 +168,24 @@ async function main() {
     [since]
   );
 
+  // Catalogue fixtures the run created. `catalogue-partial-update.spec.js` mints a throwaway test
+  // to prove a status toggle does not wipe its preparation text, and DEACTIVATES it rather than
+  // deleting — so one row was left behind on every single run, forever.
+  //
+  // They are not invisible either: they sit in the admin Services Catalogue as
+  // "E2E Preparation Guard 1787594770405", which is what somebody sees when they open the screen
+  // to change a price. Twenty-one had accumulated before this was noticed.
+  //
+  // Only ever removes rows nothing references — a fixture that a surviving visit still points at
+  // stays, because deleting it would orphan that visit's line and change what a past bill says
+  // it was for.
+  await db.query(
+    `DELETE FROM tests t
+      WHERE t.name LIKE 'E2E %'
+        AND NOT EXISTS (SELECT 1 FROM visit_tests vt WHERE vt.test_id = t.id)
+        AND NOT EXISTS (SELECT 1 FROM test_package_items pi WHERE pi.test_id = t.id)`
+  );
+
   // Notifications the run itself generated. These are addressed to the seeded STAFF accounts —
   // a test payment notifies the real cashier and superadmin — so deleting the throwaway client
   // accounts above leaves them behind entirely. That was the last remaining leak: ~200 rows per

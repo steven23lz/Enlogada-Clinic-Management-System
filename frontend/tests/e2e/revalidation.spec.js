@@ -88,7 +88,11 @@ test('a change made elsewhere still reaches a polling screen', async ({ page }) 
     headers: auth,
     data: {
       patientTypeId: await selfPayTypeId(ctx, API, recToken),
-      firstName: 'Cache', lastName: surname,
+      // Deliberately NOT a name from helpers/people.js, unlike every other fixture. This test
+      // filters the queue to a surname that must not exist yet, so the empty result can be cached
+      // with its ETag and then overturned. A realistic surname drawn from a pool could already
+      // belong to a seeded demo patient, and the precondition would silently not hold.
+      firstName: 'Corazon', lastName: surname,
       birthdate: '1990-01-01', sex: 'Female', contactNumber: '09170000000',
     },
   });

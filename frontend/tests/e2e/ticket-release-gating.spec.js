@@ -4,6 +4,7 @@ import { payAndReleaseWalkIn, confirmAppointmentCheckIn } from './helpers/ticket
 import { selfPayTypeId } from './helpers/patients.js';
 import { COUNTER_PAYMENT_METHODS } from '../../src/lib/paymentMethods.js';
 import { daysAgoStr } from '../../src/lib/date.js';
+import { fixturePerson } from './helpers/people.js';
 
 // Ticket Release Gating.
 //
@@ -25,9 +26,6 @@ const RECEPTIONIST = { email: 'receptionist@enlogada.com', password: 'Password12
 const LAB_STAFF = { email: 'lab@enlogada.com', password: 'Password123!' };
 const CLIENT = { email: 'client@enlogada.com', password: 'Password123!' };
 
-function uniqueName(prefix) {
-  return `${prefix}${Date.now()}${Math.floor(Math.random() * 10000)}`;
-}
 
 async function loginAs(apiContext, creds) {
   const res = await apiContext.post(`${API}/auth/login`, { data: creds });
@@ -44,8 +42,7 @@ async function createUnreleasedWalkIn(apiContext, recToken) {
       // referred them", so it now requires a referring physician and every fixture here failed.
       // These are ordinary unpaid walk-ins with no doctor, which is what Self Pay describes.
       patientTypeId: await selfPayTypeId(apiContext, API, recToken),
-      firstName: 'Gate',
-      lastName: uniqueName('Fixture'),
+      ...fixturePerson(),
       birthdate: '1990-01-01',
       sex: 'Male',
       address: 'Addr',
