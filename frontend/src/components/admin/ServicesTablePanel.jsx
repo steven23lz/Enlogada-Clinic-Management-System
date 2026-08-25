@@ -92,7 +92,7 @@ export default function ServicesTablePanel({ catalogue }) {
               action={<Button size="sm" onClick={catalogue.openAdd}><Plus className="h-3.5 w-3.5" />Add New Service</Button>}
             />
           ) : (
-            <Table>
+            <Table data-testid="services-table">
               <TableHeader className="bg-slate-50/70">
                 <TableRow>
                   <TableHead className="text-xs font-bold uppercase">ID</TableHead>
