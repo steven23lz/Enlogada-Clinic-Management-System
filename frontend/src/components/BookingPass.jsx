@@ -72,7 +72,7 @@ const BookingPass = ({ reference, queueNumber, isPaid, canPayOnline = false }) =
           </span>
         </div>
       ) : (
-        <div className="w-40 h-40 bg-gray-100 rounded-lg animate-pulse" aria-hidden="true" />
+        <div className="w-40 h-40 bg-skeleton rounded-lg animate-pulse" aria-hidden="true" />
       )}
 
       <span className="font-mono text-note font-bold tracking-wide text-slate-900">{reference}</span>

@@ -127,7 +127,7 @@ const ServicesPage = ({ onNavigate }) => {
           <h1 className="mt-2.5 mb-0 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
             Our Services
           </h1>
-          <p className="mt-3 mb-0 max-w-2xl text-sm leading-relaxed text-slate-300">
+          <p className="mt-3 mb-0 max-w-2xl text-sm leading-relaxed text-rail-ink-soft">
             Every diagnostic test we offer, with its price and how to prepare for it. No account
             needed — and the prices below are the ones charged at the counter.
           </p>
@@ -348,7 +348,7 @@ const ServicesPage = ({ onNavigate }) => {
                   <h2 className="m-0 text-xl font-bold tracking-tight text-white sm:text-2xl">
                     Ready to book?
                   </h2>
-                  <p className="mt-1.5 mb-0 text-note leading-relaxed text-slate-300">
+                  <p className="mt-1.5 mb-0 text-note leading-relaxed text-rail-ink-soft">
                     Reserve a slot online, or walk in during clinic hours — we take both.
                   </p>
                 </div>

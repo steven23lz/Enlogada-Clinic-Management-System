@@ -199,7 +199,7 @@ const DashboardOverview = ({ onSelectNav }) => {
           <PanelHeader title="Revenue Trend" description="Last 7 days" icon={TrendingUp} />
           <PanelBody>
             {loading ? (
-              <div className="h-48 animate-pulse rounded-lg bg-slate-100" />
+              <div className="h-48 animate-pulse rounded-lg bg-skeleton" />
             ) : revenueTrend.length === 0 ? (
               <EmptyState
                 compact

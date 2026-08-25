@@ -116,7 +116,7 @@ export const BillingTotalsPanel = ({ billing, loading }) => {
       <PanelHeader title="Takings" description="Settled payments in this range" icon={TrendingUp} />
       <PanelBody>
         {loading || !t ? (
-          <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
+          <div className="h-16 animate-pulse rounded-lg bg-skeleton" />
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <Stat label="Collected" value={formatCurrency(t.collected)} hint={`${t.receipts} receipt${t.receipts === 1 ? '' : 's'}`} tone="good" />
@@ -149,7 +149,7 @@ export const ReceptionThroughputPanel = ({ reception, loading }) => (
     <PanelHeader title="Front desk" description="Check-in to payment" icon={Users} />
     <PanelBody>
       {loading || !reception ? (
-        <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
+        <div className="h-16 animate-pulse rounded-lg bg-skeleton" />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Stat label="Visits" value={reception.visits} hint={`${reception.walk_ins} walk-in · ${reception.appointments} booked`} />

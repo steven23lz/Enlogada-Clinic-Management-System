@@ -43,8 +43,8 @@ function MethodQr({ methodId, label }) {
   }, [methodId]);
 
   if (failed) return null;
-  if (!src) return <div className="h-36 w-36 animate-pulse rounded-lg bg-slate-100" aria-hidden="true" />;
-  return <img src={src} alt={`${label} QR code`} className="h-36 w-36 rounded-lg border border-line object-contain" />;
+  if (!src) return <div className="h-36 w-36 animate-pulse rounded-lg bg-skeleton" aria-hidden="true" />;
+  return <img src={src} alt={`${label} QR code`} className="h-36 w-36 rounded-lg border border-line bg-[#ffffff] p-2 object-contain" />;
 }
 
 function CopyField({ label, value }) {
@@ -130,7 +130,7 @@ export default function PayBookingPanel({ visitId, amountDue, onSettled }) {
   const selected = pay.methods.find((m) => String(m.id) === String(pay.methodId)) || pay.methods[0];
 
   if (pay.loading) {
-    return <div className="h-24 animate-pulse rounded-xl bg-slate-100" aria-hidden="true" />;
+    return <div className="h-24 animate-pulse rounded-xl bg-skeleton" aria-hidden="true" />;
   }
 
   // Already sent, awaiting a human. No second upload offered — a duplicate is refused by the

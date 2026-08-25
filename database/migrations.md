@@ -1,5 +1,117 @@
 # Database Migration & Schema History
 
+## [1.46.0] - 2026-08-25 (A fill and its foreground are two halves of one decision)
+
+No schema change. Frontend only. Fixes the third recurrence of [1.45.0]'s bug shape, and adds the
+check that makes the fourth fail at lint time instead of on screen.
+
+### What was reported, and what was actually wrong
+
+Two controls were unreadable in dark mode: the Active Queue's ticket number and Walk-In
+Registration's Search button. Both were `bg-slate-900 text-white`. `--color-slate-900` is remapped
+to `#eef2f6` for dark mode — near-white — so both rendered white on near-white, **1.12:1**.
+
+The remap is right for the INK role and inverted for the FILL role, which is exactly [1.45.0]'s
+finding about `brand-600/700`. The sweep found the same fault in six more places, two of them
+worse than the two reported:
+
+| | was | now |
+|---|---|---|
+| "Confirm Refund" (`CashierDashboard.jsx:190`) | **2.69**, hover 1.89 | 4.70, hover 6.29 |
+| Critical-result tap-to-call (`CriticalCallbackDialog.jsx:51`) | **2.69** | 4.70 |
+| Queue ticket (`ActiveQueuePanel.jsx:147`) | **1.12** | 15.87 |
+| Search (`WalkInPanel.jsx:51`) | **1.12**, hover 1.31 | 15.87, hover 13.67 |
+| `Button` `secondary` pressed (`button.jsx:27`) | **1.00** — white on white | 17.85 |
+| `Badge` `secondary` / `destructive` | 1.12 / 2.69 | 15.87 / 4.70 |
+| Public footer body text (`PublicFooter.jsx`) | **1.81** | 11.55 |
+
+The refund button is the one that matters most: an irreversible, money-moving action whose label
+was hardest to read at the moment of pressing it. Neither it nor the critical-callback button was
+in the report.
+
+### The root cause was in the dark-mode work itself
+
+`--color-emphasis` exists precisely to solve this. [1.40.0] created it as the seam token for "the
+dark counterpart to the primary button", correctly reasoned that it must invert with the ground,
+and set its dark value to `#eef2f6` — while `button.jsx` kept a hardcoded `text-white`. The fill
+flipped and its ink could not follow, because a literal has no theme.
+
+`emphasis` was **the only fill token in the file shipped without a foreground**. `primary`,
+`secondary`, `destructive`, `card` and `popover` all have one, and the dark block already flips
+`card-foreground`/`popover-foreground` in lockstep. So the fix is the file's own existing idiom,
+not a new one:
+
+- `--color-emphasis-foreground`: `#ffffff` light, `#0f172a` dark, **defined next to the fill** so
+  the two cannot drift apart again.
+- `--color-destructive` promoted to a real ramp (`-hover`, `-active`, `-foreground`). Deliberately
+  **absent from the dark block**: red carries its meaning by hue rather than by tonal distance, so
+  it reads on both canvases, and inverting it would turn the one irreversible button in the app
+  pale. Its value moved `#ef4444` → `#e11d48` — the old value had zero consumers and would have
+  *lowered* light-mode contrast from 4.70 to 3.76.
+
+All eight call sites now use a paired token. Two were hand-rolled bypasses of a primitive built
+for exactly them: the Search button became `<Button variant="secondary">` and the refund button
+`<Button variant="destructive">`, which also retires two [1.39.0] label-swap stragglers.
+
+### The same fault, pointing the other way: ink on surfaces that never flip
+
+A surface that is dark in BOTH themes must not carry themeable ink — the fourth appearance of this
+(rail heroes in [1.40.0], `rail-accent` in [1.43.0], `.auth-panel` in [1.45.0]). `rail-ink-*`
+exists for it, and the migration had been started and abandoned: `AboutUs.jsx:38` already used
+`text-rail-ink-soft` on the line directly below a `border-gray-800` that was still broken.
+
+Migrated: the whole public footer (body copy at 1.81:1, plus two `border-gray-800` hairlines that
+were rendering at **12.45:1** — bright white slashes where a subtle seam belongs), the three public
+banners, both `bg-rail` portal cards, and four `rail-gradient` heroes that a previous pass reported
+as fixed and had missed.
+
+### Twelve invisible skeletons
+
+`bg-slate-100`/`bg-gray-100` remaps to `#16212e`, which against a card's `#131c2b` is **1.05:1**.
+Twelve loading placeholders across nine screens were invisible, silently reinstating the exact
+failure `skeleton.jsx` documents: a panel that reads "nothing here" rather than "not yet", so
+people conclude a queue is empty and leave a screen that is about to fill. No contrast rule covers
+a decorative placeholder, so nothing else would have caught it. All twelve had bypassed the
+`Skeleton` primitive; they now share one `--color-skeleton` token (1.68:1 on dark, matching light
+mode's weight).
+
+### Three more
+
+- **Cut-out rings stopped cutting out.** The unread-count `ring-white` and the avatar's
+  `border-white` are gaps matching the ground, not decoration; `white` never remaps, so both became
+  bright halos on dark chrome. Now `ring-surface` / `border-surface`.
+- **The payment QR had no white backing at all.** A QR is a machine-readable optical target — its
+  contrast budget belongs to the scanner, not the theme. A transparent upload rendered dark-on-dark
+  and would not scan, and `object-contain` letterboxed dark canvas into the quiet zone even for an
+  opaque one. Now a fixed `#ffffff` with `p-2`. This is the only item here whose failure mode is a
+  patient unable to pay.
+
+### `scripts/checkFillRoles.js` — why a comment was not enough
+
+`index.css` already carried a warning that this ramp "is NO LONGER MONOTONIC" and that misusing it
+"will produce dark-on-dark". Four instances were then written anyway, one of them by the same pass
+that wrote the warning. Prose does not stop this; a grep does.
+
+The check bans `bg-{slate,gray}-{700,800,900,950}` and `bg-{rose,red}-{600,700,800}` outright.
+Those shades are ink; every legitimate solid fill goes through a paired token. Making the rule
+absolute keeps it context-free — no pairing analysis, no false positives — and it fails on the
+fill you wrote rather than on the foreground you forgot. It also reads the dark block out of
+`index.css` at runtime and warns about any *other* shade that block turns light while being used
+as a fill, so it widens as that block grows rather than needing to be kept in sync by hand
+(`prose_scan.py`'s `HOOKS` list is its eyesight, and that is a weakness worth not inheriting).
+
+Wired into `npm run lint`. Verified by reintroducing both original bugs and confirming it fails.
+
+### Known, still not fixed
+
+Unchanged from [1.45.0]: the Google sign-in button (shadow DOM), the Recharts axis/grid/cursor
+props, and two `lib/categories.js` chart colours below the 3:1 floor. Newly noted and left alone:
+`ring-rose-300` on `wait-badge.jsx` is the one shade in a four-step severity ladder the dark block
+does not remap, so the worst wait tier shouts louder than the other three — arguably correct, but
+by accident. And `Receipt.jsx` on screen is a themed panel while the paper is pinned light, so a
+cashier proofing it before printing is not previewing what prints; that is a product decision
+rather than a defect.
+
 ## [1.49.0] - 2026-08-25 (Tell the patient, and let the cashier look back)
 
 No schema change. The two gaps [1.48.2] left open.

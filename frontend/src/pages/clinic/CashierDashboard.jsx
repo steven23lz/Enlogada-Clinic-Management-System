@@ -185,11 +185,11 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
               <Button type="button" variant="outline" onClick={refund.cancel} disabled={refund.submitting}>Cancel</Button>
               <Button
                 type="button"
+                variant="destructive"
                 onClick={refund.confirm}
-                disabled={refund.submitting}
-                className="bg-red-600 hover:bg-red-700 text-white"
+                loading={refund.submitting}
               >
-                {refund.submitting ? 'Refunding…' : 'Confirm Refund'}
+                Confirm Refund
               </Button>
             </DialogFooter>
           </DialogContent>

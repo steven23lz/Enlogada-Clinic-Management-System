@@ -33,7 +33,7 @@ const AboutUs = ({ onNavigate }) => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <PublicHeader currentTab="about" onNavigate={onNavigate} />
 
-      <section className="bg-primary-navy text-white py-10 sm:py-14 px-4 sm:px-6 lg:px-8 border-b border-gray-800">
+      <section className="bg-primary-navy text-white py-10 sm:py-14 px-4 sm:px-6 lg:px-8 border-b border-rail-line">
         <div className="max-w-4xl mx-auto space-y-3">
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">About Enlogada</h1>
           <p className="text-rail-ink-soft text-sm max-w-2xl leading-relaxed">
@@ -81,7 +81,7 @@ const AboutUs = ({ onNavigate }) => {
         <div className="rail-gradient rail-grid relative overflow-hidden rounded-2xl border border-[#2b3a4d] p-8 md:p-10 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
           <div className="space-y-3">
             <h2 className="text-xl font-bold tracking-tight m-0">Visit Us</h2>
-            <div className="space-y-2 text-sm text-gray-300">
+            <div className="space-y-2 text-sm text-rail-ink-soft">
               <div className="flex items-center space-x-2.5">
                 <MapPin className="w-4 h-4 text-brand-600 flex-shrink-0" />
                 <span>Bugo, Cagayan de Oro, Philippines 9000</span>

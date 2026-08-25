@@ -61,7 +61,7 @@ function ProofViewer({ submissionId, onClose }) {
             description="It may have been removed from storage. Decide from the reference number, or ask the patient to send it again."
           />
         ) : !src ? (
-          <div className="h-80 animate-pulse rounded-lg bg-slate-100" aria-hidden="true" />
+          <div className="h-80 animate-pulse rounded-lg bg-skeleton" aria-hidden="true" />
         ) : isPdf ? (
           <iframe src={src} title="Proof of payment" className="h-[70vh] w-full rounded-lg border border-line" />
         ) : (

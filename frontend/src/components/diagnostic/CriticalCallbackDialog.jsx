@@ -48,7 +48,7 @@ export default function CriticalCallbackDialog({ criticals }) {
                 {c.contact_number && (
                   <a
                     href={`tel:${c.contact_number}`}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-fine font-bold text-white no-underline hover:bg-rose-700"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-destructive px-3 py-2 text-fine font-bold text-destructive-foreground no-underline hover:bg-destructive-hover"
                   >
                     <PhoneCall className="h-3.5 w-3.5" />
                     {c.contact_number}

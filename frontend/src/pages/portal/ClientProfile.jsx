@@ -79,7 +79,7 @@ const ClientProfile = ({ onNavigate }) => {
                 <ShieldCheck className="w-5 h-5" />
                 <h3 className="font-bold text-sm text-white m-0">Account Security</h3>
               </div>
-              <p className="text-gray-300 text-xs leading-relaxed m-0">
+              <p className="text-rail-ink-soft text-xs leading-relaxed m-0">
                 Never share your password. If you suspect unauthorized access to your account, change your password immediately.
               </p>
             </Card>

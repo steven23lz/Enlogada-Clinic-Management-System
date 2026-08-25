@@ -48,8 +48,8 @@ export default function WalkInPanel({ queue, lookup, checkIn, reference }) {
                 onChange={e => lookup.setQuery(e.target.value)}
                 className="flex-1"
               />
-              <Button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white" disabled={lookup.searching}>
-                {lookup.searching ? 'Searching…' : 'Search'}
+              <Button type="submit" variant="secondary" loading={lookup.searching}>
+                Search
               </Button>
             </form>
 

@@ -500,6 +500,18 @@ visits, patients and notifications, so `catalogue-partial-update.spec.js` — wh
 fixture rather than deleting — left one row behind on every run, forever, visible in the admin
 Services Catalogue.
 
+- **A solid fill never comes from a ramp shade — it comes from a paired token.** `[1.46.0]` The
+  dark block remaps ramps for the INK role, so `bg-slate-900` is near-black in light and
+  **near-white** in dark. Under a hardcoded `text-white` that is 1.12:1, which is what shipped on
+  the queue ticket, the walk-in Search button and — worse — the Confirm Refund button at 2.69:1.
+  Use `bg-emphasis text-emphasis-foreground` or `bg-destructive text-destructive-foreground`: the
+  fill and its ink are defined next to each other so the dark block cannot flip one without the
+  other. `scripts/checkFillRoles.js` (wired into `npm run lint`) rejects the ink-only shades.
+- **A surface that is dark in BOTH themes must not carry themeable ink.** The rail, the hero
+  panels, `.auth-panel`, the public footer and the navy banners do not flip, so `text-slate-300`
+  on them inverts to dark-on-dark. Use `text-rail-ink-*` and `border-rail-line`. This has now been
+  found four separate times; it is the single most repeated dark-mode mistake in this codebase.
+
 **Don't couple a test to a class name.** `payment.spec.js` used to scope itself with
   `ancestor::div[contains(@class,"rounded-2xl")]`, so changing a corner radius failed a payment
   assertion. Add a `data-testid` instead.

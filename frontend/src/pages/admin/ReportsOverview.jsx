@@ -260,7 +260,7 @@ const DateRangeReports = () => {
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
-              <div className="h-44 animate-pulse rounded-lg bg-slate-100" />
+              <div className="h-44 animate-pulse rounded-lg bg-skeleton" />
             ) : revenueTrend.length === 0 ? (
               <EmptyState compact icon={TrendingUp} title="No paid transactions in this range" description="Widen the date range above, or check that the cashier has settled the day's bills." />
             ) : (
@@ -275,7 +275,7 @@ const DateRangeReports = () => {
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
-              <div className="h-44 animate-pulse rounded-lg bg-slate-100" />
+              <div className="h-44 animate-pulse rounded-lg bg-skeleton" />
             ) : serviceVolume.length === 0 ? (
               <EmptyState compact icon={FlaskConical} title="No tests recorded in this range" description="Volume is counted from tests attached to a visit, not from bookings." />
             ) : (
@@ -292,7 +292,7 @@ const DateRangeReports = () => {
           </CardHeader>
           <CardContent className="p-5">
             {loading ? (
-              <div className="h-44 animate-pulse rounded-lg bg-slate-100" />
+              <div className="h-44 animate-pulse rounded-lg bg-skeleton" />
             ) : visitStatusBreakdown.length === 0 ? (
               <EmptyState compact icon={ClipboardList} title="No visits in this range" description="Walk-ins and checked-in appointments both count as visits." />
             ) : (
@@ -499,7 +499,7 @@ const StaffWorkload = () => {
           </CardHeader>
           <CardContent className="p-5 space-y-3">
             {loading ? (
-              <div className="h-44 animate-pulse rounded-lg bg-slate-100" />
+              <div className="h-44 animate-pulse rounded-lg bg-skeleton" />
             ) : receptionWorkload.length === 0 ? (
               <EmptyState compact icon={ClipboardList} title="No visits in this range" description="Walk-ins and checked-in appointments both count as visits." />
             ) : (
@@ -530,7 +530,7 @@ const StaffWorkload = () => {
           </CardHeader>
           <CardContent className="p-5 space-y-3">
             {loading ? (
-              <div className="h-44 animate-pulse rounded-lg bg-slate-100" />
+              <div className="h-44 animate-pulse rounded-lg bg-skeleton" />
             ) : diagnosticRows.length === 0 ? (
               <p className="py-10 text-center text-fine text-slate-500">No results released in this range.</p>
             ) : (

@@ -62,7 +62,7 @@ export default function ProfileTab({ profiles }) {
               <ShieldCheck className="w-5 h-5" />
               <h3 className="font-bold text-sm text-white m-0">HMO Accreditation</h3>
             </div>
-            <p className="text-gray-300 text-xs leading-relaxed">
+            <p className="text-rail-ink-soft text-xs leading-relaxed">
               Enlogada Clinic is partnered with accredited HMO providers like <strong>1CoopHealth</strong>. Present your HMO LOA or Approval Code during booking.
             </p>
           </Card>

@@ -141,7 +141,7 @@ const Home = ({ onNavigate }) => {
         <div className="rail-gradient rail-grid relative flex flex-col items-center justify-between gap-5 overflow-hidden rounded-2xl border border-[#2b3a4d] p-6 text-white sm:p-10 md:flex-row">
           <div className="relative space-y-2 text-center md:text-left">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Need a Diagnostic Appointment?</h2>
-            <p className="text-xs sm:text-sm text-gray-300">Sign in to your account or register to schedule an appointment today.</p>
+            <p className="text-xs sm:text-sm text-rail-ink-soft">Sign in to your account or register to schedule an appointment today.</p>
           </div>
           <Button
             onClick={() => onNavigate && onNavigate('login')}

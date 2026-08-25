@@ -21,7 +21,7 @@ export function Skeleton({ className }) {
   return (
     <div
       aria-hidden="true"
-      className={cn('animate-pulse motion-reduce:animate-none rounded-md bg-gray-200/80', className)}
+      className={cn('animate-pulse motion-reduce:animate-none rounded-md bg-skeleton', className)}
     />
   );
 }

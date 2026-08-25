@@ -144,7 +144,7 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                             {/* The ticket number is the thing a receptionist calls out and a
                                 patient reads back, so it is set larger than the row around it
                                 rather than smaller — it was 12px in a row of 12px text. */}
-                            <span className="rounded-md bg-slate-900 px-2 py-1 text-fine font-bold tabular-nums text-white">
+                            <span className="rounded-md bg-emphasis px-2 py-1 text-fine font-bold tabular-nums text-emphasis-foreground">
                               {visit.queue_number || `V-${visit.id}`}
                             </span>
                             {/* aria-label as well as title: `title` alone is not a reliable

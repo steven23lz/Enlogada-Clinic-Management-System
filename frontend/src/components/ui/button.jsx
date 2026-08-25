@@ -20,11 +20,11 @@ const buttonVariants = cva(
         default:
           "bg-brand-500 text-white shadow-[0_1px_2px_rgb(15_23_42_/_0.10)] hover:bg-brand-600 active:bg-brand-700",
         destructive:
-          "bg-rose-600 text-white shadow-[0_1px_2px_rgb(15_23_42_/_0.10)] hover:bg-rose-700 active:bg-rose-800",
+          "bg-destructive text-destructive-foreground shadow-[0_1px_2px_rgb(15_23_42_/_0.10)] hover:bg-destructive-hover active:bg-destructive-active",
         outline:
           "border border-slate-200 bg-white text-slate-700 shadow-[0_1px_2px_rgb(15_23_42_/_0.04)] hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900",
         // The dark counterpart to `default`, for a second high-emphasis action beside it.
-        secondary: "bg-emphasis text-white shadow-[0_1px_2px_rgb(15_23_42_/_0.10)] hover:bg-emphasis-hover active:bg-emphasis-active",
+        secondary: "bg-emphasis text-emphasis-foreground shadow-[0_1px_2px_rgb(15_23_42_/_0.10)] hover:bg-emphasis-hover active:bg-emphasis-active",
         subtle:
           "bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900",
         ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900",

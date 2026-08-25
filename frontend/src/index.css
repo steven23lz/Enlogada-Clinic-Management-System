@@ -62,7 +62,14 @@
   --color-primary-sage: #53843b;
   --color-secondary: #16212e;
   --color-secondary-foreground: #ffffff;
-  --color-destructive: #ef4444;
+  /* A destructive fill, and the ink that belongs on it. Deliberately absent from the dark block:
+     red carries its meaning by HUE, not by tonal distance from the ground, so it reads on both
+     canvases and inverting it would turn the one irreversible button in the app pale. This is the
+     value the components already shipped via `bg-rose-600` — the old #ef4444 had no consumers and
+     would have dropped white text from 4.70:1 to 3.76:1. */
+  --color-destructive: #e11d48;
+  --color-destructive-hover: #be123c;
+  --color-destructive-active: #9f1239;
   --color-destructive-foreground: #ffffff;
 
   /* Tints of the brand green, so a highlighted row or a selected chip does not have to be
@@ -195,6 +202,20 @@
   --color-emphasis: oklch(20.8% .042 265.755);       /* was slate-900 */
   --color-emphasis-hover: oklch(27.9% .041 260.031); /* was slate-800 */
   --color-emphasis-active: oklch(12.9% .042 264.695);/* was slate-950 */
+  /* The ink that rides on it. `emphasis` is the ONLY fill token in this file that shipped without
+     a foreground, and that omission is the whole bug: the dark block flipped the fill to near-white
+     while `text-white` stayed a literal in button.jsx, giving 1.12:1. Every other fill here already
+     pairs (`primary-foreground`, `secondary-foreground`, `destructive-foreground`), so this is the
+     file's own idiom, not a new one. Defined next to the fill so the two cannot drift. */
+  --color-emphasis-foreground: #ffffff;
+
+  /* The loading placeholder fill. One token because twelve screens had hand-rolled it as
+     `bg-slate-100`/`bg-gray-100`, which the dark block remaps to #16212e — 1.05:1 against a card,
+     i.e. invisible. That silently reinstates the failure skeleton.jsx was built to prevent: a
+     panel that reads "nothing here" instead of "not yet", so people conclude a queue is empty and
+     leave a screen that is about to fill. No contrast rule covers a decorative placeholder, so
+     nothing else would have caught it. */
+  --color-skeleton: #e2e8f0;
   /* The pale-green eyebrow on the hero banners. `text-brand-200` on a permanently dark surface,
      so it must NOT follow the brand ramp into dark mode — brand-200 there is a dark olive and the
      eyebrow disappeared into the banner. Same class of bug as the rail ink above. */
@@ -810,6 +831,9 @@ body.printing-receipt {
     --color-emphasis: #eef2f6;
     --color-emphasis-hover: #dbe2ea;
     --color-emphasis-active: #ffffff;
+    /* Flips WITH the fill. This is the line whose absence produced the reported bug. */
+    --color-emphasis-foreground: #0f172a;
+    --color-skeleton: #2f3b4b;          /* 1.68:1 on a dark card, matching light mode's weight */
   }
 
   /* ── The utilities no variable can reach ──────────────────────────────────────────────────
