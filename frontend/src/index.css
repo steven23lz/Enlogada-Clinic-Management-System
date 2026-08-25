@@ -549,6 +549,34 @@ select:focus-visible {
 
 /* Anyone who has asked the OS for less motion gets none of the above. Vestibular triggers are an
    accessibility concern, not a preference — and this app is open all day on a reception desk. */
+/* ── Disclosure: a section that opens smoothly without anyone measuring it ──────────────────
+ *
+ * `grid-template-rows: 0fr -> 1fr` animates a container from nothing to its natural height with
+ * no JavaScript and no hardcoded max-height. The usual `max-height: 500px` trick needs a guess
+ * larger than the tallest possible content, and then every shorter section eases at a different
+ * apparent speed because the transition is over a distance the content never travels.
+ *
+ * The inner element must be `overflow: hidden`, or the content spills out of a row that is still
+ * zero-height and the section appears to flash open before it animates.
+ *
+ * 200ms on a standard-decelerate curve: fast enough not to be a wait, slow enough to show the
+ * reader that this section came from the header they clicked rather than simply appearing.
+ */
+.disclosure {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.disclosure[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+
+.disclosure > * {
+  overflow: hidden;
+  min-height: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
