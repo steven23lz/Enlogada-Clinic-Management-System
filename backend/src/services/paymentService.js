@@ -1,4 +1,5 @@
 const paymentRepository = require('../repositories/paymentRepository');
+const { formatCurrency } = require('../utils/money');
 const discountService = require('./discountService');
 const db = require('../config/database');
 const notificationService = require('./notificationService');
@@ -193,7 +194,7 @@ class PaymentService {
     // own receipt flow.
     await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
       title: 'Payment Confirmed',
-      message: `Receipt #${receiptNumber} — ${bill.patientName}, ₱${authoritativeTotal.toFixed(2)}`,
+      message: `Receipt #${receiptNumber} — ${bill.patientName}, ${formatCurrency(authoritativeTotal)}`,
       type: 'success'
     });
 

@@ -1,5 +1,28 @@
 # Database Migration & Schema History
 
+## [1.48.2] - 2026-08-25 (Catching a bad screenshot before the cashier does)
+
+No schema change.
+
+**The patient sees what they are about to send.** A thumbnail of the chosen file, its size, and a
+line saying to check the reference and amount are readable — plus a remove button. This is the
+cheapest possible place to catch an unreadable screenshot: at thumbnail size it is obvious, and
+fixing it costs one click instead of a rejection, a phone call and a second upload. The guidance
+("a screenshot from your banking app works better than a photo of the screen") is stated BEFORE the
+file picker rather than in a rejection afterwards.
+
+The object URL is revoked on replacement as well as on unmount, so picking three files in a row
+does not leak two blobs for the life of the page.
+
+**`backend/src/utils/money.js`.** The backend wrote money into notification text as
+`₱${n.toFixed(2)}` at each site, so a cashier's bell read "₱13690.00" — legible only by counting
+digits, which is the opposite of what a glanceable notification is for, and disagreeing with every
+figure on screen. One formatter now, same locale and options as the frontend's `lib/currency.js`,
+used by both notification sites so they cannot drift.
+
+Verified that the cashier notification actually lands, rather than assuming the server call worked:
+the bell goes 10 → 11 and reads "Proof of payment to review — Ref … awaiting verification".
+
 ## [1.48.1] - 2026-08-25 (The screens for it)
 
 No schema change. The three screens [1.48.0]'s API was built for.

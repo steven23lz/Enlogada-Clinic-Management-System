@@ -9,6 +9,7 @@ const patientRepository = require('../repositories/patientRepository');
 const auditService = require('./auditService');
 const notificationService = require('./notificationService');
 const { PAYMENT_UPLOAD_ROOT, discardPaymentFile } = require('../config/upload');
+const { formatCurrency } = require('../utils/money');
 
 /**
  * Manual proof of payment: the patient pays into the clinic's own account and a cashier checks it.
@@ -99,7 +100,7 @@ class PaymentSubmissionService {
       // until somebody happens to open the review screen.
       await notificationService.notifyRoles(['Cashier', 'Admin', 'SuperAdmin'], {
         title: 'Proof of payment to review',
-        message: `Ref ${submission.reference_number} — ₱${Number(submission.amount_claimed).toFixed(2)} awaiting verification`,
+        message: `Ref ${submission.reference_number} — ${formatCurrency(submission.amount_claimed)} awaiting verification`,
         type: 'info',
       }).catch(() => { /* a notification failure must never lose the claim */ });
 

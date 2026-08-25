@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, AlertCircle, Upload, Copy, Check, QrCode } from 'lucide-react';
+import { Clock, AlertCircle, Upload, Copy, Check, QrCode, FileText, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { formatCurrency } from '../../lib/currency';
@@ -72,6 +72,54 @@ function CopyField({ label, value }) {
         className="flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-slate-100 text-slate-600 transition-colors hover:bg-slate-200"
       >
         {copied ? <Check className="h-3.5 w-3.5 text-brand-600" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * What the patient is about to send, shown back to them.
+ *
+ * The single cheapest way to stop an unreadable screenshot reaching a cashier: at thumbnail size
+ * it is obvious whether the figures are legible, and correcting it here costs one click instead of
+ * a rejection, a phone call and a second upload.
+ */
+function ProofPreview({ file, onClear }) {
+  const [src, setSrc] = useState('');
+
+  React.useEffect(() => {
+    if (!file || file.type === 'application/pdf') { setSrc(''); return undefined; }
+    const url = URL.createObjectURL(file);
+    setSrc(url);
+    // Revoked on replacement as well as unmount: picking three files in a row would otherwise
+    // leak two blobs for the life of the page.
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  if (!file) return null;
+
+  return (
+    <div className="mt-2 flex items-center gap-2.5 rounded-lg border border-line bg-white p-2">
+      {src ? (
+        <img src={src} alt="" className="h-16 w-16 flex-shrink-0 rounded-md border border-line object-cover" />
+      ) : (
+        <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-md border border-line bg-slate-50 text-slate-400">
+          <FileText className="h-6 w-6" aria-hidden="true" />
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-fine font-semibold text-slate-800">{file.name}</span>
+        <span className="block text-fine text-slate-500">
+          {(file.size / 1024).toFixed(0)} KB — check the reference and amount are readable
+        </span>
+      </span>
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label="Remove this file"
+        className="flex h-7 w-7 flex-shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+      >
+        <X className="h-3.5 w-3.5" />
       </button>
     </div>
   );
@@ -220,6 +268,13 @@ export default function PayBookingPanel({ visitId, amountDue, onSettled }) {
 
         <div>
           <label htmlFor={`proof-${visitId}`} className="field-label">Screenshot of the transaction</label>
+          {/* Said before they choose, not after it is rejected. A cashier can only approve what
+              they can read, and a cropped or blurred screenshot costs the patient a whole
+              round trip — a rejection, a phone call, and a second upload. */}
+          <p className="m-0 mb-1.5 text-fine leading-relaxed text-slate-500">
+            The <strong>reference number</strong> and the <strong>amount</strong> must both be
+            readable. A screenshot from your banking app works better than a photo of the screen.
+          </p>
           <input
             id={`proof-${visitId}`}
             type="file"
@@ -228,6 +283,7 @@ export default function PayBookingPanel({ visitId, amountDue, onSettled }) {
             disabled={pay.submitting}
             className="block w-full cursor-pointer rounded-lg border border-slate-200 bg-white p-2 text-fine text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-fine file:font-semibold file:text-slate-700"
           />
+          <ProofPreview file={pay.proof} onClear={() => pay.setProof(null)} />
         </div>
 
         <Button type="submit" loading={pay.submitting} className="w-full">
