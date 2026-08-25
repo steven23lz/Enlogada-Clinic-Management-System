@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { signIn } from './helpers/auth.js';
 
 /**
  * A receipt has to be findable again. [1.52.0]
@@ -142,19 +143,7 @@ test.describe('Receipt lookup and printing', () => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
 
-    await page.goto('/');
-    await page.getByText('Sign In', { exact: true }).first().click();
-    await page.fill('input[type="email"]', 'cashier@enlogada.com');
-    await page.fill('input[type="password"]', PASSWORD);
-    await page.locator('button[type="submit"]').click();
-
-    // Wait on the SESSION, not on wording. `/welcome/i` matches "Welcome Back" — the heading of
-    // the login form itself — so a text assertion here is satisfied before the login has even been
-    // sent, and the navigation below then fires on a signed-out page. The stored token is the one
-    // signal that cannot be true early.
-    await expect
-      .poll(async () => page.evaluate(() => Boolean(localStorage.getItem('token'))), { timeout: 20000 })
-      .toBe(true);
+    await signIn(page, 'cashier@enlogada.com');
 
     // The deep link — the same URL the Open buttons put in a new tab. Reached directly here,
     // which is the case that matters: a link pasted to a colleague has none of this app's state.
