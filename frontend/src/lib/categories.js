@@ -34,6 +34,17 @@ export const CATEGORY_COLORS = {
 // look deliberately unremarkable rather than borrow another category's colour.
 export const UNMAPPED_CATEGORY_COLOR = '#94a3b8';
 
+/**
+ * The order categories are shown in, offered first and busiest first.
+ *
+ * A DISPLAY order, not a list of what exists — 2D Echo and ECG are retired [1.47.0] and stay here
+ * because a patient with a past 2D Echo still has to be able to filter to it. Anything that reads
+ * this must decide from the data which of these to show; hardcoding the array itself into a filter
+ * is how the portal came to advertise two services the clinic does not sell to every patient who
+ * had never had one.
+ */
+export const CATEGORY_ORDER = ['Laboratory', 'Ultrasound', 'Xray', '2D Echo', 'ECG'];
+
 // Pale tile + saturated glyph, for an icon beside a heading. Kept as Tailwind classes rather
 // than derived from the hex, because an opacity variant of the mark colour is exactly the
 // "five different pale greens on one screen" problem the design notes warn about.

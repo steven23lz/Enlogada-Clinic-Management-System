@@ -8,7 +8,7 @@ import { StatusBadge } from '../../components/ui/status-badge';
 import { SkeletonList } from '../../components/ui/skeleton';
 import RevenueTrendChart from '../../components/charts/RevenueTrendChart';
 import {
-  DollarSign, Shield, FileText, UserCheck, Users, CreditCard, BarChart3, ClipboardList,
+  DollarSign, FileText, UserCheck, Users, CreditCard, BarChart3, ClipboardList,
   ArrowRight, LayoutDashboard, TrendingUp, History, WifiOff, CalendarClock
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -56,7 +56,7 @@ const DashboardOverview = ({ onSelectNav }) => {
   const { user } = useAuth();
   const [catalogCount, setCatalogCount] = useState(0);
   const [todayRevenue, setTodayRevenue] = useState(0);
-  const [roleCount, setRoleCount] = useState(0);
+  const [staffCount, setStaffCount] = useState(0);
   const [hmoPartnerCount, setHmoPartnerCount] = useState(0);
   const [revenueTrend, setRevenueTrend] = useState([]);
   const [recentVisits, setRecentVisits] = useState([]);
@@ -67,23 +67,31 @@ const DashboardOverview = ({ onSelectNav }) => {
   const fetchOverview = useCallback(async () => {
     try {
       const today = todayStr();
-      const [testsRes, txRes, rbacRes, hmoRes] = await Promise.all([
+      // Staff accounts rather than the RBAC matrix. Two reasons, and the second is the one that
+      // matters: reading the matrix is now SuperAdmin's alone, so an Admin loading this dashboard
+      // would have taken a 403 — and because these four run in one Promise.all, that single
+      // refusal would have blanked the revenue, the catalogue and the HMO count with it.
+      //
+      // It is also just a better card. "Operational Roles: 8" is a constant the clinic cannot
+      // change and never needs to look at; how many staff accounts exist is a number an Admin
+      // actually acts on, and it comes from staff:manage, which is theirs.
+      const [testsRes, txRes, staffRes, hmoRes] = await Promise.all([
         api.get('/tests'),
         api.get('/payments/transactions', { params: { startDate: today, endDate: today } }),
-        api.get('/rbac/matrix'),
+        api.get('/admin/staff'),
         api.get('/hmo/providers'),
       ]);
       setCatalogCount((testsRes.data.data.tests || []).length);
       // From the endpoint's own summary, not a reduce over the rows: the list includes reversed
       // receipts, so summing it would report refunded money as revenue.
       setTodayRevenue(Number(txRes.data.data.summary?.collected || 0));
-      setRoleCount((rbacRes.data.data.roles || []).length);
+      setStaffCount((staffRes.data.data.staff || []).length);
       setHmoPartnerCount((hmoRes.data.data.providers || []).filter(p => p.is_active).length);
       setPrimaryError(false);
     } catch (err) {
       console.error('Failed to fetch dashboard overview:', err);
       // Without this the four metric cards keep their initial zeros and render them as fact:
-      // "Today's Revenue ₱0.00", "0 Roles", "0 Services". An administrator cannot tell a quiet
+      // "Today's Revenue ₱0.00", "0 Staff Accounts", "0 Services". An administrator cannot tell a quiet
       // morning from an unreachable backend, and ₱0.00 is the more alarming of the two readings
       // to get wrong. The cards show an em dash instead while this is set — the same treatment
       // `secondaryError` already gives the charts below.
@@ -159,11 +167,11 @@ const DashboardOverview = ({ onSelectNav }) => {
           tone="emerald"
         />
         <MetricCard
-          label="Operational Roles"
-          value={loading ? '…' : primaryError ? '—' : roleCount}
-          caption="Permission matrix enforced"
+          label="Staff Accounts"
+          value={loading ? '…' : primaryError ? '—' : staffCount}
+          caption="Active operational staff"
           captionTone="slate"
-          icon={Shield}
+          icon={Users}
           tone="indigo"
         />
         <MetricCard

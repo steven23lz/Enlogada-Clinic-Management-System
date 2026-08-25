@@ -45,9 +45,11 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
             />
 
               <div className="inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
-                {/* Mirrors the 5 seeded test_categories rows exactly (database/schema.sql) —
-                    previously only 3 of 5 were filterable, silently hiding 2D Echo/ECG results. */}
-                {['All', 'Laboratory', 'Ultrasound', 'Xray', '2D Echo', 'ECG'].map(cat => (
+                {/* Only the categories this patient actually has. The hardcoded list this
+                    replaces mirrored all five test_categories rows, so every patient was offered
+                    2D Echo and ECG filters for services the clinic retired [1.47.0] — chips that
+                    named a service nobody can book and returned nothing when clicked. */}
+                {results.categories.map(cat => (
                   <button
                     key={cat}
                     onClick={() => results.setCategory(cat)}

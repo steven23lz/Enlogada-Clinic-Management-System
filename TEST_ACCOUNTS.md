@@ -6,7 +6,7 @@ Seeded by `backend/src/scripts/seedUsers.js` — one account per role, for local
 
 | Role | Name | Email |
 |---|---|---|
-| SuperAdmin | Super Admin | admin@enlogada.com |
+| SuperAdmin | Super Admin | @enadminlogada.com |
 | Admin | Clinic Manager | clinicadmin@enlogada.com |
 | Receptionist | Maria Santos | receptionist@enlogada.com |
 | Cashier | Juan Cashier | cashier@enlogada.com |
