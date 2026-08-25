@@ -24,6 +24,7 @@ import { useVisitDisposition } from '../../hooks/useVisitDisposition';
 import { useTestAssignment } from '../../hooks/useTestAssignment';
 import { useHmoLogging } from '../../hooks/useHmoLogging';
 import { UserCheck, UserPlus, QrCode, AlertCircle, History } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const PAGE_TITLES = {
   'reception-queue': 'Active Patient Queue',
@@ -55,6 +56,7 @@ const PAGE_BLURBS = {
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 
 const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) => {
+  const { hasPermission } = useAuth();
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
   // back to the primary queue view, mirroring DiagnosticDashboard's existing fallback pattern.
   const view = VALID_VIEWS.includes(activeNav) ? activeNav : 'reception-queue';
@@ -152,7 +154,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           title={PAGE_TITLES[view]}
           description={PAGE_BLURBS[view]}
           actions={
-            view === 'reception-queue' ? (
+            /* Only for someone who can actually register one. [1.53.0] A Cashier holds
+               `visits:read` and so reaches this queue legitimately — knowing who is waiting is
+               half of running a till — but not `visits:create`. This button sent them to a screen
+               their own sidebar does not list, to submit a request the API answers with 403.
+               Gated on the permission the endpoint itself demands, so the two agree. */
+            view === 'reception-queue' && hasPermission('visits:create') ? (
               <Button variant="outline" onClick={() => onSelectNav?.('reception-walkin')}>
                 <UserPlus className="h-4 w-4" />
                 Register Walk-In

@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertCircle, ClipboardList, Clock, Printer, ShieldAlert, UserCheck, UserPlus, Volume2, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
+import { useAuth } from '../../contexts/AuthContext';
 import { Panel, PanelBody } from '../ui/panel';
 import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
 import EmptyState from '../ui/empty-state';
@@ -22,6 +23,27 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
  * scrolling.
  */
 export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignment, onPrintTicket, onCallPatient, onSelectNav }) {
+  /**
+   * The queue is a BORROWED screen for anyone who is not the front desk. [1.53.0]
+   *
+   * A Cashier holds `visits:read`, so this screen is legitimately theirs to look at — knowing who
+   * is waiting is half of running a till. They do NOT hold `visits:create`, `tests:assign` or
+   * `hmo:request`, and the panel offered all three anyway: measured, a Cashier was shown
+   * "Register Walk-In" and "Attach Tests", and both are 403 at the API.
+   *
+   * That is the failure CLAUDE.md names about the sidebar, happening one level down. A control
+   * that cannot work is worse than a missing one: the person clicks it, gets an error that reads
+   * like a fault in the system rather than a boundary, and learns to distrust the screen.
+   *
+   * Each action is gated on the permission its own endpoint demands, so the UI and the API answer
+   * the same question. hasPermission bypasses for SuperAdmin alone — Admin is judged on what it
+   * actually holds, same as everyone else.
+   */
+  const { hasPermission } = useAuth();
+  const canRegisterWalkIn = hasPermission('visits:create');
+  const canAttachTests = hasPermission('tests:assign');
+  const canRaiseHmo = hasPermission('hmo:request');
+
   return (
         <>
           {/* KPI Metrics Header */}
@@ -193,15 +215,17 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                                     {t.test_name}
                                     <span className="ml-1 text-slate-400">({t.test_status})</span>
                                   </Badge>
-                                  <button
-                                    type="button"
-                                    onClick={() => hmo.openFor(t)}
-                                    title="Log HMO pre-authorization for this test"
-                                    aria-label={`Log HMO pre-authorization for ${t.test_name}`}
-                                    className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border-0 bg-transparent text-slate-300 hover:bg-brand-50 hover:text-brand-600"
-                                  >
-                                    <ShieldAlert className="h-3 w-3" />
-                                  </button>
+                                  {canRaiseHmo && (
+                                    <button
+                                      type="button"
+                                      onClick={() => hmo.openFor(t)}
+                                      title="Log HMO pre-authorization for this test"
+                                      aria-label={`Log HMO pre-authorization for ${t.test_name}`}
+                                      className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border-0 bg-transparent text-slate-300 hover:bg-brand-50 hover:text-brand-600"
+                                    >
+                                      <ShieldAlert className="h-3 w-3" />
+                                    </button>
+                                  )}
                                 </span>
                               ))}
                             </div>
@@ -226,9 +250,11 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
 
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <Button onClick={() => testAssignment.openFor(visit.id)} variant="outline" size="xs">
-                              Attach Tests
-                            </Button>
+                            {canAttachTests && (
+                              <Button onClick={() => testAssignment.openFor(visit.id)} variant="outline" size="xs">
+                                Attach Tests
+                              </Button>
+                            )}
                             {!['Completed', 'Cancelled'].includes(visit.visit_status) && (
                               <button
                                 type="button"
@@ -253,10 +279,12 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                           description={
                             queue.search || queue.status !== 'All'
                               ? 'Clear the search or switch the status filter back to All.'
-                              : 'The queue is clear. Register a walk-in or check in an appointment to start one.'
+                              : canRegisterWalkIn
+                                ? 'The queue is clear. Register a walk-in or check in an appointment to start one.'
+                                : 'The queue is clear. Nobody is waiting to be seen or billed.'
                           }
                           action={
-                            !queue.search && queue.status === 'All' ? (
+                            !queue.search && queue.status === 'All' && canRegisterWalkIn ? (
                               <Button size="sm" onClick={() => onSelectNav?.('reception-walkin')}>
                                 <UserPlus className="h-3.5 w-3.5" />
                                 Register Walk-In

@@ -224,6 +224,17 @@ This layering is enforced convention in this codebase (checked by the "Project A
   on a permission that did not exist was reported as "All good", which is the one thing that script
   exists to prevent. Joined on balanced parentheses now.
 - **Adding a permission to a route, or a nav item?** Run `node src/scripts/verifyRbacWiring.js`. Four checks: the permission exists; at least one staff role holds it (otherwise only SuperAdmin can reach the route); for routes that keep an explicit role list, every named role holds it; and every `permission:` in `frontend/src/config/navigation.js` is one the API actually enforces. That last check is what now guarantees the sidebar and the API agree — they used to agree by sharing a hardcoded role list, and no longer do.
+- **A screen the sidebar is right to show can still offer actions the API refuses.** `[1.53.0]`
+  Access is permission-driven, so a screen is reachable by whoever holds the right permission —
+  which means it can be legitimately VISIBLE to someone holding only SOME of the permissions its
+  controls need. A Cashier holds `visits:read` and so reaches the Active Queue legitimately
+  (knowing who is waiting is half of running a till), but not `visits:create`, `tests:assign` or
+  `hmo:request` — and the screen offered all three anyway, each a 403. Gate every ACTION on the
+  permission its own endpoint demands, not just the route. A control that cannot work is worse
+  than a missing one: the person clicks it, gets an error that reads as a fault rather than a
+  boundary, and stops trusting the parts that do work. `borrowed-screen-actions.spec.js` holds
+  both directions — the Cashier is offered none of them, the Receptionist keeps all of them, and
+  the API's 403s are asserted beside the UI so the two can only move together.
 - Navigation gates on the same three axes (`canSee` in `frontend/src/config/navigation.js`: `staffOnly`, `permission`, `department`), so the sidebar cannot advertise a screen the API will refuse. `AuthContext` re-reads `/auth/me` every 60s and on tab focus, so a change reaches a signed-in user without a re-login.
 - Roles/permissions are DB-driven (`roles`, `permissions`, `user_roles`, `user_permissions`, `user_departments`), seeded via `setupRbac.js`.
 - Google OAuth: `POST /api/auth/google` verifies an ID token via `google-auth-library`, then logs in or auto-creates a Client user.
