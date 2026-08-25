@@ -44,7 +44,15 @@ const ISOLATED = 'printing-isolated';
  * @param {string|null} pageClass    a body class selecting an @page size (e.g. 'printing-receipt')
  */
 export function printElement(node = null, pageClass = null) {
-  const target = node || document.querySelector('.print-area');
+  // A dialog's print area wins over one on the page behind it. Several screens render a printable
+  // document inside a dialog while the console underneath has its own — the receipt over the
+  // transaction log, a result report over the worklist — and `querySelector` alone returns the
+  // first in DOM order, which is the one nobody asked to print. Radix renders dialogs into a
+  // portal at the end of <body>, so "open dialog first" is both correct and cheap to ask for.
+  const target =
+    node
+    || document.querySelector('[role="dialog"] .print-area')
+    || document.querySelector('.print-area');
 
   // Nothing to isolate — print the page as it is rather than silently doing nothing.
   if (!target) {

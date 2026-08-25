@@ -134,8 +134,15 @@ class ResultRepository {
       SELECT vt.id as visit_test_id, vt.status as test_status,
              t.name as test_name, tc.name as category_name,
              pv.id as visit_id, pv.queue_number,
-             p.id as patient_id, p.first_name, p.last_name,
-             tr.findings, tr.remarks as result_remarks, tr.file_path, tr.released_at,
+             -- The demographics a diagnostic report has to carry. [1.54.0] Age and sex decide the
+             -- reference range a clinician reads the findings against, and the visit date is the
+             -- date the examination was PERFORMED, which is not the date it was released. A report
+             -- naming none of them is a page of findings that cannot be attributed to anyone.
+             pv.created_at as visit_date,
+             pv.referring_physician, pv.referring_physician_prc,
+             p.id as patient_id, p.first_name, p.last_name, p.birthdate, p.sex,
+             tr.findings, tr.remarks as result_remarks, tr.file_path, tr.file_original_name,
+             tr.released_at,
              tr.version, tr.is_critical, tr.critical_acknowledged_at,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM visit_tests vt

@@ -1,4 +1,5 @@
 import React from 'react';
+import { printElement } from '../../lib/printArea';
 import { AlertCircle, CheckCircle2, FileText, Printer, Send } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -57,7 +58,7 @@ export default function ResultEntryDialog({ worklist, entry, patientHistory }) {
               </div>
 
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => window.print()} className="text-xs font-bold flex items-center space-x-1.5">
+                <Button type="button" variant="outline" onClick={() => printElement()} className="text-xs font-bold flex items-center space-x-1.5">
                   <Printer className="w-3.5 h-3.5" />
                   <span>Print Now</span>
                 </Button>

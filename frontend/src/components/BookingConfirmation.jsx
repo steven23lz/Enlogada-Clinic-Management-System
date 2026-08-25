@@ -1,4 +1,5 @@
 import React from 'react';
+import { printElement } from '../lib/printArea';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from './ui/button';
 import { Printer, CheckCircle2, Wallet, ShieldCheck } from 'lucide-react';
@@ -155,7 +156,7 @@ const BookingConfirmation = ({
         <Button
           type="button"
           variant="outline"
-          onClick={() => window.print()}
+          onClick={() => printElement()}
           className="flex items-center space-x-1.5 text-xs font-bold"
         >
           <Printer className="h-3.5 w-3.5" />

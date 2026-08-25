@@ -1,4 +1,6 @@
 import React from 'react';
+import { printElement } from '../../lib/printArea';
+import DiagnosticReport from '../DiagnosticReport';
 import { Activity, Calendar, CheckCircle, ChevronRight, Clock, Download, Eye, FileText, FlaskConical, Info, Printer, Scan, Stethoscope } from 'lucide-react';
 
 // The mark a patient recognises their own report by. Elements rather than components because
@@ -16,7 +18,6 @@ import { SearchInput } from '../ui/search-input';
 import { Dialog, DialogContent, DialogTrigger } from '../ui/dialog';
 import { StatusBadge } from '../ui/status-badge';
 import { TabsContent } from '../ui/tabs';
-import { formatDateTime } from '../../lib/date';
 import { isSafeResultUrl, downloadResultFile } from '../../lib/resultFile';
 
 /**
@@ -110,123 +111,71 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
                         </DialogTrigger>
                         <DialogContent className="max-w-2xl">
 
-                        <div className="print-area space-y-4">
-                          {/* Official Lab Report Simulation Header */}
-                          <div className="border-b border-gray-200 pb-4 text-center space-y-1">
-                            <h2 className="text-base font-extrabold text-slate-900 uppercase tracking-wide m-0">ENLOGADA ULTRASOUND & DIAGNOSTIC CLINIC</h2>
-                            <p className="text-fine text-gray-500 font-semibold m-0">Official Diagnostic Examination Report</p>
-                            <span className="text-meta text-brand-600 font-bold block">CONFIDENTIAL MEDICAL DOCUMENT</span>
-                          </div>
+                        {/* The SAME document the clinic prints internally. [1.54.0] A patient's
+                            "official copy" and the staff copy used to be two hand-built layouts,
+                            so they disagreed about what a report contains — this one carried no
+                            age or sex, which is what a reference range is read against.
+                            One component, so the patient is handed the real thing. */}
+                        <DiagnosticReport
+                          patient={profiles.selected}
+                          result={{ ...item, result_remarks: item.remarks }}
+                        />
 
-                          {/* Patient Info Summary Block */}
-                          <div className="bg-gray-50 border border-[#e6ebf1] rounded-xl p-3.5 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                            <div>
-                              <span className="text-gray-400 font-bold text-meta uppercase block">Patient Name</span>
-                              <span className="font-bold text-slate-900">{profiles.selected?.first_name} {profiles.selected?.last_name}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 font-bold text-meta uppercase block">Examination</span>
-                              <span className="font-bold text-slate-900">{item.test_name}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-400 font-bold text-meta uppercase block">Category</span>
-                              <span className="font-bold text-slate-900">{item.category_name}</span>
-                            </div>
-                            {/* Only when there is one. A "Referred by: —" line on a self-pay
-                                walk-in's report is noise: nobody referred them, and an empty
-                                field invites the reader to wonder what is missing. */}
-                            {item.referring_physician && (
-                              <div>
-                                <span className="text-gray-400 font-bold text-meta uppercase block">Referred By</span>
-                                <span className="font-bold text-slate-900">{item.referring_physician}</span>
-                                {item.referring_physician_prc && (
-                                  <span className="block text-meta text-slate-500">
-                                    PRC {item.referring_physician_prc}
-                                  </span>
-                                )}
-                              </div>
+                        {/* Attachment actions are on-screen only — a button on paper is
+                            meaningless, and DiagnosticReport names the file in print instead. */}
+                        {(item.file_path || item.file_url) && (
+                          <div className="no-print mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
+                            <span className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-brand-600" />
+                              <span className="text-fine font-semibold text-slate-800">
+                                {item.file_original_name || 'Attached report'}
+                              </span>
+                            </span>
+                            {item.file_path ? (
+                              <span className="flex items-center gap-1.5">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="xs"
+                                  onClick={() => onPreviewDocument({
+                                    visitTestId: item.visit_test_id,
+                                    testName: item.test_name,
+                                    patientName: `${profiles.selected?.first_name || ''} ${profiles.selected?.last_name || ''}`.trim(),
+                                    fileName: item.file_original_name,
+                                  })}
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  View Report
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="xs"
+                                  onClick={() => downloadResultFile(item.visit_test_id, item.file_original_name)}
+                                >
+                                  <Download className="h-3 w-3" />
+                                  Download
+                                </Button>
+                              </span>
+                            ) : isSafeResultUrl(item.file_url) ? (
+                              <a
+                                href={item.file_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-fine font-semibold text-brand-700 hover:underline"
+                              >
+                                <Download className="h-3 w-3" />
+                                Open attachment
+                              </a>
+                            ) : (
+                              <span className="text-fine font-semibold text-amber-700">Attachment link unavailable</span>
                             )}
                           </div>
-
-                          {/* Findings Body */}
-                          <div className="space-y-3 pt-2">
-                            <div className="space-y-1">
-                              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider m-0">Clinical Findings & Impression</h4>
-                              <div className="p-4 bg-white border border-gray-200 rounded-xl text-xs leading-relaxed text-gray-800 whitespace-pre-line min-h-[100px]">
-                                {item.findings || 'No specific clinical findings recorded.'}
-                              </div>
-                            </div>
-
-                            {item.remarks && (
-                              <div className="border-l-4 border-brand-500 pl-3 py-1">
-                                <h4 className="text-fine font-bold text-gray-500 uppercase m-0">Remarks</h4>
-                                <p className="text-xs text-gray-700 m-0">{item.remarks}</p>
-                              </div>
-                            )}
-
-                            {(item.file_path || item.file_url) && (
-                              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
-                                <span className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-brand-600" />
-                                  <span className="text-fine font-semibold text-slate-800">
-                                    {item.file_original_name || 'Attached report'}
-                                  </span>
-                                </span>
-                                {item.file_path ? (
-                                  // View, not download. The patient is already looking at the
-                                  // summary; making them save a file to read the report itself
-                                  // is a step that exists only because nothing rendered it.
-                                  <span className="flex items-center gap-1.5">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="xs"
-                                      onClick={() => onPreviewDocument({
-                                        visitTestId: item.visit_test_id,
-                                        testName: item.test_name,
-                                        patientName: `${profiles.selected?.first_name || ''} ${profiles.selected?.last_name || ''}`.trim(),
-                                        fileName: item.file_original_name,
-                                      })}
-                                    >
-                                      <Eye className="h-3 w-3" />
-                                      View Report
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="xs"
-                                      onClick={() => downloadResultFile(item.visit_test_id, item.file_original_name)}
-                                    >
-                                      <Download className="h-3 w-3" />
-                                      Download
-                                    </Button>
-                                  </span>
-                                ) : isSafeResultUrl(item.file_url) ? (
-                                  <a
-                                    href={item.file_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-fine font-semibold text-brand-700 hover:underline"
-                                  >
-                                    <Download className="h-3 w-3" />
-                                    Open attachment
-                                  </a>
-                                ) : (
-                                  <span className="text-fine font-semibold text-amber-700">Attachment link unavailable</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Footer Release Stamp */}
-                          <div className="pt-4 border-t border-[#e6ebf1] text-fine">
-                            <span className="text-gray-400 font-medium">Released: {formatDateTime(item.released_at)}</span>
-                          </div>
-                        </div>
+                        )}
 
                         <div className="flex justify-end pt-2">
                           <Button
-                            onClick={() => window.print()}
+                            onClick={() => printElement()}
                             variant="outline"
                             className="text-xs font-bold flex items-center space-x-1.5"
                           >
