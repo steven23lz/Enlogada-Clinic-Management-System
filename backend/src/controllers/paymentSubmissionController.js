@@ -41,6 +41,16 @@ class PaymentSubmissionController {
     }
   }
 
+  /** Decisions already made, so a cashier can look back at one — including its screenshot. */
+  async getReviewed(req, res, next) {
+    try {
+      const submissions = await paymentSubmissionService.listRecentlyReviewed();
+      return res.status(200).json({ status: 'success', data: { submissions } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   /** What a patient has claimed for one booking, so they can see a rejection and its reason. */
   async getForVisit(req, res, next) {
     try {

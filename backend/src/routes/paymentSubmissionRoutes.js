@@ -20,6 +20,10 @@ router.post(
 // Before '/:id' so 'pending' is never read as an id.
 router.get('/pending', verifyToken, authorizeStaff, authorizePermissions('billing:read'), paymentSubmissionController.getPending);
 
+// Reading past decisions is billing:read, not billing:process — looking is not taking money, and
+// Admin oversees the cash-up without being able to transact on it.
+router.get('/reviewed', verifyToken, authorizeStaff, authorizePermissions('billing:read'), paymentSubmissionController.getReviewed);
+
 // A client reads their own; the service enforces ownership per patient profile.
 router.get('/visit/:visitId', verifyToken, paymentSubmissionController.getForVisit);
 router.get('/:id/proof', verifyToken, paymentSubmissionController.getProof);

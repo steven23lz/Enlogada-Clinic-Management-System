@@ -193,6 +193,73 @@ class AppointmentEmailService {
       `),
     });
   }
+  /**
+   * Their online payment was accepted, so the booking pass now exists.
+   *
+   * ── Why this is an email and not a notification ────────────────────────────────────────────
+   *
+   * The patient portal has no notification bell. Writing an in-app notification for a Client
+   * would produce a row nobody can ever see — so for a patient, email IS the channel, and the
+   * portal card is where they look it up afterwards.
+   *
+   * That matters more here than for most messages: the patient has paid and is waiting on
+   * something the clinic controls. Silence reads as "it did not go through", and the usual next
+   * step is paying a second time.
+   */
+  async sendPaymentVerified({ to, patientName, reference, receiptNumber, amount }) {
+    if (!to) {
+      logger.debug('Payment verified email skipped: no email address on the patient.');
+      return { skipped: true };
+    }
+
+    return sendEmail({
+      to,
+      subject: `Payment received — ${CLINIC_NAME}`,
+      html: shell(`Hello ${patientName},`, `
+        <p>We have checked your payment and your booking is confirmed. Your QR booking pass is now
+           in your account — show it at the front desk when you arrive.</p>
+        <table style="border-collapse:collapse;margin:16px 0;font-size:14px;">
+          <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Booking</td>
+              <td style="padding:4px 0;"><strong>${esc(reference || '—')}</strong></td></tr>
+          <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Receipt</td>
+              <td style="padding:4px 0;"><strong>${esc(receiptNumber || '—')}</strong></td></tr>
+          <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Amount</td>
+              <td style="padding:4px 0;"><strong>${esc(amount || '')}</strong></td></tr>
+        </table>
+        <p style="font-size:14px;">Please arrive about 10 minutes early.</p>
+      `),
+    });
+  }
+
+  /**
+   * Their online payment could not be confirmed, and why.
+   *
+   * The reason is the whole message. A patient told only "rejected" rings the clinic, and whoever
+   * answers has to go and look it up — which is the same failure [1.27.0] fixed for HMO refusals.
+   * The service refuses to record a rejection without one, so there is always something to say.
+   */
+  async sendPaymentRejected({ to, patientName, reference, reason }) {
+    if (!to) {
+      logger.debug('Payment rejected email skipped: no email address on the patient.');
+      return { skipped: true };
+    }
+
+    return sendEmail({
+      to,
+      subject: `We could not confirm your payment — ${CLINIC_NAME}`,
+      html: shell(`Hello ${patientName},`, `
+        <p>We were not able to confirm the payment you sent for your booking
+           ${reference ? `<strong>${esc(reference)}</strong>` : ''}. Nothing has been charged.</p>
+        <table style="border-collapse:collapse;margin:16px 0;font-size:14px;">
+          <tr><td style="padding:4px 16px 4px 0;color:#64748b;vertical-align:top;">Reason</td>
+              <td style="padding:4px 0;"><strong>${esc(reason)}</strong></td></tr>
+        </table>
+        <p style="font-size:14px;">You can send the payment again from your account — sign in and
+           open the booking to upload a new confirmation. Your appointment time is still reserved
+           in the meantime, and you can also settle at the counter when you arrive.</p>
+      `),
+    });
+  }
 }
 
 module.exports = new AppointmentEmailService();

@@ -19,6 +19,7 @@ import { toastSuccess, toastError } from '../lib/toast';
  */
 export function usePaymentReview({ enabled = true } = {}) {
   const [submissions, setSubmissions] = useState([]);
+  const [reviewed, setReviewed] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -28,8 +29,15 @@ export function usePaymentReview({ enabled = true } = {}) {
 
   const load = useCallback(async () => {
     try {
-      const res = await api.get('/payment-submissions/pending');
-      setSubmissions(res.data.data.submissions || []);
+      // Both together: the pending queue is the work, and the recent decisions are what a cashier
+      // is asked about ("did we take that one yesterday?"). Settled together so a verification
+      // moves a row from one list to the other in a single refresh rather than two.
+      const [pendingRes, reviewedRes] = await Promise.all([
+        api.get('/payment-submissions/pending'),
+        api.get('/payment-submissions/reviewed'),
+      ]);
+      setSubmissions(pendingRes.data.data.submissions || []);
+      setReviewed(reviewedRes.data.data.submissions || []);
       setError('');
     } catch (err) {
       console.error('Failed to load payment submissions:', err);
@@ -91,7 +99,7 @@ export function usePaymentReview({ enabled = true } = {}) {
   };
 
   return {
-    submissions, loading, error, reload: load,
+    submissions, reviewed, loading, error, reload: load,
     acting, verify,
     rejecting, rejectReason, setRejectReason, askReject, dismissReject, confirmReject,
   };

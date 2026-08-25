@@ -1,5 +1,49 @@
 # Database Migration & Schema History
 
+## [1.49.0] - 2026-08-25 (Tell the patient, and let the cashier look back)
+
+No schema change. The two gaps [1.48.2] left open.
+
+### The patient is told, by email, because there is no other channel
+
+**The patient portal has no notification bell.** An in-app notification addressed to a Client would
+be a row written to a table nobody can ever see — so for a patient, email IS the channel and the
+portal card is where they look it up afterwards.
+
+That matters most in exactly this flow: the patient has paid and is waiting on something only the
+clinic can do. Silence reads as "it did not go through", and the usual next step is paying twice.
+So a decision now sends one of two mails:
+
+  * **verified** — the pass is ready, with the receipt number and amount
+  * **rejected** — with the reason, and how to send it again
+
+The reason is the whole message. Requiring one at rejection ([1.48.0]) is only worth anything if it
+reaches the person who has to act on it — otherwise it is a note the clinic writes to itself, which
+is the failure [1.27.0] fixed for HMO refusals.
+
+Both are sent AFTER the decision commits and neither can fail it: `sendEmail` already swallows
+transport errors, and `notifyPatient` adds the same guarantee around the lookup. Verified against a
+real client booking with SMTP off — the log shows a clean skip naming the recipient and subject.
+
+The address comes from the account that OWNS the patient profile, never from `submitted_by`:
+reception can file a claim on a patient's behalf, and mailing the receptionist that their payment
+was rejected helps nobody.
+
+### A settled submission stopped disappearing
+
+Verified or rejected, it dropped out of the only screen that showed it. A cashier asked "did we take
+that GCash payment yesterday?" had nowhere to look, and could not re-open the screenshot behind a
+decision somebody else made — the receipt was in Transaction History, but the EVIDENCE for it was
+nowhere.
+
+`GET /payment-submissions/reviewed` and a **Recently Reviewed** panel: who decided, when, the
+receipt number if it produced one, the reason if it did not, and the proof still openable. Gated on
+`billing:read` rather than `billing:process` — looking is not taking money, and Admin oversees the
+cash-up without being able to transact on it.
+
+Bounded at 20 rather than paged: this answers "what happened recently", and anything older is a
+question for the transaction history, which is built for it.
+
 ## [1.48.2] - 2026-08-25 (Catching a bad screenshot before the cashier does)
 
 No schema change.

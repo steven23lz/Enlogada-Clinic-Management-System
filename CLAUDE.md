@@ -272,6 +272,12 @@ isActive : true` was the same bug pointing the other way, turning "I did not men
 "switch it on". If you add a repository method that writes a whole row, the service above it owes
 the same treatment.
 
+**The patient portal has no notification bell — email is the only channel that reaches a patient.**
+`[1.49.0]` `notifyRoles` writes to staff, who have a bell in `SidebarLayout`. A Client does not, so
+an in-app notification addressed to one is a row nobody can ever see. Anything a patient must be
+told goes through `appointmentEmailService`, which skips cleanly when SMTP is unconfigured; the
+portal screen is where they look it up afterwards, not how they find out.
+
 **PHI reads are audited; keep the scope narrow.** `auditService.logPhiRead` records reads of an *identified patient's* records (demographics, result history, report file). Do not add it to searches, worklists or queues — staff refresh those constantly, and the entries that matter would drown in traffic that is just people doing their job. That is the fan-out mistake that took `notification_reads` to 255,540 rows.
 
 **`test_results` is versioned — always filter on `is_current`.** A test carries one row per version of its report (an amendment supersedes rather than overwrites; see [1.15.0]). A `LEFT JOIN test_results` without `AND tr.is_current` repeats the parent row once per amendment and shows superseded findings beside live ones, and an `UPDATE … WHERE visit_test_id = $1` without it rewrites the history. `findVersionHistoryByVisitTestId` is the only intentional reader of superseded rows.

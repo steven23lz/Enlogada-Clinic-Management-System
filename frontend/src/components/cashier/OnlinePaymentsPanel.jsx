@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Check, X, Eye, AlertTriangle, Wallet } from 'lucide-react';
+import { Check, X, Eye, AlertTriangle, Wallet, History } from 'lucide-react';
 import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { Textarea } from '../ui/textarea';
@@ -75,7 +76,7 @@ export default function OnlinePaymentsPanel({ review }) {
   const [viewing, setViewing] = useState(null);
 
   return (
-    <>
+    <div className="space-y-5">
       <Panel className="overflow-hidden">
         <PanelHeader
           title="Online Payments to Verify"
@@ -189,6 +190,59 @@ export default function OnlinePaymentsPanel({ review }) {
         </PanelBody>
       </Panel>
 
+      {/* What was decided, and by whom. A settled submission used to leave the system entirely, so
+          "did we take that GCash payment yesterday?" had nowhere to look and the screenshot behind
+          somebody else's decision could not be re-opened. The receipt lives in Transaction
+          History; the evidence for it lives here. */}
+      {review.reviewed.length > 0 && (
+        <Panel className="overflow-hidden">
+          <PanelHeader
+            title="Recently Reviewed"
+            description="The last decisions made here, with the proof still attached"
+            icon={History}
+          />
+          <PanelBody flush>
+            <ul className="m-0 list-none divide-y divide-line p-0">
+              {review.reviewed.map((s) => (
+                <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+                  <span className="min-w-0">
+                    <span className="block text-note font-semibold text-slate-800">
+                      {s.first_name} {s.last_name}
+                    </span>
+                    <span className="block text-fine text-slate-500">
+                      ref <span className="font-mono">{s.reference_number}</span>
+                      {s.reviewed_by_first_name ? ` · by ${s.reviewed_by_first_name} ${s.reviewed_by_last_name}` : ''}
+                    </span>
+                    {s.review_note && (
+                      <span className="mt-0.5 block text-fine italic leading-relaxed text-slate-500">
+                        “{s.review_note}”
+                      </span>
+                    )}
+                  </span>
+                  <span className="flex flex-shrink-0 items-center gap-2.5">
+                    {s.receipt_number && (
+                      <span className="font-mono text-fine text-slate-500">{s.receipt_number}</span>
+                    )}
+                    <Badge variant={s.status === 'Verified' ? 'default' : 'secondary'}>
+                      {s.status}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!s.has_proof}
+                      onClick={() => setViewing(s.id)}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      Proof
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </PanelBody>
+        </Panel>
+      )}
+
       {viewing && <ProofViewer submissionId={viewing} onClose={() => setViewing(null)} />}
 
       <ConfirmDialog
@@ -210,6 +264,6 @@ export default function OnlinePaymentsPanel({ review }) {
           aria-label="Reason for rejecting"
         />
       </ConfirmDialog>
-    </>
+    </div>
   );
 }

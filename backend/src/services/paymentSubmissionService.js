@@ -7,9 +7,11 @@ const paymentService = require('./paymentService');
 const visitRepository = require('../repositories/visitRepository');
 const patientRepository = require('../repositories/patientRepository');
 const auditService = require('./auditService');
+const logger = require('../config/logger');
 const notificationService = require('./notificationService');
 const { PAYMENT_UPLOAD_ROOT, discardPaymentFile } = require('../config/upload');
 const { formatCurrency } = require('../utils/money');
+const appointmentEmailService = require('./appointmentEmailService');
 
 /**
  * Manual proof of payment: the patient pays into the clinic's own account and a cashier checks it.
@@ -116,6 +118,10 @@ class PaymentSubmissionService {
     return await paymentSubmissionRepository.findPending();
   }
 
+  async listRecentlyReviewed() {
+    return await paymentSubmissionRepository.findRecentlyReviewed();
+  }
+
   async listForVisit(patientVisitId, user) {
     await this.assertClientOwnsVisit(user, patientVisitId);
     return await paymentSubmissionRepository.findAllForVisit(patientVisitId);
@@ -179,6 +185,15 @@ class PaymentSubmissionService {
       description: `Ref ${settled.reference_number} verified — receipt ${payment.receipt_number}`,
     });
 
+    // Told, rather than left to notice. The patient portal has no notification bell, so email is
+    // the only channel that reaches them — and they are waiting on something only the clinic can
+    // do, which is exactly the situation where silence gets read as "it did not work".
+    //
+    // After the settle, never inside it, and never awaited in a way that can fail the approval:
+    // the money is taken and the receipt exists by this point, so an SMTP problem must not turn a
+    // completed payment into an error the cashier has to interpret.
+    await this.notifyPatient(settled.id, { verified: true, payment }).catch(() => {});
+
     return { submission: settled, payment };
   }
 
@@ -222,7 +237,48 @@ class PaymentSubmissionService {
       description: `Ref ${settled.reference_number} rejected — ${settled.review_note}`,
     });
 
+    // The reason is the whole point of requiring one. Sending it is what stops the patient
+    // refreshing the portal, guessing, and eventually ringing the clinic.
+    await this.notifyPatient(settled.id, { verified: false }).catch(() => {});
+
     return settled;
+  }
+
+  /**
+   * Write to the patient about a decision on their payment.
+   *
+   * Never throws. Every caller invokes it after the decision has committed, so a missing SMTP
+   * config or a bounced address must not surface as a failure on a payment that already happened
+   * — `sendEmail` already swallows transport errors, and this adds the same guarantee around the
+   * lookup.
+   */
+  async notifyPatient(submissionId, { verified, payment }) {
+    try {
+      const s = await paymentSubmissionRepository.findByIdWithContact(submissionId);
+      if (!s || !s.patient_email) return { skipped: true };
+
+      const patientName = `${s.first_name} ${s.last_name}`;
+      if (verified) {
+        return await appointmentEmailService.sendPaymentVerified({
+          to: s.patient_email,
+          patientName,
+          reference: s.appointment_reference,
+          receiptNumber: payment?.receipt_number,
+          amount: formatCurrency(payment?.amount),
+        });
+      }
+      return await appointmentEmailService.sendPaymentRejected({
+        to: s.patient_email,
+        patientName,
+        reference: s.appointment_reference,
+        reason: s.review_note,
+      });
+    } catch (err) {
+      // Logged rather than raised: the decision stands either way, and losing the email must not
+      // make a settled payment look broken.
+      logger.error('Failed to email the patient about their payment decision:', err);
+      return { error: err.message };
+    }
   }
 
   /**

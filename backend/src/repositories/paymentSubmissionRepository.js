@@ -27,6 +27,31 @@ class PaymentSubmissionRepository {
     return result.rows[0];
   }
 
+  /**
+   * A submission with everything needed to write to the patient about it.
+   *
+   * The address comes from the account that OWNS the patient profile, not from `submitted_by` —
+   * reception can file a claim on a patient's behalf, and mailing the receptionist that their
+   * payment was rejected helps nobody.
+   */
+  async findByIdWithContact(id) {
+    const result = await db.query(
+      `SELECT ps.*, pm.label AS method_label, pm.kind AS method_kind,
+              p.first_name, p.last_name,
+              u.email AS patient_email,
+              a.appointment_reference
+         FROM payment_submissions ps
+         JOIN patient_visits pv ON pv.id = ps.patient_visit_id
+         JOIN patients p        ON p.id = pv.patient_id
+         LEFT JOIN users u      ON u.id = p.user_id
+         LEFT JOIN payment_methods pm ON pm.id = ps.payment_method_id
+         LEFT JOIN appointments a     ON a.patient_visit_id = pv.id
+        WHERE ps.id = $1`,
+      [id]
+    );
+    return result.rows[0];
+  }
+
   /** The live claim on a visit, if there is one. At most one by uq_paysub_one_live_per_visit. */
   async findPendingForVisit(patientVisitId) {
     const result = await db.query(
@@ -82,6 +107,41 @@ class PaymentSubmissionRepository {
          LEFT JOIN appointments a     ON a.patient_visit_id = pv.id
         WHERE ps.status = 'Pending'
         ORDER BY ps.submitted_at ASC`
+    );
+    return result.rows;
+  }
+
+  /**
+   * Decisions already made, newest first.
+   *
+   * A settled submission left the system entirely — verified or rejected, it dropped out of the
+   * only screen that showed it. So a cashier asked "did we take that GCash payment yesterday?"
+   * had nowhere to look, and could not re-open the screenshot behind a decision somebody else
+   * made. The receipt exists in Transaction History, but the EVIDENCE for it did not.
+   *
+   * Bounded rather than paged: this answers "what happened recently", and anything older is a
+   * question for the transaction history, which is built for it.
+   */
+  async findRecentlyReviewed(limit = 20) {
+    const result = await db.query(
+      `SELECT ps.id, ps.patient_visit_id, ps.reference_number, ps.amount_claimed,
+              ps.status, ps.reviewed_at, ps.review_note,
+              (ps.proof_file_path IS NOT NULL) AS has_proof,
+              pm.label AS method_label, pm.kind AS method_kind,
+              p.first_name, p.last_name,
+              pay.receipt_number,
+              reviewer.first_name AS reviewed_by_first_name,
+              reviewer.last_name  AS reviewed_by_last_name
+         FROM payment_submissions ps
+         JOIN patient_visits pv ON pv.id = ps.patient_visit_id
+         JOIN patients p        ON p.id = pv.patient_id
+         LEFT JOIN payment_methods pm ON pm.id = ps.payment_method_id
+         LEFT JOIN payments pay       ON pay.id = ps.payment_id
+         LEFT JOIN users reviewer     ON reviewer.id = ps.reviewed_by
+        WHERE ps.status <> 'Pending'
+        ORDER BY ps.reviewed_at DESC NULLS LAST
+        LIMIT $1`,
+      [limit]
     );
     return result.rows;
   }
