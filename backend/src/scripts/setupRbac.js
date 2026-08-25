@@ -72,6 +72,7 @@ const PERMISSIONS = [
   // Billing
   { name: 'billing:read', module: 'Billing', description: 'View bills and transaction history' },
   { name: 'billing:process', module: 'Billing', description: 'Take payment and issue a receipt' },
+  { name: 'billing:submit_proof', module: 'Billing', description: 'Submit proof of an online payment for a cashier to verify' },
   { name: 'billing:refund', module: 'Billing', description: 'Refund or void a settled payment' },
   { name: 'billing:discount', module: 'Billing', description: 'Grant a statutory or commercial discount' },
 
@@ -94,6 +95,10 @@ const RECEPTION = [
   'appointments:read', 'appointments:update', 'appointments:cancel', 'appointments:reschedule',
   'tests:assign', 'tests:read_assigned', 'hmo:read', 'hmo:request',
   'results:acknowledge_critical',
+  // Files a proof of payment on a patient's behalf — somebody who paid online and then rang the
+  // clinic rather than uploading it themselves. Reception cannot VERIFY one: that is
+  // billing:process, and taking money stays with the cashier.
+  'billing:submit_proof',
   // Reception applies the statutory (Senior Citizen / PWD) discount at the desk, when the ID is
   // presented. POST /discounts/visit/:visitId has always allowed the Receptionist role, but the
   // matrix never granted the permission — and nothing caught the disagreement because that route
@@ -107,6 +112,7 @@ const RECEPTION = [
 const CASHIER = [
   'patients:read', 'patients:read_all_departments', 'visits:read', 'visits:update',
   'billing:read', 'billing:process', 'billing:refund', 'billing:discount',
+  'billing:submit_proof',
   'hmo:read',
 ];
 
@@ -127,7 +133,7 @@ const ADMIN = [
   'appointments:read', 'appointments:update', 'appointments:cancel', 'appointments:reschedule',
   'tests:manage', 'tests:assign', 'tests:read_assigned',
   'results:read', 'results:acknowledge_critical',
-  'billing:read', 'billing:refund', 'billing:discount',
+  'billing:read', 'billing:refund', 'billing:discount', 'billing:submit_proof',
   'hmo:read', 'hmo:request', 'hmo:approve',
   'reports:view', 'audit:view', 'staff:manage',
 ];
@@ -153,7 +159,7 @@ const ROLE_PERMISSIONS = {
   Client: [
     'patients:create', 'patients:read', 'patients:update',
     'appointments:create', 'appointments:read', 'appointments:cancel', 'appointments:reschedule',
-    'tests:assign', 'billing:read',
+    'tests:assign', 'billing:read', 'billing:submit_proof',
     'visits:read', 'results:read',
     'hmo:request', 'hmo:read',
   ],

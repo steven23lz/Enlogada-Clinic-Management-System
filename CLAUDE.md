@@ -75,6 +75,7 @@ node src/scripts/migrateClaimIntegrity.js     # [1.31.0] one live HMO claim per 
 node src/scripts/migrateSlotHold.js            # [1.35.0] an unpaid online booking holds its slot instead of taking it forever (--rollback reverses it)
 node src/scripts/migratePaymentMethods.js     # [1.33.0] narrow chk_payment_method to what the clinic settles; refuses if a row would violate it (--rollback reverses it)
 node src/scripts/migrateTestPackages.js        # [1.45.0] the clinic's package deals (--rollback reverses it)
+node src/scripts/migratePaymentSubmissions.js  # [1.48.0] clinic payment channels + manual proof of payment (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -132,6 +133,19 @@ Run it before and after any non-trivial change and compare the pass/fail counts 
 
 Three notes learned the hard way. The dev rate limiter allows 20,000 requests per 15 minutes; running the suite many times back to back trips it, and the resulting 429s surface as scattered, unrelated-looking failures — restart the backend to reset the counter. (There is now a second, tighter limiter on the credential endpoints, but it only counts *failed* attempts and allows 2,000 outside production, so the suite does not touch it.) Editing a backend file mid-run has the same signature: nodemon restarts, in-flight requests are dropped, and several unrelated specs go red at once — re-run on a settled server before believing a failure. And navigation/role changes need `multirole@enlogada.com` (see `TEST_ACCOUNTS.md`) to exercise properly: a single-role account cannot reveal the class of bug where the sidebar offers a screen the router refuses to open.
 
+**Manual proof of payment is the live channel; the gateway is not.** `[1.48.0]` The clinic takes
+online payment WITHOUT a gateway: SuperAdmin publishes its own GCash/bank details and QR
+(`payment_methods`), the patient pays and uploads a screenshot plus reference (`payment_submissions`),
+and a cashier verifies it. Approval runs the **existing** `paymentService.processPayment`, so it
+gets a real receipt number, the visit release and the cash-up entry — never a parallel money writer.
+The claimed amount is evidence only: the payment is always the recomputed bill, which is why the
+review queue shows `amount_due` beside `amount_claimed` (approving a ₱50 claim on a ₱1,450 visit
+records ₱1,450 and the drawer is short with nothing on screen to say so). `payment_methods.kind` is
+constrained to **Cash/GCash/Bank** because those are the cash-up buckets `payments` accepts; the
+clinic's own naming goes in `label`. Publishing an account number is **SuperAdmin only and audited**
+— it is where a patient's money is sent. Everything below about PayMongo still applies if the clinic
+ever wants a real gateway; the two paths coexist.
+
 **Turning on online payment (GCash) is configuration only — no code change.** [1.37.0] The whole
 path is wired, mounted and unflagged; it is dormant purely because the secrets are blank. In order:
 
@@ -186,6 +200,10 @@ This layering is enforced convention in this codebase (checked by the "Project A
   - `permissions` — the role template **plus** that account's own grants, **minus** its revokes (`user_permissions`). Revoke is applied last as a set difference, so a conflict resolves to *less* access.
   - `departments` — the modalities implied by the account's roles **plus** `user_departments`. `null` means unrestricted (Admin/SuperAdmin) and is deliberately distinct from `[]`, "none"; collapsing the two is how an access check ends up inverted. Enforced in the service layer — see `resultService.assertStaffAllowedCategory`.
 - Per-account exceptions are edited on **Access Control** (SuperAdmin → By Person) and are **audited**. Role edits are not: a role change is visible in the matrix everyone reads, while an exception applies to one person and is easy to forget.
+- **`verifyRbacWiring.js` reads a route across lines, and must keep doing so.** `[1.48.0]` It used
+  to read one LINE at a time, so a multi-line `router.post(...)` was never examined — a route gated
+  on a permission that did not exist was reported as "All good", which is the one thing that script
+  exists to prevent. Joined on balanced parentheses now.
 - **Adding a permission to a route, or a nav item?** Run `node src/scripts/verifyRbacWiring.js`. Four checks: the permission exists; at least one staff role holds it (otherwise only SuperAdmin can reach the route); for routes that keep an explicit role list, every named role holds it; and every `permission:` in `frontend/src/config/navigation.js` is one the API actually enforces. That last check is what now guarantees the sidebar and the API agree — they used to agree by sharing a hardcoded role list, and no longer do.
 - Navigation gates on the same three axes (`canSee` in `frontend/src/config/navigation.js`: `staffOnly`, `permission`, `department`), so the sidebar cannot advertise a screen the API will refuse. `AuthContext` re-reads `/auth/me` every 60s and on tab focus, so a change reaches a signed-in user without a re-login.
 - Roles/permissions are DB-driven (`roles`, `permissions`, `user_roles`, `user_permissions`, `user_departments`), seeded via `setupRbac.js`.

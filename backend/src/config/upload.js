@@ -219,6 +219,91 @@ const discardHmoCard = (file) => {
   if (file && file.path) fs.unlink(file.path, () => {});
 };
 
+// [1.48.0] Two more image paths, both the same server-generated-filename pattern as everything
+// above, and neither of them optional to get right.
+//
+//   payment-qr      the clinic's OWN GCash/bank QR, published to patients. SuperAdmin writes it.
+//   payment-proof   a patient's screenshot of a transfer they say they made. The patient writes it.
+//
+// The second is the one to be careful with: it is an unauthenticated-user-shaped upload attached
+// to a money claim, so it is size-bounded, mime-mapped and containment-checked exactly like the
+// HMO card, and it is served back only through an ownership-checked route.
+const PAYMENT_UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads', 'payments');
+fs.mkdirSync(PAYMENT_UPLOAD_ROOT, { recursive: true });
+
+// PDF is accepted for a proof — banks email PDF receipts and a patient will forward one — but NOT
+// for the QR, which has to be an image the browser can render inline on the payment screen.
+const PAYMENT_PROOF_MIME_EXTENSIONS = new Map([
+  ['image/jpeg', '.jpg'],
+  ['image/png', '.png'],
+  ['image/webp', '.webp'],
+  ['application/pdf', '.pdf'],
+]);
+const PAYMENT_QR_MIME_EXTENSIONS = new Map([
+  ['image/jpeg', '.jpg'],
+  ['image/png', '.png'],
+  ['image/webp', '.webp'],
+]);
+const MAX_PAYMENT_FILE_SIZE_BYTES = 8 * 1024 * 1024; // 8MB, matching the HMO card
+
+const paymentUpload = (extensions, prefix, message) => {
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, PAYMENT_UPLOAD_ROOT),
+    filename: (req, file, cb) => {
+      const ext = extensions.get(file.mimetype) || '.bin';
+      // Seeded on the uploading user, not on the record: the submission row does not exist yet
+      // when multer runs. Same reasoning as the HMO card above.
+      assertInside(PAYMENT_UPLOAD_ROOT, `${prefix}-${req.user.userId}-${crypto.randomBytes(16).toString('hex')}${ext}`, cb);
+    }
+  });
+  const fileFilter = (req, file, cb) => {
+    if (!extensions.has(file.mimetype)) {
+      const error = new Error(message);
+      error.statusCode = 400;
+      return cb(error);
+    }
+    cb(null, true);
+  };
+  return multer({
+    storage,
+    fileFilter,
+    limits: { fileSize: MAX_PAYMENT_FILE_SIZE_BYTES, files: 1, fields: 30, fieldNameSize: 200 }
+  });
+};
+
+const uploadPaymentProof = paymentUpload(
+  PAYMENT_PROOF_MIME_EXTENSIONS, 'proof',
+  'The proof of payment must be a JPEG, PNG, WebP or PDF file.'
+);
+const uploadPaymentQr = paymentUpload(
+  PAYMENT_QR_MIME_EXTENSIONS, 'qr',
+  'The QR image must be a JPEG, PNG or WebP file.'
+);
+
+const paymentUploadMiddleware = (upload, field, sizeMessage) => (req, res, next) => {
+  upload.single(field)(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        err.friendlyMessage = sizeMessage;
+      }
+      return next(classifyUploadError(err));
+    }
+    next();
+  });
+};
+
+const uploadPaymentProofMiddleware = paymentUploadMiddleware(
+  uploadPaymentProof, 'proof', 'The proof of payment must be 8MB or smaller.'
+);
+const uploadPaymentQrMiddleware = paymentUploadMiddleware(
+  uploadPaymentQr, 'qr', 'The QR image must be 8MB or smaller.'
+);
+
+/** Best-effort cleanup, same contract and same reasoning as discardHmoCard. */
+const discardPaymentFile = (file) => {
+  if (file && file.path) fs.unlink(file.path, () => {});
+};
+
 module.exports = {
   uploadResultFileMiddleware,
   UPLOAD_ROOT,
@@ -226,5 +311,9 @@ module.exports = {
   AVATAR_UPLOAD_ROOT,
   uploadHmoCardMiddleware,
   HMO_CARD_UPLOAD_ROOT,
-  discardHmoCard
+  discardHmoCard,
+  uploadPaymentProofMiddleware,
+  uploadPaymentQrMiddleware,
+  PAYMENT_UPLOAD_ROOT,
+  discardPaymentFile
 };

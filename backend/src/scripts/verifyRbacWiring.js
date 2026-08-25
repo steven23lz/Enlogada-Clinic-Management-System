@@ -25,10 +25,42 @@ const ROUTES_DIR = path.join(__dirname, '..', 'routes');
 // Roles that legitimately bypass the permission layer, so a gap for them is not a finding.
 const BYPASS = new Set(['SuperAdmin']);
 
+/**
+ * Every router.<verb>(...) call in a source file, each flattened to a single string.
+ *
+ * Lines that are not part of a route call are passed through untouched, so the caller's own
+ * `router.` test still decides what counts.
+ */
+function joinRouteCalls(source) {
+  const lines = source.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!/^router\.(get|post|put|patch|delete)\(/.test(lines[i].trim())) {
+      out.push(lines[i]);
+      continue;
+    }
+    let call = lines[i];
+    let depth = (call.match(/\(/g) || []).length - (call.match(/\)/g) || []).length;
+    while (depth > 0 && i + 1 < lines.length) {
+      i += 1;
+      call += ' ' + lines[i].trim();
+      depth += (lines[i].match(/\(/g) || []).length - (lines[i].match(/\)/g) || []).length;
+    }
+    out.push(call);
+  }
+  return out;
+}
+
 function extractRouteGuards(source) {
   const found = [];
-  // One router.<verb>( ... ) call per line is the convention throughout this codebase.
-  for (const line of source.split('\n')) {
+  // A router.<verb>( ... ) call, however many lines it is spread over.
+  //
+  // This used to read one LINE at a time, on the stated convention that every route fits on one.
+  // A route written across several lines — which a long guard chain invites — was therefore not
+  // examined at all: it did not appear in the count, and its permissions were never checked
+  // against the catalogue. Caught when a route gated on a permission that did not exist was
+  // reported as "All good", which is the one thing this script exists to make impossible.
+  for (const line of joinRouteCalls(source)) {
     if (!/^router\.(get|post|put|patch|delete)\(/.test(line.trim())) continue;
     const permMatch = line.match(/authorizePermissions\(([^)]*)\)/);
     if (!permMatch) continue;

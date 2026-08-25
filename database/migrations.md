@@ -1,5 +1,66 @@
 # Database Migration & Schema History
 
+## [1.48.0] - 2026-08-25 (Pay into the clinic's own account, and a cashier checks it)
+
+`node src/scripts/migratePaymentSubmissions.js` — additive, idempotent, `--rollback` reverses it.
+Then `node src/scripts/setupRbac.js` for the new permission.
+
+Online payment **without a gateway**. The patient pays into the clinic's own GCash or bank account,
+uploads a screenshot with its reference number, and a cashier looks at it and approves. Deliberately
+not PayMongo: the gateway path ([1.37.0]) stays in the codebase, dormant, and this needs no merchant
+account and no publicly reachable webhook.
+
+### Two tables, and why not one
+
+`payment_methods` is what the clinic PUBLISHES — a GCash number, a bank account, a QR image.
+`payment_submissions` is what a patient CLAIMS — "I sent ₱1,450, here is the screenshot".
+
+`payments` is not extended, because `payments` is the money: every peso figure in the app is
+aggregated from it, and `receipt_number` comes from `daily_counters` at the moment a real payment is
+taken. An unverified claim is none of those things, and writing claims in there with an 'Unverified'
+status would put them one missing WHERE clause away from counting as revenue — the exact class of
+bug [1.30.0] spent a release fixing.
+
+On approval the cashier's **existing** `processPayment` runs: same receipt number, same visit
+release, same cash-up entry, same audit trail. A parallel "verified payment" writer would have been
+a second way to take money, and the two would have drifted the first time either changed.
+
+### The claimed amount is never trusted
+
+Verified against a live visit: a claim of ₱50 on a ₱1,450 visit, approved by a cashier, produces a
+payment of **₱1,450** — the figure comes from the recomputed bill, not from what the patient typed.
+
+That is right for the ledger and wrong for the drawer, so the review queue now carries `amount_due`
+beside `amount_claimed`. The cashier is the control, and a control needs both numbers side by side
+rather than in two screens.
+
+### `payment_methods.kind` is constrained to Cash / GCash / Bank
+
+Not free text, which was the first shape. `payments.payment_method` is constrained to exactly those
+three by `chk_payment_method` ([1.33.0]), and the drawer tiles and `findTransactionSummary` are
+built on them — a fourth kind would either fail the constraint on approval or land in a bucket that
+belongs to no tile and quietly vanish from the day's total. The clinic's own naming lives in
+`label`: kind `Bank`, label `BPI Savings`.
+
+### Who may do what
+
+Publishing an account number is **SuperAdmin only**, matching `superAdminRoutes.js` and
+deliberately not delegable by permission — it is where a patient's money is about to be sent, and a
+wrong number here routes real payments to a stranger. Every write is audited with the old and new
+number, because that is the only question anyone asks afterwards.
+
+`billing:submit_proof` (new) covers filing a claim: Client, Receptionist, Cashier, Admin. Verifying
+is `billing:process` — taking money, which stays with the cashier. Admin can file one and cannot
+verify one, preserving the standing separation of duties.
+
+### A hole in verifyRbacWiring, found by falling into it
+
+The route parser read **one line at a time**, on the stated convention that every route fits on one.
+A route written across several lines was therefore not examined at all. Caught when a route gated on
+`billing:submit_proof` — a permission that did not exist — was reported as "All good", which is the
+single thing that script exists to make impossible. It joins a `router.<verb>(...)` call across
+lines on balanced parentheses now, and immediately reported the four real problems it had missed.
+
 ## [1.47.1] - 2026-08-25 (The demo seeder outlived the departments it named)
 
 `seedDemoScenario.js` hardcoded all five categories in four places. Retiring 2D Echo and ECG in
