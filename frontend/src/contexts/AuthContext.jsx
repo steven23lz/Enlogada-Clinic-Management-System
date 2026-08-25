@@ -160,9 +160,23 @@ export const AuthProvider = ({ children }) => {
     setUser((prev) => (prev ? { ...prev, hasAvatar } : prev));
   };
 
+  /**
+   * SuperAdmin bypasses. Admin does NOT — that single difference is what separates the two roles.
+   *
+   * This used to bypass for Admin as well, which made the two roles identical to every screen that
+   * asked. The API has always enforced the distinction (`authorizePermissions` bypasses only for
+   * SuperAdmin), so the disagreement pointed the dangerous way round: the UI offered an Admin
+   * controls the server would refuse, which is the exact failure `canSee` in navigation.js was
+   * written to avoid — it gets this right, one line and one file away from here.
+   *
+   * Two rules, matched to the server's:
+   *   - a bypass belongs to SuperAdmin alone;
+   *   - everyone else, Admin included, is judged on the permissions their account actually holds,
+   *     which already carry that role's grants and revokes resolved server-side.
+   */
   const hasPermission = (permissionName) => {
     if (!user) return false;
-    if (user.roles?.includes('SuperAdmin') || user.roles?.includes('Admin')) return true;
+    if (user.roles?.includes('SuperAdmin')) return true;
     return (user.permissions || []).includes(permissionName);
   };
 

@@ -219,6 +219,84 @@ test.describe('Admin vs SuperAdmin — separation of duties', () => {
     });
     expect(res.status()).toBe(403);
   });
+
+  // READING the matrix is SuperAdmin's too, not only writing it. It enumerates every role, every
+  // permission, and by omission exactly which ones the reader lacks — the reconnaissance half of
+  // an escalation, and Admin is the role positioned to attempt one.
+  test('reading the permission matrix stays SuperAdmin-only', async () => {
+    const asAdmin = await apiContext.get(`${API}/rbac/matrix`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(asAdmin.status(), 'Admin must not enumerate the permission matrix').toBe(403);
+
+    const asSuper = await apiContext.get(`${API}/rbac/matrix`, {
+      headers: { Authorization: `Bearer ${superAdminToken}` },
+    });
+    expect(asSuper.status()).toBe(200);
+  });
+
+  // The Admin dashboard reads this in the same Promise.all that loads revenue and the catalogue,
+  // so it is not incidental: were it to start refusing, an Admin's four metric cards would all
+  // blank together and the cause would look like a network fault.
+  test('Admin keeps the staff list its own dashboard is built on', async () => {
+    const res = await apiContext.get(`${API}/admin/staff`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.status()).toBe(200);
+
+    // And it exposes operational staff only — no Admin, no SuperAdmin. This is the list that
+    // feeds deactivate and password-reset, so who appears on it IS the escalation boundary.
+    const roles = new Set(
+      ((await res.json()).data.staff || []).flatMap((u) => u.roles || [u.role]).filter(Boolean)
+    );
+    expect([...roles].sort(), 'an elevated account must never be listed as manageable staff')
+      .not.toContain('SuperAdmin');
+    expect([...roles]).not.toContain('Admin');
+  });
+
+  // "Can an Admin dethrone the SuperAdmin?" — the question worth asking of any two-tier admin
+  // model, because staff:manage covers deactivation AND password reset. Either one alone is a
+  // full takeover: lock the owner out, or set a password you know and sign in as them.
+  test('Admin cannot deactivate, reset, or edit a SuperAdmin', async () => {
+    const accounts = (await (await apiContext.get(`${API}/superadmin/accounts`, {
+      headers: { Authorization: `Bearer ${superAdminToken}` },
+    })).json()).data.accounts || [];
+    const target = accounts.find((u) => (u.roles || []).includes('SuperAdmin'));
+    expect(target, 'need a SuperAdmin account to aim at').toBeTruthy();
+
+    const asAdmin = { Authorization: `Bearer ${adminToken}` };
+
+    expect((await apiContext.patch(`${API}/admin/staff/${target.id}/status`, {
+      headers: asAdmin, data: { status: false },
+    })).status(), 'Admin must not be able to lock the SuperAdmin out').toBe(403);
+
+    expect((await apiContext.patch(`${API}/admin/staff/${target.id}/password`, {
+      headers: asAdmin, data: { newPassword: 'Hijacked123!' },
+    })).status(), 'Admin must not be able to take the SuperAdmin account').toBe(403);
+
+    // A COMPLETE body, so a rejection can only be the authorization guard. An incomplete one is
+    // refused by controller validation first and would pass this test without proving anything.
+    expect((await apiContext.patch(`${API}/admin/staff/${target.id}`, {
+      headers: asAdmin,
+      data: {
+        firstName: 'Pwned', lastName: 'Owner',
+        email: target.email, contactNumber: '09171234567',
+      },
+    })).status(), 'Admin must not be able to edit the SuperAdmin').toBe(403);
+
+    // Nor promote anyone into the tier they cannot touch.
+    expect((await apiContext.post(`${API}/admin/staff`, {
+      headers: asAdmin,
+      data: {
+        firstName: 'Esc', lastName: 'Alate', email: `esc${Date.now()}@enlogada-e2e.test`,
+        password: 'Password123!', role: 'Admin',
+      },
+    })).status(), 'Admin must not mint another elevated account').toBe(400);
+
+    // And the elevated-account register itself stays closed.
+    expect((await apiContext.get(`${API}/superadmin/accounts`, { headers: asAdmin })).status())
+      .toBe(403);
+  });
 });
 
 // Combined-role access. A user holding two operational roles must reach BOTH consoles: the

@@ -1,5 +1,6 @@
 // @ts-check
-import { test, expect } from 'playwright/test';
+import { test, expect, request } from 'playwright/test';
+import { selfPayProfile } from './helpers/patients.js';
 
 // Information each role needs *on the screen where they act*, rather than one screen away.
 //
@@ -10,6 +11,7 @@ import { test, expect } from 'playwright/test';
 // errors, and the work is still harder than it should be.
 
 const PASSWORD = 'Password123!';
+const API = `${process.env.E2E_API_URL || 'http://localhost:5000'}/api`;
 
 async function signIn(page, email) {
   await page.goto('/');
@@ -54,14 +56,65 @@ test('an upcoming booking tells the patient what to do beforehand', async ({ pag
   // [1.24.0] put preparation in the booking wizard and the confirmation email, then left it off
   // the one screen a patient opens the day before to check the time. A patient who booked three
   // weeks ago and wants to re-read the instruction had nowhere to look.
+  //
+  // This books its OWN appointment on a test that carries preparation, and then finds that exact
+  // card. It used to assert on `[data-testid="appointment-card"]` .first() — whatever booking the
+  // database happened to hold — so it passed or failed on ambient data: booking anything through
+  // the UI, as a developer demoing the app does, put a card with no preparation at the front and
+  // turned this red with nothing in the app having changed. Which made it a test of the seed data
+  // rather than of the screen.
+  const ctx = await request.newContext();
+  const token = (await (await ctx.post(`${API}/auth/login`, {
+    data: { email: 'client@enlogada.com', password: PASSWORD },
+  })).json()).data.token;
+  const auth = { Authorization: `Bearer ${token}` };
+
+  // Read which test carries preparation rather than naming one: the catalogue is the clinic's to
+  // edit, and a fixture name hard-coded here is a second source of truth for it.
+  const prepped = (await (await ctx.get(`${API}/tests`)).json()).data.tests
+    .find((t) => t.is_active && t.preparation);
+  expect(prepped, 'the catalogue needs at least one active test with preparation').toBeTruthy();
+
+  const patientId = selfPayProfile(
+    (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth })).json()).data.patients
+  ).id;
+
+  // Far out, and past the weekend — the clinic is shut on Sunday and closes at noon on Saturday,
+  // so a nearer date makes this fail on the day of the week rather than on the app.
+  const day = new Date();
+  day.setDate(day.getDate() + 120 + (Date.now() % 25));
+  while (day.getDay() === 0 || day.getDay() === 6) day.setDate(day.getDate() + 1);
+  const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+
+  const free = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth })).json())
+    .data.slots.filter((s) => s.available);
+  test.skip(free.length === 0, 'Need a free slot to book into.');
+
+  const created = await ctx.post(`${API}/appointments`, {
+    headers: auth,
+    data: { patientId, scheduledDate: date, scheduledTime: free[0].time, testIds: [prepped.id] },
+  });
+  expect(created.status()).toBe(201);
+  const reference = (await created.json()).data.appointment.appointment_reference;
+  await ctx.dispose();
+
   await signIn(page, 'client@enlogada.com');
   await expect(page.getByText(/welcome/i).first()).toBeVisible({ timeout: 15000 });
 
   await page.getByRole('tab', { name: 'Appointments' }).click();
+  await expect(page.locator('[data-testid="appointment-card"]').first()).toBeVisible({ timeout: 15000 });
 
-  const card = page.locator('[data-testid="appointment-card"]').first();
-  await expect(card).toBeVisible({ timeout: 15000 });
+  // Page to the booking just made rather than assuming it is on page one — open bookings sort
+  // soonest-first, eight to a page, and this one is deliberately months out.
+  const card = page.locator(`[data-testid="appointment-card"][data-reference="${reference}"]`);
+  const nextPage = page.getByLabel('Next page');
+  for (let i = 0; i < 12 && (await card.count()) === 0; i += 1) {
+    if (!(await nextPage.isEnabled().catch(() => false))) break;
+    await nextPage.click();
+    await page.waitForTimeout(150);
+  }
+  await expect(card, 'the booking just created should be somewhere in the list').toBeVisible();
 
-  await expect(page.getByText('Before this appointment').first()).toBeVisible({ timeout: 10000 });
-  await expect(page.getByText(/8 hours|bladder|pregnant|loose top/i).first()).toBeVisible();
+  await expect(card.getByText('Before this appointment')).toBeVisible({ timeout: 10000 });
+  await expect(card.getByText(prepped.preparation.slice(0, 30), { exact: false })).toBeVisible();
 });

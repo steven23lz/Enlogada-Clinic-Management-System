@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import PageHeader from '../../components/ui/page-header';
+import { useAuth } from '../../contexts/AuthContext';
 import useOperationsReport from '../../hooks/useOperationsReport';
 import {
   BillingTotalsPanel,
@@ -344,10 +345,14 @@ const DateRangeReports = () => {
   );
 };
 
-// --- RBAC Matrix report (read-only). Editing stays SuperAdmin-only under Super Admin
-// Management (Module 13) — this closes a real gap where Admin, already authorized server-side
-// for GET /rbac/matrix, had no UI path to view it at all (the only viewer was gated to
-// SuperAdmin alone in the sidebar nav). -----------------------------------------------------
+// --- RBAC Matrix report (read-only), SuperAdmin only. ---------------------------------------
+//
+// This tab used to render for anyone who could open Reports, which in practice meant Admin — the
+// role the matrix is most sensitive to. It lists every role, every permission, and by omission
+// exactly which permissions the reader does not hold, which is the reconnaissance an Admin would
+// need to attempt escalation. GET /rbac/matrix is gated on `rbac:manage` server-side now; hiding
+// the tab keeps the UI from advertising a screen the API will refuse, which is the whole point of
+// canSee() in navigation.js.
 const RbacMatrixReport = () => {
   const [roles, setRoles] = useState([]);
   const [rolePermissions, setRolePermissions] = useState({});
@@ -644,6 +649,12 @@ const OperationsReport = () => {
 // and explicitly deferred historical trends, date-range filtering, and the RBAC matrix report
 // to this module. That live snapshot logic is unchanged here — only added to, not replaced.
 const ReportsOverview = () => {
+  // SuperAdmin bypasses in hasPermission; an Admin is judged on what they actually hold, and does
+  // not hold rbac:manage. Both the trigger and the panel are gated — a hidden trigger still leaves
+  // the panel mountable by anything that sets the tab value.
+  const { hasPermission } = useAuth();
+  const canSeeRbac = hasPermission('rbac:manage');
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -659,7 +670,7 @@ const ReportsOverview = () => {
           <TabsTrigger value="operations">Operations</TabsTrigger>
           <TabsTrigger value="range">Trends</TabsTrigger>
           <TabsTrigger value="workload">Staff Workload</TabsTrigger>
-          <TabsTrigger value="rbac">RBAC Matrix</TabsTrigger>
+          {canSeeRbac && <TabsTrigger value="rbac">RBAC Matrix</TabsTrigger>}
         </TabsList>
         <TabsContent value="snapshot" className="m-0">
           <TodaySnapshot />
@@ -673,9 +684,11 @@ const ReportsOverview = () => {
         <TabsContent value="workload" className="m-0">
           <StaffWorkload />
         </TabsContent>
-        <TabsContent value="rbac" className="m-0">
-          <RbacMatrixReport />
-        </TabsContent>
+        {canSeeRbac && (
+          <TabsContent value="rbac" className="m-0">
+            <RbacMatrixReport />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

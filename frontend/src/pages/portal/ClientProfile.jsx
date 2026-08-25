@@ -2,9 +2,7 @@ import React from 'react';
 import DashboardLayout from '../../components/DashboardLayout';
 import AccountSettingsForm from '../../components/AccountSettingsForm';
 import { Button } from '../../components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
-import { Badge } from '../../components/ui/badge';
-import { useAuth } from '../../contexts/AuthContext';
+import { Card } from '../../components/ui/card';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 
 // Module 5: Profile — a client's own account settings (contact info, password,
@@ -12,18 +10,15 @@ import { ArrowLeft, ShieldCheck } from 'lucide-react';
 // which covers the `patients` records a client manages, not the `users` account itself.
 // The form itself (Account Information + Change Password) now lives in the shared,
 // layout-agnostic AccountSettingsForm component — this page supplies the Client-specific
-// shell (back button, header) and the Account Type sidebar card.
+// shell (back button, header).
 //
-// UI/UX Phase 3: dropped the raw resource:action permission-string badges that used to sit
-// below the role badge here — confirmed not a security issue (a caller only ever sees their
-// own JWT-derived roles/permissions), but raw RBAC strings like "appointments:create" are
-// internal implementation detail that only confused a non-technical Client. The role badge
-// alone already answers "what kind of account is this."
+// UI/UX Phase 3 dropped the raw resource:action permission strings that sat here; the "Account
+// Type" card holding the role badge is now gone too, and for the same reason taken one step
+// further. Every account that can reach this screen is a Client — the staff consoles have their
+// own settings page — so the card spent a third of the layout telling each patient the one thing
+// about their account that could never be anything else. "Client" is not information to a
+// patient; it is the system describing its own data model.
 const ClientProfile = ({ onNavigate }) => {
-  const { user } = useAuth();
-
-  const roles = user?.roles || [];
-
   return (
     <DashboardLayout onNavigate={onNavigate} activeTab="account">
       <div className="flex flex-col space-y-6">
@@ -40,7 +35,7 @@ const ClientProfile = ({ onNavigate }) => {
           </Button>
           <div>
             <h1 className="text-xl font-bold text-slate-900 m-0">My Account</h1>
-            <p className="text-xs text-gray-500 m-0">Manage your contact details, password, and view your assigned role.</p>
+            <p className="text-xs text-gray-500 m-0">Manage your contact details, photo, and password.</p>
           </div>
         </div>
 
@@ -53,27 +48,6 @@ const ClientProfile = ({ onNavigate }) => {
 
           {/* Right column: read-only role/permissions */}
           <div className="space-y-6">
-            <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
-              <CardHeader className="bg-slate-50/80 border-b border-[#e6ebf1] py-3.5">
-                <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                  <ShieldCheck className="w-4 h-4 text-brand-600" />
-                  <span>Account Type</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 space-y-1.5">
-                <span className="text-meta text-gray-400 font-bold uppercase tracking-wider block">Assigned Role(s)</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {roles.length > 0 ? roles.map(role => (
-                    <Badge key={role} className="bg-brand-50 text-brand-600 text-fine font-bold px-2.5 py-1 rounded-full border-0">
-                      {role}
-                    </Badge>
-                  )) : (
-                    <span className="text-xs text-slate-500">No role assigned</span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
             <Card className="border-[#e6ebf1] bg-rail text-white rounded-2xl overflow-hidden p-5 space-y-2">
               <div className="flex items-center space-x-2 text-brand-600">
                 <ShieldCheck className="w-5 h-5" />
