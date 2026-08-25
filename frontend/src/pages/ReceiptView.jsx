@@ -4,6 +4,7 @@ import ReceiptDocument from '../components/Receipt';
 import { Button } from '../components/ui/button';
 import EmptyState from '../components/ui/empty-state';
 import api from '../config/api';
+import { printElement } from '../lib/printArea';
 
 /**
  * One receipt, on its own page, opened in its own tab. [1.52.0]
@@ -60,14 +61,7 @@ export default function ReceiptView({ receiptNumber, onClose }) {
   // 80mm, not A4. @page cannot be scoped to an element, so the size is chosen by a body class and
   // taken off afterwards — the same mechanism the cashier's dialog uses, removed in a `finally`
   // so an abandoned print dialog cannot leave the whole app stuck on receipt paper.
-  const print = () => {
-    document.body.classList.add('printing-receipt');
-    try {
-      window.print();
-    } finally {
-      document.body.classList.remove('printing-receipt');
-    }
-  };
+  const print = () => printElement(null, 'printing-receipt');
 
   return (
     <div className="min-h-screen bg-slate-100 py-6">

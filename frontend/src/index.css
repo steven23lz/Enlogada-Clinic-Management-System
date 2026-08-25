@@ -604,6 +604,72 @@ select:focus-visible {
     visibility: hidden !important;
     display: none !important;
   }
+
+  /* ── A dialog is the wrong shape to print out of, in three separate ways ──────────────────
+   *
+   * The receipt prints from inside a Radix dialog, and measured under print media that dialog is
+   * `position: fixed`, `max-height: 648px`, `overflow-y: auto` — and its own box was 56px tall.
+   * So a 644px receipt was being laid out inside a 56px clipping box, anchored 333px down the
+   * page. What came out of the printer was the clinic name and then nothing, spilling to a second
+   * blank sheet.
+   *
+   * Each property breaks it on its own, which is why all three are undone here:
+   *
+   *   position: fixed   a fixed element is a CONTAINING BLOCK for absolutely-positioned
+   *                     descendants, so `.print-area { top: 0; left: 0 }` above was resolving
+   *                     against the dialog rather than the page. That is the whole reason the
+   *                     receipt printed a third of the way down.
+   *   max-height        clips the receipt to the height of a box sized for a viewport.
+   *   overflow-y: auto  scrolling is meaningless on paper; it just hides what does not fit.
+   *
+   * `transform` is reset too. It measured as `none` here only because the open-state animation
+   * class had settled — while it is applied, a transform is ALSO a containing block, so this
+   * would break again for anyone printing before the animation finished.
+   *
+   * The overlay is display:none rather than visibility:hidden: it is a full-viewport scrim, and
+   * leaving it in the flow risks a printer rendering a grey page. */
+  [role='dialog'] {
+    position: static !important;
+    transform: none !important;
+    max-height: none !important;
+    max-width: none !important;
+    width: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  [data-radix-dialog-overlay],
+  [data-state='open'][class*='bg-scrim'] {
+    display: none !important;
+  }
+
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* ── Isolated printing, driven by lib/printArea.js ────────────────────────────────────────
+   *
+   * `display: none` rather than `visibility: hidden`, and that difference is the whole point:
+   * visibility keeps the element's LAYOUT, so the application still occupied the page and the
+   * receipt was laid out after it — measured at top:720, a full viewport down, on a second sheet.
+   * display removes the box entirely, leaving the printed page with only #print-root in it.
+   *
+   * The clone is a direct child of <body>, so there is no transformed, fixed or scrolling
+   * ancestor left to resolve `position: absolute` against — which is what the two previous CSS
+   * attempts kept losing to. It needs no positioning at all now; it is simply the only thing
+   * on the page. */
+  body.printing-isolated > *:not(#print-root) {
+    display: none !important;
+  }
+
+  body.printing-isolated #print-root .print-area {
+    position: static !important;
+    margin: 0 auto !important;
+  }
 }
 
 /* A counter receipt goes to an 80mm thermal roll, not A4. Without this the receipt prints as one

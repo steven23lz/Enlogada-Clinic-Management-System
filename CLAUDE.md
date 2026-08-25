@@ -477,7 +477,25 @@ and the copies had drifted apart:
 | `button.jsx` | `<Button loading>` for anything in flight — spinner, disable and `aria-busy`, and the **label stays put**. Never swap it for "Saving…": on `ConfirmDialog` that erased which of a refund, a cancellation or a release the person had just agreed to. `[1.39.0]` |
 | `date-field.jsx` / `calendar.jsx` | every date input. Keeps the native `<input type="date">` and replaces only the picker, so ISO values, `min`/`max`, `required` and the phone's OS picker all still work. Where the browser's glyph cannot be hidden — Firefox, measured, no CSS exists — it renders nothing custom rather than showing a second icon. `RANGE_PRESETS` for filters, `BIRTHDATE_YEAR_RANGE` for birthdates. See migrations.md [1.34.0] |
 
-- **A receipt has an ADDRESS: `?receipt=RCT-…`.** `[1.52.0]` The printable document lived only in
+- **Printing an element uses `lib/printArea.js`, never a print stylesheet alone.** `[1.52.0]` The
+receipt printed the clinic name and then a blank sheet, and nothing in the suite could see it —
+every on-screen assertion was true, because the defect lived entirely in `@media print`, which no
+test had ever evaluated.
+
+Measured, the receipt was laid out inside the DIALOG rather than on the page: `position: fixed`
+(a fixed element is a containing block, so `.print-area { top: 0 }` resolved against the dialog),
+`max-height: 648px` and `overflow-y: auto` clipping a 644px receipt into a box measuring 56px.
+Undoing those moved it to top:720 — off the first sheet — because `visibility: hidden` KEEPS
+layout, so the whole app still occupied the page and the receipt queued up after it.
+
+`printElement()` copies the node to a child of `<body>`, `display: none`s every sibling, prints,
+and tears the copy down in a `finally`. A COPY, because relocating a live node is a mutation React
+did not perform. `display`, not `visibility`, because only `display` removes the layout.
+`receipt-print.spec.js` evaluates the print stylesheet — the only way any of this is visible —
+and asserts top === 0, zero other visible body children, and that the text reaches the FOOTER
+rather than stopping at the letterhead.
+
+**A receipt has an ADDRESS: `?receipt=RCT-…`.** `[1.52.0]` The printable document lived only in
 a dialog inside the cashier's console, reachable only from the day's transaction list — so "send me
 a copy of RCT-…", asked weeks later, had no answer. `pages/ReceiptView.jsx` renders the SAME
 `components/Receipt.jsx` at its own URL, openable in a new tab from the cashier log, from Cashier
