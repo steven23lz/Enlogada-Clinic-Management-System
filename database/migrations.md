@@ -1,5 +1,44 @@
 # Database Migration & Schema History
 
+## [1.48.1] - 2026-08-25 (The screens for it)
+
+No schema change. The three screens [1.48.0]'s API was built for.
+
+**SuperAdmin → Payment Methods** (a third tab beside the RBAC matrix and elevated accounts, which
+is where the other two undelegatable capabilities already live). The account number is echoed back
+in large tabular figures as it is typed, because a mistyped digit produces no error anywhere — the
+money simply goes to a stranger — so the only defence is making it easy to read back against the
+banking app it was copied from. A standing banner says every change is recorded against your name,
+and a red line appears if every method is hidden, since "patients cannot pay online at all" is
+invisible from a list that has rows in it.
+
+**The patient's booking card** now shows the clinic's account, its QR, a copy button for the number
+and an upload form — and the QR booking pass is issued only once payment is verified.
+
+That last part reverses [1.23.0]'s rule, and the reasoning it reversed is worth keeping: the pass
+used to require payment, that disabled the feature because the clinic could only take money at the
+counter, so it was shown unpaid instead. **That premise is gone** — a patient can settle from home
+now, so withholding the pass gives them something to do rather than stranding them. The reference is
+still printed as TEXT on an unpaid booking, so the counter path never depended on the QR at all.
+
+`amount_due` was added to the client's bookings query: a patient about to type a figure into a
+banking app should not have to go and find it somewhere else.
+
+**Cashier → Online Payments**, polling at 20s because a patient who has just paid is watching for
+their pass and the cashier is the only thing between them and it. The queue puts what the patient
+claims beside what the visit owes, and spells the mismatch out in words — "Approving records
+₱1,450.00 as received" — because two numbers in adjacent columns is exactly the difference a tired
+eye slides over at the end of a shift.
+
+`ConfirmDialog` gained `children`, so a rejection can carry its reason field.
+
+### One bug this introduced and caught
+
+`payment_submissions.payment_id` references `payments`, so `purgeE2eData.js` deleting payments first
+failed the constraint and **aborted the whole purge**. Surfaced as a "purge failed (non-fatal)" line
+after a green spec run — which is exactly the shape of thing that gets skimmed past. Submissions are
+deleted before payments now.
+
 ## [1.48.0] - 2026-08-25 (Pay into the clinic's own account, and a cashier checks it)
 
 `node src/scripts/migratePaymentSubmissions.js` — additive, idempotent, `--rollback` reverses it.

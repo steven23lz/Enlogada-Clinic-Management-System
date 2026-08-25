@@ -144,6 +144,10 @@ async function main() {
      WHERE NOT EXISTS (SELECT 1 FROM hmo_request_tests hrt WHERE hrt.hmo_request_id = hr.id)`
   );
   await db.query(`DELETE FROM test_results WHERE visit_test_id IN (SELECT id FROM visit_tests WHERE patient_visit_id = ANY($1))`, v);
+  // Before payments: payment_submissions.payment_id references it, so deleting the payment first
+  // fails the constraint and aborts the entire purge — which is how this was found, as a
+  // "purge failed (non-fatal)" line after a green spec run. [1.48.0]
+  await db.query('DELETE FROM payment_submissions WHERE patient_visit_id = ANY($1)', v);
   await db.query('DELETE FROM payments WHERE patient_visit_id = ANY($1)', v);
   await db.query('DELETE FROM visit_tests WHERE patient_visit_id = ANY($1)', v);
   await db.query('DELETE FROM appointments WHERE patient_visit_id = ANY($1)', v);

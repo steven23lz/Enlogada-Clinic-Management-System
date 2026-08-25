@@ -1,0 +1,215 @@
+import React, { useState } from 'react';
+import { Check, X, Eye, AlertTriangle, Wallet } from 'lucide-react';
+import { Panel, PanelHeader, PanelBody } from '../ui/panel';
+import { Button } from '../ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { ConfirmDialog } from '../ui/confirm-dialog';
+import { Textarea } from '../ui/textarea';
+import EmptyState from '../ui/empty-state';
+import { formatCurrency } from '../../lib/currency';
+import api from '../../config/api';
+
+/**
+ * Online payments waiting for a cashier to look at the screenshot. [1.48.0]
+ *
+ * ── The two numbers ─────────────────────────────────────────────────────────────────────────
+ *
+ * Approving bills the visit's REAL total, not what the patient typed. A screenshot claiming ₱50
+ * against a ₱1,450 visit, approved, records ₱1,450 as received — and the drawer is short ₱1,400
+ * with nothing on any screen to explain it. So both figures sit side by side and a mismatch is
+ * called out in words, because "1450.00" and "50.00" in adjacent columns is exactly the kind of
+ * difference a tired eye slides over at the end of a shift.
+ */
+
+/** The uploaded screenshot, fetched with the session's auth header. */
+function ProofViewer({ submissionId, onClose }) {
+  const [src, setSrc] = useState('');
+  const [failed, setFailed] = useState(false);
+  const [isPdf, setIsPdf] = useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    let objectUrl = '';
+    // A bare <img src> would 401: the route is authenticated because this is a patient's banking
+    // screen. Fetched as a blob through the configured axios instance, which carries the token.
+    api.get(`/payment-submissions/${submissionId}/proof`, { responseType: 'blob' })
+      .then((res) => {
+        if (cancelled) return;
+        setIsPdf(res.data.type === 'application/pdf');
+        objectUrl = URL.createObjectURL(res.data);
+        setSrc(objectUrl);
+      })
+      .catch(() => setFailed(true));
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [submissionId]);
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Proof of payment</DialogTitle>
+        </DialogHeader>
+        {failed ? (
+          <EmptyState
+            tone="error"
+            compact
+            title="The file could not be opened"
+            description="It may have been removed from storage. Decide from the reference number, or ask the patient to send it again."
+          />
+        ) : !src ? (
+          <div className="h-80 animate-pulse rounded-lg bg-slate-100" aria-hidden="true" />
+        ) : isPdf ? (
+          <iframe src={src} title="Proof of payment" className="h-[70vh] w-full rounded-lg border border-line" />
+        ) : (
+          <img src={src} alt="Proof of payment" className="max-h-[70vh] w-full rounded-lg border border-line object-contain" />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export default function OnlinePaymentsPanel({ review }) {
+  const [viewing, setViewing] = useState(null);
+
+  return (
+    <>
+      <Panel className="overflow-hidden">
+        <PanelHeader
+          title="Online Payments to Verify"
+          description="Patients who paid into the clinic's account and are waiting for their booking pass"
+          icon={Wallet}
+          actions={
+            review.submissions.length > 0 ? (
+              <span className="rounded-md bg-amber-100 px-2 py-1 text-fine font-semibold text-amber-800">
+                {review.submissions.length} waiting
+              </span>
+            ) : null
+          }
+        />
+        <PanelBody flush>
+          {review.error ? (
+            <EmptyState
+              tone="error"
+              compact
+              title="Could not load the payment queue"
+              description={review.error}
+              action={<Button variant="outline" size="sm" onClick={review.reload}>Try again</Button>}
+            />
+          ) : review.loading ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-12">
+              <div className="h-6 w-6 animate-spin rounded-full border-4 border-azure-500 border-t-transparent" />
+              <span className="text-fine font-semibold text-slate-500">Loading…</span>
+            </div>
+          ) : review.submissions.length === 0 ? (
+            <EmptyState
+              compact
+              title="Nothing waiting"
+              description="Payments patients make online appear here for checking. The list refreshes on its own."
+            />
+          ) : (
+            <ul className="m-0 list-none divide-y divide-line p-0">
+              {review.submissions.map((s) => {
+                const claimed = Number(s.amount_claimed);
+                const due = Number(s.amount_due);
+                const mismatch = Math.abs(claimed - due) > 0.01;
+                const busy = review.acting === s.id;
+
+                return (
+                  <li key={s.id} className="p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="m-0 font-semibold text-slate-900">
+                          {s.first_name} {s.last_name}
+                        </p>
+                        <p className="m-0 text-fine text-slate-500">
+                          {s.method_label || s.method_kind || 'Online'} · ref{' '}
+                          <span className="font-mono font-semibold text-slate-700">{s.reference_number}</span>
+                          {s.appointment_reference ? ` · ${s.appointment_reference}` : ''}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-shrink-0 items-center gap-4 text-right">
+                        <span>
+                          <span className="block text-micro font-semibold uppercase tracking-[0.1em] text-slate-400">
+                            Patient says
+                          </span>
+                          <span className={`block font-bold tabular-nums ${mismatch ? 'text-rose-600' : 'text-slate-900'}`}>
+                            {formatCurrency(claimed)}
+                          </span>
+                        </span>
+                        <span>
+                          <span className="block text-micro font-semibold uppercase tracking-[0.1em] text-slate-400">
+                            Visit owes
+                          </span>
+                          <span className="block font-bold tabular-nums text-slate-900">
+                            {formatCurrency(due)}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Said in words, not left as two numbers to compare. */}
+                    {mismatch && (
+                      <p className="m-0 mt-2 flex items-start gap-1.5 rounded-lg bg-rose-50 px-2.5 py-1.5 text-fine font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">
+                        <AlertTriangle className="mt-px h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                        <span>
+                          These do not match. Approving records {formatCurrency(due)} as received —
+                          check the screenshot before you do.
+                        </span>
+                      </p>
+                    )}
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setViewing(s.id)}
+                        disabled={!s.has_proof}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        {s.has_proof ? 'View proof' : 'No proof attached'}
+                      </Button>
+                      <Button size="sm" loading={busy} onClick={() => review.verify(s)}>
+                        <Check className="h-3.5 w-3.5" />
+                        Verify &amp; issue receipt
+                      </Button>
+                      <Button variant="outline" size="sm" disabled={busy} onClick={() => review.askReject(s)}>
+                        <X className="h-3.5 w-3.5" />
+                        Reject
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </PanelBody>
+      </Panel>
+
+      {viewing && <ProofViewer submissionId={viewing} onClose={() => setViewing(null)} />}
+
+      <ConfirmDialog
+        open={!!review.rejecting}
+        onOpenChange={(open) => { if (!open) review.dismissReject(); }}
+        title="Reject this payment"
+        description={review.rejecting && (
+          `${review.rejecting.first_name} ${review.rejecting.last_name} is shown your reason and can submit again. Their booking stays unpaid and no pass is issued.`
+        )}
+        confirmLabel="Reject payment"
+        onConfirm={review.confirmReject}
+        loading={!!review.acting}
+      >
+        <Textarea
+          rows={3}
+          value={review.rejectReason}
+          onChange={(e) => review.setRejectReason(e.target.value)}
+          placeholder="e.g. The screenshot shows ₱500 but this visit is ₱1,450."
+          aria-label="Reason for rejecting"
+        />
+      </ConfirmDialog>
+    </>
+  );
+}

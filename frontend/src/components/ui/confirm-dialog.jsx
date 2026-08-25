@@ -12,7 +12,10 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   onConfirm,
   loading = false,
-  error = ""
+  error = "",
+  // Anything the decision needs before it can be made — most often a reason field, because a
+  // refusal that names no reason leaves whoever answers the phone afterwards with nothing to say.
+  children
 }) {
   return (
     <Dialog open={open} onOpenChange={(next) => !loading && onOpenChange(next)}>
@@ -21,6 +24,8 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription className="text-xs text-gray-500">{description}</DialogDescription>
         </DialogHeader>
+
+        {children && <div className="space-y-2">{children}</div>}
 
         {error && (
           <div className="bg-rose-50 border border-rose-100 text-rose-600 rounded-xl p-3 flex items-center space-x-2 text-xs">

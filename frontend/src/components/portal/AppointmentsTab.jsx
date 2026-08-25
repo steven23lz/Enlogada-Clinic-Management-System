@@ -8,6 +8,7 @@ import { StatusBadge } from '../ui/status-badge';
 import { TabsContent } from '../ui/tabs';
 import Pagination from '../ui/pagination';
 import BookingPass from '../BookingPass';
+import PayBookingPanel from './PayBookingPanel';
 import { formatAppointmentDate, formatTime12 } from '../../lib/date';
 
 /**
@@ -58,22 +59,28 @@ export default function AppointmentsTab({ bookings }) {
                 paged.map((appt) => {
                   const isCancellable = appt.status === 'Pending' || appt.status === 'Confirmed';
                   const isOpen = appt.status !== 'Cancelled' && appt.status !== 'Completed';
-                  // The pass shows for any live booking, paid or not.
+
+                  // The QR pass is issued only once the booking is PAID. [1.48.0]
                   //
-                  // It used to require payment first — "that is what makes it a pass". The
-                  // reasoning sounded right and the effect was to disable the feature: this
-                  // clinic takes most payments at the counter, so the large majority of
-                  // bookings never got a QR at all, and the receptionist's scanner had almost
-                  // nothing to read. GET /appointments/verify/:reference has always resolved a
-                  // reference regardless of payment, so the scan worked; the patient simply had
-                  // no code to present.
+                  // This reverses the previous rule, and the reason the previous rule existed is
+                  // worth restating so it is not reinstated by accident: the pass used to require
+                  // payment, that disabled the feature because the clinic could only take money at
+                  // the counter, and so it was shown unpaid instead — "a patient walking in with an
+                  // unpaid booking still needs a code to be scanned".
                   //
-                  // Nothing is disclosed by showing it. The payload is the appointment
-                  // reference, which is already printed as text underneath and is useless
-                  // without a staff account to verify it against (see BookingPass.jsx).
-                  // Payment is a separate fact, said separately below.
-                  const showPass = isOpen;
+                  // That premise is gone. A patient can now settle a booking from home by paying
+                  // into the clinic's own account, so withholding the pass no longer strands
+                  // anyone: it gives them something to do instead.
+                  //
+                  // The reference is still printed as TEXT on an unpaid booking, which is what
+                  // keeps the counter path working — reception can look it up by hand exactly as
+                  // before. Only the scannable code waits for payment.
+                  const showPass = isOpen && appt.is_paid;
+                  // The two payment routes are mutually exclusive by construction: a configured
+                  // gateway takes precedence, and the manual channel is what an unconfigured
+                  // deployment falls back to. Showing both would ask the patient to pay twice.
                   const showPayOptions = isOpen && !appt.is_paid && bookings.gateway.available;
+                  const showPayPanel = isOpen && !appt.is_paid && !bookings.gateway.available;
 
                   // Postgres TIMESTAMP arrives as an ISO instant; toTimeString gives the local
                   // wall clock, which is what formatTime12 formats and what the patient reads.
@@ -106,6 +113,7 @@ export default function AppointmentsTab({ bookings }) {
                       ) : (
                         <span className="block font-mono text-micro text-slate-400">{appt.appointment_reference}</span>
                       )}
+
 
                       {/* What to do before this appointment. [1.24.0] surfaced these while
                           choosing tests and in the confirmation email, and then left them off
@@ -167,11 +175,16 @@ export default function AppointmentsTab({ bookings }) {
                         </div>
                       )}
 
-                      {isOpen && !appt.is_paid && !bookings.gateway.available && (
-                        <p className="text-fine text-gray-500 bg-gray-100 border border-gray-200 rounded-lg p-2 m-0">
-                          Please settle payment at the clinic counter on arrival. Your reference code above
-                          is what the receptionist needs to check you in.
-                        </p>
+                      {/* Paying from home, into the clinic's own account. [1.48.0] Replaced a
+                          paragraph that could only say "settle at the counter on arrival" — which
+                          was true when there was no way to pay in advance, and is now the fallback
+                          this panel itself shows when no payment method is configured. */}
+                      {showPayPanel && (
+                        <PayBookingPanel
+                          visitId={appt.patient_visit_id}
+                          amountDue={appt.amount_due}
+                          onSettled={bookings.reload}
+                        />
                       )}
 
                       {/* Reschedule sits before Cancel, and only while the booking is still

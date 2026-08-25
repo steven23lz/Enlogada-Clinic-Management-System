@@ -14,8 +14,7 @@
 import {
   LayoutDashboard, Users, ClipboardList, FileText, CreditCard, Calendar,
   FolderKanban, BarChart3, Activity, ShieldCheck, UserPlus, QrCode, History,
-  Receipt, FlaskConical, Stethoscope, Scan,
-} from 'lucide-react';
+  Receipt, FlaskConical, Stethoscope, Scan, Wallet } from 'lucide-react';
 
 // Which top-level screen component handles a destination. App.jsx maps these to real
 // components; this module stays free of component imports so it can be used from anywhere
@@ -105,6 +104,9 @@ export const OPS_NAV_GROUPS = [
     label: 'Billing',
     items: [
       { id: 'cashier-queue', label: 'Billing Queue', icon: Receipt, staffOnly: true, permission: 'billing:process', console: CONSOLE.CASHIER },
+      // Gated on billing:process, not billing:read: this screen TAKES money — verifying a proof
+      // issues a receipt and releases the visit — so it is the same authority as the counter till.
+      { id: 'cashier-payments', label: 'Online Payments', icon: Wallet, staffOnly: true, permission: 'billing:process', console: CONSOLE.CASHIER },
       { id: 'cashier-history', label: 'Transaction History', icon: History, staffOnly: true, permission: 'billing:read', console: CONSOLE.CASHIER },
     ],
   },

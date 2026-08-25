@@ -15,24 +15,29 @@ import { useBillingQueue } from '../../hooks/useBillingQueue';
 import { useRefund } from '../../hooks/useRefund';
 import { useCheckout } from '../../hooks/useCheckout';
 import { useReceipt } from '../../hooks/useReceipt';
+import { usePaymentReview } from '../../hooks/usePaymentReview';
 import CollectionsStrip from '../../components/cashier/CollectionsStrip';
 import BillingQueuePanel from '../../components/cashier/BillingQueuePanel';
 import CheckoutTerminal from '../../components/cashier/CheckoutTerminal';
 import TransactionHistoryPanel from '../../components/cashier/TransactionHistoryPanel';
-import { Receipt, Printer, AlertCircle, History } from 'lucide-react';
+import OnlinePaymentsPanel from '../../components/cashier/OnlinePaymentsPanel';
+import { Receipt, Printer, AlertCircle, History, Wallet } from 'lucide-react';
 
 const PAGE_TITLES = {
   'cashier-queue': 'Cashier POS & Billing Terminal',
+  'cashier-payments': 'Online Payments',
   'cashier-history': 'Transaction History',
 };
 
 const PAGE_ICONS = {
   'cashier-queue': Receipt,
+  'cashier-payments': Wallet,
   'cashier-history': History,
 };
 
 const PAGE_BLURBS = {
   'cashier-queue': 'Select a patient from the billing queue to price their visit, apply a statutory discount, take payment and issue a receipt.',
+  'cashier-payments': "Patients who paid into the clinic's GCash or bank account and are waiting for you to check the screenshot. Verifying issues a receipt and releases their booking pass.",
   'cashier-history': 'Receipts you and other cashiers have issued, for the daily cash-up. Refunds and cancellations are recorded against the original receipt.',
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
@@ -55,6 +60,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // drives queue.paidVisitIds and the queue's collections metrics. Sharing one list between the two
   // would mean picking a date range in History silently changes what "Today's Collections" means.
   const history = useTransactionHistory({ enabled: view === 'cashier-history' });
+  // Only polls while its own screen is open, like the two above it.
+  const review = usePaymentReview({ enabled: view === 'cashier-payments' });
 
   // Feature Gap Plan Phase A: payment_status has always allowed 'Refunded'/'Cancelled', but
   // nothing in the app ever set them — a duplicate or disputed charge had no reversal path.
@@ -134,6 +141,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         </div>
         </>
         )}
+
+        {view === 'cashier-payments' && <OnlinePaymentsPanel review={review} />}
 
         {view === 'cashier-history' && (
           <TransactionHistoryPanel

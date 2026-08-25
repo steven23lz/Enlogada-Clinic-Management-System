@@ -125,9 +125,12 @@ class AppointmentRepository {
     return result.rows[0];
   }
 
-  // `is_paid` drives the client's booking pass: the QR code the receptionist scans is only
-  // issued once the online payment has actually settled, so an unpaid booking shows payment
-  // options instead of a scannable pass.
+  // `is_paid` drives the client's booking pass: the QR code the receptionist scans is only issued
+  // once payment has actually settled, so an unpaid booking shows how to pay instead of a
+  // scannable pass. [1.48.0] restored that rule after a spell where the pass was shown unpaid —
+  // which was correct while the clinic could only take money at the counter, and stopped being so
+  // once a patient could settle from home. The reference is still printed as text either way, so
+  // the counter path never depended on the QR.
   async findByPatientUserId(userId) {
     const queryText = `
       SELECT a.*, pv.patient_id, pv.visit_type, pv.status as visit_status, pv.queue_number,
@@ -136,6 +139,17 @@ class AppointmentRepository {
                SELECT 1 FROM payments pay
                WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
              ) AS is_paid,
+             -- What this booking costs, so the patient paying from home is told a FIGURE rather
+             -- than "the amount due". [1.48.0] They are about to type it into a banking app, and
+             -- a number they have to go and find somewhere else is a number they will get wrong.
+             --
+             -- Summed from price_at_time, the same column every other total in the app reads, so
+             -- a package's allocated shares add up here exactly as they do on the cashier's bill.
+             (
+               SELECT COALESCE(SUM(vt.price_at_time), 0)
+               FROM visit_tests vt
+               WHERE vt.patient_visit_id = pv.id
+             ) AS amount_due,
              -- What the patient has to do before this appointment. [1.24.0] put these in the
              -- booking wizard and the confirmation email, and then the patient's own list of
              -- bookings — the screen they open the day before to check the time — could not show
