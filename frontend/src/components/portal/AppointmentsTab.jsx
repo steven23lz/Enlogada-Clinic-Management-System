@@ -109,6 +109,7 @@ export default function AppointmentsTab({ bookings }) {
                           queueNumber={appt.queue_number}
                           isPaid={appt.is_paid}
                           canPayOnline={bookings.gateway.available}
+                          receiptNumber={appt.receipt_number}
                         />
                       ) : (
                         <span className="block font-mono text-micro text-slate-400">{appt.appointment_reference}</span>

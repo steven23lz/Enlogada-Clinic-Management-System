@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { QrCode, AlertCircle } from 'lucide-react';
+import { QrCode, AlertCircle, ExternalLink } from 'lucide-react';
 
 /**
  * The scannable booking pass for a paid online appointment.
@@ -17,7 +17,7 @@ import { QrCode, AlertCircle } from 'lucide-react';
  * `qrcode` is imported lazily so it never lands in the initial bundle: only clients who have a
  * paid booking ever need the encoder. Mirrors how QrScanner.jsx defers html5-qrcode.
  */
-const BookingPass = ({ reference, queueNumber, isPaid, canPayOnline = false }) => {
+const BookingPass = ({ reference, queueNumber, isPaid, canPayOnline = false, receiptNumber = null }) => {
   const [dataUrl, setDataUrl] = useState('');
   const [failed, setFailed] = useState(false);
 
@@ -94,6 +94,30 @@ const BookingPass = ({ reference, queueNumber, isPaid, canPayOnline = false }) =
       {isPaid === true && (
         <span className="mt-1 rounded-md bg-emerald-50 px-2 py-0.5 text-micro font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">
           Paid
+        </span>
+      )}
+
+      {/* The receipt rides WITH the pass once the money is in. [1.52.0]
+          ── Why it is beside the QR and not inside it ──────────────────────────────────────────
+          The QR encodes the appointment reference and nothing else, because ReceptionistDashboard's
+          scanner hands whatever it decodes straight to GET /appointments/verify/:ref. Packing a
+          second value in would not give the patient more — it would stop check-in working, since
+          the decoded string would no longer be a reference the endpoint recognises.
+          So the pass carries both: the code the desk scans, and the receipt number the patient is
+          actually asked for by an HMO or an employer, openable as a real printable document. */}
+      {isPaid === true && receiptNumber && (
+        <span className="mt-1.5 flex flex-col items-center gap-0.5">
+          <span className="text-micro text-slate-500">
+            Receipt <span className="font-mono font-semibold text-slate-700">{receiptNumber}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => window.open(`?receipt=${encodeURIComponent(receiptNumber)}`, '_blank', 'noopener')}
+            className="inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent p-0 text-micro font-semibold text-azure-700 underline underline-offset-2 hover:text-azure-800"
+          >
+            <ExternalLink className="h-3 w-3" aria-hidden="true" />
+            View / print receipt
+          </button>
         </span>
       )}
     </div>

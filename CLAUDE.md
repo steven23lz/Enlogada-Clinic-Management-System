@@ -477,7 +477,29 @@ and the copies had drifted apart:
 | `button.jsx` | `<Button loading>` for anything in flight — spinner, disable and `aria-busy`, and the **label stays put**. Never swap it for "Saving…": on `ConfirmDialog` that erased which of a refund, a cancellation or a release the person had just agreed to. `[1.39.0]` |
 | `date-field.jsx` / `calendar.jsx` | every date input. Keeps the native `<input type="date">` and replaces only the picker, so ISO values, `min`/`max`, `required` and the phone's OS picker all still work. Where the browser's glyph cannot be hidden — Firefox, measured, no CSS exists — it renders nothing custom rather than showing a second icon. `RANGE_PRESETS` for filters, `BIRTHDATE_YEAR_RANGE` for birthdates. See migrations.md [1.34.0] |
 
-- **The printed receipt is `components/Receipt.jsx`**, and the clinic's own identity is
+- **A receipt has an ADDRESS: `?receipt=RCT-…`.** `[1.52.0]` The printable document lived only in
+a dialog inside the cashier's console, reachable only from the day's transaction list — so "send me
+a copy of RCT-…", asked weeks later, had no answer. `pages/ReceiptView.jsx` renders the SAME
+`components/Receipt.jsx` at its own URL, openable in a new tab from the cashier log, from Cashier
+Monitoring (Admin/SuperAdmin), and from the patient's own booking pass. Not a PDF and not a second
+rendering path — the browser prints it at 80mm through the same `printing-receipt` body class.
+
+The second deep link in the app, following `?reset_token=`; this app has no router by design. Only
+the receipt NUMBER travels in the URL — the session comes from localStorage, already shared across
+tabs of the same origin. A link carrying a token ends up in history, a chat message and a screenshot.
+
+`GET /payments/receipt/:receiptNumber` authorizes in the SERVICE, not in route middleware, because
+the two callers need different questions answered: staff on `billing:read`, a Client on OWNERSHIP.
+A patient printing the receipt for money they paid is what a receipt is for — an HMO or an employer
+asks them to produce it. Verified: own receipt 200, another patient's 403, technician 403.
+
+**The booking pass carries the receipt but the QR does NOT encode it.** The QR holds the appointment
+reference alone, because ReceptionistDashboard's scanner hands whatever it decodes straight to
+`GET /appointments/verify/:ref`. Packing a second value in would not give the patient more — it
+would stop check-in working. The pass shows both: the code the desk scans, and the receipt number
+with a link to the printable document.
+
+**The printed receipt is `components/Receipt.jsx`**, and the clinic's own identity is
   `lib/clinic.js`. Two rules. First, anything inside `.print-area` prints, including a toolbar
   that happens to be nested there — the old receipt's Print button printed itself; mark chrome
   `no-print`. Second, `lib/clinic.js` leaves `tin` / `businessPermit` blank unless configured

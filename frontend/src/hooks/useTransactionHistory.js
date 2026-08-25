@@ -37,17 +37,28 @@ export function useTransactionHistory({ enabled = false } = {}) {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  // What the cashier typed, and what was last SENT. Two values, not one: the box updates on every
+  // keystroke, but the query only changes when they press Apply or Enter. Searching per keystroke
+  // over a date range would fire a request per character on the screen used for the cash-up.
+  const [search, setSearch] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
 
   // Paged at the server, not here. [1.29.0] This used to pull every settled payment in the range
   // and slice fifteen out of it in the browser. Measured at 570 bytes a payment, a year-wide
   // range is a 2.0 MB response to fill a fifteen-row table — on the screen a cashier opens for
   // the daily cash-up.
-  const fetch = useCallback(async (from, to, nextPage = 1) => {
+  const fetch = useCallback(async (from, to, nextPage = 1, term = '') => {
     setLoading(true);
     setError('');
+    setAppliedSearch(term);
     try {
       const response = await api.get('/payments/transactions', {
-        params: { startDate: from, endDate: to, page: nextPage, limit: HISTORY_PAGE_SIZE },
+        params: {
+          startDate: from, endDate: to, page: nextPage, limit: HISTORY_PAGE_SIZE,
+          // Omitted entirely when blank rather than sent as '', so the server's own
+          // "trim to null" is never the only thing standing between an empty box and `%%`.
+          ...(term ? { search: term } : {}),
+        },
       });
       const { transactions: rows, total: count, totalPages: pages } = response.data.data;
       setTransactions(rows || []);
@@ -75,10 +86,13 @@ export function useTransactionHistory({ enabled = false } = {}) {
     transactions, loading, error,
     startDate, setStartDate,
     endDate, setEndDate,
+    search, setSearch, appliedSearch,
     page, total, totalPages,
-    /** Re-run for the dates currently chosen — what the Apply button and the retry link do. */
-    reload: () => fetch(startDate, endDate),
-    /** Jump to a page, keeping the chosen range. */
-    goToPage: (next) => fetch(startDate, endDate, next),
+    /** Re-run for the dates and search currently chosen — the Apply button and the retry link. */
+    reload: () => fetch(startDate, endDate, 1, search),
+    /** Jump to a page, keeping the range AND the search — a page 2 that drops the filter is a bug. */
+    goToPage: (next) => fetch(startDate, endDate, next, appliedSearch),
+    /** Clear the box and re-run, so the list matches what the reader can see in the field. */
+    clearSearch: () => { setSearch(''); fetch(startDate, endDate, 1, ''); },
   };
 }

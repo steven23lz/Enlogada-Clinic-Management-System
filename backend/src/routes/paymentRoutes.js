@@ -28,6 +28,18 @@ router.get('/transactions', verifyToken, authorizeStaff, authorizePermissions('b
 router.patch('/:id/status', verifyToken, authorizeStaff, authorizePermissions('billing:refund'), paymentController.updateStatus);
 
 // View payments for a specific visit
+// One receipt by number, viewable and printable.
+//
+// Authorization is in paymentService.getReceipt, not here, because the two callers need DIFFERENT
+// questions answered: staff are judged on `billing:read` (Cashier, Admin, SuperAdmin — looking up
+// a receipt is not taking money, so deliberately not billing:process), and a Client is judged on
+// whether the receipt is THEIRS. One middleware can only ask one of those. Same shape as the
+// ownership scoping in resultService and hmoService.
+//
+// This is why the route carries no authorizePermissions call: verifyRbacWiring.js only checks
+// routes that name one, and a permission here would be the wrong gate for half the callers.
+router.get('/receipt/:receiptNumber', verifyToken, paymentController.getReceipt);
+
 router.get('/visit/:visitId', verifyToken, authorizeStaff, authorizePermissions('billing:read'), paymentController.getVisitPayments);
 
 // --- Online payment gateway (GCash / Maya) ------------------------------------------------

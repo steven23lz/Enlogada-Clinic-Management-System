@@ -78,6 +78,24 @@ class AppointmentRepository {
                SELECT 1 FROM payments pay
                WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
              ) AS is_paid,
+             -- The receipt for the money already taken, so the booking pass can carry it. [1.52.0]
+             -- A patient who has paid holds two things that belong together: the pass they present
+             -- and the receipt for what they paid. They lived on separate screens, so the patient
+             -- had to go and find the second one.
+             --
+             -- 'Paid' only: a reversed receipt must not keep appearing on a live booking pass as
+             -- though the money were still the clinic's. LIMIT 1 because a visit settled once has
+             -- one receipt, and ordering by paid_at makes "the current one" deterministic rather
+             -- than whatever the planner returned first.
+             (
+               SELECT pay.receipt_number
+                 FROM payments pay
+                WHERE pay.patient_visit_id = pv.id
+                  AND pay.payment_status = 'Paid'
+                  AND pay.receipt_number IS NOT NULL
+                ORDER BY pay.paid_at DESC
+                LIMIT 1
+             ) AS receipt_number,
              COALESCE(ARRAY_AGG(DISTINCT tc.name) FILTER (WHERE tc.name IS NOT NULL), '{}') as categories
       FROM appointments a
       JOIN patient_visits pv ON a.patient_visit_id = pv.id
@@ -139,6 +157,24 @@ class AppointmentRepository {
                SELECT 1 FROM payments pay
                WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
              ) AS is_paid,
+             -- The receipt for money already taken, so the pass and the receipt travel together.
+             -- [1.52.0] A patient who has paid holds two things that belong side by side: the pass
+             -- they present at the desk, and proof of what they paid. They lived on separate
+             -- screens, so the patient had to go and find the second one — usually at the moment
+             -- an HMO or an employer asked them for it.
+             --
+             -- 'Paid' only: a reversed receipt must not keep riding on a live pass as though the
+             -- money were still the clinic's. LIMIT 1 with an explicit ORDER BY because "the
+             -- current receipt" must be deterministic, not whatever the planner returned first.
+             (
+               SELECT pay.receipt_number
+                 FROM payments pay
+                WHERE pay.patient_visit_id = pv.id
+                  AND pay.payment_status = 'Paid'
+                  AND pay.receipt_number IS NOT NULL
+                ORDER BY pay.paid_at DESC
+                LIMIT 1
+             ) AS receipt_number,
              -- What this booking costs, so the patient paying from home is told a FIGURE rather
              -- than "the amount due". [1.48.0] They are about to type it into a banking app, and
              -- a number they have to go and find somewhere else is a number they will get wrong.

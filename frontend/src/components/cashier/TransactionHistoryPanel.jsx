@@ -1,8 +1,9 @@
 import React from 'react';
-import { History, Printer, Receipt, RefreshCw, Undo2 } from 'lucide-react';
+import { ExternalLink, History, Printer, Receipt, RefreshCw, Undo2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
+import { SearchInput } from '../ui/search-input';
 import EmptyState from '../ui/empty-state';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -34,6 +35,18 @@ export default function TransactionHistoryPanel({ history, receipt, refund, oper
             <RefreshCw className="h-3.5 w-3.5" />
             Apply
           </Button>
+          {/* One box for three things — a receipt number off the printed slip, a patient's
+              surname, or the GCash reference read out over the phone. Making the reader pick the
+              right field first is how a lookup fails for someone who has the right information.
+              Enter submits, so the keyboard path works without reaching for Apply. */}
+          <SearchInput
+            placeholder="Receipt #, patient or reference…"
+            value={history.search}
+            onChange={(e) => history.setSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') history.reload(); }}
+            containerClassName="w-full sm:w-60"
+            aria-label="Search receipts"
+          />
           <ToolbarSpacer />
           <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
             {history.total} receipt{history.total === 1 ? '' : 's'}
@@ -136,6 +149,22 @@ export default function TransactionHistoryPanel({ history, receipt, refund, oper
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Two different jobs, so two buttons. Reprint opens the dialog in
+                              place — fastest when the patient is standing at the counter. Open
+                              gives the receipt its own tab, which is what you want when you need
+                              to keep it up beside the till, or send the link to someone. */}
+                          {t.receipt_number && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="xs"
+                              onClick={() => window.open(`?receipt=${encodeURIComponent(t.receipt_number)}`, '_blank', 'noopener')}
+                              title="Open this receipt in a new tab"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Open
+                            </Button>
+                          )}
                           <Button type="button" variant="outline" size="xs" onClick={() => receipt.reprint(t)}>
                             <Printer className="h-3 w-3" />
                             Reprint
