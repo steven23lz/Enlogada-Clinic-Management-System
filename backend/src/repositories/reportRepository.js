@@ -310,6 +310,101 @@ class ReportRepository {
     const result = await db.query(queryText);
     return result.rows;
   }
+
+  /**
+   * What the clinic's HMO work is worth, per provider.
+   *
+   * ── An approved claim is NOT money in the drawer ────────────────────────────────────────────
+   *
+   * This is the whole reason the query is shaped this way. An approved HMO test is a RECEIVABLE:
+   * the clinic bills the insurer and is paid later, through a channel this system does not see.
+   * `payments` never contains it. So `approved` must never be added to, compared against, or
+   * presented as the same kind of number as `collected` — doing that reports the same peso twice,
+   * once as a claim and once as cash, and inflates revenue by exactly the amount the clinic is
+   * still waiting for.
+   *
+   * The four figures answer four different questions and are returned side by side, never netted:
+   *
+   *   approved   billable to the insurer — work done, decision favourable, cash not yet in
+   *   refused    the HMO said no, so it falls to the PATIENT — the counter conversation [1.27.0]
+   *   pending    undecided, and therefore at risk of becoming either of the two above
+   *   collected  what the patient actually paid at the counter on these visits. This one IS in
+   *              the cash-up already, and is here only so the two halves of an HMO visit can be
+   *              seen together
+   *
+   * ── Why the visit's date, not the decision's ────────────────────────────────────────────────
+   *
+   * Bucketed by `patient_visits.created_at`: "HMO work done in this period". A claim decided
+   * three weeks later would otherwise move a peso out of a period already reported — the closed-
+   * day restatement [1.30.0] exists to prevent, arriving by a different door. A period's figures
+   * are fixed by when the work happened; only the split between the columns changes as claims
+   * are decided, which is the honest behaviour.
+   *
+   * Half-open range on the raw column, never `created_at::date` — see CLAUDE.md.
+   */
+  async getHmoClaimTotals(startDate, endDate) {
+    const queryText = `
+      WITH claim_lines AS (
+        SELECT hp.name                AS provider_name,
+               vt.price_at_time,
+               pv.id                  AS patient_visit_id,
+               -- The effective decision on ONE test, read from BOTH levels.
+               --
+               -- A claim and its tests are decided independently and can legitimately disagree:
+               -- approveRequest sets hmo_requests.status alone, and PUT /hmo/request-test/:id
+               -- sets each test. That is not a bug — an HMO routinely clears a claim while
+               -- refusing one line on it — but it means a report reading either column BY ITSELF
+               -- misstates the money. Reading only the per-test column reported an approved claim
+               -- as ₱0 approved and its full value still Pending; reading only the claim column
+               -- would report a refused test as billable.
+               --
+               -- A refusal at either level wins, matching the partial unique index on this table
+               -- in schema.sql, whose predicate is approval_status <> 'Rejected' -- it treats a
+               -- rejected test as no longer a live claim on that work.
+               CASE
+                 WHEN hr.status = 'Rejected' OR hrt.approval_status = 'Rejected' THEN 'Rejected'
+                 WHEN hr.status = 'Approved'                                     THEN 'Approved'
+                 ELSE 'Pending'
+               END AS effective_status
+          FROM hmo_requests hr
+          JOIN hmo_providers hp     ON hp.id = hr.hmo_provider_id
+          JOIN hmo_request_tests hrt ON hrt.hmo_request_id = hr.id
+          JOIN visit_tests vt       ON vt.id = hrt.visit_test_id
+          JOIN patient_visits pv    ON pv.id = vt.patient_visit_id
+         WHERE pv.created_at >= $1::date AND pv.created_at < ($2::date + 1)
+      ),
+      -- Counter takings per visit, resolved BEFORE the join so a visit carrying three claimed
+      -- tests contributes its receipt once rather than three times. Summing payments alongside
+      -- the lines is how a two-test claim reports double the money that was actually taken.
+      visit_cash AS (
+        SELECT pay.patient_visit_id,
+               SUM(pay.amount)::numeric(12,2) AS collected
+          FROM payments pay
+         WHERE ${ISSUED_RECEIPT_CLAUSE}
+           AND pay.patient_visit_id IN (SELECT patient_visit_id FROM claim_lines)
+         GROUP BY pay.patient_visit_id
+      )
+      SELECT cl.provider_name,
+             COUNT(*)::int                                                                  AS tests_claimed,
+             COUNT(DISTINCT cl.patient_visit_id)::int                                       AS visits,
+             COALESCE(SUM(cl.price_at_time) FILTER (WHERE cl.effective_status = 'Approved'), 0)::numeric(12,2) AS approved,
+             COALESCE(SUM(cl.price_at_time) FILTER (WHERE cl.effective_status = 'Rejected'), 0)::numeric(12,2) AS refused,
+             COALESCE(SUM(cl.price_at_time) FILTER (WHERE cl.effective_status = 'Pending'),  0)::numeric(12,2) AS pending,
+             COALESCE((
+               SELECT SUM(vc.collected)
+                 FROM visit_cash vc
+                WHERE vc.patient_visit_id IN (
+                  SELECT cl2.patient_visit_id FROM claim_lines cl2
+                   WHERE cl2.provider_name = cl.provider_name
+                )
+             ), 0)::numeric(12,2)                                                           AS collected
+        FROM claim_lines cl
+       GROUP BY cl.provider_name
+       ORDER BY approved DESC, cl.provider_name
+    `;
+    const result = await db.query(queryText, [startDate, endDate]);
+    return result.rows;
+  }
 }
 
 module.exports = new ReportRepository();

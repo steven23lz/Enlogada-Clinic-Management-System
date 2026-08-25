@@ -303,6 +303,21 @@ portal screen is where they look it up afterwards, not how they find out.
 
 **Never filter on `column::date`.** A B-tree index cannot serve a predicate on an expression, so `WHERE created_at::date = CURRENT_DATE` silently forces a sequential scan no matter what is indexed — `idx_patient_visits_created` existed for a year and was never used. Write half-open ranges on the raw column instead: `col >= $1::date AND col < ($2::date + 1)`. Measured at 219k rows: 50.7ms seq scan vs 0.84ms index scan. Casting in `SELECT`/`GROUP BY` is fine; only the filter matters.
 
+**An HMO claim is a RECEIVABLE, and must never be added to takings.** `[1.51.0]` Every other
+money figure in this app comes from `payments`; an approved HMO claim never reaches that table —
+the insurer is billed and pays later, outside this system. `GET /reports/hmo-claims` reports
+`approved` / `pending` / `refused` beside `collected` and never nets or sums them, because folding
+approved into revenue reports the same peso twice, once as a claim and once as cash. The response
+carries its own `note` saying so, so the caveat survives being copied into a summary.
+
+Two things decide a claim, independently, and BOTH decide the money: `hmo_requests.status` (set by
+approve/reject) and `hmo_request_tests.approval_status` (set per test). An HMO routinely clears a
+claim while refusing one line on it, so neither column alone is the answer — reading only the
+per-test column reported an approved claim as ₱0 approved with its full value still Pending.
+A refusal at either level wins, matching the partial unique index on that table. Bucketed by the
+VISIT date, so a claim decided three weeks later never moves money out of a period already
+reported — the closed-day restatement [1.30.0] exists to prevent, arriving by another door.
+
 **A money total never comes from the transaction list.** `GET /payments/transactions` is a log of
 receipts *issued*, and it includes ones later reversed — the cashier's cash-up is the screen that
 most needs to show a refund, not the one that can afford to hide it. The peso figures come from

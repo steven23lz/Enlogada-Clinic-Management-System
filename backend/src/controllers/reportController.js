@@ -14,6 +14,19 @@ class ReportController {
     }
   }
 
+  async getHmoClaims(req, res, next) {
+    try {
+      const { startDate, endDate } = req.query;
+      const report = await reportService.getHmoClaims(startDate, endDate);
+      return res.status(200).json({
+        status: 'success',
+        data: { report }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   /**
    * GET /reports/operations — per-department operating metrics for a date range.
    *

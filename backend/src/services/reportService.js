@@ -35,6 +35,36 @@ class ReportService {
     return { revenueTrend, serviceVolume, visitStatusBreakdown, paymentMethodBreakdown };
   }
 
+  /**
+   * HMO claim value per provider for a date range.
+   *
+   * Returns the providers plus a `totals` row the caller does not have to re-derive, and a
+   * `note` naming the one thing a reader can get wrong: `approved` is billable to the insurer,
+   * not money the clinic holds. The figure travels with its own caveat because a number this
+   * shape WILL be copied into a summary, and the caveat has to survive the copy.
+   */
+  async getHmoClaims(startDate, endDate) {
+    assertValidRange(startDate, endDate);
+
+    const providers = await reportRepository.getHmoClaimTotals(startDate, endDate);
+
+    const sum = (key) => providers.reduce((n, p) => n + Number(p[key] || 0), 0);
+    const totals = {
+      testsClaimed: providers.reduce((n, p) => n + Number(p.tests_claimed || 0), 0),
+      visits: providers.reduce((n, p) => n + Number(p.visits || 0), 0),
+      approved: Number(sum('approved').toFixed(2)),
+      refused: Number(sum('refused').toFixed(2)),
+      pending: Number(sum('pending').toFixed(2)),
+      collected: Number(sum('collected').toFixed(2)),
+    };
+
+    return {
+      providers,
+      totals,
+      note: 'Approved is billable to the insurer and is not part of counter takings.',
+    };
+  }
+
   async getStaffWorkload(startDate, endDate) {
     assertValidRange(startDate, endDate);
 
