@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import api from '../config/api';
+import { CATEGORY_ORDER } from '../lib/categories';
 
 /**
  * One patient's diagnostic history, with the filters the portal puts over it.
@@ -39,6 +40,35 @@ export function useMyResultHistory({ patientId } = {}) {
     return matchesCategory && matchesSearch;
   }), [history, category, search]);
 
+  /**
+   * The filter chips this patient gets — derived from what they actually have.
+   *
+   * This list used to be hardcoded as all five test_categories rows, which meant every patient was
+   * offered "2D Echo" and "ECG" filters. The clinic RETIRED both [1.47.0]; the category rows stay
+   * only so a past visit can still say what it was for. So the portal was advertising two services
+   * nobody can book, to patients who had never had one, and the chips returned nothing when
+   * clicked.
+   *
+   * Deriving it fixes both directions at once: a patient with a historical 2D Echo keeps the chip
+   * that reaches it, and a patient without one never learns the service exists. Same reason the
+   * category rows are not deleted — see CLAUDE.md.
+   */
+  const categories = useMemo(() => {
+    const present = new Set(history.map((h) => h.category_name).filter(Boolean));
+    const known = CATEGORY_ORDER.filter((c) => present.has(c));
+    // A category added to the database after this was written still gets a chip rather than
+    // becoming unreachable — it just sorts after the ones with a defined order.
+    const unknown = [...present].filter((c) => !CATEGORY_ORDER.includes(c)).sort();
+    return ['All', ...known, ...unknown];
+  }, [history]);
+
+  // Switching profiles can strip the chip that is currently selected — a child with no X-ray
+  // history, say — which would otherwise leave the list filtered to a category with no chip to
+  // clear it, reading as an empty record.
+  useEffect(() => {
+    if (!categories.includes(category)) setCategory('All');
+  }, [categories, category]);
+
   // Counted over the WHOLE history, not the filtered view: these are tiles describing the
   // patient's record, and a search box narrowing them would make them read as the record itself
   // shrinking.
@@ -52,7 +82,7 @@ export function useMyResultHistory({ patientId } = {}) {
   );
 
   return {
-    history, filtered,
+    history, filtered, categories,
     category, setCategory,
     search, setSearch,
     pendingCount, completedCount,

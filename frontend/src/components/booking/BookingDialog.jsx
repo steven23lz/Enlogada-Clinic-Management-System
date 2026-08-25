@@ -201,13 +201,22 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, hmoPro
       }
 
       const appt = response.data.data.appointment;
+      const { visitTests = [], hmoRequest } = response.data.data;
+
+      // Summed from the rows the SERVER wrote, never from the prices the picker was showing. A
+      // package expands into one visit_test per component with its allocated share of the fixed
+      // price [1.45.0], so the picker's own figure would be the list total of the parts — higher
+      // than the bill, on the one screen telling a patient what to send to a bank.
+      const amountDue = visitTests.reduce((sum, t) => sum + Number(t.price_at_time || 0), 0);
 
       setBookingConfirmation({
         referenceCode: appt.appointment_reference,
         queueNumber: appt.queue_number,
         patientName: selectedProfile ? `${selectedProfile.first_name} ${selectedProfile.last_name}` : '',
         scheduledDate: formatAppointmentDate(bookingData.scheduledDate),
-        scheduledTime: bookingData.scheduledTime
+        scheduledTime: bookingData.scheduledTime,
+        amountDue,
+        isHmo: !!hmoRequest
       });
       setBookingData({
         scheduledDate: '',
