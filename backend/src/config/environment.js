@@ -75,11 +75,18 @@ module.exports = {
   CLINIC_VAT_REGISTERED: process.env.CLINIC_VAT_REGISTERED !== 'false',
   VAT_RATE: parseFloat(process.env.VAT_RATE || '0.12'),
 
-  SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
-  SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
-  SMTP_USER: process.env.SMTP_USER || '',
-  SMTP_PASS: process.env.SMTP_PASS || '',
-  SMTP_FROM: process.env.SMTP_FROM || 'Enlogada Clinic <noreply@enlogadaclinic.com>',
+  // Outbound mail. EMAIL_* is accepted as an alias for SMTP_* because that is how Gmail names
+  // these when you generate an App Password, and an operator following Google's own wording
+  // should not end up with a silently unconfigured mailer. SMTP_* wins where both are set, being
+  // the more specific and the one this project has always documented.
+  //
+  // The password is read from the environment and nowhere else — never a default, never a
+  // fallback literal, never logged. `logSafeConfig` below must never gain a line for it.
+  SMTP_HOST: process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com',
+  SMTP_PORT: parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587', 10),
+  SMTP_USER: process.env.SMTP_USER || process.env.EMAIL_USER || '',
+  SMTP_PASS: process.env.SMTP_PASS || process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS || '',
+  SMTP_FROM: process.env.SMTP_FROM || process.env.EMAIL_FROM || 'Enlogada Clinic <noreply@enlogadaclinic.com>',
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || '',
 

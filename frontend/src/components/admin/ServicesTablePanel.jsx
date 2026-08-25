@@ -7,6 +7,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { formatCurrency } from '../../lib/currency';
 import EmptyState from '../ui/empty-state';
+import Pagination from '../ui/pagination';
 
 /**
  * Every service the clinic sells, its price, and the filter over them.
@@ -103,7 +104,7 @@ export default function ServicesTablePanel({ catalogue }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {catalogue.filtered.map(test => (
+                {catalogue.paged.map(test => (
                   <TableRow key={test.id}>
                     <TableCell className="font-bold text-xs text-slate-900">SRV-{test.id}</TableCell>
                     {/* Whether this service tells the patient how to prepare. [1.24.0] added
@@ -156,6 +157,18 @@ export default function ServicesTablePanel({ catalogue }) {
             </Table>
           )}
         </PanelBody>
+        {/* Only once there is more than one page — a control that can never do anything is noise
+            on a catalogue the clinic may only have a dozen rows in. */}
+        {!catalogue.loading && !catalogue.error && catalogue.totalPages > 1 && (
+          <Pagination
+            page={catalogue.page}
+            totalPages={catalogue.totalPages}
+            onPageChange={catalogue.setPage}
+            total={catalogue.filtered.length}
+            totalLabel="services"
+            className="border-t border-line px-4 py-2.5"
+          />
+        )}
       </Panel>
       </div>
   );

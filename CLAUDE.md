@@ -6,11 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Enlogada Clinic Management System — an enterprise diagnostic healthcare platform for human diagnostic services only (**Ultrasound, Laboratory, Digital X-Ray**). Veterinary/pet functionality was fully removed; do not reintroduce it.
 
-**2D Echo and ECG are not offered.** `[1.47.0]` The clinic confirmed this. Their tests are
-deactivated and they are gone from all public copy — but the `test_categories` rows, the
-`modality.js` mappings, the category colours and the portal's result filters all REMAIN, because 18
-historical `visit_tests` point at them and a past visit has to keep being able to say what it was
-for. Do not "finish the job" by deleting the categories.
+**2D Echo and ECG are not offered.** `[1.47.0]` The clinic confirmed this.
+
+**2D Echo is now GONE entirely** `[1.50.0]` — category, tests, `modality.js` mappings, category
+colour and the portal filter. [1.47.0] kept the category because 18 historical `visit_tests`
+pointed at it; that count reached zero, so the reason expired. `migrateRemove2dEcho.js` does the
+deletion and **re-counts the references itself before touching anything**, exiting without a
+change if any remain — a developer database and the clinic's live database are not the same
+database, and the whole argument for deleting rests on a number only true of one of them.
+`--rollback` restores the category and both tests, inactive.
+
+**ECG is different: deactivate, do not delete.** Its tests are inactive and it is gone from public
+copy, but the `test_categories` row, its colour and `CATEGORY_ORDER` entry REMAIN so a past visit
+can still say what it was for. The portal's filter chips are derived from what each patient
+actually has `[1.49.0]`, so nobody is offered an ECG filter unless they had one.
 
 Stack: React 19 (Vite, Tailwind CSS v4) frontend + Node.js/Express 5 backend + PostgreSQL.
 
@@ -76,6 +85,7 @@ node src/scripts/migrateSlotHold.js            # [1.35.0] an unpaid online booki
 node src/scripts/migratePaymentMethods.js     # [1.33.0] narrow chk_payment_method to what the clinic settles; refuses if a row would violate it (--rollback reverses it)
 node src/scripts/migrateTestPackages.js        # [1.45.0] the clinic's package deals (--rollback reverses it)
 node src/scripts/migratePaymentSubmissions.js  # [1.48.0] clinic payment channels + manual proof of payment (--rollback reverses it)
+node src/scripts/migrateRemove2dEcho.js       # [1.50.0] remove the 2D Echo category and its tests; REFUSES if any visit_tests still reference them (--rollback restores)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -172,6 +182,15 @@ retry schedule while the money has already moved.
 **Two things change the day it goes on.** Unpaid client self-pay bookings become provisional and
 start releasing their slot after 15 minutes ([1.35.0] — HMO and staff bookings stay permanent), and
 the client's booking cards begin offering GCash instead of "pay at the counter".
+
+**Outbound email is configured and working.** `[1.50.0]` The clinic sends from
+`enlogada2011@gmail.com` via Gmail SMTP — released results, booking confirmations, password
+resets. `SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` in `backend/.env` (gitignored, untracked);
+`EMAIL_USER`/`EMAIL_APP_PASSWORD`/`EMAIL_FROM` are accepted as aliases because that is how Google
+names them. The App Password lives **only** in that file — never in source, git, logs or docs.
+`sendEmail` now requires BOTH halves and names the missing one: checking the username alone let a
+half-configured clinic past the guard and fail inside nodemailer once per released result, which
+reads as a mail outage rather than an unfinished setting.
 
 Env files: `backend/.env` and `frontend/.env`, based on the respective `.env.example`. Backend needs `DATABASE_URL`, `JWT_SECRET`, SMTP settings (for result-release emails), and Google OAuth credentials. Frontend needs `VITE_GOOGLE_CLIENT_ID` and `VITE_API_BASE_URL` (the latter is inlined at **build** time, so it must be set before `npm run build` — setting it on the server afterwards has no effect). The backend refuses to start if `JWT_SECRET` is blank, shorter than 32 characters, or a known example value; generate one with `openssl rand -hex 32`.
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Calendar, CheckCircle, ChevronRight, Clock, Download, Eye, FileText, FlaskConical, HeartPulse, Info, Printer, Scan, Stethoscope } from 'lucide-react';
+import { Activity, Calendar, CheckCircle, ChevronRight, Clock, Download, Eye, FileText, FlaskConical, Info, Printer, Scan, Stethoscope } from 'lucide-react';
 
 // The mark a patient recognises their own report by. Elements rather than components because
 // they are looked up by name and rendered as-is; the sizing is the same everywhere it appears.
@@ -7,7 +7,6 @@ const CATEGORY_ICONS = {
   Ultrasound: <Stethoscope className="w-5 h-5" />,
   Xray: <Scan className="w-5 h-5" />,
   Laboratory: <FlaskConical className="w-5 h-5" />,
-  '2D Echo': <HeartPulse className="w-5 h-5" />,
   ECG: <Activity className="w-5 h-5" />,
 };
 import { Button } from '../ui/button';
@@ -47,7 +46,7 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
               <div className="inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
                 {/* Only the categories this patient actually has. The hardcoded list this
                     replaces mirrored all five test_categories rows, so every patient was offered
-                    2D Echo and ECG filters for services the clinic retired [1.47.0] — chips that
+                    filters for services the clinic does not offer — chips that
                     named a service nobody can book and returned nothing when clicked. */}
                 {results.categories.map(cat => (
                   <button

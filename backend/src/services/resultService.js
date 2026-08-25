@@ -112,10 +112,10 @@ async function assertStaffOwnsVisitTest(requestingUser, visitTestId) {
 
 class ResultService {
   async getPendingByCategory(categoryName, requestingUser) {
-    // '2D Echo' is its own row in test_categories, distinct from 'Ultrasound', but
-    // MODULE_SCOPE.md explicitly assigns it to the Ultrasound Staff role ("Ultrasound-category
-    // (including 2D Echo)") — so it must be independently queryable here even though no staff
-    // role is named after it directly.
+    // The list is DIAGNOSTIC_CATEGORIES in constants/modality.js rather than a literal here, so
+    // adding or retiring a department changes one file. It used to carry '2D Echo' as a fourth
+    // entry — its own test_categories row that MODULE_SCOPE.md assigned to the Ultrasound role —
+    // until [1.50.0] removed that category entirely.
     if (!DIAGNOSTIC_CATEGORIES.includes(categoryName)) {
       const error = new Error(`Invalid category. Must be one of: ${DIAGNOSTIC_CATEGORIES.join(', ')}`);
       error.statusCode = 400;

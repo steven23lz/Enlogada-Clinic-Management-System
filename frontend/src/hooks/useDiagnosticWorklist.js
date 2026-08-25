@@ -18,10 +18,14 @@ const ROLE_TO_CATEGORY = [
 ];
 
 /**
- * '2D Echo' is its own test_categories row, but MODULE_SCOPE.md assigns it to the Ultrasound
- * Staff role — so that one worklist covers two categories and every other covers one.
+ * A worklist covers exactly the category it names.
+ *
+ * This used to widen 'Ultrasound' to ['Ultrasound', '2D Echo'], because 2D Echo was its own
+ * test_categories row that MODULE_SCOPE.md assigned to the Ultrasound role. [1.50.0] removed that
+ * category, so the widening became a query for a category that no longer exists. Kept as a
+ * function rather than inlined: the shape is what a second such mapping would need.
  */
-const categoriesFor = (category) => (category === 'Ultrasound' ? ['Ultrasound', '2D Echo'] : [category]);
+const categoriesFor = (category) => [category];
 
 /**
  * A department's work: the tickets waiting for a report, and the reports already released.

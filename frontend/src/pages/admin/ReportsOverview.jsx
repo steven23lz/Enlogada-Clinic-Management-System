@@ -648,6 +648,22 @@ const OperationsReport = () => {
 // Module 12 originally built this page's "Today's Snapshot" as an honest, minimal entry point
 // and explicitly deferred historical trends, date-range filtering, and the RBAC matrix report
 // to this module. That live snapshot logic is unchanged here — only added to, not replaced.
+/**
+ * One category of reports: a quiet label over its own segmented strip.
+ *
+ * A separate TabsList per group rather than dividers inside one, because Radix drives arrow-key
+ * roving focus from the List — putting non-trigger children inside it makes the keyboard order
+ * disagree with the visual one. Three small lists keep both correct.
+ */
+const TabGroup = ({ label, children }) => (
+  <div className="space-y-1.5">
+    <span className="block px-0.5 text-micro font-semibold uppercase tracking-[0.12em] text-slate-400">
+      {label}
+    </span>
+    <TabsList>{children}</TabsList>
+  </div>
+);
+
 const ReportsOverview = () => {
   // SuperAdmin bypasses in hasPermission; an Admin is judged on what they actually hold, and does
   // not hold rbac:manage. Both the trigger and the panel are gated — a hidden trigger still leaves
@@ -665,13 +681,26 @@ const ReportsOverview = () => {
       />
 
       <Tabs defaultValue="snapshot" className="w-full space-y-4">
-        <TabsList>
-          <TabsTrigger value="snapshot">Today</TabsTrigger>
-          <TabsTrigger value="operations">Operations</TabsTrigger>
-          <TabsTrigger value="range">Trends</TabsTrigger>
-          <TabsTrigger value="workload">Staff Workload</TabsTrigger>
-          {canSeeRbac && <TabsTrigger value="rbac">RBAC Matrix</TabsTrigger>}
-        </TabsList>
+        {/* Grouped by the QUESTION each report answers, not left as one undifferentiated row of
+            five. "Today" and "Staff Workload" sat side by side looking like alternatives, when one
+            is a live clinic view and the other is a management read over a date range.
+
+            The groups describe what is actually here — there is no report behind a label that has
+            no data. Anything the clinic does not measure (HMO claim outcomes, appointment
+            no-shows) is deliberately absent rather than given an empty tab. */}
+        <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
+          <TabGroup label="Clinic">
+            <TabsTrigger value="snapshot">Today</TabsTrigger>
+            <TabsTrigger value="operations">Departments</TabsTrigger>
+          </TabGroup>
+          <TabGroup label="Revenue &amp; Volume">
+            <TabsTrigger value="range">Trends</TabsTrigger>
+          </TabGroup>
+          <TabGroup label="People">
+            <TabsTrigger value="workload">Staff Workload</TabsTrigger>
+            {canSeeRbac && <TabsTrigger value="rbac">Access Matrix</TabsTrigger>}
+          </TabGroup>
+        </div>
         <TabsContent value="snapshot" className="m-0">
           <TodaySnapshot />
         </TabsContent>

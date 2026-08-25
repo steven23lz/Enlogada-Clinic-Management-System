@@ -577,11 +577,13 @@ INSERT INTO patient_types (name) VALUES
 ('Private'),
 ('Self Pay');
 
+-- [1.50.0] '2D Echo' removed: the clinic does not offer it. 'ECG' is likewise not offered and its
+-- tests are deactivated by seedRealCatalogue.js, but the CATEGORY row stays because historical
+-- visit_tests may still point at it — a past visit has to keep being able to say what it was for.
 INSERT INTO test_categories (name) VALUES
 ('Laboratory'),
 ('Xray'),
 ('Ultrasound'),
-('2D Echo'),
 ('ECG');
 
 INSERT INTO hmo_providers (name) VALUES
@@ -604,11 +606,8 @@ INSERT INTO tests (category_id, name, price) VALUES
 (3, 'Abdominal Ultrasound', 1500.00),
 (3, 'Thyroid Ultrasound', 1000.00),
 (3, 'Breast Ultrasound', 1200.00),
--- 2D Echo Tests
-(4, 'Plain 2D Echo with Doppler', 2580.00),
-(4, 'Pediatric 2D Echo', 3080.00),
 -- ECG Tests
-(5, '12 Lead ECG', 480.00);
+(4, '12 Lead ECG', 480.00);
 
 -- Seed Clinic Operating Hours (Mon-Fri 08:00-17:00, Sat 08:00-12:00, Sun closed, 30-min slots)
 INSERT INTO clinic_operating_hours (day_of_week, is_open, open_time, close_time, slot_interval_minutes, max_concurrent_bookings) VALUES

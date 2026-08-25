@@ -4,7 +4,7 @@ import PublicFooter from '../../components/PublicFooter';
 import PageShell from '../../components/ui/page-shell';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
-import { Activity, Stethoscope, FileText, Heart, Zap, Search, Info, Phone, CalendarCheck, X, Package, Check } from 'lucide-react';
+import { Activity, Stethoscope, FileText, Zap, Search, Info, Phone, CalendarCheck, X, Package, Check } from 'lucide-react';
 import { categoryKey, categoryTint } from '../../lib/categories';
 import { useClinic } from '../../lib/clinic';
 
@@ -89,7 +89,6 @@ const ServicesPage = ({ onNavigate }) => {
     Laboratory: Activity,
     Ultrasound: Stethoscope,
     Xray: FileText,
-    '2D Echo': Heart,
     ECG: Zap,
   };
 
