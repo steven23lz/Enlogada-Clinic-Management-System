@@ -1,4 +1,5 @@
 import React from 'react';
+import LoadingState from '../ui/loading-state';
 import { Edit2, Plus, Wallet, QrCode, AlertTriangle } from 'lucide-react';
 import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -39,10 +40,7 @@ export default function PaymentMethodsPanel({ paymentMethods }) {
             action={<Button variant="outline" size="sm" onClick={paymentMethods.reload}>Try again</Button>}
           />
         ) : paymentMethods.loading ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-10">
-            <div className="h-6 w-6 animate-spin rounded-full border-4 border-azure-500 border-t-transparent" />
-            <span className="text-fine font-semibold text-slate-500">Loading payment methods…</span>
-          </div>
+          <LoadingState label="Loading payment methods…" />
         ) : paymentMethods.methods.length === 0 ? (
           <EmptyState
             compact

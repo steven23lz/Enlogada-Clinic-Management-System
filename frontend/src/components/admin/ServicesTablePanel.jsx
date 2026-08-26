@@ -1,4 +1,5 @@
 import React from 'react';
+import LoadingState from '../ui/loading-state';
 import { Edit2, Info, Layers, Plus } from 'lucide-react';
 import { Panel, PanelBody } from '../ui/panel';
 import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
@@ -74,10 +75,7 @@ export default function ServicesTablePanel({ catalogue }) {
               action={<Button variant="outline" size="sm" onClick={catalogue.reload}>Try again</Button>}
             />
           ) : catalogue.loading ? (
-            <div className="py-16 flex flex-col items-center justify-center space-y-3">
-              <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-xs font-semibold text-gray-500">Loading catalog...</span>
-            </div>
+            <LoadingState size="lg" label="Loading the catalogue…" />
           ) : catalogue.filtered.length === 0 ? (
             /* The last two bare grey lines in the app — the exact "centred line of small italic
                grey text" that empty-state.jsx was written to replace, and it said "in this

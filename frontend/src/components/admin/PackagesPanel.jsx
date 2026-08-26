@@ -1,4 +1,5 @@
 import React from 'react';
+import LoadingState from '../ui/loading-state';
 import { Edit2, Plus, Package } from 'lucide-react';
 import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -39,10 +40,7 @@ export default function PackagesPanel({ packageAdmin }) {
             action={<Button variant="outline" size="sm" onClick={packageAdmin.reload}>Try again</Button>}
           />
         ) : packageAdmin.loading ? (
-          <div className="py-10 flex flex-col items-center justify-center space-y-3">
-            <div className="w-6 h-6 border-4 border-azure-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-fine font-semibold text-slate-500">Loading packages…</span>
-          </div>
+          <LoadingState label="Loading packages…" />
         ) : packageAdmin.packages.length === 0 ? (
           <EmptyState
             compact

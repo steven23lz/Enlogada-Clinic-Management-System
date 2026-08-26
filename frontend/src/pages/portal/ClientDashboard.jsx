@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import LoadingState from '../../components/ui/loading-state';
 import DashboardLayout from '../../components/DashboardLayout';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
@@ -63,10 +64,7 @@ const ClientDashboard = ({ onNavigate }) => {
   if (profiles.loading) {
     return (
       <DashboardLayout onNavigate={onNavigate} activeTab="dashboard">
-        <div className="flex-1 flex flex-col items-center justify-center space-y-3 py-16">
-          <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-sm font-semibold text-gray-500">Loading your clinic patient profile...</span>
-        </div>
+        <LoadingState size="lg" label="Loading your patient profile…" className="flex-1" />
       </DashboardLayout>
     );
   }

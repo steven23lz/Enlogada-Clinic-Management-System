@@ -298,8 +298,15 @@ h1, h2, h3, h4 {
 
    Azure, because focus is an interaction and azure is the interactive colour. It also carries the
    contrast the green could not: 5.32:1 on white against 4.44:1. */
+/* Through a TOKEN, not the literal. [1.54.0] This was `#0a71a9` — the logo's azure, which is
+   correct on white and nearly invisible on the dark console's #0a1119 ground. `azure-500` is one
+   of the few steps the dark theme does NOT redefine, so the ring stayed dark-blue-on-black for
+   every keyboard user who chose dark mode: the one indicator that exists to be found, hidden.
+
+   `azure-600` is redefined in both directions — #096293 on light, #549cc3 on dark — so it reads
+   as a ring against either ground. */
 :focus-visible {
-  outline: 2px solid #0a71a9;
+  outline: 2px solid var(--color-azure-600);
   outline-offset: 2px;
   border-radius: 4px;
 }

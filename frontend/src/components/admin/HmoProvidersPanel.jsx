@@ -1,4 +1,5 @@
 import React from 'react';
+import LoadingState from '../ui/loading-state';
 import { Edit2, Plus, ShieldPlus } from 'lucide-react';
 import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -36,9 +37,10 @@ export default function HmoProvidersPanel({ hmoAdmin }) {
               action={<Button variant="outline" size="sm" onClick={hmoAdmin.reload}>Try again</Button>}
             />
           ) : hmoAdmin.loading ? (
-            <div className="py-10 flex flex-col items-center justify-center space-y-3">
-              <div className="w-6 h-6 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
+            // A label, where there was none. A bare spinner says something is happening and not
+            // WHAT — which on a panel that also renders an empty state and an error state leaves
+            // the reader guessing which of the three they are looking at.
+            <LoadingState label="Loading HMO providers…" />
           ) : hmoAdmin.providers.length === 0 ? (
             <EmptyState
               compact

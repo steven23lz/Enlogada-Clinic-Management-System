@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import LoadingState from '../../components/ui/loading-state';
 import PublicHeader from '../../components/PublicHeader';
 import PublicFooter from '../../components/PublicFooter';
 import PageShell from '../../components/ui/page-shell';
@@ -170,10 +171,7 @@ const ServicesPage = ({ onNavigate }) => {
       <main className="flex-1 w-full">
         <PageShell className="py-10 sm:py-14">
           {loading ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-24">
-              <div className="h-9 w-9 animate-spin rounded-full border-4 border-azure-500 border-t-transparent" />
-              <span className="text-note font-semibold text-slate-500">Loading services…</span>
-            </div>
+            <LoadingState size="lg" label="Loading services…" className="py-24" />
           ) : loadError ? (
             /* Deliberately says the list could not load and gives the clinic's phone number,
                rather than reporting an empty catalogue. A visitor who cannot see the price list

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import LoadingState from '../ui/loading-state';
 import { Check, X, Eye, AlertTriangle, Wallet, History } from 'lucide-react';
 import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import { Button } from '../ui/button';
@@ -100,10 +101,7 @@ export default function OnlinePaymentsPanel({ review }) {
               action={<Button variant="outline" size="sm" onClick={review.reload}>Try again</Button>}
             />
           ) : review.loading ? (
-            <div className="flex flex-col items-center justify-center gap-3 py-12">
-              <div className="h-6 w-6 animate-spin rounded-full border-4 border-azure-500 border-t-transparent" />
-              <span className="text-fine font-semibold text-slate-500">Loading…</span>
-            </div>
+            <LoadingState label="Loading payments to check…" />
           ) : review.submissions.length === 0 ? (
             <EmptyState
               compact
