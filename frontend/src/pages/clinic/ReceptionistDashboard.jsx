@@ -22,8 +22,10 @@ import { useAppointmentCheckIn } from '../../hooks/useAppointmentCheckIn';
 import { useVisitDisposition } from '../../hooks/useVisitDisposition';
 import { useTestAssignment } from '../../hooks/useTestAssignment';
 import { useHmoLogging } from '../../hooks/useHmoLogging';
-import { UserCheck, UserPlus, QrCode, AlertCircle, History } from 'lucide-react';
+import { UserCheck, UserPlus, QrCode, AlertCircle, History, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import LoadingState from '../../components/ui/loading-state';
+import { formatCurrency } from '../../lib/currency';
 
 const PAGE_TITLES = {
   'reception-queue': 'Active Patient Queue',
@@ -181,13 +183,72 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
         <Dialog open={testAssignment.open} onOpenChange={(next) => { if (!next) testAssignment.close(); }}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Attach Diagnostic Tests to Visit</DialogTitle>
+              <DialogTitle>Edit Tests on This Visit</DialogTitle>
               <DialogDescription>
-                Select tests requested for Visit ID #{testAssignment.visitId}.
+                What this visit is for. Tests are usually chosen at registration — change them
+                here if the patient adds one, or if one was picked in error.
               </DialogDescription>
             </DialogHeader>
 
+            {/* What the visit ALREADY carries, first. [1.55.0] This dialog used to open on an
+                empty picker, so the desk could not see what was attached and could only add to it
+                — and a test picked in error stayed on the visit until the cashier had to explain
+                the charge to a patient standing at the counter. */}
+            <div className="space-y-1.5 pt-2">
+              <span className="field-label">Currently on this visit</span>
+              {testAssignment.loading ? (
+                <LoadingState size="sm" label="Loading this visit's tests…" />
+              ) : testAssignment.existing.length === 0 ? (
+                <p className="m-0 rounded-lg border border-dashed border-line px-3 py-2.5 text-fine text-slate-500">
+                  Nothing attached yet — choose below.
+                </p>
+              ) : (
+                <ul className="m-0 max-h-40 list-none space-y-1 overflow-y-auto p-0">
+                  {testAssignment.existing.map((line) => {
+                    const locked = testAssignment.lockReason(line);
+                    return (
+                      <li
+                        key={line.id}
+                        className="flex items-center gap-2 rounded-lg border border-line bg-white px-2.5 py-1.5"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-fine font-semibold text-slate-800">
+                            {line.test_name}
+                            {line.package_name && (
+                              <span className="ml-1.5 font-normal text-azure-700">
+                                · {line.package_name}
+                              </span>
+                            )}
+                          </span>
+                          {/* Why it cannot come off, said beside it rather than only on refusal. */}
+                          {locked && (
+                            <span className="block text-micro text-slate-500">{locked}</span>
+                          )}
+                        </span>
+                        <span className="flex-shrink-0 text-fine font-semibold tabular-nums text-slate-600">
+                          {formatCurrency(line.price_at_time)}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          disabled={Boolean(locked) || testAssignment.removing === line.id}
+                          loading={testAssignment.removing === line.id}
+                          onClick={() => testAssignment.remove(line)}
+                          aria-label={`Remove ${line.test_name} from this visit`}
+                          className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
             <form onSubmit={testAssignment.submit} className="space-y-4 pt-2">
+              <span className="field-label">Add more</span>
               {/* Same control as the registration form below, so the two cannot drift on
                   grouping, the running total, or the preparation warning. */}
               <TestPicker
@@ -211,7 +272,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                   }
                   className="font-bold"
                 >
-                  Attach Selected
+                  Add to Visit
                 </Button>
               </div>
             </form>

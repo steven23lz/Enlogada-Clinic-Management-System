@@ -242,9 +242,13 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
 
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* Edit, not attach. [1.55.0] Tests are chosen at registration, so by
+                                the time a visit is in this queue the list already exists and what
+                                the desk needs is to CHANGE it. "Attach" described a dialog that
+                                could only ever add. */}
                             {canAttachTests && (
                               <Button onClick={() => testAssignment.openFor(visit.id)} variant="outline" size="xs">
-                                Attach Tests
+                                Edit Tests
                               </Button>
                             )}
                             {!['Completed', 'Cancelled'].includes(visit.visit_status) && (

@@ -29,7 +29,7 @@ const PASSWORD = 'Password123!';
 /** The permission each control's own endpoint demands. */
 const QUEUE_ACTIONS = [
   { label: /Register Walk-In/, permission: 'visits:create' },
-  { label: /Attach Tests/, permission: 'tests:assign' },
+  { label: /Edit Tests/, permission: 'tests:assign' },
 ];
 
 async function permissionsOf(ctx, email) {
