@@ -274,3 +274,140 @@ test.describe('Patient Records is a clinical roster', () => {
     await ctx.dispose();
   });
 });
+
+/**
+ * An address to send it TO. [1.60.0]
+ *
+ * [1.59.0] built the button and the record. Measured immediately afterwards: Laboratory 15
+ * released results with 0 addresses, X-Ray 12 with 0, Ultrasound 13 with 0. Forty released
+ * reports and nowhere to send one of them.
+ *
+ * The cause was that the only address in the system was `users.email`, reached through
+ * `patients.user_id` — which is NULLABLE precisely because reception registers walk-ins at the
+ * counter without a web account. That is how most of this clinic's patients arrive, so the
+ * delivery feature was unusable for the people it was built for. `patients.email` closes it.
+ */
+test.describe('Where the report is sent', () => {
+  let ctx; let rec;
+  const auth = (t) => ({ Authorization: `Bearer ${t}` });
+
+  test.beforeAll(async () => {
+    ctx = await request.newContext();
+    rec = await login(ctx, 'receptionist@enlogada.com');
+  });
+  test.afterAll(async () => { await ctx.dispose(); });
+
+  const makePatient = async (extra = {}) => {
+    const types = (await (await ctx.get(`${API}/patients/types`, { headers: auth(rec) })).json()).data.patientTypes;
+    const selfPay = types.find((t) => t.name === 'Self Pay');
+    const res = await ctx.post(`${API}/patients`, {
+      headers: auth(rec),
+      data: {
+        ...fixturePerson(), birthdate: '1988-03-04', sex: 'Male',
+        address: 'Bugo, Cagayan de Oro City', contactNumber: FIXTURE_CONTACT,
+        patientTypeId: selfPay.id, ...extra,
+      },
+    });
+    return res;
+  };
+
+  test('a walk-in with no account can still be given an address', async () => {
+    const address = `Walkin.${Date.now()}@enlogada-e2e.test`;
+    const res = await makePatient({ email: `  ${address}  ` });
+    expect(res.status()).toBe(201);
+
+    const patient = (await res.json()).data.patient;
+    expect(patient.user_id, 'a counter registration has no web account').toBeNull();
+    // Trimmed and lowercased in the service, so "no address" and "an address" each have exactly
+    // one representation and the COALESCE on read behaves.
+    expect(patient.email).toBe(address.toLowerCase());
+  });
+
+  test('a malformed address is refused rather than stored', async () => {
+    const res = await makePatient({ email: 'not-an-email' });
+    expect(res.status()).toBe(400);
+    // Names the way out, because leaving it blank is a legitimate answer.
+    expect((await res.json()).message).toMatch(/leave it blank/i);
+  });
+
+  test('omitting the field does not erase the address', async () => {
+    const address = `Keep.${Date.now()}@enlogada-e2e.test`;
+    const patient = (await (await makePatient({ email: address })).json()).data.patient;
+
+    const base = {
+      patientTypeId: patient.patient_type_id, firstName: patient.first_name,
+      lastName: patient.last_name, birthdate: '1988-03-04', sex: 'Male',
+      address: 'A different address', contactNumber: FIXTURE_CONTACT,
+    };
+
+    // An omitted field is not an instruction to erase. updatePatient writes every column
+    // unconditionally, so without the guard in the service this call would blank the address a
+    // patient's results go to — the same defect [1.54.0] found in the Services Catalogue.
+    const kept = await ctx.put(`${API}/patients/${patient.id}`, { headers: auth(rec), data: base });
+    expect(kept.status()).toBe(200);
+    expect((await kept.json()).data.patient.email, 'not mentioning it must keep it')
+      .toBe(address.toLowerCase());
+
+    // Sending it EMPTY is a different instruction, and does clear it.
+    const cleared = await ctx.put(`${API}/patients/${patient.id}`, {
+      headers: auth(rec), data: { ...base, email: '' },
+    });
+    expect((await cleared.json()).data.patient.email, 'an explicit blank clears it').toBeNull();
+  });
+
+  test('the record address wins over the account it belongs to', async () => {
+    const stamp = Date.now();
+    const accountEmail = `owner.${stamp}@enlogada-e2e.test`;
+    await ctx.post(`${API}/auth/register`, {
+      data: {
+        firstName: 'Owner', lastName: 'Probe', email: accountEmail,
+        password: PASSWORD, contactNumber: FIXTURE_CONTACT,
+      },
+    });
+    const owner = await login(ctx, accountEmail);
+    const types = (await (await ctx.get(`${API}/patients/types`, { headers: auth(owner) })).json()).data.patientTypes;
+    const selfPay = types.find((t) => t.name === 'Self Pay');
+
+    // One account owns several profiles — a parent booking for dependents, which is why
+    // /patients/my-profiles is plural. The ACCOUNT address is the right default for a dependent,
+    // since the parent is who booked.
+    const inherits = (await (await ctx.post(`${API}/patients`, {
+      headers: auth(owner),
+      data: {
+        ...fixturePerson(), birthdate: '2015-06-01', sex: 'Female',
+        address: 'Bugo, Cagayan de Oro City', contactNumber: FIXTURE_CONTACT,
+        patientTypeId: selfPay.id,
+      },
+    })).json()).data.patient;
+    expect(inherits.email, 'nothing is copied onto the row').toBeNull();
+
+    // But an address typed onto ONE patient's record is a deliberate statement about that
+    // patient, and must win over the inherited one.
+    const ownAddress = `child.${stamp}@enlogada-e2e.test`;
+    const specific = (await (await ctx.post(`${API}/patients`, {
+      headers: auth(owner),
+      data: {
+        ...fixturePerson(), birthdate: '2012-06-01', sex: 'Male',
+        address: 'Bugo, Cagayan de Oro City', contactNumber: FIXTURE_CONTACT,
+        patientTypeId: selfPay.id, email: ownAddress,
+      },
+    })).json()).data.patient;
+    expect(specific.email).toBe(ownAddress);
+
+    // Both profiles are reachable, by different routes to the same question.
+    const mine = (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth(owner) })).json()).data.patients;
+    expect(mine.length, 'one account, several profiles').toBeGreaterThanOrEqual(2);
+  });
+
+  test('reception is asked for it at the counter', async ({ page }) => {
+    await signIn(page, 'receptionist@enlogada.com');
+    await page.getByRole('button', { name: 'Walk-In Registration' }).first().click();
+
+    // Asked HERE because this is the only moment the patient is standing in front of somebody
+    // who can ask. Optional — it must never become a barrier to registering a patient.
+    const field = page.locator('#wi-email');
+    await expect(field).toBeVisible({ timeout: 20000 });
+    await expect(field).not.toHaveAttribute('required', '');
+    await expect(page.getByText(/Released reports are sent here/i).first()).toBeVisible();
+  });
+});

@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
+import { nthWorkingDay } from './helpers/dates.js';
 
 /**
  * The clinic's diary: its hours, its capacity, and closing one specific date. [1.57.0]
@@ -32,19 +33,6 @@ async function login(ctx, email) {
   return (await res.json()).data.token;
 }
 
-/**
- * A weekday far enough out that no fixture has booked it, computed from LOCAL getters.
- *
- * Never toISOString(): run before 08:00 PHT it returns the UTC date, which is yesterday, and a
- * spec that quietly tests the wrong day reads exactly like one that passed.
- */
-function futureWeekday(daysAhead) {
-  const d = new Date();
-  d.setDate(d.getDate() + daysAhead);
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 test.describe('Clinic schedule', () => {
   let ctx; let sup;
   const auth = (t) => ({ Authorization: `Bearer ${t}` });
@@ -52,11 +40,11 @@ test.describe('Clinic schedule', () => {
   // Each test takes its own date. They share one database and one worker, and two tests
   // overriding the same date would silently overwrite each other through the ON CONFLICT.
   const DATES = {
-    closure: futureWeekday(120),
-    capacity: futureWeekday(127),
-    hours: futureWeekday(134),
-    pattern: futureWeekday(141),
-    ui: futureWeekday(148),
+    closure: nthWorkingDay(120),
+    capacity: nthWorkingDay(127),
+    hours: nthWorkingDay(134),
+    pattern: nthWorkingDay(141),
+    ui: nthWorkingDay(148),
   };
 
   test.beforeAll(async () => {

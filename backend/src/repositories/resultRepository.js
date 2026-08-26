@@ -167,14 +167,17 @@ class ResultRepository {
              tr.emailed_at, tr.emailed_to, tr.email_count,
              -- The address the report WOULD go to on a re-send, so the screen can offer the
              -- action honestly rather than discovering there is no email after the click.
-             pu.email as patient_email,
+             -- Resolved the same way the send resolves it — see findPatientEmailByVisitTestId.
+             -- Two different answers here and there is a button that promises one address and
+             -- uses another.
+             COALESCE(NULLIF(p.email, ''), pu.email) as patient_email,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
       JOIN patient_visits pv ON vt.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
-      -- A walk-in has no account, so this is a LEFT join and patient_email is legitimately null.
+      -- A walk-in has no account, so this is a LEFT join; p.email then supplies the address.
       LEFT JOIN users pu ON p.user_id = pu.id
       -- is_current: a test can now carry several versions, and joining them all would repeat
       -- the row once per amendment and show superseded findings alongside the live ones.
@@ -408,7 +411,16 @@ class ResultRepository {
       -- telephone the patient should not have to go and look it up while a panic value is
       -- sitting unactioned. Recipients of that notification (Receptionist/Admin/SuperAdmin) are
       -- already entitled to patient contact details.
-      SELECT u.email, p.first_name, p.last_name, p.contact_number, t.name as test_name
+      -- The patient record's own address first, the owning ACCOUNT's second. [1.60.0]
+      --
+      -- The order matters because one account owns several patient profiles — a parent booking
+      -- for dependents, which is why /patients/my-profiles is plural. The account address is the
+      -- right default for a dependent, since the parent is who booked; but an address typed onto
+      -- one patient's record is a deliberate statement about THAT patient and wins over an
+      -- inherited one. Falling back rather than replacing means no client-owned patient loses
+      -- the address they already had.
+      SELECT COALESCE(NULLIF(p.email, ''), u.email) AS email,
+             p.first_name, p.last_name, p.contact_number, t.name as test_name
       FROM visit_tests vt
       JOIN patient_visits pv ON vt.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id

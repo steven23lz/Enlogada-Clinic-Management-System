@@ -1,10 +1,10 @@
 const db = require('../config/database');
 
 class PatientRepository {
-  async createPatient({ userId, patientTypeId, firstName, lastName, birthdate, sex, address, contactNumber, emergencyContact }) {
+  async createPatient({ userId, patientTypeId, firstName, lastName, birthdate, sex, address, contactNumber, emergencyContact, email = null }) {
     const queryText = `
-      INSERT INTO patients (user_id, patient_type_id, first_name, last_name, birthdate, sex, address, contact_number, emergency_contact)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO patients (user_id, patient_type_id, first_name, last_name, birthdate, sex, address, contact_number, emergency_contact, email)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
     const result = await db.query(queryText, [
@@ -16,7 +16,8 @@ class PatientRepository {
       sex,
       address,
       contactNumber,
-      emergencyContact
+      emergencyContact,
+      email
     ]);
     return result.rows[0];
   }
@@ -44,11 +45,11 @@ class PatientRepository {
     return result.rows[0];
   }
 
-  async updatePatient(id, { patientTypeId, firstName, lastName, birthdate, sex, address, contactNumber, emergencyContact }) {
+  async updatePatient(id, { patientTypeId, firstName, lastName, birthdate, sex, address, contactNumber, emergencyContact, email = null }) {
     const queryText = `
       UPDATE patients
-      SET patient_type_id = $1, first_name = $2, last_name = $3, birthdate = $4, sex = $5, address = $6, contact_number = $7, emergency_contact = $8, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $9
+      SET patient_type_id = $1, first_name = $2, last_name = $3, birthdate = $4, sex = $5, address = $6, contact_number = $7, emergency_contact = $8, email = $9, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $10
       RETURNING *
     `;
     const result = await db.query(queryText, [
@@ -60,6 +61,7 @@ class PatientRepository {
       address,
       contactNumber,
       emergencyContact,
+      email,
       id
     ]);
     return result.rows[0];

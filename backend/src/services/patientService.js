@@ -16,6 +16,10 @@ const AUDITED_FIELDS = [
   ['contact_number', 'Contact number'],
   ['address', 'Address'],
   ['emergency_contact', 'Emergency contact'],
+  // Audited like any other contact detail, and for a sharper reason than most: this is where a
+  // medical report gets sent. A wrong address here delivers someone's results to a stranger, and
+  // "what did it say before?" is the first question asked afterwards.
+  ['email', 'Email'],
 ];
 
 /** A DATE comes back as a Date object; everything else is a string or null. Compare as text. */
@@ -59,11 +63,35 @@ function departmentScopeFor(requestingUser) {
   return requestingUser?.departments ?? null;
 }
 
+/**
+ * An address a result can actually be sent to, or null. [1.60.0]
+ *
+ * Deliberately permissive about what an address may look like and strict about it being present:
+ * the check exists to catch a slip at the counter (a missing @, a trailing comma from a form),
+ * not to adjudicate RFC 5322. Rejecting an unusual but valid address would turn "we can email
+ * your results" into "we cannot", which is the worse failure.
+ *
+ * Blank normalises to NULL rather than '', so "no address" has exactly one representation and
+ * the COALESCE in resultRepository behaves. NULLIF there covers the rows that predate this.
+ */
+function normaliseEmail(value) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim().toLowerCase();
+  if (!trimmed) return null;
+  if (trimmed.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    const error = new Error('That email address does not look right. Check it, or leave it blank.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return trimmed;
+}
+
 class PatientService {
   async addPatientProfile(userId, patientData) {
     return await patientRepository.createPatient({
       userId,
-      ...patientData
+      ...patientData,
+      email: normaliseEmail(patientData.email),
     });
   }
 
@@ -110,7 +138,16 @@ class PatientService {
    */
   async updatePatientProfile(id, patientData, requestingUser) {
     const before = await this.getPatientById(id, requestingUser);
-    const updated = await patientRepository.updatePatient(id, patientData);
+
+    // An omitted field is not an instruction to erase. `updatePatient` writes every column
+    // unconditionally, so a caller sending only the fields it cares about would blank the rest —
+    // the same defect [1.54.0] found in the Services Catalogue, where a status toggle deleted a
+    // test's preparation. Here it would silently discard the address a patient's results go to.
+    const email = patientData.email === undefined
+      ? (before.email ?? null)
+      : normaliseEmail(patientData.email);
+
+    const updated = await patientRepository.updatePatient(id, { ...patientData, email });
 
     // Audited with a field-level diff, not a bare "patient updated". [1.24.0]
     //

@@ -156,6 +156,17 @@ CREATE TABLE patients (
     address TEXT,
     contact_number VARCHAR(20),
     emergency_contact VARCHAR(100),
+    -- Where this patient's RESULTS are sent. [1.60.0] The only address used to be users.email,
+    -- reached through the NULLABLE user_id -- and reception registers walk-ins at the counter
+    -- with no web account, which is how most patients here arrive. Measured the day this was
+    -- added: 54 of 56 active patients had no address of any kind, so the delivery feature
+    -- [1.59.0] had nowhere to send 40 released reports.
+    --
+    -- Not unique and not required. A household shares an inbox more often than not, and a UNIQUE
+    -- would refuse the second child at the counter for no clinical reason; a patient entitled to
+    -- their result is never turned away for not having email. Reads COALESCE this over the
+    -- owning account's address -- see findPatientEmailByVisitTestId.
+    email VARCHAR(255),
     -- Archived, not deleted. [1.56.0] NULL means active, which is every row without a backfill.
     -- A patient row is the parent of their visits, bills and results; deleting one would either
     -- fail on the foreign keys or take a clinical and financial history with it. Diagnostic
@@ -966,3 +977,8 @@ CREATE INDEX IF NOT EXISTS idx_visit_tests_package
 -- EXCLUDES rather than the whole table. [1.56.0]
 CREATE INDEX IF NOT EXISTS idx_patients_archived
     ON patients (archived_at) WHERE archived_at IS NOT NULL;
+
+-- Lookup by address, lowercased to match how the service stores it. Partial: only rows that have
+-- one, which is the minority today and always the point of the index.
+CREATE INDEX IF NOT EXISTS idx_patients_email
+    ON patients (LOWER(email)) WHERE email IS NOT NULL;

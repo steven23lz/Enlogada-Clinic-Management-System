@@ -44,6 +44,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
     address: '',
     contactNumber: '',
     emergencyContact: '',
+    email: '',
     patientTypeId: ''
   });
   const [visitNotes, setVisitNotes] = useState('');
@@ -128,6 +129,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
         address: '',
         contactNumber: '',
         emergencyContact: '',
+        email: '',
         patientTypeId: ''
       });
       setVisitNotes('');
@@ -284,6 +286,30 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                       onChange={e => setNewPatient({...newPatient, address: e.target.value})}
                       disabled={isRegistering}
                     />
+                  </div>
+
+                  {/* Where this patient's RESULTS will be sent. [1.60.0]
+                      Asked HERE, at the counter, because this is the only moment the patient is
+                      standing in front of somebody who can ask. A walk-in has no web account, so
+                      before this there was nowhere to record an address for them at all — the
+                      clinic could release a report and then have no way to send it. Measured on
+                      the day it was added: 54 of 56 active patients had no address of any kind.
+
+                      Optional, and it must stay optional: a patient entitled to their result is
+                      never turned away for not having email. */}
+                  <div className="space-y-1">
+                    <label className="field-label" htmlFor="wi-email">Email for results</label>
+                    <Input
+                      id="wi-email"
+                      type="email"
+                      placeholder="juan.delacruz@example.com"
+                      value={newPatient.email}
+                      onChange={e => setNewPatient({...newPatient, email: e.target.value})}
+                      disabled={isRegistering}
+                    />
+                    <p className="m-0 text-micro text-slate-500">
+                      Released reports are sent here. Leave blank if they will collect a printed copy.
+                    </p>
                   </div>
 
                   </div>

@@ -1,5 +1,88 @@
 # Database Migration & Schema History
 
+## [1.60.0] - 2026-08-27 (An address to send it to)
+
+`patients.email`, plus one partial index. `migratePatientEmail.js` (`--rollback` reverses it).
+Folded into `schema.sql`; verified zero-drift at 271 columns, 127 indexes, 31 tables.
+
+### The delivery feature had nowhere to deliver
+
+[1.59.0] shipped the "Email Result" button and the record of what was sent. Measured immediately
+afterwards, across all three modalities:
+
+| | released results | with an address |
+|---|---|---|
+| Laboratory | 15 | **0** |
+| X-Ray | 12 | **0** |
+| Ultrasound | 13 | **0** |
+
+Forty released reports and nowhere to send a single one of them.
+
+The cause: the only address in the system was `users.email`, reached through `patients.user_id` —
+and `user_id` is NULLABLE *precisely because* reception registers walk-ins at the counter without a
+web account. That is how most of this clinic's patients arrive, so "no email on file" was never an
+edge case; it was the norm, and the feature was unusable for exactly the people it was built for.
+The migration measured it on the live database: **54 of 56 active patients had no address of any
+kind.**
+
+Forcing a walk-in to create a login before the clinic can email them a result is a worse clinic,
+not a better database. Somebody at the counter can say their address in four seconds; they cannot
+choose a password, confirm it and verify an inbox while a queue forms behind them.
+
+### Which address wins
+
+`COALESCE(NULLIF(p.email, ''), u.email)` — the patient record first, the owning account second.
+
+The order matters because one account owns several patient profiles: a parent booking for
+dependents, which is why `GET /patients/my-profiles` is plural. The account's address is the right
+default for a dependent, since the parent is the one who booked. But an address typed onto a
+specific patient's record is a deliberate statement about **that** patient and should win over an
+inherited one. Falling back rather than replacing means no existing client-owned patient loses the
+address they already had, and nothing was backfilled — copying `users.email` onto the row would
+freeze a value that should follow the account when it changes, and create two places to correct
+one typo.
+
+Both reads resolve it identically. Two different answers in the list query and the send query is a
+button that promises one address and uses another.
+
+Not unique and not required. A household shares an inbox more often than not — a mother and two
+children on one address is ordinary — and a UNIQUE would refuse the second child at the counter
+for no clinical reason. Nor is it mandatory: a patient entitled to their result is never turned
+away for not having email.
+
+Asked for at **walk-in registration**, because that is the only moment the patient is standing in
+front of somebody who can ask, and editable afterwards in **Patient Records**. An omitted field is
+not an instruction to erase — `updatePatient` writes every column unconditionally, so without the
+guard in the service a caller sending only the fields it cares about would blank the address a
+patient's results go to. Same defect [1.54.0] found in the Services Catalogue, with a sharper
+consequence.
+
+### A calendar bug in the suite, found by the run that verified this
+
+`appointment-reschedule.spec.js` failed four tests. Nothing in the application had changed; the
+date had.
+
+The spec computed two distinct days as `workingDay(150)` and `workingDay(151)` — "today + N, then
+push off a weekend". On 2026-08-27, today+150 was Sunday 2027-01-24, which pushed to Monday
+2027-01-25 — and today+151 *was* that Monday. `DAY_A === DAY_B`, so "move this booking to another
+day" became "move it to the slot it already holds", and the tests failed on a perfectly correct
+409.
+
+This is the **second** time that helper shape has broken this spec. The first was the Saturday
+case: the clinic opens 18 slots on a weekday and 8 on a Saturday, so a helper that skipped Sunday
+alone silently halved the capacity a spec was claiming its way through.
+
+`tests/e2e/helpers/dates.js` replaces all four copies with `nthWorkingDay(n)`, which counts
+working days instead of offsetting into them. `nthWorkingDay(n)` and `nthWorkingDay(n + 1)` are
+different days on every calendar — the property those specs were assuming and never had. Verified
+over 250 consecutive values: zero adjacent collisions.
+
+A test that passes or fails on the day of the week is worse than one that always fails, because
+the morning goes on looking for a regression that is not there.
+
+`result-delivery.spec.js` grows to 14 tests. Suite is 274.
+
+
 ## [1.59.0] - 2026-08-26 (Send the patient their result, and be able to say that you did)
 
 `test_results.emailed_at` / `emailed_to` / `email_count`, plus one partial index.

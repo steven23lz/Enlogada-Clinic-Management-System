@@ -60,7 +60,7 @@ const rejectBadBirthdate = (birthdate, res) => {
 class PatientController {
   async addProfile(req, res, next) {
     try {
-      const { patientTypeId, firstName, lastName, birthdate, sex, address, contactNumber, emergencyContact } = req.body;
+      const { patientTypeId, firstName, lastName, birthdate, sex, address, contactNumber, emergencyContact, email } = req.body;
       const isClient = req.user?.roles?.includes('Client');
       const linkedUserId = isClient ? req.user.userId : null;
 
@@ -81,7 +81,10 @@ class PatientController {
         sex,
         address,
         contactNumber,
-        emergencyContact
+        emergencyContact,
+        // Left undefined when the caller did not send it, which the service reads as "keep what
+        // is there" rather than as "clear it".
+        email
       });
 
       return res.status(201).json({
@@ -151,7 +154,7 @@ class PatientController {
   async updateProfile(req, res, next) {
     try {
       const { id } = req.params;
-      const { patientTypeId, firstName, lastName, birthdate, sex, address, contactNumber, emergencyContact } = req.body;
+      const { patientTypeId, firstName, lastName, birthdate, sex, address, contactNumber, emergencyContact, email } = req.body;
 
       if (!patientTypeId || !firstName || !lastName || !birthdate || !sex) {
         return res.status(400).json({
@@ -185,7 +188,10 @@ class PatientController {
         sex,
         address,
         contactNumber,
-        emergencyContact
+        emergencyContact,
+        // Left undefined when the caller did not send it, which the service reads as "keep what
+        // is there" rather than as "clear it".
+        email
       }, req.user);
 
       return res.status(200).json({

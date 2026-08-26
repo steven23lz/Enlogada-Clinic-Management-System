@@ -88,6 +88,7 @@ node src/scripts/migratePaymentSubmissions.js  # [1.48.0] clinic payment channel
 node src/scripts/migratePatientArchive.js      # [1.56.0] archive a patient record without deleting a clinical history (--rollback reverses it)
 node src/scripts/migrateScheduleOverrides.js   # [1.57.0] close a DATE, or change its hours/capacity, without touching the weekly pattern (--rollback reverses it)
 node src/scripts/migrateResultDelivery.js      # [1.59.0] record that a released report actually reached the patient (--rollback reverses it)
+node src/scripts/migratePatientEmail.js        # [1.60.0] an address on the patient record, so a walk-in can be sent their result (--rollback reverses it)
 node src/scripts/migrateRemove2dEcho.js       # [1.50.0] remove the 2D Echo category and its tests; REFUSES if any visit_tests still reference them (--rollback restores)
 node src/scripts/migratePatientArchive.js     # [1.56.0] archive a patient record without deleting it (--rollback reverses it)
 
@@ -457,8 +458,22 @@ This paragraph asserted the opposite of the one above it for a day, having been 
 .toISOString().slice(0, 10)`. Run at 03:11 on a Sunday in PHT, UTC is still Saturday, so "tomorrow"
 resolved to Sunday — the clinic is closed Sundays and three tests **silently skipped**. They are
 the ones asserting an unpaid appointment stays invisible to the department, and a security check
-that quietly does not run reads exactly like one that passed. Use the local-date `workingDay()` /
-`nextWorkingDay()` helpers those specs now define. Watch the skip count, not just the pass count.
+that quietly does not run reads exactly like one that passed. Use `tests/e2e/helpers/dates.js`
+(`nthWorkingDay` / `nextWorkingDay` / `dateStr`, all built from local getters). Watch the skip
+count, not just the pass count.
+
+**And count working days rather than offsetting into them.** `[1.60.0]` The obvious helper —
+"today + N, then push off a weekend" — was written four times in this suite and has now failed
+twice, for two different reasons. First the SATURDAY case: the clinic opens 08:00-17:00 on
+weekdays but only 08:00-12:00 on Saturday, 18 slots against 8, so a helper that skipped Sunday
+alone silently gave a spec less than half the capacity it expected. Fixing that by skipping
+Saturday too introduced the COLLAPSE case: when today+150 lands on a Sunday it pushes to Monday,
+and today+151 *is* that Monday. Two constants meant to be different days became one, so "move this
+booking to another day" became "move it to the slot it already holds" and four reschedule tests
+failed on a correct 409. Measured on 2026-08-27: `DAY_A` and `DAY_B` both resolved to 2027-01-25.
+`nthWorkingDay(n)` and `nthWorkingDay(n + 1)` are different days on every calendar, which is the
+property those specs were assuming all along and never actually had. Both failures share a shape
+worth naming: nothing in the application had changed, the calendar had.
 
 **Dates: never use `toISOString()` for "today".** It returns the **UTC** date, which in Philippine time (UTC+8) is *yesterday* between midnight and 08:00 — silently, with no error. Postgres `CURRENT_DATE` is the server's local date, so the two disagree every morning. Frontend code uses `frontend/src/lib/date.js` (`todayStr` / `daysAgoStr`, built from local getters); backend code derives date strings **in SQL** rather than in JavaScript. This bug shipped twice: in four dashboard `todayStr` helpers, and in the receipt-number generator.
 
