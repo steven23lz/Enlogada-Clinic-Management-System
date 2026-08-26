@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { printElement } from '../../lib/printArea';
 import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
 import EmptyState from '../../components/ui/empty-state';
@@ -319,7 +320,7 @@ const PatientRecordsOversight = () => {
               </div>
 
               <div className="flex justify-end border-t border-[#e6ebf1] pt-3">
-                <Button type="button" variant="outline" onClick={() => window.print()}>
+                <Button type="button" variant="outline" onClick={() => printElement()}>
                   <Printer className="h-3.5 w-3.5" />
                   Print Patient Test Records
                 </Button>

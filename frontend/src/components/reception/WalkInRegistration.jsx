@@ -147,7 +147,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
   };
 
   return (
-              <Panel className="max-w-3xl p-6">
+              <Panel className="max-w-6xl p-6">
                 <div className="border-b border-[#e6ebf1] pb-3 mb-4">
                   <h2 className="m-0 flex items-center gap-2 text-lead font-bold tracking-tight text-slate-900">
                     <UserPlus className="h-4 w-4 text-brand-600" />
@@ -170,6 +170,18 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                 )}
 
                 <form onSubmit={handleWalkInRegister} className="space-y-4">
+                  {/* Two columns above `lg`, split by QUESTION rather than by field count. [1.54.0]
+                      This was one max-w-3xl column on a screen twice that wide: the right half of
+                      a reception terminal sat empty while the form ran off the bottom, so the
+                      person registering a patient standing at the desk was scrolling.
+
+                      Left is WHO — the patient record, and the only fields that are required.
+                      Right is WHY THEY CAME — what to run, who referred them, what to note. They
+                      are answered at different moments of the same conversation, and keeping them
+                      apart means the required half is complete and visible before the optional
+                      half is even looked at. */}
+                  <div className="grid grid-cols-1 gap-x-8 gap-y-4 lg:grid-cols-2">
+                  <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="field-label" htmlFor="wi-first">First Name <span className="text-rose-600">*</span></label>
@@ -263,6 +275,21 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                       'Private' makes it mandatory, since at this clinic that type means "a physician
                       sent them". The server enforces the same rule; this mirrors it so the
                       receptionist is not told at submit what could have been said while typing. */}
+                  <div className="space-y-1">
+                    <label className="field-label" htmlFor="wi-address">Home Address</label>
+                    <Input
+                      id="wi-address"
+                      placeholder="Barangay, City, Province"
+                      value={newPatient.address}
+                      onChange={e => setNewPatient({...newPatient, address: e.target.value})}
+                      disabled={isRegistering}
+                    />
+                  </div>
+
+                  </div>
+
+                  {/* ── Right: why they came ───────────────────────────────────────────────── */}
+                  <div className="space-y-4">
                   {/* Tests, chosen here rather than on a second screen. [1.26.0]
                       Reception used to register the patient, then find them again in the queue to
                       attach anything — two screens for one interaction at the busiest point of the
@@ -309,17 +336,6 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                   />
 
                   <div className="space-y-1">
-                    <label className="field-label" htmlFor="wi-address">Home Address</label>
-                    <Input
-                      id="wi-address"
-                      placeholder="Barangay, City, Province"
-                      value={newPatient.address}
-                      onChange={e => setNewPatient({...newPatient, address: e.target.value})}
-                      disabled={isRegistering}
-                    />
-                  </div>
-
-                  <div className="space-y-1">
                     <label className="field-label" htmlFor="wi-notes">Visit Notes / Referral Reason</label>
                     <Input
                       id="wi-notes"
@@ -328,6 +344,9 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                       onChange={e => setVisitNotes(e.target.value)}
                       disabled={isRegistering}
                     />
+                  </div>
+
+                  </div>
                   </div>
 
                   <div className="flex justify-end pt-3">

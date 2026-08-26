@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, ClipboardList, Clock, Printer, ShieldAlert, UserCheck, UserPlus, Volume2, XCircle } from 'lucide-react';
+import { AlertCircle, ClipboardList, Clock, ShieldAlert, UserCheck, UserPlus, Volume2, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useAuth } from '../../contexts/AuthContext';
 import { Panel, PanelBody } from '../ui/panel';
@@ -22,7 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
  * reached for, so what each view depends on is visible at its top instead of inferred by
  * scrolling.
  */
-export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignment, onPrintTicket, onCallPatient, onSelectNav }) {
+export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignment, onCallPatient, onSelectNav }) {
   /**
    * The queue is a BORROWED screen for anyone who is not the front desk. [1.53.0]
    *
@@ -179,14 +179,6 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                               className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-slate-400 hover:bg-brand-50 hover:text-brand-600"
                             >
                               <Volume2 className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={() => onPrintTicket(visit)}
-                              title={`Print queue ticket for ${visit.first_name} ${visit.last_name}`}
-                              aria-label={`Print queue ticket for ${visit.first_name} ${visit.last_name}`}
-                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
-                            >
-                              <Printer className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </TableCell>

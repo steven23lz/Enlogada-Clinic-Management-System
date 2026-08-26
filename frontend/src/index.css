@@ -705,6 +705,18 @@ select:focus-visible {
     position: static !important;
     margin: 0 auto !important;
   }
+
+  /* A scroll container is a viewport, and paper is not. [1.54.0] Some print areas are also the
+     scrolling region on screen — PatientRecordsOversight's is `max-h-96 overflow-y-auto` — so the
+     clone would print 384px of a patient's test history and silently drop the rest. The reader
+     gets a page that looks complete and is not, which is worse than one that obviously failed.
+
+     Applied to the clone only: the on-screen original keeps its scrolling. */
+  body.printing-isolated #print-root .print-area,
+  body.printing-isolated #print-root .print-area * {
+    max-height: none !important;
+    overflow: visible !important;
+  }
 }
 
 /* A counter receipt goes to an 80mm thermal roll, not A4. Without this the receipt prints as one

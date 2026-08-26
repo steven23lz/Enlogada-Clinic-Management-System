@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import SidebarLayout from '../../components/SidebarLayout';
 import { Button } from '../../components/ui/button';
 import PageHeader from '../../components/ui/page-header';
@@ -6,7 +6,6 @@ import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
-import { formatDateTime } from '../../lib/date';
 import { toastSuccess, toastInfo } from '../../lib/toast';
 import RescheduleDialog from '../../components/booking/RescheduleDialog';
 import TestPicker from '../../components/booking/TestPicker';
@@ -92,10 +91,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
   const testAssignment = useTestAssignment({ onAssigned: () => queue.refresh() });
 
-  // The visit whose queue slip is being printed. Held in state only for the duration of the
-  // print dialog — see handlePrintTicket.
-  const [ticketToPrint, setTicketToPrint] = useState(null);
-
   // Existing Patient Lookup State (Module 7: patient record lookup)
   const lookup = usePatientLookup();
 
@@ -114,28 +109,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   // effectively invisible unless someone already knew to look at Admin's Service Requests page.
   // Read-only here: approving stays wherever it already lives, this just surfaces the list.
   /**
-   * Prints the physical queue slip the patient carries.
-   *
-   * This button used to call a bare `window.print()` on a view with no `.print-area` anywhere in
-   * it. The rule in index.css hides `body *` and reveals only `.print-area`, so it produced a
-   * completely blank sheet — on the one artefact the whole queue_number design assumes exists.
-   *
-   * The slip is rendered into a dedicated node rather than printed from the table row, because a
-   * table row has none of the things a ticket needs: the number at a readable size, the patient's
-   * name to hand it to the right person, and which departments they are going to.
-   *
-   * The print dialog is synchronous and blocks until dismissed, so the slip is cleared afterwards
-   * rather than on a timer.
+   * Calls the patient by voice. [1.54.0] The queue row's other control — a per-row reprint of the
+   * physical slip — is gone: the ticket is printed once at registration, the number is on screen
+   * and called aloud, and a second copy answered a question nobody was asking. Its slip markup and
+   * handler went with it rather than being left behind for someone to wonder about.
    */
-  const handlePrintTicket = (visit) => {
-    setTicketToPrint(visit);
-    // Let React commit the slip before the browser snapshots the page for printing.
-    requestAnimationFrame(() => {
-      window.print();
-      setTicketToPrint(null);
-    });
-  };
-
   const speakQueueNumber = (queueNum) => {
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(`Queue Number ${queueNum}, please proceed to the desk`);
@@ -182,7 +160,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
             disposition={disposition}
             hmo={hmo}
             testAssignment={testAssignment}
-            onPrintTicket={handlePrintTicket}
             onCallPatient={speakQueueNumber}
             onSelectNav={onSelectNav}
           />
@@ -374,61 +351,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           }}
         />
 
-        {/* The physical queue slip.
-            Mounted only while printing, and `hidden` on screen — the @media print rule in
-            index.css reveals .print-area and hides everything else, so this never appears in the
-            dashboard itself. Rendering it unconditionally would put a stray ticket in the DOM of
-            every screen and inside every other print job on this page. */}
-        {ticketToPrint && (
-          <div className="print-area hidden print:block" aria-hidden="true">
-            <div style={{ textAlign: 'center', fontFamily: 'Outfit, sans-serif', padding: '24px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                Enlogada Ultrasound
-              </div>
-              <div style={{ fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#555' }}>
-                &amp; Diagnostic Clinic
-              </div>
-
-              <div style={{ borderTop: '1px dashed #999', margin: '14px 0' }} />
-
-              <div style={{ fontSize: '10px', letterSpacing: '0.18em', textTransform: 'uppercase', color: '#555' }}>
-                Queue Number
-              </div>
-              {/* Deliberately enormous: this is read across a waiting room, and it is the only
-                  thing on the slip that matters at a glance. */}
-              <div style={{ fontSize: '64px', fontWeight: 800, lineHeight: 1.1, letterSpacing: '0.04em' }}>
-                {ticketToPrint.queue_number}
-              </div>
-
-              <div style={{ borderTop: '1px dashed #999', margin: '14px 0' }} />
-
-              <div style={{ fontSize: '14px', fontWeight: 700 }}>
-                {ticketToPrint.first_name} {ticketToPrint.last_name}
-              </div>
-              <div style={{ fontSize: '10px', color: '#555', marginTop: '2px' }}>
-                {ticketToPrint.visit_type} · {formatDateTime(ticketToPrint.created_at)}
-              </div>
-
-              {/* Where to go next. Without this the patient has a number and no idea which
-                  department it is for, which is the question reception then answers by hand. */}
-              {ticketToPrint.tests && ticketToPrint.tests.length > 0 && (
-                <div style={{ marginTop: '12px' }}>
-                  <div style={{ fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#555' }}>
-                    Proceed to
-                  </div>
-                  <div style={{ fontSize: '12px', fontWeight: 700, marginTop: '2px' }}>
-                    {[...new Set(ticketToPrint.tests.map((t) => t.category_name))].join(' · ')}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ borderTop: '1px dashed #999', margin: '14px 0' }} />
-              <div style={{ fontSize: '9px', color: '#777' }}>
-                Please keep this slip and wait for your number to be called.
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </SidebarLayout>
   );

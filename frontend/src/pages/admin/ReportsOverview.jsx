@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { printElement } from '../../lib/printArea';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import PageHeader from '../../components/ui/page-header';
 import { useAuth } from '../../contexts/AuthContext';
@@ -234,7 +235,7 @@ const DateRangeReports = () => {
         </div>
         <ToolbarSpacer />
         <div className="flex items-end self-stretch">
-          <Button variant="outline" onClick={() => window.print()}>
+          <Button variant="outline" onClick={() => printElement()}>
             <Printer className="h-3.5 w-3.5" />
             Print Reports
           </Button>
@@ -782,7 +783,7 @@ const OperationsReport = () => {
           </Button>
         </div>
         <ToolbarSpacer />
-        <Button variant="outline" onClick={() => window.print()}>
+        <Button variant="outline" onClick={() => printElement()}>
           <Printer className="h-3.5 w-3.5" />
           Print
         </Button>
