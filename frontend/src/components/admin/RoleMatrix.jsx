@@ -6,6 +6,8 @@ import { SearchInput } from '../ui/search-input';
 import { SkeletonList } from '../ui/skeleton';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
+import RefreshButton from '../ui/refresh-button';
+import { useFreshness } from '../../hooks/useFreshness';
 
 // A person-level exception is a coloured chip, so the eye separates "this is what the role
 // gives" from "someone made a decision about this individual".
@@ -22,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
  * 774-line file. State and saving live in useAccessControl.
  */
 export default function RoleMatrix({ access }) {
+  const updatedAt = useFreshness(access.loading, access.loadError);
   return (
   <div className="space-y-4">
     {/* This banner used to read "Advisory only — not yet enforced", and the note here explained
@@ -48,6 +51,8 @@ export default function RoleMatrix({ access }) {
         description="Edit the template a role gives everyone, or the exceptions for one person"
         icon={ShieldCheck}
         actions={
+          <>
+          <RefreshButton compact onRefresh={access.reload} loading={access.loading} updatedAt={updatedAt} />
           <div className="inline-flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
             {[
               { value: 'role', label: 'By Role' },
@@ -67,6 +72,7 @@ export default function RoleMatrix({ access }) {
               </button>
             ))}
           </div>
+          </>
         }
       />
 

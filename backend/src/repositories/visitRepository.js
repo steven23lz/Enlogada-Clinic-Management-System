@@ -141,7 +141,7 @@ class VisitRepository {
   // 3.6 MB response to fill a fifteen-row table — down the wire, parsed, and held in memory, on
   // every page load and on a screen that polls. The row count comes back separately so the
   // pagination footer can still say how many there are without shipping them.
-  async findVisitsByDateRange({ startDate, endDate, search, limit = null, offset = 0 }) {
+  async findVisitsByDateRange({ startDate, endDate, search, visitType, status, limit = null, offset = 0 }) {
     // COALESCE to CURRENT_DATE rather than defaulting in JavaScript: the server's local date is
     // what every other date filter in this file compares against, and a JS default would have to
     // agree with it — which is exactly the disagreement the toISOString bug was.
@@ -155,6 +155,19 @@ class VisitRepository {
       params.push(`%${search}%`);
       const idx = params.length;
       filters.push(`(p.first_name ILIKE $${idx} OR p.last_name ILIKE $${idx} OR pv.queue_number ILIKE $${idx})`);
+    }
+
+    // Filtered in SQL, not in the page of rows already fetched. This list is paged at the
+    // database, so narrowing it in JavaScript would filter 25 rows and then label the answer as
+    // the whole range — the same mistake the money summary exists to avoid. The COUNT below runs
+    // on the same WHERE, so the total the footer shows is the total that matches.
+    if (visitType) {
+      params.push(visitType);
+      filters.push(`pv.visit_type = $${params.length}`);
+    }
+    if (status) {
+      params.push(status);
+      filters.push(`pv.status = $${params.length}`);
     }
     const whereClause = filters.join(' AND ');
 

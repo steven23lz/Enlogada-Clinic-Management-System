@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
+import RefreshButton from '../../components/ui/refresh-button';
+import { useFreshness } from '../../hooks/useFreshness';
 import EmptyState from '../../components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
@@ -193,6 +195,10 @@ const StaffAccounts = () => {
   const totalPages = Math.max(1, Math.ceil(filteredStaff.length / PAGE_SIZE));
   const pagedStaff = filteredStaff.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  // Two admins onboarding staff at once is the ordinary case at the start of a term, and the
+  // second one needs to see the first one's work without reloading the whole application.
+  const updatedAt = useFreshness(loading, loadError);
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -201,6 +207,8 @@ const StaffAccounts = () => {
         title="Staff Accounts"
         description="Receptionist, Cashier and diagnostic staff logins. Admin and SuperAdmin accounts are managed separately under RBAC administration."
         actions={
+        <>
+        <RefreshButton onRefresh={fetchStaff} loading={loading} updatedAt={updatedAt} />
         <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
           <DialogTrigger asChild>
             <Button onClick={handleOpenAdd}>
@@ -265,6 +273,7 @@ const StaffAccounts = () => {
             </form>
           </DialogContent>
         </Dialog>
+        </>
         }
       />
 

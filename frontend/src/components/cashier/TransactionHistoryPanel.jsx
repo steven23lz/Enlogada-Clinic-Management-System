@@ -2,10 +2,11 @@ import React from 'react';
 import { ExternalLink, History, Printer, Receipt, RefreshCw, Undo2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Panel, PanelHeader, PanelBody } from '../ui/panel';
-import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
+import Toolbar, { ToolbarSpacer, SegmentedFilter } from '../ui/toolbar';
 import { SearchInput } from '../ui/search-input';
 import EmptyState from '../ui/empty-state';
 import { Badge } from '../ui/badge';
+import { COUNTER_PAYMENT_METHODS } from '../../lib/paymentMethods';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { StatusBadge } from '../ui/status-badge';
 import { SkeletonRows } from '../ui/skeleton';
@@ -51,6 +52,26 @@ export default function TransactionHistoryPanel({ history, receipt, refund, oper
           <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
             {history.total} receipt{history.total === 1 ? '' : 's'}
           </span>
+        </Toolbar>
+
+        {/* The Payment Method column has been on this table since [1.0.0] with no way to ask for
+            one. Reconciling a drawer is exactly that question — "what came in as cash?" — and
+            without it the cashier counts by eye down a paged list.
+
+            The server has accepted `method` all along; nothing on screen ever sent it — and it
+            already narrows the peso totals to match, which is the point. A method IS a partition
+            of the drawer: "Cash collected ₱4,200" against the cash filter is the figure being
+            counted. That is why `search` deliberately does not narrow the totals and this does —
+            a name typed to find one receipt is a lookup, not a slice of the day. */}
+        <Toolbar attached className="border-t-0">
+          <SegmentedFilter
+            ariaLabel="Filter receipts by payment method"
+            options={['All', ...COUNTER_PAYMENT_METHODS].map(m => ({
+              value: m, label: m === 'All' ? 'All methods' : m,
+            }))}
+            value={history.method}
+            onChange={history.setMethod}
+          />
         </Toolbar>
 
         <Panel className="overflow-hidden rounded-t-none">

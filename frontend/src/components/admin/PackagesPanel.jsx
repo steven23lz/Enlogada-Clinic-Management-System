@@ -6,6 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import EmptyState from '../ui/empty-state';
+import RefreshButton from '../ui/refresh-button';
+import { useFreshness } from '../../hooks/useFreshness';
 import { formatCurrency } from '../../lib/currency';
 
 /**
@@ -17,6 +19,7 @@ import { formatCurrency } from '../../lib/currency';
  * and nobody would have noticed from the price alone.
  */
 export default function PackagesPanel({ packageAdmin }) {
+  const updatedAt = useFreshness(packageAdmin.loading, packageAdmin.error);
   return (
     <Panel className="overflow-hidden">
       <PanelHeader
@@ -24,10 +27,13 @@ export default function PackagesPanel({ packageAdmin }) {
         description="Fixed-price bundles. A patient pays the package price, not the sum of the tests inside it."
         icon={Package}
         actions={
-          <Button size="sm" onClick={packageAdmin.openAdd}>
-            <Plus className="h-3.5 w-3.5" />
-            Add Package
-          </Button>
+          <>
+            <RefreshButton compact onRefresh={packageAdmin.reload} loading={packageAdmin.loading} updatedAt={updatedAt} />
+            <Button size="sm" onClick={packageAdmin.openAdd}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Package
+            </Button>
+          </>
         }
       />
       <PanelBody flush>

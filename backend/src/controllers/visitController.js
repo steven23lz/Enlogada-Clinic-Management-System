@@ -49,8 +49,10 @@ class VisitController {
 
   async getVisitsByDateRange(req, res, next) {
     try {
-      const { startDate, endDate, search, page, limit } = req.query;
-      const result = await visitService.getVisitHistoryByDateRange({ startDate, endDate, search, page, limit });
+      const { startDate, endDate, search, visitType, status, page, limit } = req.query;
+      const result = await visitService.getVisitHistoryByDateRange({
+        startDate, endDate, search, visitType, status, page, limit,
+      });
       return res.status(200).json({
         status: 'success',
         // `visits` stays the key it always was so nothing that reads it has to change; the paging

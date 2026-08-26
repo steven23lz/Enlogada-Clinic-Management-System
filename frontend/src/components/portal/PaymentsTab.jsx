@@ -4,6 +4,7 @@ const LIST_PAGE_SIZE = 8;
 import { Receipt } from 'lucide-react';
 import { Panel } from '../ui/panel';
 import EmptyState from '../ui/empty-state';
+import { Button } from '../ui/button';
 import { SkeletonList } from '../ui/skeleton';
 import { StatusBadge } from '../ui/status-badge';
 import { TabsContent } from '../ui/tabs';
@@ -33,7 +34,15 @@ export default function PaymentsTab({ payments }) {
               <h3 className="m-0 text-note font-semibold text-slate-900">Payment History</h3>
             </div>
             <div className="space-y-2 p-4">
-              {payments.loading ? (
+              {payments.error ? (
+                <EmptyState
+                  tone="error"
+                  compact
+                  title="Could not load your payments"
+                  description={payments.error}
+                  action={<Button variant="outline" size="sm" onClick={payments.reload}>Try again</Button>}
+                />
+              ) : payments.loading ? (
                 <SkeletonList rows={3} />
               ) : payments.payments.length === 0 ? (
                 <EmptyState

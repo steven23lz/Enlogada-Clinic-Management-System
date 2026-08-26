@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { printElement } from '../../lib/printArea';
 import { Panel, PanelHeader, PanelBody } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
+import RefreshButton from '../../components/ui/refresh-button';
+import { useFreshness } from '../../hooks/useFreshness';
 import EmptyState from '../../components/ui/empty-state';
 import { SearchInput } from '../../components/ui/search-input';
 import { Button } from '../../components/ui/button';
@@ -49,6 +51,7 @@ const PatientRecordsOversight = () => {
   const [departmentScope, setDepartmentScope] = useState(null);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const updatedAt = useFreshness(searching, error);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -176,6 +179,12 @@ const PatientRecordsOversight = () => {
         icon={FolderSearch}
         title="Patient Records"
         description="Search the clinic-wide roster, across client-owned and walk-in profiles. Opening a record is audited."
+        actions={
+          // Re-runs what is on screen, keeping the page. `load()` bare defaults to p = 1, which
+          // would throw a reader on page 3 back to the start — a refresh that loses your place
+          // is a navigation, not a refresh.
+          <RefreshButton onRefresh={() => load({ p: page })} loading={searching} updatedAt={updatedAt} />
+        }
       />
 
       <Panel>

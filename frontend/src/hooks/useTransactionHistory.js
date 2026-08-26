@@ -42,12 +42,15 @@ export function useTransactionHistory({ enabled = false } = {}) {
   // over a date range would fire a request per character on the screen used for the cash-up.
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
+  // 'All' is the absence of a filter, kept as a real value so the chip strip always has one
+  // selected. The server already accepted `method` — nothing on screen ever sent it.
+  const [method, setMethod] = useState('All');
 
   // Paged at the server, not here. [1.29.0] This used to pull every settled payment in the range
   // and slice fifteen out of it in the browser. Measured at 570 bytes a payment, a year-wide
   // range is a 2.0 MB response to fill a fifteen-row table — on the screen a cashier opens for
   // the daily cash-up.
-  const fetch = useCallback(async (from, to, nextPage = 1, term = '') => {
+  const fetch = useCallback(async (from, to, nextPage = 1, term = '', payMethod = 'All') => {
     setLoading(true);
     setError('');
     setAppliedSearch(term);
@@ -58,6 +61,7 @@ export function useTransactionHistory({ enabled = false } = {}) {
           // Omitted entirely when blank rather than sent as '', so the server's own
           // "trim to null" is never the only thing standing between an empty box and `%%`.
           ...(term ? { search: term } : {}),
+          ...(payMethod !== 'All' ? { method: payMethod } : {}),
         },
       });
       const { transactions: rows, total: count, totalPages: pages } = response.data.data;
@@ -88,11 +92,18 @@ export function useTransactionHistory({ enabled = false } = {}) {
     endDate, setEndDate,
     search, setSearch, appliedSearch,
     page, total, totalPages,
-    /** Re-run for the dates and search currently chosen — the Apply button and the retry link. */
-    reload: () => fetch(startDate, endDate, 1, search),
-    /** Jump to a page, keeping the range AND the search — a page 2 that drops the filter is a bug. */
-    goToPage: (next) => fetch(startDate, endDate, next, appliedSearch),
+    method,
+    /**
+     * Applies on click, unlike the date range, which waits for Apply. Reconciling a drawer means
+     * asking "what came in as cash?" and then "what as GCash?" in quick succession; making each
+     * of those two clicks is friction on the one screen that is used against a ticking clock.
+     */
+    setMethod: (next) => { setMethod(next); fetch(startDate, endDate, 1, appliedSearch, next); },
+    /** Re-run for the dates, search and method currently chosen — Apply and the retry link. */
+    reload: () => fetch(startDate, endDate, 1, search, method),
+    /** Jump to a page, keeping the range AND the filters — a page 2 that drops one is a bug. */
+    goToPage: (next) => fetch(startDate, endDate, next, appliedSearch, method),
     /** Clear the box and re-run, so the list matches what the reader can see in the field. */
-    clearSearch: () => { setSearch(''); fetch(startDate, endDate, 1, ''); },
+    clearSearch: () => { setSearch(''); fetch(startDate, endDate, 1, '', method); },
   };
 }

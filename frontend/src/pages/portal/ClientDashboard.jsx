@@ -17,6 +17,8 @@ import ResultsTab from '../../components/portal/ResultsTab';
 import AppointmentsTab from '../../components/portal/AppointmentsTab';
 import PaymentsTab from '../../components/portal/PaymentsTab';
 import ProfileTab from '../../components/portal/ProfileTab';
+import RefreshButton from '../../components/ui/refresh-button';
+import { useFreshness } from '../../hooks/useFreshness';
 
 // Mirrors the 5 seeded test_categories rows exactly (database/schema.sql) so every
 // category a client can actually have a result in gets a distinct, correct icon.
@@ -61,6 +63,16 @@ const ClientDashboard = ({ onNavigate }) => {
   }, []);
 
 
+  // One control for all three lists. A patient thinks "has anything changed?", not "reload my
+  // payments"; and their own data is a handful of rows, so fetching all three costs nothing.
+  const portalLoading = results.loading || bookings.loading || payments.loading;
+  const updatedAt = useFreshness(portalLoading, results.error || bookings.error || payments.error);
+  const refreshEverything = () => {
+    results.reload?.();
+    bookings.reload?.();
+    payments.reload?.();
+  };
+
   if (profiles.loading) {
     return (
       <DashboardLayout onNavigate={onNavigate} activeTab="dashboard">
@@ -90,13 +102,21 @@ const ClientDashboard = ({ onNavigate }) => {
             Payment History sat 3rd of 3 cards in a compressed right sidebar, requiring a client
             to scroll past everything else to reach it (the exact complaint that prompted this
             restructure). Each section now gets its own full-width tab. */}
+        {/* The patient portal has no notification bell — email is the only channel that reaches
+            a patient ([1.49.0]). So the sequence is: the clinic releases a result, the email
+            arrives, and the patient switches back to the tab they left open this morning, which
+            is still showing what it fetched this morning. This button is the whole answer to
+            that, and the timestamp beside it is how they know it was worth pressing. */}
         <Tabs defaultValue="results" className="w-full space-y-4">
-          <TabsList className="h-auto flex-wrap">
-            <TabsTrigger value="results">Diagnostic Results</TabsTrigger>
-            <TabsTrigger value="appointments">Appointments</TabsTrigger>
-            <TabsTrigger value="payments">Payments</TabsTrigger>
-            <TabsTrigger value="profile">Profile</TabsTrigger>
-          </TabsList>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <TabsList className="h-auto flex-wrap">
+              <TabsTrigger value="results">Diagnostic Results</TabsTrigger>
+              <TabsTrigger value="appointments">Appointments</TabsTrigger>
+              <TabsTrigger value="payments">Payments</TabsTrigger>
+              <TabsTrigger value="profile">Profile</TabsTrigger>
+            </TabsList>
+            <RefreshButton onRefresh={refreshEverything} loading={portalLoading} updatedAt={updatedAt} />
+          </div>
 
           <TabsContent value="results" className="m-0 space-y-4">
             <ResultsTab profiles={profiles} results={results} onPreviewDocument={setPreviewDoc} />

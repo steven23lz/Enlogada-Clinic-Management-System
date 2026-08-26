@@ -1,4 +1,5 @@
 const visitRepository = require('../repositories/visitRepository');
+const { VISIT_TYPES, VISIT_STATUSES } = require('../constants/visits');
 const notificationService = require('./notificationService');
 const patientRepository = require('../repositories/patientRepository');
 const { assertReferralIfRequired, normaliseReferral } = require('./referralService');
@@ -78,14 +79,23 @@ class VisitService {
   // number generator); this was the third place. `null` reaches the repository, which falls back
   // to CURRENT_DATE — the database's own local date, which is what every other date filter here
   // compares against.
-  async getVisitHistoryByDateRange({ startDate, endDate, search, page, limit }) {
+  async getVisitHistoryByDateRange({ startDate, endDate, search, visitType, status, page, limit }) {
     const limitNum = limit ? Math.min(Math.max(parseInt(limit, 10) || 0, 1), 100) : null;
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+
+    // Allow-listed rather than passed through. Both columns are constrained in the database, so
+    // an unknown value could only ever return nothing — and an empty screen is indistinguishable
+    // from a quiet day, which is how a typo in a query string becomes "the clinic saw nobody".
+    // Anything unrecognised is dropped, so the filter is simply not applied.
+    const type = VISIT_TYPES.includes(visitType) ? visitType : null;
+    const visitStatus = VISIT_STATUSES.includes(status) ? status : null;
 
     const result = await visitRepository.findVisitsByDateRange({
       startDate: startDate || null,
       endDate: endDate || null,
       search,
+      visitType: type,
+      status: visitStatus,
       limit: limitNum,
       offset: limitNum ? (pageNum - 1) * limitNum : 0,
     });

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelBody } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
+import RefreshButton from '../../components/ui/refresh-button';
+import { useFreshness } from '../../hooks/useFreshness';
 import Toolbar, { SegmentedFilter } from '../../components/ui/toolbar';
 import EmptyState from '../../components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
@@ -200,6 +202,11 @@ const ServiceRequests = () => {
     };
   }, [detailRequest?.id, detailRequest?.card_file_path]);
 
+  // Reception logs a claim and an Admin decides it — two people, two screens, and this
+  // one used to fetch once and then sit. An admin who left it open after lunch was
+  // reading a queue as it stood before lunch, with nothing on screen to say so.
+  const updatedAt = useFreshness(loading, loadError);
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -210,6 +217,13 @@ const ServiceRequests = () => {
         meta={(loadError || loading)
           ? undefined
           : <span><strong className="font-semibold text-slate-700">{total}</strong> request{total === 1 ? '' : 's'}</span>}
+        actions={
+          <RefreshButton
+            onRefresh={() => fetchRequests(page)}
+            loading={loading}
+            updatedAt={updatedAt}
+          />
+        }
       />
 
       <div>

@@ -1,5 +1,71 @@
 # Database Migration & Schema History
 
+## [1.58.0] - 2026-08-26 (Ask for a slice, and ask for it again)
+
+No schema change. One new backend constant file, one new UI primitive, one new hook.
+
+### Filtering on a column the table was already printing
+
+Visit History has shown **Visit Type** and **Status** in their own columns since [1.0.0] and never
+offered a way to ask for either. "Show me yesterday's walk-ins" — the ordinary question at a front
+desk — meant reading 53 rows and counting by eye. Transaction History had the identical gap on
+**Payment Method**, on the screen used to reconcile a cash drawer against a ticking clock.
+
+Both now filter **at the server**. That is the property, not the chips: both lists are paged at the
+database, so narrowing the 25 rows already fetched would filter one page and then print the count
+of the whole range beside it — a screen reading *"53 visits"* over a list of four. The COUNT runs
+on the same WHERE as the list.
+
+`method` was already accepted by `GET /payments/transactions`; nothing on screen had ever sent it.
+`visitType` and `status` are new all the way down, allow-listed in `visitService` against
+`constants/visits.js`, which mirrors `chk_visits_type` and `chk_visits_status`.
+
+**An unrecognised filter is dropped, not applied.** Passing a typo through to SQL matches nothing
+and renders an empty screen — and an empty screen is indistinguishable from a clinic that saw
+nobody. Payment method is the deliberate exception and returns 400: those are the cash-up buckets,
+and a caller naming one that does not exist has made a mistake worth reporting.
+
+**The money case has a rule of its own.** `summary` narrows with `method` and deliberately does not
+narrow with `search`. A method is a real partition of the drawer — "Cash collected ₱17,690" against
+the cash filter *is* the figure being counted — while a name typed to find one receipt is a lookup
+and must not move the day's totals. Measured: 17,690 + 7,840 + 8,270 = 33,800, and 24 + 11 + 12 =
+47, both reconciling exactly to the unfiltered day.
+
+### A screen that fetched once and then sat
+
+Four screens polled. The rest fetched on mount and showed that reading indefinitely — and nobody
+closes a browser between patients, so an admin was routinely reading a queue as it stood hours
+earlier, with nothing on screen to say so.
+
+`RefreshButton` + `useFreshness` now cover eleven screens. **The timestamp is the half that
+matters**: a screen that can be refreshed still cannot be trusted unless it says how old what you
+are reading is. `useFreshness` observes an existing hook's loading flag rather than owning a fetch,
+so no data hook changed — the alternative was adding `lastUpdated` to a dozen of them, where the
+one that later forgets to stamp it reports stale data as fresh. It stamps only on a *successful*
+read, because a confidently wrong "Updated 15:32" over a five-hour-old queue is the exact thing it
+exists to prevent.
+
+Two fixes fell out of the sweep:
+
+- **`ServicesCatalog`'s Refresh reloaded one of the three lists it shows.** A package or an HMO
+  provider added elsewhere stayed missing from a screen the reader had just deliberately
+  refreshed — worse than no button, because it answers the question wrongly.
+- **`PatientRecordsOversight`** — a refresh wired to the bare `load()` would have reset to page 1.
+  A refresh that loses your place is a navigation.
+
+### Two patient-facing screens were reporting a failure as an absence
+
+`useMyResultHistory` and `useMyPayments` both caught their error, called `console.error`, and
+returned an empty array — so a failed request rendered **"No diagnostic requests found"** to a
+patient who had just been emailed to say their result was ready, and **"No payments yet"** to a
+patient holding a receipt. This is the omission `failure-states.spec.js` was written about, in the
+two places it had been missed, and on the screens where it does the most damage. Both hooks now
+carry `loading` and `error`, and both tabs render `tone="error"` — which looks deliberately unlike
+empty — with a retry.
+
+`filters-and-refresh.spec.js` covers all of it: 9 tests. Suite is 260.
+
+
 ## [1.57.0] - 2026-08-26 (The clinic can finally say when it is open)
 
 `clinic_schedule_overrides` — the per-DATE layer. `migrateScheduleOverrides.js` (`--rollback`

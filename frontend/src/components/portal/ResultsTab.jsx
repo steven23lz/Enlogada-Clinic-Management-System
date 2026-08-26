@@ -13,6 +13,8 @@ const CATEGORY_ICONS = {
 };
 import { Button } from '../ui/button';
 import { Card, CardContent } from '../ui/card';
+import EmptyState from '../ui/empty-state';
+import { SkeletonList } from '../ui/skeleton';
 import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
 import { SearchInput } from '../ui/search-input';
 import { Dialog, DialogContent, DialogTrigger } from '../ui/dialog';
@@ -67,7 +69,19 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
 
           {/* Test Cards List */}
           <div className="space-y-3">
-            {results.filtered.length > 0 ? (
+            {results.error ? (
+              // tone="error" looks deliberately unlike empty. A patient who has just been
+              // emailed "your result is ready" and then reads "no diagnostic requests found"
+              // concludes the clinic lost it.
+              <EmptyState
+                tone="error"
+                title="Your results could not be loaded"
+                description={results.error}
+                action={<Button variant="outline" size="sm" onClick={results.reload}>Try again</Button>}
+              />
+            ) : results.loading ? (
+              <SkeletonList rows={3} />
+            ) : results.filtered.length > 0 ? (
               results.filtered.map(item => (
                 <Card key={item.visit_test_id} className="border-[#e6ebf1] rounded-xl hover:shadow-raised transition-all">
                   <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

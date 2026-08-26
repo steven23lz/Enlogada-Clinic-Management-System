@@ -6,6 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import EmptyState from '../ui/empty-state';
+import RefreshButton from '../ui/refresh-button';
+import { useFreshness } from '../../hooks/useFreshness';
 
 /**
  * The clinic's own GCash and bank accounts, as published to patients.
@@ -15,6 +17,7 @@ import EmptyState from '../ui/empty-state';
  * clinic real cash with no error anywhere to signal it.
  */
 export default function PaymentMethodsPanel({ paymentMethods }) {
+  const updatedAt = useFreshness(paymentMethods.loading, paymentMethods.error);
   const active = paymentMethods.methods.filter((m) => m.is_active);
 
   return (
@@ -24,10 +27,13 @@ export default function PaymentMethodsPanel({ paymentMethods }) {
         description="The accounts patients pay into when they settle a booking online"
         icon={Wallet}
         actions={
-          <Button size="sm" onClick={paymentMethods.openAdd}>
-            <Plus className="h-3.5 w-3.5" />
-            Add Method
-          </Button>
+          <>
+            <RefreshButton compact onRefresh={paymentMethods.reload} loading={paymentMethods.loading} updatedAt={updatedAt} />
+            <Button size="sm" onClick={paymentMethods.openAdd}>
+              <Plus className="h-3.5 w-3.5" />
+              Add Method
+            </Button>
+          </>
         }
       />
       <PanelBody flush>
