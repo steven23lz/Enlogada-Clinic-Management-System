@@ -135,14 +135,88 @@ class PatientService {
     return updated;
   }
 
-  async searchPatients(query, requestingUser) {
+  /**
+   * The roster, browsed or searched. [1.56.0]
+   *
+   * A query is no longer required. It used to be, so the screen opened on "search for a patient
+   * to begin" and there was no way to simply LOOK at the records — which is what somebody sitting
+   * down to review them wants. Two characters is still the floor when a query IS given, because a
+   * single letter matches most of a roster and is a scan wearing a search box.
+   */
+  async searchPatients(query, requestingUser, { from, to, includeArchived, page, limit } = {}) {
     const trimmed = (query || '').trim();
-    if (trimmed.length < 2) {
-      const error = new Error('Search query must be at least 2 characters.');
+    if (trimmed && trimmed.length < 2) {
+      const error = new Error('Search for at least 2 characters, or clear the box to browse.');
       error.statusCode = 400;
       throw error;
     }
-    return await patientRepository.searchPatients(trimmed, departmentScopeFor(requestingUser));
+
+    if ((from && !to) || (to && !from)) {
+      const error = new Error('Give both a start and an end date, or neither.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+
+    // Archived records are hidden from everyone by default and revealed only on request. Whether
+    // the CALLER may reveal them is the route's business, not this method's.
+    const { patients, total } = await patientRepository.findPatients({
+      query: trimmed || null,
+      departments: departmentScopeFor(requestingUser),
+      from: from || null,
+      to: to || null,
+      includeArchived: Boolean(includeArchived),
+      limit: limitNum,
+      offset: (pageNum - 1) * limitNum,
+    });
+
+    return {
+      patients,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.max(1, Math.ceil(total / limitNum)),
+    };
+  }
+
+  /**
+   * Archive a record, or put it back. [1.56.0]
+   *
+   * Deliberately NOT a delete, and the service refuses to pretend otherwise: nothing is removed,
+   * the visits and bills and results all stay, and the record is simply out of the roster the
+   * front desk searches. Audited, because hiding somebody's medical record is an editorial act
+   * and "who did this" is the first question asked when a record cannot be found.
+   */
+  async setArchived(patientId, archived, requestingUser) {
+    const before = await patientRepository.findPatientById(patientId);
+    if (!before) {
+      const error = new Error('Patient not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (Boolean(before.archived_at) === Boolean(archived)) {
+      // Not an error — the caller and the record already agree. Returning the row keeps a
+      // double-click idempotent rather than turning it into a failure the reader has to read.
+      return before;
+    }
+
+    const updated = await patientRepository.setPatientArchived(patientId, {
+      archived: Boolean(archived),
+      actorId: requestingUser?.userId ?? null,
+    });
+
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: archived ? 'patient.archived' : 'patient.restored',
+      entityType: 'patient',
+      entityId: Number(patientId),
+      description: `${before.first_name} ${before.last_name} (PT-${patientId}) ${archived ? 'archived — hidden from the active roster' : 'restored to the active roster'}`,
+    });
+
+    return updated;
   }
 
   /** What the caller is allowed to see, so the UI can say so rather than looking broken. */

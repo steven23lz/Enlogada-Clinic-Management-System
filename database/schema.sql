@@ -155,10 +155,21 @@ CREATE TABLE patients (
     address TEXT,
     contact_number VARCHAR(20),
     emergency_contact VARCHAR(100),
+    -- Archived, not deleted. [1.56.0] NULL means active, which is every row without a backfill.
+    -- A patient row is the parent of their visits, bills and results; deleting one would either
+    -- fail on the foreign keys or take a clinical and financial history with it. Diagnostic
+    -- records are retained for years, and a receipt already issued must stay explicable.
+    --
+    -- archived_by is who decided. Hiding a record from the roster the front desk searches all day
+    -- is an editorial act on somebody's medical record, and "who did this" is the first question
+    -- asked when a record cannot be found.
+    archived_at TIMESTAMP,
+    archived_by INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_patients_user FOREIGN KEY (user_id) REFERENCES users(id),
     CONSTRAINT fk_patients_type FOREIGN KEY (patient_type_id) REFERENCES patient_types(id),
+    CONSTRAINT fk_patients_archived_by FOREIGN KEY (archived_by) REFERENCES users(id),
     CONSTRAINT chk_patients_sex CHECK (sex IN ('Male', 'Female'))
 );
 
@@ -893,3 +904,7 @@ CREATE INDEX IF NOT EXISTS idx_patient_visits_referring_physician
 -- Most visit_tests are picked individually rather than as part of a bundle [1.45.0].
 CREATE INDEX IF NOT EXISTS idx_visit_tests_package
     ON visit_tests (package_id) WHERE package_id IS NOT NULL;
+-- Archived records are the minority and always will be, so this covers the rows the roster query
+-- EXCLUDES rather than the whole table. [1.56.0]
+CREATE INDEX IF NOT EXISTS idx_patients_archived
+    ON patients (archived_at) WHERE archived_at IS NOT NULL;

@@ -86,6 +86,7 @@ node src/scripts/migratePaymentMethods.js     # [1.33.0] narrow chk_payment_meth
 node src/scripts/migrateTestPackages.js        # [1.45.0] the clinic's package deals (--rollback reverses it)
 node src/scripts/migratePaymentSubmissions.js  # [1.48.0] clinic payment channels + manual proof of payment (--rollback reverses it)
 node src/scripts/migrateRemove2dEcho.js       # [1.50.0] remove the 2D Echo category and its tests; REFUSES if any visit_tests still reference them (--rollback restores)
+node src/scripts/migratePatientArchive.js     # [1.56.0] archive a patient record without deleting it (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
