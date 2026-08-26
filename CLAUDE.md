@@ -284,6 +284,27 @@ Public (unauthenticated) pages: `Home`, `ServicesPage` (dynamically fetches acti
 
 Schema lives in `database/schema.sql` (source of truth, applied wholesale by `migrateDb.js`); human-readable change log in `database/migrations.md`.
 
+**It is actually the source of truth again as of `[1.54.0]`, and it had stopped being one.** Four
+tables (`test_packages`, `test_package_items`, `payment_methods`, `payment_submissions`), the
+`visit_tests.package_id` column and its FK, and **ten indexes** lived only inside the additive
+migration scripts. A database rebuilt from this file came up with no package deals and no online
+payment — the app failed the moment anyone opened the Services Catalogue — and, more quietly,
+measurably slower, with no error to say why.
+
+If you add a migration script, fold its DDL back into this file in the same commit. Verify the way
+[1.54.0] did rather than by reading: build a throwaway database from `schema.sql` and diff it
+against the live one on tables, columns, indexes AND constraints. All four matched exactly — 30
+tables, 254 columns, 121 indexes, 240 constraints, zero differences:
+
+```bash
+psql -d postgres -c "CREATE DATABASE enlogada_schemacheck"
+psql -d enlogada_schemacheck -v ON_ERROR_STOP=1 -f database/schema.sql
+# then diff pg_class / information_schema.columns / pg_indexes / pg_constraint against the live DB
+```
+
+The one legitimate difference to expect: a constraint a migration added `NOT VALID` (to avoid
+validating existing rows) is fully valid in a fresh build, which has no rows to validate.
+
 **Transactions:** `db.withTransaction(fn)` in `src/config/database.js` makes every query issued underneath it — at any call depth, through any repository — run on one connection and commit as a unit. It uses `AsyncLocalStorage`, so repositories need no `client` argument and cannot accidentally write outside the transaction. Nested calls join the transaction already in progress. **Never call `db.pool.connect()` directly**: a self-managed client inside a `withTransaction` opens a second, independent transaction that commits on its own, and with a bounded pool it deadlocks once every connection is held by a transaction waiting for another connection. Any service method performing 2+ writes that must succeed together belongs in `withTransaction`; keep bcrypt hashing and outbound email/HTTP *outside* it so a pooled connection is not held during slow work. No code under `src/services` or `src/repositories` manages its own client any more — the only `pool.connect()` calls left are inside `withTransaction` itself and in one-shot migration scripts, which run alone.
 
 **`createAppointment` is the shape to copy for "commit, then do the after-work".** It writes the visit, the appointment, the tests and any HMO claim in one `withTransaction`, and everything that must only happen *after* a successful commit — the staff notification, discarding an unused card upload — sits after the `try`, not inside it. The version this replaced tracked a `committed` boolean so its own `catch` would know whether the COMMIT had already run; a post-commit throw would otherwise have issued ROLLBACK on a committed transaction and reported a real booking as failed. Structuring it this way removes the flag rather than maintaining it.
