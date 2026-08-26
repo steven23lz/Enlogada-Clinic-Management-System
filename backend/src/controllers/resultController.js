@@ -24,9 +24,10 @@ class ResultController {
       // days/limit/offset are optional; the service clamps them. Defaults to the last 90 days,
       // which is what the screen actually shows — this list used to return every completed test
       // in the clinic's history, findings text included, on every load.
-      const { days, limit, offset } = req.query;
+      const { days, limit, offset, delivery } = req.query;
       const released = await resultService.getReleasedByCategory(category, req.user, {
         days,
+        delivery,
         limit,
         offset
       });

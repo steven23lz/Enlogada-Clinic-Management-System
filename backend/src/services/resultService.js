@@ -145,7 +145,11 @@ class ResultService {
     const limit = Math.min(Math.max(parseInt(options.limit, 10) || 200, 1), 500);
     const offset = Math.max(parseInt(options.offset, 10) || 0, 0);
 
-    return await resultRepository.findReleasedByCategory(categoryName, { days, limit, offset });
+    // Allow-listed. Anything unrecognised is dropped rather than passed to SQL, where it could
+    // only match nothing — and an empty worklist reads as "no work", which is a claim.
+    const delivery = ['sent', 'unsent'].includes(options.delivery) ? options.delivery : null;
+
+    return await resultRepository.findReleasedByCategory(categoryName, { days, delivery, limit, offset });
   }
 
   // A modality may move its own ticket to 'Waiting for Release' (exam done, findings pending

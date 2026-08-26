@@ -5,7 +5,7 @@ const PAGE_SIZE = 10;
 import { Eye, History, Pencil, Mail, MailCheck, MailX } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Panel, PanelBody } from '../ui/panel';
-import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
+import Toolbar, { ToolbarSpacer, SegmentedFilter } from '../ui/toolbar';
 import EmptyState from '../ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { SearchInput } from '../ui/search-input';
@@ -44,8 +44,22 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
       <div>
         {/* Search Bar */}
         <Toolbar attached>
+          {/* Released and DELIVERED are two different facts, and "not sent" is the pile worth
+              having a button for: released reports the patient was never told about. It matters
+              most after a mail outage, when the failures are a contiguous block with no other way
+              to find them. Filtered at the server, against a partial index. [1.59.0] */}
+          <SegmentedFilter
+            ariaLabel="Filter released results by whether the patient was sent them"
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'unsent', label: 'Not sent' },
+              { value: 'sent', label: 'Sent' },
+            ]}
+            value={worklist.deliveryFilter}
+            onChange={worklist.setDeliveryFilter}
+          />
           <span className="text-fine font-medium tabular-nums text-slate-500">
-            {filtered.length} released result{filtered.length === 1 ? '' : 's'}
+            {filtered.length} result{filtered.length === 1 ? '' : 's'}
           </span>
           <ToolbarSpacer />
           <SearchInput
@@ -197,11 +211,23 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                   <TableCell colSpan={6} className="p-0">
                     <EmptyState
                       icon={History}
-                      title={worklist.search ? 'Nothing matches that search' : `No released ${categoryLabel} results yet`}
+                      title={
+                        worklist.search
+                          ? 'Nothing matches that search'
+                          : worklist.deliveryFilter === 'unsent'
+                            ? 'Every released report has reached its patient'
+                            : worklist.deliveryFilter === 'sent'
+                              ? 'No sends recorded yet'
+                              : `No released ${categoryLabel} results yet`
+                      }
                       description={
                         worklist.search
                           ? 'Try a surname, a test name, or a queue ticket number.'
-                          : 'A result appears here once it has been authorised for release from the worklist.'
+                          : worklist.deliveryFilter === 'unsent'
+                            ? 'Nothing is waiting to be sent.'
+                            : worklist.deliveryFilter === 'sent'
+                              ? 'Reports released before this was recorded show as unsent — that means unknown, not that the patient was never told.'
+                              : 'A result appears here once it has been authorised for release from the worklist.'
                       }
                     />
                   </TableCell>

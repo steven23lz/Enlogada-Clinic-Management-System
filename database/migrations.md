@@ -84,7 +84,26 @@ The roster itself is now a proper `Table` -- sticky header, `stack` on mobile, o
 the patient, their details, the diagnostic work, the last visit and the last report -- matching the
 diagnostic Test History, which was the better-looking screen and is the right shape for this one.
 
-`result-delivery.spec.js` covers all of it: 8 tests. Suite is 268.
+### Finding the ones nobody was told about
+
+`idx_test_results_undelivered` had no reader when it was created. `GET /results/released/:category`
+now takes `delivery=unsent|sent`, and the Test History carries the chips for it.
+
+That filter is the reason the column was worth adding. Scanning a released list by eye for reports
+that never went is not a thing anyone does, so without it the record would be a fact stored and
+never used. It matters most straight after a mail outage, when the failures are a contiguous block
+with no other way to identify them — which is exactly the state the clinic was in when the send
+quota ran out. `unsent` deliberately does not mean "has no address": a report to a patient with a
+perfectly good email that failed at release belongs in that pile, because that is the pile someone
+has to work through.
+
+The empty state speaks for the filter too. "No released results yet" over a department with plenty
+of them, filtered to a set that happens to be empty, is a screen making a false claim about the
+department — so `unsent` reads "Every released report has reached its patient", and `sent` says
+plainly that anything released before this was recorded shows as unsent, meaning *unknown* rather
+than *never told*.
+
+`result-delivery.spec.js` covers all of it: 9 tests. Suite is 269.
 
 
 ## [1.58.0] - 2026-08-26 (Ask for a slice, and ask for it again)

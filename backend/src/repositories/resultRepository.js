@@ -121,11 +121,28 @@ class ResultRepository {
    * @param {string} categoryName
    * @param {{days?: number, limit?: number, offset?: number}} options
    */
-  async findReleasedByCategory(categoryName, { days = 90, limit = 200, offset = 0 } = {}) {
+  async findReleasedByCategory(categoryName, { days = 90, delivery = null, limit = 200, offset = 0 } = {}) {
     // Half-open range on the raw column so idx_test_results_released_at applies — a ::date cast
     // here would put the planner straight back on a sequential scan. See [1.18.0].
     const windowClause =
       days > 0 ? `AND tr.released_at >= (CURRENT_DATE - $2::int * INTERVAL '1 day')` : '';
+
+    /**
+     * Reports the patient has not been told about. [1.59.0]
+     *
+     * This is the reader idx_test_results_undelivered exists for, and the reason the column was
+     * worth adding at all: a technician can find every released report that never reached anyone
+     * instead of scanning the list by eye. It matters most after a mail outage, when the failures
+     * are a contiguous block nobody has any other way to identify.
+     *
+     * `sent` deliberately does NOT mean "has an address" — it means a send was recorded. A report
+     * to a patient with an email that failed at release belongs in `unsent`, which is exactly the
+     * pile someone needs to work through.
+     */
+    const deliveryClause =
+      delivery === 'unsent' ? 'AND tr.emailed_at IS NULL'
+        : delivery === 'sent' ? 'AND tr.emailed_at IS NOT NULL'
+          : '';
     const params = [categoryName];
     if (days > 0) params.push(days);
     params.push(limit, offset);
@@ -166,6 +183,7 @@ class ResultRepository {
       WHERE tc.name = $1
         AND vt.status = 'Completed'
         ${windowClause}
+        ${deliveryClause}
       ORDER BY tr.released_at DESC NULLS LAST, pv.created_at DESC
       LIMIT $${params.length - 1} OFFSET $${params.length}
     `;

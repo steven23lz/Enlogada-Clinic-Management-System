@@ -65,6 +65,17 @@ export function useDiagnosticWorklist({ activeNav, roles, mode, paused = false }
   const [status, setStatus] = useState('All');
   const [worklistPage, setWorklistPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
+  /**
+   * Whether the patient has been TOLD about a released report. [1.59.0]
+   *
+   * 'unsent' is the pile that matters: released reports nobody was ever notified of. It matters
+   * most after a mail outage, when the failures are a contiguous block with no other way to find
+   * them — which is exactly the state this clinic was in when the Gmail send quota ran out.
+   *
+   * Filtered at the SERVER, so it hits idx_test_results_undelivered and the count below is the
+   * count of what matches rather than of the page in hand.
+   */
+  const [deliveryFilter, setDeliveryFilter] = useState('all');
 
   const fetchPending = useCallback(async (catName) => {
     setWorklistError('');
@@ -82,11 +93,13 @@ export function useDiagnosticWorklist({ activeNav, roles, mode, paused = false }
     }
   }, []);
 
-  const fetchReleased = useCallback(async (catName) => {
+  const fetchReleased = useCallback(async (catName, delivery = 'all') => {
     setHistoryError('');
     try {
       const responses = await Promise.all(
-        categoriesFor(catName).map((c) => api.get(`/results/released/${c}`))
+        categoriesFor(catName).map((c) => api.get(`/results/released/${c}`, {
+          params: delivery === 'all' ? undefined : { delivery },
+        }))
       );
       setReleased(responses.flatMap((r) => r.data.data.released || []));
     } catch (err) {
@@ -115,8 +128,8 @@ export function useDiagnosticWorklist({ activeNav, roles, mode, paused = false }
   /** Re-read whichever list the current mode is showing. */
   const refresh = useCallback(() => {
     if (!category || !categoryResolved) return;
-    return mode === 'history' ? fetchReleased(category) : fetchPending(category);
-  }, [category, categoryResolved, mode, fetchPending, fetchReleased]);
+    return mode === 'history' ? fetchReleased(category, deliveryFilter) : fetchPending(category);
+  }, [category, categoryResolved, mode, deliveryFilter, fetchPending, fetchReleased]);
 
   useEffect(() => {
     if (category && categoryResolved) {
@@ -151,6 +164,10 @@ export function useDiagnosticWorklist({ activeNav, roles, mode, paused = false }
     status, setStatus,
     worklistPage, setWorklistPage,
     historyPage, setHistoryPage,
+    deliveryFilter,
+    // Page back to 1: staying on page 3 of a list that just became two rows shows an empty table
+    // over a non-empty result.
+    setDeliveryFilter: (next) => { setDeliveryFilter(next); setHistoryPage(1); },
     refresh,
   };
 }

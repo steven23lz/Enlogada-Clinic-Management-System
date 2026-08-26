@@ -174,11 +174,44 @@ test.describe('Emailing a released report', () => {
     }
   });
 
+  test('the undelivered pile can be asked for by itself', async () => {
+    const ctx2 = await request.newContext();
+    const token = await login(ctx2, 'lab@enlogada.com');
+    const get = async (params) =>
+      (await (await ctx2.get(`${API}/results/released/Laboratory`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { days: 0, limit: 500, ...params },
+      })).json()).data.released;
+
+    const all = await get({});
+    const unsent = await get({ delivery: 'unsent' });
+    const sent = await get({ delivery: 'sent' });
+
+    // The reason the column was worth adding: a technician can find every released report nobody
+    // was told about, instead of scanning by eye. This is the pile that matters after a mail
+    // outage, when the failures are a contiguous block with no other way to identify them.
+    expect(unsent.every((r) => !r.emailed_at), 'unsent means no send recorded').toBeTruthy();
+    expect(sent.every((r) => Boolean(r.emailed_at)), 'sent means a send WAS recorded').toBeTruthy();
+    expect(unsent.length + sent.length, 'the two must partition the released list').toBe(all.length);
+
+    // Unrecognised is dropped, not applied — an empty worklist reads as "no work", which is a
+    // claim about the department rather than a result.
+    expect((await get({ delivery: 'nonsense' })).length).toBe(all.length);
+
+    await ctx2.dispose();
+  });
+
   test('the technician can see delivery state and reach the action', async ({ page }) => {
     await signIn(page, 'lab@enlogada.com');
     await page.getByRole('button', { name: 'Laboratory History' }).first().click();
 
     await expect(page.getByRole('columnheader', { name: 'Sent to patient' })).toBeVisible({ timeout: 20000 });
+
+    // And the filter that finds the ones nobody was told about.
+    await expect(page.getByRole('tab', { name: 'Not sent' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Not sent' }).click();
+    await expect(page.getByRole('tab', { name: 'Not sent' })).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('tab', { name: 'All' }).click();
 
     const firstRow = page.locator('tbody tr').first();
     await expect(firstRow).toBeVisible();
