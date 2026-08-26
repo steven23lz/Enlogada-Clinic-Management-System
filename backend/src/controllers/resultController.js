@@ -189,6 +189,30 @@ class ResultController {
     }
   }
 
+  /**
+   * Send a released report to the patient again. [1.59.0]
+   *
+   * Separate from release on purpose: releasing is a clinical authorisation that happens once,
+   * and re-sending is a delivery problem that can happen any number of times. Folding the second
+   * into the first would mean re-authorising a result to fix an email bounce.
+   */
+  async emailResult(req, res, next) {
+    try {
+      const { visitTestId } = req.params;
+      const sent = await resultService.emailResult({ visitTestId }, req.user);
+
+      return res.status(200).json({
+        status: 'success',
+        // Names the address. A patient who has changed their email needs whoever is on the phone
+        // to be able to say where it actually went.
+        message: `Report sent to ${sent.emailedTo}.`,
+        data: { delivery: sent },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getResult(req, res, next) {
     try {
       const { visitTestId } = req.params;

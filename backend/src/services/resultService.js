@@ -346,6 +346,140 @@ class ResultService {
     };
   }
 
+  /**
+   * Send the patient their report, and WRITE DOWN that it went. [1.59.0]
+   *
+   * One builder, called by release and by a manual re-send, because two copies of this would
+   * drift — and the copy that drifts is the one nobody is looking at, which here means a
+   * critical value going out under the cheerful wording while the release path uses the careful
+   * one.
+   *
+   * Recording happens only on success. `emailed_at IS NULL` has to keep meaning "this report has
+   * never reached the patient", with no second reading — a failed attempt that stamped the column
+   * would turn the one honest signal in the feature into a lie.
+   *
+   * `sendEmail` never throws: it swallows SMTP failures and returns {error}/{skipped}, so the
+   * return value is the only way to know. Discarding it is how this used to report "patient
+   * notified" over an unconfigured mail server.
+   */
+  async deliverResultEmail({ patientInfo, isCritical, isAmendment, visitTestId }) {
+    if (!patientInfo || !patientInfo.email) return 'no_email';
+
+    // A panic value must not go out with the same cheerful "your results are ready" wording as a
+    // normal CBC. The clinic still telephones — that is what the acknowledgement records — but
+    // the email must not read as routine in the meantime, and it must not put a clinical value in
+    // front of a patient with no clinician attached to it.
+    const subject = isCritical
+      ? `IMPORTANT: Please contact Enlogada Clinic about your ${patientInfo.test_name} result`
+      : isAmendment
+        ? `Updated ${patientInfo.test_name} result - Enlogada Clinic`
+        : `Your ${patientInfo.test_name} Results Are Ready - Enlogada Clinic`;
+
+    const body = isCritical
+      ? `<p>Your <strong>${patientInfo.test_name}</strong> result requires prompt discussion with a clinician.</p>
+         <p><strong>Please contact the clinic as soon as you can</strong>, or proceed to the nearest
+            emergency department if you feel unwell. A member of our staff will also be trying to
+            reach you by phone.</p>`
+      : isAmendment
+        ? `<p>Your <strong>${patientInfo.test_name}</strong> report has been <strong>updated</strong>, and the
+              revised version replaces the one issued earlier.</p>
+           <p>Please use the updated report, and discard or disregard any earlier copy.</p>`
+        : `<p>Your <strong>${patientInfo.test_name}</strong> results are now available.</p>
+           <p>You can view your results by logging in to your account or by visiting the clinic.</p>`;
+
+    const emailResult = await sendEmail({
+      to: patientInfo.email,
+      subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>Hello ${patientInfo.first_name} ${patientInfo.last_name},</h2>
+          ${body}
+          <br/>
+          <p>Thank you,</p>
+          <p><strong>Enlogada Ultrasound and Diagnostic Clinic</strong></p>
+        </div>
+      `,
+    });
+
+    if (emailResult?.error || emailResult?.skipped) return 'failed';
+
+    await resultRepository.recordEmailDelivery(visitTestId, patientInfo.email);
+    return 'sent';
+  }
+
+  /**
+   * Send a released report to the patient AGAIN, on request. [1.59.0]
+   *
+   * The gap this closes: release was the only path that emailed, it fired once, and it could not
+   * be repeated. A patient who says "I never received it", an address corrected after the fact,
+   * an SMTP outage during a release — in every case the only remedy available to a technician was
+   * to re-release a result that was already out, which writes a new authorisation record for a
+   * clinical event that did not happen again.
+   *
+   * Refuses on anything not yet released. A report that has not been authorised must not be
+   * emailable by another door — that would make `results:release` bypassable by whoever can send
+   * an email, and the whole point of 'Waiting for Release' is that authorisation is a separate,
+   * deliberate act.
+   */
+  async emailResult({ visitTestId }, requestingUser) {
+    await assertStaffOwnsVisitTest(requestingUser, visitTestId);
+
+    const result = await resultRepository.findResultByVisitTestId(visitTestId);
+    if (!result) {
+      const error = new Error('There is no report for this test yet, so there is nothing to send.');
+      error.statusCode = 404;
+      throw error;
+    }
+    if (!result.released_at || !result.authorised_at) {
+      const error = new Error(
+        'This report has not been released yet. Release it from the worklist — that notifies the patient as part of the same step.'
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const patientInfo = await resultRepository.findPatientEmailByVisitTestId(visitTestId);
+    if (!patientInfo || !patientInfo.email) {
+      // A walk-in registered at the counter often has no account and therefore no address. Naming
+      // the remedy matters: whoever is holding the phone can fix this in a minute from Patient
+      // Records, and "no email on file" alone does not tell them that.
+      const error = new Error(
+        'This patient has no email address on file. Add one to their record first, then send it again.'
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const emailStatus = await this.deliverResultEmail({
+      patientInfo,
+      isCritical: Boolean(result.is_critical),
+      isAmendment: (result.version || 1) > 1,
+      visitTestId,
+    });
+
+    if (emailStatus !== 'sent') {
+      const error = new Error(
+        'The email could not be sent. The clinic mail account may be unreachable — telephone the patient if this one is urgent.'
+      );
+      error.statusCode = 502;
+      throw error;
+    }
+
+    // Audited, unlike the automatic send at release: this one is a person deciding to put a
+    // medical report in front of a patient a second time, and "who sent this, and when" is the
+    // question asked afterwards.
+    await auditService.log({
+      actorId: requestingUser?.userId,
+      action: 'result.emailed',
+      entityType: 'test_results',
+      entityId: result.id,
+      description: `${patientInfo.test_name} for ${patientInfo.first_name} ${patientInfo.last_name} re-sent to ${patientInfo.email}`,
+    });
+
+    const fresh = await resultRepository.findResultByVisitTestId(visitTestId);
+    return { emailedTo: patientInfo.email, emailedAt: fresh?.emailed_at, emailCount: fresh?.email_count };
+  }
+
   async releaseResult({ visitTestId, releasedBy }, requestingUser) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
 
@@ -401,45 +535,9 @@ class ResultService {
     const isCritical = Boolean(result.is_critical);
     const isAmendment = (result.version || 1) > 1;
 
-    let emailStatus = 'no_email';
-    if (patientInfo && patientInfo.email) {
-      // A panic value used to go out with exactly the same cheerful "your results are ready"
-      // email as a normal CBC. The clinic still telephones — that is what the acknowledgement
-      // below records — but the email must not read as routine in the meantime, and it must not
-      // put a clinical value in front of a patient with no clinician attached to it.
-      const subject = isCritical
-        ? `IMPORTANT: Please contact Enlogada Clinic about your ${patientInfo.test_name} result`
-        : isAmendment
-          ? `Updated ${patientInfo.test_name} result - Enlogada Clinic`
-          : `Your ${patientInfo.test_name} Results Are Ready - Enlogada Clinic`;
-
-      const body = isCritical
-        ? `<p>Your <strong>${patientInfo.test_name}</strong> result requires prompt discussion with a clinician.</p>
-           <p><strong>Please contact the clinic as soon as you can</strong>, or proceed to the nearest
-              emergency department if you feel unwell. A member of our staff will also be trying to
-              reach you by phone.</p>`
-        : isAmendment
-          ? `<p>Your <strong>${patientInfo.test_name}</strong> report has been <strong>updated</strong>, and the
-                revised version replaces the one issued earlier.</p>
-             <p>Please use the updated report, and discard or disregard any earlier copy.</p>`
-          : `<p>Your <strong>${patientInfo.test_name}</strong> results are now available.</p>
-             <p>You can view your results by logging in to your account or by visiting the clinic.</p>`;
-
-      const emailResult = await sendEmail({
-        to: patientInfo.email,
-        subject,
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2>Hello ${patientInfo.first_name} ${patientInfo.last_name},</h2>
-            ${body}
-            <br/>
-            <p>Thank you,</p>
-            <p><strong>Enlogada Ultrasound and Diagnostic Clinic</strong></p>
-          </div>
-        `
-      });
-      emailStatus = (emailResult?.error || emailResult?.skipped) ? 'failed' : 'sent';
-    }
+    const emailStatus = await this.deliverResultEmail({
+      patientInfo, isCritical, isAmendment, visitTestId,
+    });
 
     // Module 18 (Notification): Admin/SuperAdmin oversight of diagnostic throughput, matching
     // the existing Reports/oversight theme — not the releasing staff member themselves, who is

@@ -1,0 +1,243 @@
+// @ts-check
+import { test, expect, request } from 'playwright/test';
+import { signIn } from './helpers/auth.js';
+import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
+
+/**
+ * Getting the report to the patient, and being able to say that you did. [1.59.0]
+ *
+ * ── What existed ────────────────────────────────────────────────────────────────────────────
+ *
+ * Releasing a result has emailed the patient since [1.0.0]: `releaseResult` builds the message,
+ * calls `sendEmail`, and hands the technician an `emailStatus` toast. Then the toast fades, and
+ * the fact is gone — nothing was ever written down. Three ordinary questions had no answer:
+ * whether a patient was ever emailed, what address it went to, and how to send it again when
+ * they say it never arrived.
+ *
+ * Re-releasing was the only workaround, and it is the wrong one: it writes a fresh clinical
+ * authorisation for an event that did not happen a second time.
+ *
+ * ── What must stay true ─────────────────────────────────────────────────────────────────────
+ *
+ *   RELEASE GATES DELIVERY      an unreleased report must not be emailable by a second door, or
+ *                               `results:release` becomes bypassable by whoever can send mail.
+ *   NULL MEANS NEVER            `emailed_at` is written only on a SUCCESSFUL send. A failure that
+ *                               stamped it would destroy the one honest signal in the feature.
+ *   A MISSING ADDRESS IS NOT    most of this clinic's patients are walk-ins with no account. That
+ *   A FAULT                     is a 409 naming the remedy, not a 500.
+ *   THE DEPARTMENT BOUNDARY     Ultrasound does not email a Laboratory report.
+ */
+
+const BACKEND_URL = process.env.E2E_API_URL || 'http://localhost:5000';
+const API = `${BACKEND_URL}/api`;
+const PASSWORD = 'Password123!';
+
+async function login(ctx, email) {
+  const res = await ctx.post(`${API}/auth/login`, { data: { email, password: PASSWORD } });
+  expect(res.ok(), `login ${email}`).toBeTruthy();
+  return (await res.json()).data.token;
+}
+
+test.describe('Emailing a released report', () => {
+  let ctx; let rec; let cash; let lab;
+  const auth = (t) => ({ Authorization: `Bearer ${t}` });
+
+  test.beforeAll(async () => {
+    ctx = await request.newContext();
+    rec = await login(ctx, 'receptionist@enlogada.com');
+    cash = await login(ctx, 'cashier@enlogada.com');
+    lab = await login(ctx, 'lab@enlogada.com');
+  });
+  test.afterAll(async () => { await ctx.dispose(); });
+
+  const released = async () =>
+    (await (await ctx.get(`${API}/results/released/Laboratory`, { headers: auth(lab) })).json())
+      .data.released;
+
+  /** A paid walk-in with one Laboratory test, taken as far as the caller asks. */
+  async function labVisit() {
+    const types = (await (await ctx.get(`${API}/patients/types`, { headers: auth(rec) })).json()).data.patientTypes;
+    const selfPay = types.find((t) => t.name === 'Self Pay');
+    const patient = (await (await ctx.post(`${API}/patients`, {
+      headers: auth(rec),
+      data: {
+        ...fixturePerson(), birthdate: '1990-01-01', sex: 'Female',
+        address: 'Bugo, Cagayan de Oro City', contactNumber: FIXTURE_CONTACT,
+        patientTypeId: selfPay.id,
+      },
+    })).json()).data.patient;
+
+    const visit = (await (await ctx.post(`${API}/visits`, {
+      headers: auth(rec), data: { patientId: patient.id, visitType: 'Walk in' },
+    })).json()).data.visit;
+
+    const labTest = (await (await ctx.get(`${API}/tests`)).json()).data.tests
+      .find((t) => t.is_active && t.category_name === 'Laboratory' && Number(t.price) > 0);
+    await ctx.post(`${API}/tests/visit-tests`, {
+      headers: auth(rec), data: { patientVisitId: visit.id, testIds: [labTest.id] },
+    });
+
+    const bill = (await (await ctx.get(`${API}/payments/bill/${visit.id}`, { headers: auth(cash) })).json()).data.bill;
+    await ctx.post(`${API}/payments`, {
+      headers: auth(cash),
+      data: { patientVisitId: visit.id, paymentMethod: 'Cash', amount: bill.totalAmount },
+    });
+
+    const pending = (await (await ctx.get(`${API}/results/pending/Laboratory`, { headers: auth(lab) })).json()).data.pending;
+    const line = pending.find((x) => x.visit_id === visit.id);
+    expect(line, 'a paid walk-in must reach the Laboratory worklist').toBeTruthy();
+    return { patient, visit, visitTestId: line.visit_test_id };
+  }
+
+  test('a report that has not been released cannot be emailed', async () => {
+    const { visitTestId } = await labVisit();
+
+    // No findings recorded yet — there is not even a report to send.
+    const noReport = await ctx.post(`${API}/results/${visitTestId}/email`, { headers: auth(lab) });
+    expect(noReport.status()).toBe(404);
+    expect((await noReport.json()).message).toMatch(/nothing to send|no report/i);
+
+    // Findings recorded, but NOT released: the ticket sits in 'Waiting for Release', which exists
+    // precisely so that authorising is a separate deliberate act. Emailing here would be a way
+    // around it.
+    await ctx.patch(`${API}/results/test-status/${visitTestId}`, {
+      headers: auth(lab), data: { status: 'Processing' },
+    });
+    await ctx.post(`${API}/results/${visitTestId}`, {
+      headers: auth(lab),
+      multipart: { findings: 'Within normal limits.', remarks: 'E2E' },
+    });
+
+    const unreleased = await ctx.post(`${API}/results/${visitTestId}/email`, { headers: auth(lab) });
+    expect(unreleased.status(), 'delivery must not bypass release').toBe(409);
+    expect((await unreleased.json()).message).toMatch(/not been released/i);
+  });
+
+  test('a walk-in with no account is told what to do, not shown an error', async () => {
+    const { visitTestId } = await labVisit();
+    await ctx.patch(`${API}/results/test-status/${visitTestId}`, {
+      headers: auth(lab), data: { status: 'Processing' },
+    });
+    await ctx.post(`${API}/results/${visitTestId}`, {
+      headers: auth(lab), multipart: { findings: 'Within normal limits.', remarks: 'E2E' },
+    });
+    expect((await ctx.post(`${API}/results/${visitTestId}/release`, { headers: auth(lab) })).status()).toBe(200);
+
+    // Reception registers walk-ins at the counter with no user account, so there is no address.
+    // This is the common case at this clinic, not an edge one.
+    const res = await ctx.post(`${API}/results/${visitTestId}/email`, { headers: auth(lab) });
+    expect(res.status()).toBe(409);
+    // Naming the remedy matters: whoever is holding the phone can fix this in a minute.
+    expect((await res.json()).message).toMatch(/no email address on file/i);
+    expect((await res.json()).message).toMatch(/add one/i);
+  });
+
+  test('the released list says whether the patient was actually told', async () => {
+    const rows = await released();
+    test.skip(rows.length === 0, 'Need a released Laboratory result.');
+
+    // Released and delivered are two different facts. The screen showed only the first, so
+    // "has she been sent her result?" had no answer anywhere in the system.
+    for (const field of ['emailed_at', 'emailed_to', 'email_count', 'patient_email']) {
+      expect(rows[0], `the row must carry ${field}`).toHaveProperty(field);
+    }
+
+    // Never stamped by a failure. A row claiming delivery it did not achieve is worse than a row
+    // that admits it does not know.
+    for (const row of rows) {
+      if (row.emailed_at) {
+        expect(row.emailed_to, 'a recorded send must name the address it went to').toBeTruthy();
+        expect(Number(row.email_count), 'a recorded send counts at least one').toBeGreaterThan(0);
+      } else {
+        expect(Number(row.email_count || 0), 'no send recorded means no count').toBe(0);
+      }
+    }
+  });
+
+  test('who may send it', async () => {
+    const rows = await released();
+    test.skip(rows.length === 0, 'Need a released Laboratory result.');
+    const id = rows[0].visit_test_id;
+
+    const cases = [
+      ['Receptionist', await login(ctx, 'receptionist@enlogada.com')],
+      ['Client', await login(ctx, 'client@enlogada.com')],
+      // Sending a Laboratory report is Laboratory's business. Department scoping is enforced in
+      // the service, the same check that guards reading the result at all.
+      ['Xray Staff', await login(ctx, 'xray@enlogada.com')],
+    ];
+    for (const [who, token] of cases) {
+      expect(
+        (await ctx.post(`${API}/results/${id}/email`, { headers: auth(token) })).status(),
+        `${who} must not email a Laboratory report`
+      ).toBe(403);
+    }
+  });
+
+  test('the technician can see delivery state and reach the action', async ({ page }) => {
+    await signIn(page, 'lab@enlogada.com');
+    await page.getByRole('button', { name: 'Laboratory History' }).first().click();
+
+    await expect(page.getByRole('columnheader', { name: 'Sent to patient' })).toBeVisible({ timeout: 20000 });
+
+    const firstRow = page.locator('tbody tr').first();
+    await expect(firstRow).toBeVisible();
+
+    // Either an address to send to, or an explicit statement that there is none. What must never
+    // appear is a button that can only refuse, with nothing on screen explaining why.
+    const emailButton = firstRow.getByRole('button', { name: /Email|Send again/ });
+    await expect(emailButton).toBeVisible();
+    if (await emailButton.isDisabled()) {
+      await expect(firstRow).toContainText(/No email on file/i);
+    }
+  });
+});
+
+test.describe('Patient Records is a clinical roster', () => {
+  test('billing state is not shown on it', async ({ page }) => {
+    await signIn(page, 'admin@enlogada.com');
+    await page.getByRole('button', { name: 'Patient Records' }).first().click();
+
+    await expect(page.locator('[data-testid="patient-row"]').first()).toBeVisible({ timeout: 20000 });
+
+    // Whether a bill is settled is the Billing Queue's question. A clinical records roster that
+    // answers it reads as a debtors list — which is what prompted this. Reception's walk-in
+    // lookup keeps the same figure, because at CHECK-IN an outstanding balance is the point.
+    await expect(page.getByTestId('patient-row').first()).not.toContainText(/unpaid/i);
+  });
+
+  test('the roster can be narrowed to finished records', async ({ page }) => {
+    await signIn(page, 'admin@enlogada.com');
+    await page.getByRole('button', { name: 'Patient Records' }).first().click();
+    await expect(page.locator('[data-testid="patient-row"]').first()).toBeVisible({ timeout: 20000 });
+
+    await expect(page.getByRole('tab', { name: 'Complete' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Still open' })).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Complete' }).click();
+    await expect(page.getByRole('tab', { name: 'Complete' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByText(/Every test seen through/i)).toBeVisible();
+  });
+
+  test('complete and open partition the roster exactly', async () => {
+    const ctx = await request.newContext();
+    const sup = await login(ctx, 'admin@enlogada.com');
+    const count = async (params) =>
+      (await (await ctx.get(`${API}/patients/search`, {
+        headers: { Authorization: `Bearer ${sup}` }, params: { limit: 100, ...params },
+      })).json()).data.total;
+
+    const all = await count({});
+    const complete = await count({ recordStatus: 'complete' });
+    const open = await count({ recordStatus: 'open' });
+
+    // Written as a clause and its exact negation in SQL, so they cannot overlap or leave a gap.
+    expect(complete + open, 'every record is one or the other').toBe(all);
+
+    // An unrecognised value is dropped, never applied as a filter that matches nothing — an
+    // empty roster reads as "this clinic has no patients", which is a claim, not a result.
+    expect(await count({ recordStatus: 'nonsense' })).toBe(all);
+
+    await ctx.dispose();
+  });
+});

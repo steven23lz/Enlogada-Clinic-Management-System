@@ -1,5 +1,92 @@
 # Database Migration & Schema History
 
+## [1.59.0] - 2026-08-26 (Send the patient their result, and be able to say that you did)
+
+`test_results.emailed_at` / `emailed_to` / `email_count`, plus one partial index.
+`migrateResultDelivery.js` (`--rollback` reverses it). Folded into `schema.sql`; verified
+zero-drift at 270 columns, 126 indexes, 31 tables.
+
+### The feature that existed and could not be used
+
+Releasing a result has emailed the patient since [1.0.0]. `releaseResult` builds the message,
+calls `sendEmail`, and hands the technician an `emailStatus` toast. Then the toast fades and the
+fact is gone, because **nothing was ever written down**. Three ordinary questions had no answer
+anywhere in the system:
+
+| | |
+|---|---|
+| "was this patient ever emailed?" | the release wrote `Completed` and `released_by`, and nothing about delivery |
+| "she says it never arrived" | release is the only path that emails, it fires once, and it cannot be repeated |
+| "which address did it go to?" | a patient who has since corrected their email had no way to be told |
+
+Re-releasing was the only workaround available, and it is the wrong one: it writes a fresh
+clinical authorisation for an event that did not happen a second time.
+
+`POST /results/:visitTestId/email` closes it, gated on **`results:release`** rather than a
+permission of its own -- whoever may authorise a report reaching a patient may put it in front of
+them again, and a fresh `results:email` would be held by nobody until somebody remembered to grant
+it, leaving the clinic with no answer to "I never got it". The service refuses anything not
+already released, so this cannot become a side door around authorisation. Every manual send is
+audited; the automatic one at release is not, because it is part of an act already recorded.
+
+**`emailed_at` records the last SUCCESSFUL send and nothing else**, so `IS NULL` means "this report
+has never reached the patient" with no second reading. Not backfilled, for the same reason [1.32.0]
+replaced a fabricated refund date with the real one: every existing released result *was* emailed
+by the code that has always done it, but we have no record of which succeeded, and writing a
+plausible timestamp would be inventing delivery evidence for a medical report.
+
+One row per VERSION turns out to be exactly right. An amendment creates a new `test_results` row,
+so a v2 correctly starts with `emailed_at` NULL -- the patient has been sent v1 and has **not** been
+sent v2, and the schema says so without anyone having to reason about it.
+
+### Found while testing this: the clinic's mail quota was exhausted
+
+The first live send failed. `verify()` proved the credentials and the connection were fine, so the
+error was captured directly:
+
+```
+550-5.4.5 Daily user sending limit exceeded
+```
+
+The cause is ours. The E2E suite registers every throwaway account under `@enlogada-e2e.test` -- a
+domain with **no MX record** -- and every booking confirmation and released result addressed to one
+was a real SMTP send from the clinic's real Gmail account to nowhere. Two consequences, and the
+second is worse than the first:
+
+- **The quota is finite.** A free Gmail account allows a few hundred recipients a day. A couple of
+  full suite runs and a demo seed exhaust it -- and a real patient's result fails to send with it.
+- **Bounces cost sender reputation.** Repeated delivery failures to a nonexistent domain are
+  exactly what spam filtering scores against a sender. That bill is not paid by the test suite; it
+  is paid months later by a patient whose results quietly land in their junk folder.
+
+`sendEmail` now suppresses any recipient on that domain and logs it. Scoped by RECIPIENT, not by
+`NODE_ENV`: the suite runs against the development server in development mode, so an environment
+check would not have caught it, and production behaviour is unchanged.
+
+### Patient Records is a clinical roster, not a debtors list
+
+The roster carried an amber "N unpaid" chip per patient. Whether a bill is settled is the Billing
+Queue's question, and a clinical records screen that answers it reads as a list of debtors -- which
+is exactly how it was reported. Removed from Patient Records; **kept in Reception's walk-in
+lookup**, where it belongs and where it was originally added: at CHECK-IN, about to register
+another visit, an outstanding balance is the point.
+
+A **record status filter** replaces it -- All / Complete / Still open, filtered at the server, with
+"complete" meaning all three at once: they have been in, every test has been seen through, and
+nothing is unsettled. A filter and **not** the default, because this roster is also how the desk
+finds a patient to correct a misspelt surname, how a record is archived, and how a technician
+checks whose result they are holding. Defaulting to complete-only would make the screen unable to
+find exactly the people the clinic is currently treating. The `open` clause is written as the
+literal negation of the `complete` clause so the two cannot drift into overlapping or leaving a
+gap; measured, 41 + 16 = 57.
+
+The roster itself is now a proper `Table` -- sticky header, `stack` on mobile, one column each for
+the patient, their details, the diagnostic work, the last visit and the last report -- matching the
+diagnostic Test History, which was the better-looking screen and is the right shape for this one.
+
+`result-delivery.spec.js` covers all of it: 8 tests. Suite is 268.
+
+
 ## [1.58.0] - 2026-08-26 (Ask for a slice, and ask for it again)
 
 No schema change. One new backend constant file, one new UI primitive, one new hook.

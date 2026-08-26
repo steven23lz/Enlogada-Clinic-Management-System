@@ -2,7 +2,7 @@ import React from 'react';
 import { categoryLabel as categoryLabelFor } from '../../lib/categories';
 
 const PAGE_SIZE = 10;
-import { Eye, History, Pencil } from 'lucide-react';
+import { Eye, History, Pencil, Mail, MailCheck, MailX } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Panel, PanelBody } from '../ui/panel';
 import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
@@ -12,6 +12,7 @@ import { SearchInput } from '../ui/search-input';
 import Pagination from '../ui/pagination';
 import { formatDateTime } from '../../lib/date';
 import { SkeletonRows } from '../ui/skeleton';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 import { TurnaroundPanel } from '../reports/OperationsPanels';
 
 /**
@@ -20,7 +21,7 @@ import { TurnaroundPanel } from '../reports/OperationsPanels';
  * Lifted out of DiagnosticDashboard, which rendered both worklist modes and four dialogs
  * from one 847-line file. The props are the hooks this piece reads.
  */
-export default function ResultHistoryPanel({ worklist, entry, operations, onViewResult }) {
+export default function ResultHistoryPanel({ worklist, entry, operations, onViewResult, delivery }) {
   const categoryLabel = categoryLabelFor(worklist.category);
 
   // Client-side, because the worklist a department holds at once is small — a handful of
@@ -65,13 +66,17 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                 <TableHead>Patient Name</TableHead>
                 <TableHead>Diagnostic Examination</TableHead>
                 <TableHead>Released</TableHead>
+                {/* Whether the patient was actually TOLD. Released and delivered are two different
+                    facts and the screen only ever showed the first, so "has she been sent her
+                    result?" had no answer anywhere in the system. [1.59.0] */}
+                <TableHead>Sent to patient</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {worklist.historyError ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-xs text-rose-600 font-semibold">
+                  <TableCell colSpan={6} className="text-center py-8 text-xs text-rose-600 font-semibold">
                     {worklist.historyError}{' '}
                     <button
                       type="button"
@@ -83,7 +88,7 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                   </TableCell>
                 </TableRow>
               ) : worklist.loading ? (
-                <SkeletonRows rows={5} columns={5} />
+                <SkeletonRows rows={5} columns={6} />
               ) : paged.length > 0 ? (
                 paged.map(test => (
                   <TableRow key={test.visit_test_id} className="hover:bg-slate-50/70 transition-colors">
@@ -121,6 +126,37 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                       )}
                     </TableCell>
 
+                    <TableCell label="Sent to patient" className="py-3.5 text-xs">
+                      {test.emailed_at ? (
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-brand-700">
+                          <MailCheck className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                          <span>
+                            {formatDateTime(test.emailed_at)}
+                            <span className="block font-normal text-meta text-gray-400">
+                              {test.emailed_to}
+                              {test.email_count > 1 && ` · sent ${test.email_count}×`}
+                            </span>
+                          </span>
+                        </span>
+                      ) : test.patient_email ? (
+                        // Released, has an address, and no record of a send. Either it predates
+                        // [1.59.0] (nothing was written down, so this honestly says "unknown")
+                        // or the send failed at release. Both are cases for the button beside it.
+                        <span className="inline-flex items-center gap-1.5 text-gray-500">
+                          <Mail className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                          Not recorded
+                        </span>
+                      ) : (
+                        // Most walk-ins. Not a fault — a patient registered at the counter has no
+                        // account, so there is nowhere to send. Saying so here stops a technician
+                        // pressing a button that can only ever refuse.
+                        <span className="inline-flex items-center gap-1.5 text-gray-400">
+                          <MailX className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                          No email on file
+                        </span>
+                      )}
+                    </TableCell>
+
                     <TableCell className="py-3.5 text-right">
                       <div className="flex items-center justify-end space-x-2">
                         <Button
@@ -130,6 +166,19 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                         >
                           <Eye className="w-3.5 h-3.5" />
                           <span>View Report</span>
+                        </Button>
+                        <Button
+                          onClick={() => delivery.requestSend(test)}
+                          variant="outline"
+                          size="xs"
+                          loading={delivery.sendingId === test.visit_test_id}
+                          disabled={!test.patient_email}
+                          title={test.patient_email
+                            ? `Send this report to ${test.patient_email}`
+                            : 'This patient has no email address on file. Add one in Patient Records first.'}
+                        >
+                          <Mail className="h-3 w-3" />
+                          <span>{test.emailed_at ? 'Send again' : 'Email'}</span>
                         </Button>
                         <Button
                           onClick={() => entry.openForEdit(test)}
@@ -145,7 +194,7 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                 ))
               ) : (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={5} className="p-0">
+                  <TableCell colSpan={6} className="p-0">
                     <EmptyState
                       icon={History}
                       title={worklist.search ? 'Nothing matches that search' : `No released ${categoryLabel} results yet`}
@@ -179,6 +228,21 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
         />
       </div>
       </div>
+
+      {/* Asked before sending, because a report reaching a patient is not an undoable click —
+          and on a re-send the patient has already had one copy, so a second arriving
+          unexpectedly is its own small alarm. */}
+      <ConfirmDialog
+        open={Boolean(delivery.confirming)}
+        onOpenChange={(open) => { if (!open) delivery.dismissSend(); }}
+        title={delivery.confirming?.emailed_at ? 'Send this report again?' : 'Email this report?'}
+        description={delivery.confirming
+          ? `${delivery.confirming.test_name} for ${delivery.confirming.first_name} ${delivery.confirming.last_name} will be sent to ${delivery.confirming.patient_email}.`
+          : ''}
+        confirmLabel="Send"
+        loading={Boolean(delivery.sendingId)}
+        onConfirm={delivery.confirmSend}
+      />
       </>
   );
 }

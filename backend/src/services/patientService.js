@@ -143,7 +143,7 @@ class PatientService {
    * down to review them wants. Two characters is still the floor when a query IS given, because a
    * single letter matches most of a roster and is a scan wearing a search box.
    */
-  async searchPatients(query, requestingUser, { from, to, includeArchived, page, limit } = {}) {
+  async searchPatients(query, requestingUser, { from, to, includeArchived, recordStatus, page, limit } = {}) {
     const trimmed = (query || '').trim();
     if (trimmed && trimmed.length < 2) {
       const error = new Error('Search for at least 2 characters, or clear the box to browse.');
@@ -167,6 +167,9 @@ class PatientService {
       departments: departmentScopeFor(requestingUser),
       from: from || null,
       to: to || null,
+      // Allow-listed. An unrecognised value must not reach SQL as a filter that matches nothing
+      // — an empty roster reads as "this clinic has no patients", which is a claim, not a result.
+      recordStatus: ['complete', 'open'].includes(recordStatus) ? recordStatus : null,
       includeArchived: Boolean(includeArchived),
       limit: limitNum,
       offset: (pageNum - 1) * limitNum,

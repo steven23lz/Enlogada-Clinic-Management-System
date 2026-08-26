@@ -144,12 +144,21 @@ class ResultRepository {
              tr.findings, tr.remarks as result_remarks, tr.file_path, tr.file_original_name,
              tr.released_at,
              tr.version, tr.is_critical, tr.critical_acknowledged_at,
+             -- Whether this report actually reached the patient. [1.59.0] Without it the history
+             -- can say a result was released and cannot say whether anyone was told, which is
+             -- the question the technician is asked when a patient rings up.
+             tr.emailed_at, tr.emailed_to, tr.email_count,
+             -- The address the report WOULD go to on a re-send, so the screen can offer the
+             -- action honestly rather than discovering there is no email after the click.
+             pu.email as patient_email,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name
       FROM visit_tests vt
       JOIN tests t ON vt.test_id = t.id
       JOIN test_categories tc ON t.category_id = tc.id
       JOIN patient_visits pv ON vt.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
+      -- A walk-in has no account, so this is a LEFT join and patient_email is legitimately null.
+      LEFT JOIN users pu ON p.user_id = pu.id
       -- is_current: a test can now carry several versions, and joining them all would repeat
       -- the row once per amendment and show superseded findings alongside the live ones.
       LEFT JOIN test_results tr ON tr.visit_test_id = vt.id AND tr.is_current
@@ -390,6 +399,29 @@ class ResultRepository {
       WHERE vt.id = $1
     `;
     const result = await db.query(queryText, [visitTestId]);
+    return result.rows[0];
+  }
+
+  /**
+   * Record that the CURRENT version of a report reached the patient. [1.59.0]
+   *
+   * Scoped to `is_current` for the reason CLAUDE.md gives about this table generally: without it
+   * an UPDATE rewrites every superseded version too, so a v1 that genuinely was emailed and a v2
+   * that was not would both claim the same delivery.
+   *
+   * Only ever called after a send actually succeeded — `emailed_at IS NULL` has to keep meaning
+   * "never reached them", with no second reading.
+   */
+  async recordEmailDelivery(visitTestId, address) {
+    const result = await db.query(
+      `UPDATE test_results
+          SET emailed_at = CURRENT_TIMESTAMP,
+              emailed_to = $2,
+              email_count = email_count + 1
+        WHERE visit_test_id = $1 AND is_current
+        RETURNING id, emailed_at, emailed_to, email_count`,
+      [visitTestId, address]
+    );
     return result.rows[0];
   }
 }

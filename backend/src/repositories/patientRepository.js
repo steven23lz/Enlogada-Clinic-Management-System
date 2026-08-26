@@ -113,6 +113,7 @@ class PatientRepository {
     from = null,
     to = null,
     includeArchived = false,
+    recordStatus = null,
     limit = 20,
     offset = 0,
   } = {}) {
@@ -155,6 +156,58 @@ class PatientRepository {
                WHERE pv.patient_id = p.id
                  AND pv.created_at >= $${a}::date AND pv.created_at < ($${a + 1}::date + 1)
             )`);
+    }
+
+    /**
+     * Whether the patient's record is FINISHED. [1.59.0]
+     *
+     * "Complete" means all three at once: they have been in, every test on every visit has been
+     * seen through, and nothing is left unsettled. That is what somebody means when they sit down
+     * to review records rather than to look a patient up.
+     *
+     * A filter and not the default, deliberately. This roster is also how the front desk finds a
+     * patient to correct a misspelt surname, how a record gets archived, and how a technician
+     * checks whose result they are holding — and every one of those has to reach the patient who
+     * is in the building right now, mid-visit, with an unpaid bill. Defaulting to complete-only
+     * would make the screen unable to find exactly the people the clinic is currently treating.
+     *
+     * Applied to the COUNT as well as the list, so the total describes what is being shown.
+     */
+    if (recordStatus === 'complete') {
+      where.push(`(
+              EXISTS (SELECT 1 FROM patient_visits pv
+                        JOIN visit_tests vt ON vt.patient_visit_id = pv.id
+                       WHERE pv.patient_id = p.id)
+          AND NOT EXISTS (SELECT 1 FROM patient_visits pv
+                            JOIN visit_tests vt ON vt.patient_visit_id = pv.id
+                           WHERE pv.patient_id = p.id
+                             AND vt.status NOT IN ('Completed', 'Cancelled'))
+          AND NOT EXISTS (SELECT 1 FROM patient_visits pv
+                           WHERE pv.patient_id = p.id
+                             AND pv.status <> 'Cancelled'
+                             AND NOT EXISTS (SELECT 1 FROM payments pay
+                                              WHERE pay.patient_visit_id = pv.id
+                                                AND pay.payment_status = 'Paid'))
+      )`);
+    } else if (recordStatus === 'open') {
+      // The complement, exactly — anything still owing work or money, plus a patient who has been
+      // registered and not yet seen. Written as the negation of the clause above rather than as a
+      // second set of conditions, so the two can never drift into overlapping or leaving a gap.
+      where.push(`NOT (
+              EXISTS (SELECT 1 FROM patient_visits pv
+                        JOIN visit_tests vt ON vt.patient_visit_id = pv.id
+                       WHERE pv.patient_id = p.id)
+          AND NOT EXISTS (SELECT 1 FROM patient_visits pv
+                            JOIN visit_tests vt ON vt.patient_visit_id = pv.id
+                           WHERE pv.patient_id = p.id
+                             AND vt.status NOT IN ('Completed', 'Cancelled'))
+          AND NOT EXISTS (SELECT 1 FROM patient_visits pv
+                           WHERE pv.patient_id = p.id
+                             AND pv.status <> 'Cancelled'
+                             AND NOT EXISTS (SELECT 1 FROM payments pay
+                                              WHERE pay.patient_visit_id = pv.id
+                                                AND pay.payment_status = 'Paid'))
+      )`);
     }
 
     if (!includeArchived) where.push('p.archived_at IS NULL');

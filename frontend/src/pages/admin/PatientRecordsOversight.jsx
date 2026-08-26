@@ -12,12 +12,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { StatusBadge } from '../../components/ui/status-badge';
 import { SkeletonList } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import Toolbar, { SegmentedFilter } from '../../components/ui/toolbar';
+import { SkeletonRows } from '../../components/ui/skeleton';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
 import ResultDocument from '../../components/ResultDocument';
 import PatientEditDialog from '../../components/patients/PatientEditDialog';
 import { useAuth } from '../../contexts/AuthContext';
-import { Users, AlertCircle, ChevronRight, Printer, FolderSearch, FileX2, Eye, Paperclip, Building2, Pencil, Archive, ArchiveRestore } from 'lucide-react';
+import { Users, AlertCircle, Printer, FolderSearch, FileX2, Eye, Paperclip, Building2, Pencil, Archive, ArchiveRestore, FolderOpen, CircleCheck, CircleDot } from 'lucide-react';
 import { DateField, RANGE_PRESETS } from '../../components/ui/date-field';
 import { formatDate } from '../../lib/date';
 import { toastSuccess, toastError } from '../../lib/toast';
@@ -52,6 +55,16 @@ const PatientRecordsOversight = () => {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const updatedAt = useFreshness(searching, error);
+  /**
+   * Whether the record is FINISHED — every test seen through and every bill settled.
+   *
+   * A filter rather than the default. This roster is also how the desk finds a patient to correct
+   * a misspelt surname, how a record gets archived, and how a technician checks whose result they
+   * are holding — all of which have to reach the patient who is in the building right now,
+   * mid-visit, unpaid. Defaulting to complete-only would make the screen unable to find exactly
+   * the people the clinic is currently treating.
+   */
+  const [recordStatus, setRecordStatus] = useState('all');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -108,6 +121,7 @@ const PatientRecordsOversight = () => {
   const load = useCallback(async (opts = {}) => {
     const {
       q = query, p = 1, dateFrom = from, dateTo = to, archived = showArchived,
+      status = recordStatus,
     } = opts;
     setError('');
     setSearching(true);
@@ -119,6 +133,9 @@ const PatientRecordsOversight = () => {
           ...(q.trim() ? { q: q.trim() } : {}),
           ...(dateFrom && dateTo ? { from: dateFrom, to: dateTo } : {}),
           ...(archived ? { includeArchived: 'true' } : {}),
+          // Filtered at the SERVER, so the count beside the list is the count of what matches
+          // rather than the count of the page in hand.
+          ...(status !== 'all' ? { recordStatus: status } : {}),
           page: p,
           limit: PAGE_SIZE,
         },
@@ -137,7 +154,7 @@ const PatientRecordsOversight = () => {
       setSearching(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, from, to, showArchived]);
+  }, [query, from, to, showArchived, recordStatus]);
 
   // Open on the roster rather than on a prompt. Recent first, which is what a live clinic's
   // records screen is for.
@@ -258,141 +275,202 @@ const PatientRecordsOversight = () => {
       </Panel>
 
       {results && (
-        <Panel>
-          <PanelHeader
-            title={`${total} record${total === 1 ? '' : 's'}`}
-            description={
-              query || from || to
-                ? 'Matching your filters. Select a patient to open their test history.'
-                : 'Most recently seen first. Select a patient to open their test history.'
-            }
-            icon={Users}
-          />
-          <PanelBody flush>
-            {results.length === 0 ? (
-              <EmptyState
-                icon={FileX2}
-                title={query || from || to ? 'No records match those filters' : 'No patient records yet'}
-                description={query || from || to
-                  ? 'Check the spelling, widen the dates, or clear the filters to browse everyone.'
-                  : 'Records appear here as patients are registered.'}
-              />
-            ) : (
-              <ul className="m-0 list-none divide-y divide-[#eef2f6] p-0">
-                {results.map(patient => (
-                  // A row, not a single button. Opening the records and correcting the details are
-                  // two different actions and a button cannot be nested inside another button, so
-                  // the row is a flex container with the record-opening button as its left half.
-                  <li
-                    key={patient.id}
-                    data-testid="patient-row"
-                    data-patient-id={patient.id}
-                    className="group flex items-center gap-2 pr-4 transition-colors hover:bg-slate-50"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleViewHistory(patient)}
-                      className="flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 border-0 bg-transparent px-5 py-3 text-left"
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-note font-semibold text-slate-900">
-                          {patient.first_name} {patient.last_name}
-                          <span className="ml-1.5 font-mono text-micro font-normal text-slate-400">PT-{patient.id}</span>
-                        </span>
-                        <span className="block text-fine text-slate-500">
-                          {patient.sex} &bull; DOB {new Date(patient.birthdate).toLocaleDateString()} &bull; {patient.contact_number || 'No contact on file'}
-                        </span>
-                        {/* What the record CONTAINS and WHEN — the two questions a records screen
-                            is opened to answer. A visit count says they came; a released count
-                            says there is something to read. The last visit and the last release
-                            are different days, and which one matters depends on why you are
-                            looking. [1.56.0] */}
-                        <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-micro text-slate-500">
-                          <span className="tabular-nums">
-                            {patient.visit_count} visit{Number(patient.visit_count) === 1 ? '' : 's'}
-                          </span>
-                          <span className="tabular-nums">
-                            {patient.released_count}/{patient.test_count} result{Number(patient.test_count) === 1 ? '' : 's'} released
-                          </span>
-                          {patient.last_visit_at && (
-                            <span>Last seen {formatDate(patient.last_visit_at)}</span>
-                          )}
-                          {patient.last_released_at && (
-                            <span>Last report {formatDate(patient.last_released_at)}</span>
-                          )}
-                          {Number(patient.unpaid_visit_count) > 0 && (
-                            <span className="font-semibold text-amber-700">
-                              {patient.unpaid_visit_count} unpaid
-                            </span>
-                          )}
-                        </span>
-                      </span>
-                      <span className="flex flex-shrink-0 items-center gap-2">
-                        {patient.archived_at && (
-                          <Badge variant="outline" className="border-slate-300 bg-slate-100 text-slate-600">
-                            Archived
-                          </Badge>
-                        )}
-                        <Badge variant="outline" className="border-brand-200 bg-brand-50 text-brand-700">
-                          {patient.patient_type_name}
-                        </Badge>
-                        <ChevronRight className="h-4 w-4 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-600" />
-                      </span>
-                    </button>
-
-                    {/* Only for accounts that hold patients:update. Diagnostic roles hold
-                        patients:read and not the write — they may read whose result they are
-                        looking at, and must not be able to change a birthdate that decides how it
-                        is interpreted. The API enforces the same thing; this keeps the screen from
-                        offering a control the server would refuse. */}
-                    {canEditPatients && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        onClick={() => setEditingPatient(patient)}
-                        className="flex-shrink-0"
-                      >
-                        <Pencil className="h-3 w-3" />
-                        Correct
-                      </Button>
-                    )}
-
-                    {/* Archive is not delete, and the label says so. Nothing is removed — the
-                        visits, bills and results stay; the record simply leaves the roster the
-                        front desk searches all day. Admin and SuperAdmin only. */}
-                    {canArchive && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        loading={archiving === patient.id}
-                        onClick={() => toggleArchive(patient)}
-                        className="flex-shrink-0"
-                        title={patient.archived_at
-                          ? 'Put this record back in the active roster'
-                          : 'Take this record out of the roster. Nothing is deleted.'}
-                      >
-                        {patient.archived_at ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
-                        {patient.archived_at ? 'Restore' : 'Archive'}
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </PanelBody>
-          {total > 0 && (
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={(next) => load({ p: next })}
-              total={total}
-              pageSize={PAGE_SIZE}
-              totalLabel="records"
+        <div>
+          {/* Whether the record is FINISHED, which is what somebody sitting down to REVIEW records
+              means — as opposed to looking a patient up, which is the other half of what this
+              screen is for and needs the whole roster. Filtered at the server, so the count in
+              the panel header below is the count of what matches. [1.59.0] */}
+          <Toolbar attached>
+            <SegmentedFilter
+              ariaLabel="Filter records by whether they are complete"
+              options={[
+                { value: 'all', label: 'All records' },
+                { value: 'complete', label: 'Complete' },
+                { value: 'open', label: 'Still open' },
+              ]}
+              value={recordStatus}
+              onChange={(next) => { setRecordStatus(next); load({ status: next, p: 1 }); }}
             />
-          )}
-        </Panel>
+            <span className="text-fine text-slate-500">
+              {recordStatus === 'complete'
+                ? 'Every test seen through and every bill settled.'
+                : recordStatus === 'open'
+                  ? 'Work still outstanding, or a bill not yet settled.'
+                  : 'Everyone on the roster, patients mid-visit included.'}
+            </span>
+          </Toolbar>
+
+          <Panel className="overflow-hidden rounded-t-none">
+            <PanelHeader
+              title={`${total} record${total === 1 ? '' : 's'}`}
+              description={
+                query || from || to
+                  ? 'Matching your filters. Select a patient to open their test history.'
+                  : 'Most recently seen first. Select a patient to open their test history.'
+              }
+              icon={Users}
+            />
+            <PanelBody flush>
+              <Table stack>
+                <TableHeader sticky>
+                  <TableRow>
+                    <TableHead>Patient</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead>Diagnostic work</TableHead>
+                    <TableHead>Last seen</TableHead>
+                    <TableHead>Last report</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {searching ? (
+                    <SkeletonRows rows={6} columns={6} />
+                  ) : results.length === 0 ? (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={6} className="p-0">
+                        <EmptyState
+                          icon={FileX2}
+                          title={query || from || to || recordStatus !== 'all'
+                            ? 'No records match those filters'
+                            : 'No patient records yet'}
+                          description={query || from || to || recordStatus !== 'all'
+                            ? 'Check the spelling, widen the dates, or clear the filters to browse everyone.'
+                            : 'Records appear here as patients are registered.'}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    results.map(patient => {
+                      // "Complete" restated only to label the row. The SERVER decides membership
+                      // of the filter; this decides which pip to draw beside the count.
+                      const testCount = Number(patient.test_count) || 0;
+                      const releasedCount = Number(patient.released_count) || 0;
+                      const complete = testCount > 0 && releasedCount === testCount;
+
+                      return (
+                        <TableRow
+                          key={patient.id}
+                          data-testid="patient-row"
+                          data-patient-id={patient.id}
+                          className="transition-colors hover:bg-slate-50/70"
+                        >
+                          <TableCell label="Patient" className="py-3.5">
+                            <span className="block text-xs font-bold text-slate-900">
+                              {patient.first_name} {patient.last_name}
+                            </span>
+                            <span className="block font-mono text-meta font-normal text-gray-400">
+                              PT-{patient.id}
+                            </span>
+                            {patient.archived_at && (
+                              <Badge variant="outline" className="mt-1">Archived</Badge>
+                            )}
+                          </TableCell>
+
+                          <TableCell label="Details" className="py-3.5 text-xs text-gray-600">
+                            {patient.sex} &middot; {formatDate(patient.birthdate)}
+                            <span className="block text-meta text-gray-400">
+                              {patient.contact_number || 'No contact on file'}
+                              {patient.patient_type_name ? ` \u00b7 ${patient.patient_type_name}` : ''}
+                            </span>
+                          </TableCell>
+
+                          {/* What the record CONTAINS. A visit count says they came; a released
+                              count says there is something to read. Deliberately no billing
+                              state — whether a bill is settled is the Billing Queue's question,
+                              and a clinical records roster that answers it reads as a debtors
+                              list. [1.59.0] */}
+                          <TableCell label="Diagnostic work" className="py-3.5 text-xs">
+                            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
+                              {complete ? (
+                                <CircleCheck className="h-3.5 w-3.5 flex-shrink-0 text-brand-600" aria-hidden="true" />
+                              ) : (
+                                <CircleDot className="h-3.5 w-3.5 flex-shrink-0 text-amber-500" aria-hidden="true" />
+                              )}
+                              <span className="tabular-nums">{releasedCount}/{testCount} released</span>
+                            </span>
+                            <span className="block text-meta tabular-nums text-gray-400">
+                              {patient.visit_count} visit{Number(patient.visit_count) === 1 ? '' : 's'}
+                            </span>
+                          </TableCell>
+
+                          <TableCell label="Last seen" className="py-3.5 text-xs text-gray-500">
+                            {patient.last_visit_at ? formatDate(patient.last_visit_at) : '\u2014'}
+                          </TableCell>
+
+                          <TableCell label="Last report" className="py-3.5 text-xs text-gray-500">
+                            {patient.last_released_at ? formatDate(patient.last_released_at) : '\u2014'}
+                          </TableCell>
+
+                          <TableCell className="py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="xs"
+                                onClick={() => handleViewHistory(patient)}
+                              >
+                                <FolderOpen className="h-3 w-3" />
+                                <span>Open records</span>
+                              </Button>
+
+                              {/* Only for accounts holding patients:update. Diagnostic roles hold
+                                  patients:read and not the write — they may read whose result they
+                                  are looking at, and must not be able to change a birthdate that
+                                  decides how it is interpreted. The API enforces the same thing;
+                                  this keeps the screen from offering a control it would refuse. */}
+                              {canEditPatients && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="xs"
+                                  onClick={() => setEditingPatient(patient)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                  <span>Correct</span>
+                                </Button>
+                              )}
+
+                              {/* Archive is not delete, and the tooltip says so. Nothing is
+                                  removed — the visits, bills and results stay; the record simply
+                                  leaves the roster the front desk searches all day. */}
+                              {canArchive && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="xs"
+                                  loading={archiving === patient.id}
+                                  onClick={() => toggleArchive(patient)}
+                                  title={patient.archived_at
+                                    ? 'Put this record back in the active roster'
+                                    : 'Take this record out of the roster. Nothing is deleted.'}
+                                >
+                                  {patient.archived_at
+                                    ? <ArchiveRestore className="h-3 w-3" />
+                                    : <Archive className="h-3 w-3" />}
+                                  <span>{patient.archived_at ? 'Restore' : 'Archive'}</span>
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </PanelBody>
+            {total > 0 && (
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={(next) => load({ p: next })}
+                total={total}
+                pageSize={PAGE_SIZE}
+                totalLabel="records"
+              />
+            )}
+          </Panel>
+        </div>
       )}
 
       <Dialog open={!!selectedPatient} onOpenChange={(open) => { if (!open) setSelectedPatient(null); }}>

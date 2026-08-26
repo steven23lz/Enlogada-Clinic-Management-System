@@ -490,6 +490,20 @@ CREATE TABLE test_results (
     critical_acknowledged_by INT,
     critical_acknowledgement_note TEXT,
 
+    -- Whether this report actually reached the patient. [1.59.0] Release has emailed the patient
+    -- since the first version and recorded nothing about it, so "was she ever told?" had no
+    -- answer anywhere. One row per VERSION turns out to be exactly right here: an amendment
+    -- creates a new row, so a v2 correctly starts with emailed_at NULL -- the patient has been
+    -- sent v1 and has NOT been sent v2, and the schema says so without anyone reasoning about it.
+    --
+    -- emailed_at records the last SUCCESSFUL send and nothing else, so IS NULL means "this report
+    -- has never reached the patient" with no second reading. A failed attempt is reported to the
+    -- technician at the time and recorded in audit_log; it must not touch a column whose whole
+    -- value is being unambiguous.
+    emailed_at TIMESTAMP,
+    emailed_to VARCHAR(255),
+    email_count INT NOT NULL DEFAULT 0,
+
     CONSTRAINT fk_results_superseded_by FOREIGN KEY (superseded_by) REFERENCES test_results(id),
     CONSTRAINT fk_results_critical_ack_by FOREIGN KEY (critical_acknowledged_by) REFERENCES users(id),
     CONSTRAINT fk_results_visit_test FOREIGN KEY (visit_test_id) REFERENCES visit_tests(id),
@@ -900,6 +914,11 @@ CREATE INDEX IF NOT EXISTS idx_payments_discount_type
 -- original in place.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_test_results_current_per_test
     ON test_results (visit_test_id) WHERE is_current;
+
+-- Released reports the patient has not been sent. Partial, because that set is the minority and
+-- always will be: the index covers the rows worth chasing, not the whole table.
+CREATE INDEX IF NOT EXISTS idx_test_results_undelivered
+    ON test_results (visit_test_id) WHERE is_current AND emailed_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_test_results_visit_test_version
     ON test_results (visit_test_id, version DESC);
 
