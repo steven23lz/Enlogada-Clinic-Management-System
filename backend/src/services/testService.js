@@ -4,6 +4,7 @@ const packageService = require('./packageService');
 const visitRepository = require('../repositories/visitRepository');
 const patientService = require('./patientService');
 const auditService = require('./auditService');
+const paymentRepository = require('../repositories/paymentRepository');
 
 // Mirrors appointmentService.js's assertClientOwnsPatient exactly. POST /tests/visit-tests
 // authorizes the Client role (for self-service booking) but previously performed no ownership
@@ -235,6 +236,28 @@ class TestService {
 
   async addTestsToVisit(patientVisitId, testIds, requestingUser, packageIds = []) {
     await assertClientOwnsVisit(requestingUser, patientVisitId);
+
+    // ── A settled visit takes no more work ──────────────────────────────────────────────────
+    //
+    // Measured before this guard existed: pay a ₱190 visit, add a ₱190 Laboratory test, and the
+    // new row is created with status 'Processing' — released straight to the department worklist,
+    // because the visit is paid. The bill does not move, and POST /payments then refuses with
+    // "This visit has already been paid" (uq_payments_one_paid_per_visit allows one settled row
+    // per visit). So the clinic performs the test and has no way to charge for it.
+    //
+    // Refusing is the honest fix rather than re-opening billing: a second settled payment per
+    // visit is exactly what that unique index exists to prevent, and a receipt already handed to
+    // the patient should not silently acquire another line.
+    //
+    // Removal is refused on the same visits for the mirror reason — it would change a bill the
+    // patient holds a receipt for. A paid visit is finished in both directions.
+    if (await paymentRepository.hasPaidPayment(patientVisitId)) {
+      const error = new Error(
+        'This visit has already been paid, so tests can no longer be added to it. Open a new visit for the extra work, or reverse the payment first if the bill was wrong.'
+      );
+      error.statusCode = 409;
+      throw error;
+    }
 
     // Standalone callers (Reception's walk-in flow) get their own transaction. Previously this
     // looped bare db.query calls, so a failure partway through left a half-attached visit.

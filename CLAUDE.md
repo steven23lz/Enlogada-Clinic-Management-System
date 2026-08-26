@@ -327,6 +327,16 @@ confirmation email and the booking wizard all keep working untouched. `parsePrep
 stored sentence back into toggles — recognising BOTH bladder wordings, so editing either converges
 it — and anything unrecognised is preserved verbatim in the free-text field rather than dropped.
 
+**A PAID visit is finished in both directions.** `[1.55.0]` Tests cannot be added to it and
+cannot be removed from it. Removal would change a bill the patient holds a receipt for. ADDING was
+worse and was a live revenue leak, measured: pay a ₱190 visit, attach another ₱190 test, and the
+new row is created `Processing` — released straight to the department worklist because the visit
+is paid. The bill does not move, and `POST /payments` then refuses with "already been paid", since
+`uq_payments_one_paid_per_visit` allows one settled row per visit. The clinic performed the test
+and had no way to charge for it. Both directions now 409 with the remedy named — open a new visit,
+or reverse the payment. Re-opening billing was the wrong fix: a second settled payment per visit is
+exactly what that unique index exists to prevent.
+
 **An omitted field is not an instruction to erase.** `testRepository.updateTest` writes every
 column unconditionally, so a caller sending only the fields it cares about destroys the rest —
 the Services Catalogue's status toggle sent four fields and every activate/deactivate wiped that

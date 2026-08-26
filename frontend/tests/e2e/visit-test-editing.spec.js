@@ -105,6 +105,37 @@ test.describe('Editing a visit\'s tests', () => {
     expect(await linesOf(visit)).toHaveLength(1);
   });
 
+  test('a paid visit takes no MORE work either — the revenue leak', async () => {
+    const tests = await activeTests();
+    const visit = await newVisit();
+    await ctx.post(`${API}/tests/visit-tests`, {
+      headers: auth(rec), data: { patientVisitId: visit.id, testIds: [tests[0].id] },
+    });
+
+    const bill = (await (await ctx.get(`${API}/payments/bill/${visit.id}`, { headers: auth(cash) })).json()).data.bill;
+    expect((await ctx.post(`${API}/payments`, {
+      headers: auth(cash),
+      data: { patientVisitId: visit.id, paymentMethod: 'Cash', amount: bill.totalAmount },
+    })).status()).toBe(201);
+
+    // Measured before the guard: this returned 201 and the new row was created 'Processing' —
+    // released straight to the department worklist, because the visit is paid. The bill did not
+    // move, and POST /payments then refused with "already been paid", since
+    // uq_payments_one_paid_per_visit allows one settled row per visit. The clinic performed the
+    // test and had no way to charge for it.
+    const added = await ctx.post(`${API}/tests/visit-tests`, {
+      headers: auth(rec), data: { patientVisitId: visit.id, testIds: [tests[1].id] },
+    });
+    expect(added.status(), 'a settled visit must not silently take on unbillable work').toBe(409);
+
+    // The message has to name the way through, because the desk still has a patient in front of
+    // them who wants the extra test.
+    expect((await added.json()).message).toMatch(/new visit|reverse the payment/i);
+
+    // And nothing was attached.
+    expect(await linesOf(visit), 'the refusal must not half-apply').toHaveLength(1);
+  });
+
   test('a package is removed whole, or not at all', async () => {
     const packages = (await (await ctx.get(`${API}/packages`)).json()).data.packages;
     test.skip(packages.length === 0, 'Need an active package.');
