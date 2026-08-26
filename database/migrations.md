@@ -1,5 +1,79 @@
 # Database Migration & Schema History
 
+## [1.57.0] - 2026-08-26 (The clinic can finally say when it is open)
+
+`clinic_schedule_overrides` — the per-DATE layer. `migrateScheduleOverrides.js` (`--rollback`
+reverses it). Folded into `schema.sql`; 31 tables now.
+
+### The table that could be read and never written
+
+`clinic_operating_hours` has existed since [1.0.0] and `appointmentService.getAvailableSlots` has
+always read it — open/closed, the hours, the slot interval, how many bookings a slot holds. There
+was no route and no screen. The clinic's own opening hours could be changed **only by someone with
+a database client**, which in practice meant they were never changed at all.
+
+So the honest answer to "can an administrator cap bookings for a date, or edit the availability
+times?" was **no**, on both counts, and had been for the life of the project.
+
+### Two layers, and the split is the design
+
+| | |
+|---|---|
+| the WEEKLY PATTERN | one row per weekday. What the clinic does most weeks. |
+| per-DATE OVERRIDES | what it does on one specific day instead. |
+
+Every override field except the date is NULLABLE, and NULL means *keep the weekday's answer*. A
+closure is therefore one row saying `is_open = false` and nothing else; halving capacity for one
+Saturday does not restate its opening hours.
+
+The mistake the split exists to prevent is closing next Thursday by editing the Thursday row — and
+closing every Thursday from now on. `clinic-schedule.spec.js` asserts exactly that: after an
+override closes one date, the same weekday seven days later is still open.
+
+### Three things that had to be got right
+
+**A capacity of 0 is a real value.** "Open, but taking no online bookings today" is a thing a
+clinic means. Every read of these columns is `??`, never `||` — with `||` that deliberate zero
+falls through to the weekday's number and every slot comes back free, which is the opposite of
+what was asked for.
+
+**The date is the date.** A DATE column arrives from node-postgres as a JS Date at *local*
+midnight, and `toISOString()` then reports the UTC date — the day before, in PHT. Measured while
+building this: closing `2026-11-24` replied *"2026-11-23 is now closed"*. The functional behaviour
+was already right; only the confirmation lied, which is the worse failure of the two, because the
+administrator reads it and believes the wrong day is shut. `override_date` is now formatted in SQL
+(`TO_CHAR`) and travels as a string, and the default "from" for the list is `CURRENT_DATE` decided
+by Postgres. This is the third recurrence of the rule in CLAUDE.md.
+
+**A closure warns; it does not refuse.** The clinic genuinely does need to close a day it has
+already taken bookings for — a radiographer falls ill. Refusing would leave them unable to say so
+in the system at all. What it must never do is close the day *silently*, so `setOverride` returns
+`affectedBookings` and both the API message and the toast name the count.
+
+### What the patient sees, and when
+
+`GET /api/schedule/public` is unauthenticated, like `GET /tests` and `GET /packages` — a clinic's
+opening hours are on its front door. It carries the week and the upcoming exceptions, and
+deliberately **not** capacity: how many patients an hour the clinic can take is operational, and
+what the patient needs is whether a slot is free, which the grid already answers slot by slot.
+
+`Calendar` gained a generic `unavailable` map (`{ 'YYYY-MM-DD': 'reason' }`) so closed dates are
+greyed and struck through **before** the patient picks one, each carrying its reason as `title` and
+`aria-label`. Overrides are applied after the weekday rule and win, so a clinic opening specially
+on a Sunday is not greyed out by its own pattern. `SlotPicker` then names the reason on the closed
+day, on a fully-booked day (previously eighteen struck-through buttons and no explanation), and
+above a shortened grid.
+
+### Authorization
+
+Reading is **any signed-in staff member** — reception is asked "are we open on the 30th?" all day,
+and making them guess because the answer lives behind an admin screen is how a patient gets told
+the wrong thing. Writing is **Admin and SuperAdmin, by role**, with no permission beside it:
+minting `schedule:manage` would mean a permission held by nobody until somebody remembered to grant
+it, while the opening hours sat unchangeable. Deciding when the clinic opens is the same tier as
+pricing and staffing, both already Admin's. Every write is audited.
+
+
 ## [1.46.0] - 2026-08-25 (A fill and its foreground are two halves of one decision)
 
 No schema change. Frontend only. Fixes the third recurrence of [1.45.0]'s bug shape, and adds the

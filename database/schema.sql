@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS discount_types CASCADE;
 DROP TABLE IF EXISTS audit_log CASCADE;
 DROP TABLE IF EXISTS notification_reads CASCADE;
 DROP TABLE IF EXISTS notification_events CASCADE;
+DROP TABLE IF EXISTS clinic_schedule_overrides CASCADE;
 DROP TABLE IF EXISTS clinic_operating_hours CASCADE;
 DROP TABLE IF EXISTS password_reset_tokens CASCADE;
 DROP TABLE IF EXISTS role_permissions CASCADE;
@@ -642,6 +643,44 @@ CREATE TABLE clinic_operating_hours (
       is_open = FALSE OR (open_time IS NOT NULL AND close_time IS NOT NULL AND open_time < close_time)
     )
 );
+
+-- What the clinic does on ONE specific date, instead of what its weekday says. [1.57.0]
+--
+-- The weekly pattern above cannot express "closed this Thursday" or "half capacity on the 30th",
+-- and editing the weekday row to say so would change every Thursday forever. So: one row per
+-- overridden date, with every field except the date NULLABLE. NULL means "keep the weekday's
+-- answer", which is why closing a day is a single row carrying is_open=false and nothing else,
+-- and why every read of these columns uses ?? rather than || -- a capacity of 0 is a real,
+-- deliberate value meaning "open, but taking no online bookings today".
+--
+-- `note` is shown to the PATIENT on the booking screen. A closed day with no reason reads as a
+-- broken website; "Closed -- Holy Week" reads as a clinic that is shut.
+CREATE TABLE clinic_schedule_overrides (
+    id SERIAL PRIMARY KEY,
+    override_date DATE NOT NULL UNIQUE,
+    is_open BOOLEAN NOT NULL DEFAULT TRUE,
+    open_time TIME,
+    close_time TIME,
+    slot_interval_minutes INT,
+    max_concurrent_bookings INT,
+    note VARCHAR(200),
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_schedule_override_creator FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT chk_schedule_override_interval CHECK (slot_interval_minutes IS NULL OR slot_interval_minutes BETWEEN 5 AND 240),
+    CONSTRAINT chk_schedule_override_capacity CHECK (max_concurrent_bookings IS NULL OR max_concurrent_bookings >= 0),
+    -- Both times or neither. Half a range is not a schedule, and the slot builder would read the
+    -- missing half from the weekday and produce a window nobody chose.
+    CONSTRAINT chk_schedule_override_times CHECK (
+      (open_time IS NULL AND close_time IS NULL)
+      OR (open_time IS NOT NULL AND close_time IS NOT NULL AND close_time > open_time)
+    )
+);
+
+-- Serves the admin list, which reads forward from today. The per-date lookup on the booking path
+-- is already served by the UNIQUE on override_date.
+CREATE INDEX idx_schedule_overrides_date ON clinic_schedule_overrides (override_date DESC);
 
 -- 9. Notifications (Module 18). Split into two tables rather than one flat, per-recipient
 -- table: an event (title/message/type) is a fact that exists once and never changes; who has

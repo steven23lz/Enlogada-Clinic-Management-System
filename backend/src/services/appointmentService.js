@@ -151,14 +151,34 @@ class AppointmentService {
     const dayOfWeek = new Date(`${date}T12:00:00Z`).getUTCDay();
     const hours = await scheduleRepository.findOperatingHoursForDay(dayOfWeek);
 
-    if (!hours || !hours.is_open) {
-      return { date, isOpen: false, slots: [] };
+    // ── What the clinic has said about THIS date, over the weekly pattern [1.57.0] ───────────
+    //
+    // The pattern cannot express "not this Thursday". Before overrides, a Holy Week closure or a
+    // day with one sonographer instead of two had to be handled by telephoning every patient who
+    // took a slot the clinic could not honour.
+    //
+    // Every field on an override is nullable and NULL means "keep the weekday's answer", so
+    // closing a day is one row saying is_open=false and nothing else. `??` rather than `||`
+    // throughout: a deliberate capacity of 0 is a real value and `||` would silently discard it
+    // in favour of the weekday's.
+    const override = await scheduleRepository.findOverrideForDate(date);
+
+    const isOpen = override ? override.is_open : Boolean(hours?.is_open);
+    if (!hours || !isOpen) {
+      return {
+        date,
+        isOpen: false,
+        slots: [],
+        // Why, when the clinic has said. A closed day with no reason reads as a broken website;
+        // "Closed — Holy Week" reads as a clinic that is shut.
+        note: override?.note || null,
+      };
     }
 
-    const openMinutes = timeToMinutes(hours.open_time);
-    const closeMinutes = timeToMinutes(hours.close_time);
-    const interval = hours.slot_interval_minutes;
-    const maxConcurrent = hours.max_concurrent_bookings;
+    const openMinutes = timeToMinutes(override?.open_time ?? hours.open_time);
+    const closeMinutes = timeToMinutes(override?.close_time ?? hours.close_time);
+    const interval = override?.slot_interval_minutes ?? hours.slot_interval_minutes;
+    const maxConcurrent = override?.max_concurrent_bookings ?? hours.max_concurrent_bookings;
 
     const bookings = await scheduleRepository.countBookingsByTimeForDate(date);
     const bookedCounts = {};
@@ -178,7 +198,9 @@ class AppointmentService {
       slots.push({ time, available: bookedCount < maxConcurrent && !isPast });
     }
 
-    return { date, isOpen: true, slots };
+    // `note` rides along on an OPEN day too: "Half day — staff training" is exactly the sort of
+    // thing a patient should read before choosing a time, not after arriving.
+    return { date, isOpen: true, slots, note: override?.note || null };
   }
 
   // Books an appointment and everything that belongs to it in ONE transaction.

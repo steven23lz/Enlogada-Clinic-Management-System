@@ -33,6 +33,10 @@ import { todayStr, daysAgoStr } from "../../lib/date"
  * @param presets    optional quick ranges for filter fields — [{ label, value }]. A report filter
  *                   is almost always answering "last 7 days", which a month grid answers slowly.
  * @param yearRange  passed to Calendar; enables month/year dropdowns. Set it for birthdates.
+ * @param unavailable  passed to Calendar; { 'YYYY-MM-DD': 'reason' } days that cannot be picked.
+ *                   Only reaches the custom picker — where the browser owns the picker (Firefox)
+ *                   there is no way to grey a day, so the caller must still handle the choice
+ *                   after the fact rather than relying on this to prevent it.
  */
 /**
  * Can we take the browser's calendar glyph away? [1.34.0]
@@ -87,7 +91,7 @@ function useFinePointer() {
 
 const DateField = React.forwardRef(({
   className, containerClassName, value, onChange, min, max, disabled,
-  presets, yearRange, ...props
+  presets, yearRange, unavailable, ...props
 }, ref) => {
   const [open, setOpen] = React.useState(false);
   const wrapRef = React.useRef(null);
@@ -243,6 +247,7 @@ const DateField = React.forwardRef(({
             min={min}
             max={max}
             yearRange={yearRange}
+            unavailable={unavailable}
             onSelect={(next) => { emit(next); setOpen(false); }}
           />
         </div>

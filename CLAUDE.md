@@ -85,6 +85,8 @@ node src/scripts/migrateSlotHold.js            # [1.35.0] an unpaid online booki
 node src/scripts/migratePaymentMethods.js     # [1.33.0] narrow chk_payment_method to what the clinic settles; refuses if a row would violate it (--rollback reverses it)
 node src/scripts/migrateTestPackages.js        # [1.45.0] the clinic's package deals (--rollback reverses it)
 node src/scripts/migratePaymentSubmissions.js  # [1.48.0] clinic payment channels + manual proof of payment (--rollback reverses it)
+node src/scripts/migratePatientArchive.js      # [1.56.0] archive a patient record without deleting a clinical history (--rollback reverses it)
+node src/scripts/migrateScheduleOverrides.js   # [1.57.0] close a DATE, or change its hours/capacity, without touching the weekly pattern (--rollback reverses it)
 node src/scripts/migrateRemove2dEcho.js       # [1.50.0] remove the 2D Echo category and its tests; REFUSES if any visit_tests still reference them (--rollback restores)
 node src/scripts/migratePatientArchive.js     # [1.56.0] archive a patient record without deleting it (--rollback reverses it)
 
