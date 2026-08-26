@@ -290,6 +290,21 @@ Schema lives in `database/schema.sql` (source of truth, applied wholesale by `mi
 
 **An uploaded file is never named from what the client sent, and never served statically.** All three upload paths (`src/config/upload.js`) build the stored filename from random hex plus an extension mapped from the *validated* mime type, and re-check containment with `assertInside`. The extension used to come from `file.originalname`, which combined with a `%2F`-encoded route param let a request choose both the directory and the suffix — and multer writes before the controller's authorization check runs, so the 403 arrives after the file is on disk. Result files, avatars and HMO cards are all streamed back through an authenticated, ownership-checked route: an HMO card carries a member number, a name and often a photo.
 
+**Preparation is COMPOSED, not retyped.** `[1.54.0]` `tests.preparation` was a free-text box, and
+free text drifts. Measured on the clinic's own catalogue: 61 active services, 16 carrying
+preparation, and among those 16 only FOUR distinct sentences — two of which say the same thing in
+different words ("…an hour before **your appointment** and do not empty your bladder" on Chest
+Ultrasound and Thyroid; "…an hour before and do not empty your bladder" on KUB, Lower Abdomen and
+Pelvic Ultrasound). The booking wizard de-duplicates preparation by TEST ID, not by sentence, so a
+patient booking a Pelvic Ultrasound and a Thyroid together is shown both lines — one instruction,
+printed twice, reading as two.
+
+`lib/preparation.js` holds the rules; `PreparationField` ticks them and previews the sentence live.
+The column still stores TEXT, deliberately: no migration, and `sendAppointmentReminders.js`, the
+confirmation email and the booking wizard all keep working untouched. `parsePreparation` reads a
+stored sentence back into toggles — recognising BOTH bladder wordings, so editing either converges
+it — and anything unrecognised is preserved verbatim in the free-text field rather than dropped.
+
 **An omitted field is not an instruction to erase.** `testRepository.updateTest` writes every
 column unconditionally, so a caller sending only the fields it cares about destroys the rest —
 the Services Catalogue's status toggle sent four fields and every activate/deactivate wiped that
