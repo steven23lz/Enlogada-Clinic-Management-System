@@ -1,6 +1,8 @@
 import React from 'react';
 import { printElement } from '../../lib/printArea';
 import DiagnosticReport from '../DiagnosticReport';
+import VersionTimeline from './VersionTimeline';
+import useResultVersions from '../../hooks/useResultVersions';
 import { Eye, Paperclip, Printer } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
@@ -12,6 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
  * from one 847-line file. The props are the hooks this piece reads.
  */
 export default function ResultViewerDialog({ result, onOpenChange, onPreviewDocument }) {
+  // Only fetched when there IS a history to fetch. A first issue is version 1 and its chain is one
+  // row — the overwhelming majority of reports — so asking for those would put a request behind
+  // every report anyone opens to buy nothing. `version` is already in the payload.
+  const history = useResultVersions(result?.visit_test_id, (result?.version ?? 1) > 1);
+
   return (
       <Dialog open={!!result} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl">
@@ -30,6 +37,16 @@ export default function ResultViewerDialog({ result, onOpenChange, onPreviewDocu
               sex: result?.sex,
             }}
             result={result}
+          />
+
+          {/* What this report used to say, and why it changed. [1.63.0] OUTSIDE the printable
+              document and marked no-print: the handed-over copy is the current report, and
+              printing superseded findings alongside it is how somebody ends up acting on a value
+              that was withdrawn. */}
+          <VersionTimeline
+            versions={history.versions}
+            loading={history.loading}
+            error={history.error}
           />
 
           {/* The attachment is an on-screen action, so it lives OUTSIDE the printable document —
