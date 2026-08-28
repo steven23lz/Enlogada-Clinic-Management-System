@@ -469,6 +469,36 @@ class VisitRepository {
     const result = await client.query(queryText);
     return String(result.rows[0].last_number).padStart(4, '0');
   }
+
+  /**
+   * How busy the clinic is right now, as COUNTS ONLY. [1.63.0]
+   *
+   * Backs a public endpoint, so the shape of this query is the privacy control: it selects no
+   * name, no id, no queue number and nothing joinable back to a person. Two integers and a
+   * timestamp. Adding a column here is a decision about what the open internet can see, and the
+   * comment is placed at the SELECT because that is where somebody would add one.
+   *
+   * `status IN ('Pending','Processing')` matches findActiveVisits, so the public number and the
+   * receptionist's KPI card cannot disagree about what "in the clinic" means.
+   *
+   * Half-open range on the raw column, never `created_at::date` — a B-tree cannot serve a
+   * predicate on an expression, and this endpoint is unauthenticated and therefore cacheable
+   * traffic that anyone can generate.
+   *
+   * @returns {Promise<{waiting: number, in_progress: number}>}
+   */
+  async countActiveForPublicStatus() {
+    const queryText = `
+      SELECT COUNT(*) FILTER (WHERE status = 'Pending')::int    AS waiting,
+             COUNT(*) FILTER (WHERE status = 'Processing')::int AS in_progress
+        FROM patient_visits
+       WHERE created_at >= CURRENT_DATE
+         AND created_at < (CURRENT_DATE + 1)
+         AND status IN ('Pending', 'Processing')
+    `;
+    const result = await db.query(queryText);
+    return result.rows[0] || { waiting: 0, in_progress: 0 };
+  }
 }
 
 module.exports = new VisitRepository();

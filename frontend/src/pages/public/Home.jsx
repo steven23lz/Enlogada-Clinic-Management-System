@@ -4,6 +4,7 @@ import PublicFooter from '../../components/PublicFooter';
 import PageShell from '../../components/ui/page-shell';
 import Logo from '../../components/Logo';
 import { Button } from '../../components/ui/button';
+import HeroQuickDock from '../../components/public/HeroQuickDock';
 import { ShieldCheck, Clock, Award, ChevronRight, Stethoscope, FlaskConical, Scan } from 'lucide-react';
 
 // Mirrors the 5 seeded test_categories rows exactly (database/schema.sql), same icon mapping
@@ -95,8 +96,15 @@ const Home = ({ onNavigate }) => {
         </PageShell>
       </section>
 
+      {/* The three errands a visitor arrives to run. [1.63.0] The hero's own two buttons sit
+          inside a dark banner competing with a headline, so somebody who came to check a result
+          had to read past a marketing paragraph to find out where to go. The dock straddles the
+          seam, which is where the eye lands after the headline, and names errands rather than
+          screens. */}
+      <HeroQuickDock onNavigate={onNavigate} />
+
       {/* Key Highlights Banner */}
-      <section className="bg-surface py-10 sm:py-12 border-b border-line">
+      <section className="bg-surface pb-10 pt-14 sm:pb-12 sm:pt-16 border-b border-line">
         <PageShell className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
           {/* One tone across all three, not three.
               These are one set of related claims about the clinic, and they wore a green, a blue

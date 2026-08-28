@@ -246,6 +246,49 @@ class VisitService {
   async getVisitHistory(patientId) {
     return await visitRepository.findVisitsByPatientId(patientId);
   }
+
+  /**
+   * "How busy is the clinic right now?" — for the public site. [1.63.0]
+   *
+   * ── Why this is safe to publish ─────────────────────────────────────────────────────────
+   *
+   * It is a count and an estimate. No name, no queue number, no id, nothing joinable to a person
+   * — the repository query selects two integers, deliberately. A clinic waiting-room display and
+   * a restaurant's "20 minute wait" sign carry the same information, and it is the information a
+   * patient needs to decide whether to set off now or after lunch.
+   *
+   * That reasoning does NOT extend to anything richer. A public endpoint that named who was
+   * waiting, or how long a specific ticket had been there, would be a PHI leak wearing a
+   * convenience feature's clothes.
+   *
+   * ── It reuses the same estimator the queue screens use ──────────────────────────────────
+   *
+   * Not a second calculation. A patient who reads "about 25 minutes" on the public page and is
+   * then told something different at the desk has been misled by the clinic twice in ten minutes,
+   * and the fix for that is one estimator rather than two that agree today.
+   *
+   * @returns {Promise<{waiting:number, inProgress:number, estimatedWaitMinutes:number|null,
+   *                    estimateIsCapped:boolean, estimateBasis:string, asOf:string}>}
+   */
+  async getPublicQueueStatus() {
+    const counts = await visitRepository.countActiveForPublicStatus();
+    const waiting = Number(counts.waiting) || 0;
+
+    // A patient arriving now joins the BACK of the queue, so everyone currently waiting is ahead
+    // of them. Passing `waiting` rather than `waiting - 1` is the whole difference between "how
+    // long have these people waited" and "how long would I wait".
+    const rate = await queueEstimateService.getServiceRate();
+    const estimate = queueEstimateService.estimateFor(waiting, rate);
+
+    return {
+      waiting,
+      inProgress: Number(counts.in_progress) || 0,
+      estimatedWaitMinutes: estimate.estimated_wait_minutes,
+      estimateIsCapped: estimate.estimate_is_capped,
+      estimateBasis: estimate.estimate_basis,
+      asOf: new Date().toISOString(),
+    };
+  }
 }
 
 module.exports = new VisitService();
