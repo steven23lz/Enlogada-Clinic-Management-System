@@ -138,7 +138,7 @@ The E2E suite creates a throwaway client, patient, visit and payment on every ru
 
 The worst of it is `notification_reads`, which is a **fan-out** table: `notifyRoles` writes one row per recipient per event, so its size is events × staff, not events. Because the suite also created staff and elevated accounts that were never cleaned up (137 Cashiers, 89 Admins, 45 SuperAdmins had accumulated), both factors grew at once and the table reached 255,540 rows across 4,309 events in five days — average fan-out 60, peak 181, with 99.4% never read by anyone. After a reset the same fan-out is 3. Production will not see the runaway staff count, but it has no retention either: 20 staff × 200 events/day is ~1.5M rows a year, growing forever. Schedule `pruneNotifications.js` (default: read 30d, unread 90d) in any environment that runs longer than a demo.
 
-There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 35 Playwright specs (211 tests, ~260s) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
+There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 49 Playwright specs (295 tests, ~7m) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. There are no unit tests; the backend has no test script.
 
 The suite is a deliberately small demo-and-regression net, not exhaustive coverage: smoke, security boundaries (`api-authorization.spec.js` — Admin-vs-SuperAdmin separation of duties, combined-role access, and the cross-role PHI boundaries), ticket-release gating, payments, laboratory results, statutory discounts (`discounts.spec.js`), result amendment history and critical values (`result-versioning.spec.js`), password-change session revocation (`session-revocation.spec.js`), account lockout and PHI read auditing (`login-protection.spec.js`), permission-matrix enforcement (`rbac-enforcement.spec.js`), department-scoped patient records (`department-scoping.spec.js`), the per-department operations report (`operations-report.spec.js`), atomic online booking with its HMO card evidence rule (`booking-atomicity.spec.js`), the two dialogs that feature added (`hmo-card-review.spec.js` — because a card that uploads correctly and then renders as a broken image on the approval screen is a working feature failing at its job), moving a booking rather than cancelling it (`appointment-reschedule.spec.js`, plus `reschedule-ui.spec.js` for the dialog), when a visit must name the doctor who requested the test (`referring-physician.spec.js`), correcting a patient record (`patient-edit.spec.js` / `patient-edit-ui.spec.js`), what the patient is told about their own booking (`booking-communication.spec.js`), that the ETag revalidation cache never hides a change (`revalidation.spec.js`), that each role can see what it needs on the screen where it acts (`workflow-context.spec.js`), registering a walk-in in one pass (`walkin-registration.spec.js`), the patient journey at phone width (`mobile-patient.spec.js`), what an HMO decision has to record before it counts as one (`hmo-decision-trail.spec.js` — a refusal that names no reason leaves the cashier explaining a charge nobody wrote down), the three-step claim workflow itself (`hmo-claim-handoff.spec.js` — reception raises it, an Admin decides it, and the cashier has to be TOLD), and that a failed request never renders as an empty one (`failure-states.spec.js` — six screens shipped without an error branch, so a 500 fell through to the empty state and the app stated "Today's Revenue ₱0.00" over a day that took ₱8,344), and that a reversed receipt is both still listed and not counted (`cashup-reversals.spec.js` — see the note under Architecture; the log and the money are two different questions, and this spec fails if either half is answered with the other), and that the reader's chosen text size scales the whole interface without inverting its own type ramp (`text-scale.spec.js` — a pixel-pinned font size looks perfect at the default and misbehaves only for the people who changed it), and that a patient can pay into the clinic's own account and only a cashier can turn that into money (`manual-payment.spec.js` — publishing an account number is SuperAdmin alone, and the amount a patient CLAIMS never becomes the amount they are charged), and that a package deal bills its own fixed price rather than the sum of its parts, with every component reaching its own department (`packages.spec.js` — a bundle that costs more than buying the parts separately is a surcharge wearing the word "package"), and that updating a service does not delete the fields the caller did not mention (`catalogue-partial-update.spec.js` — the status toggle used to wipe a test's patient preparation, which is the sentence the day-before reminder carries). It was cut down from ~200 tests once the module-by-module build-out finished; the rest asserted UI copy that legitimately keeps changing. Prefer adding a focused spec over reviving deleted ones from git history.
 
@@ -196,6 +196,12 @@ names them. The App Password lives **only** in that file — never in source, gi
 `sendEmail` now requires BOTH halves and names the missing one: checking the username alone let a
 half-configured clinic past the guard and fail inside nodemailer once per released result, which
 reads as a mail outage rather than an unfinished setting.
+
+`TURNAROUND_TARGETS` (optional, e.g. `Laboratory:90,Xray:30`) sets the per-department turnaround
+benchmarks the analytics chart draws its reference line against. `[1.62.0]` They are a clinic
+POLICY, not a measurement, and the built-in values are plausible defaults nobody has agreed — which
+is why they are a setting rather than a table. A department absent from the map is measured and not
+judged, with a NULL rate rather than 0.
 
 Env files: `backend/.env` and `frontend/.env`, based on the respective `.env.example`. Backend needs `DATABASE_URL`, `JWT_SECRET`, SMTP settings (for result-release emails), and Google OAuth credentials. Frontend needs `VITE_GOOGLE_CLIENT_ID` and `VITE_API_BASE_URL` (the latter is inlined at **build** time, so it must be set before `npm run build` — setting it on the server afterwards has no effect). The backend refuses to start if `JWT_SECRET` is blank, shorter than 32 characters, or a known example value; generate one with `openssl rand -hex 32`.
 
@@ -379,6 +385,60 @@ per-test column reported an approved claim as ₱0 approved with its full value 
 A refusal at either level wins, matching the partial unique index on that table. Bucketed by the
 VISIT date, so a claim decided three weeks later never moves money out of a period already
 reported — the closed-day restatement [1.30.0] exists to prevent, arriving by another door.
+
+**A report exports as CSV via `?format=csv`, and money in it is a NUMBER.** `[1.62.0]` All five
+report endpoints serve the same figures as a file through `utils/csvExport.js` +
+`utils/reportCsv.js`. Three rules, each of which was the obvious thing done the other way round:
+
+- **Never `formatCurrency` in a CSV cell.** `₱1,450.00` is TEXT to Excel — the separator and the
+  symbol both disqualify it as a number — so the column cannot be summed, which is the whole
+  reason somebody exported rather than printing. Write `1450.00` and put the unit in the header
+  (`Collected (PHP)`). This is the one place that deliberately does not use `formatCurrency`.
+- **The file opens with a UTF-8 BOM** (`\uFEFF`, written as an escape — a literal one is invisible
+  and one lint rule away from vanishing). Without it Excel on Windows reads the file as the system
+  codepage and every `ñ` and `₱` is mojibake. `charset=utf-8` in the header never reaches Excel;
+  the file is opened from disk.
+- **A NULL money value is an EMPTY cell, not `0.00`.** `Number(null)` is 0 and passes
+  `isFinite`, so the naive formatter states the clinic collected nothing rather than that nothing
+  is recorded.
+
+The format decision happens in the controller AFTER the service returns, so an export can never
+see figures the JSON could not — the operations report's per-slice permission gating applies
+unchanged, and a laboratory account's export omits Takings rather than zeroing it. Validation
+throws before any header is written, because a response that has begun as a download cannot become
+an error page. `Content-Disposition` must stay in `app.js`'s CORS `exposedHeaders` or the browser
+cannot read the filename.
+
+**An OCR read is a suggestion and must never write.** `[1.62.0]` `receiptOcrService` has no write
+in it, by design. [1.48.0] already ruled that the amount a patient CLAIMS is evidence and never
+the amount charged; a machine reading of that claim is weaker still. It pre-fills only a field the
+patient left EMPTY, and its duplicate warning does not block — a patient correcting a rejected
+submission legitimately re-sends the same reference. The scan uses `memoryStorage` and persists
+nothing: most scans are abandoned, and a disk-backed scan would orphan a file per attempt,
+indistinguishable from a real proof and safe for nothing to delete.
+
+**A queue estimate multiplies a service RATE, never a wait.** `[1.62.0]` `getReceptionThroughput`
+publishes a median WAIT of 36–96 minutes; multiplying that by patients-ahead tells the fourth
+person in line they have four hours, because a wait already contains the queue. The multiplier is
+the interval between consecutive patients being SERVED (`getMedianServiceMinutes` — `LAG` per day,
+gaps bounded 0.5–60 min so an idle desk is not read as a slow one). Below 10 samples it falls back
+to a stated default and says so in `estimate_basis`. `patients_ahead` counts only *Pending*
+predecessors, and a non-Pending visit gets `null` rather than 0 — zero reads as "no wait", which
+is a claim rather than an absence. Both the staff queue and the patient's booking pass go through
+`queueEstimateService`, so the two screens cannot disagree.
+
+**A second query must never publish a different number under an existing column's name.**
+`[1.62.0]` `getDepartmentTurnaroundPerformance` reports `median_turnaround_minutes` on exactly the
+basis `getDiagnosticThroughput` uses (payment → release) and verified equal to it, and names the
+registration → release span `median_total_minutes` instead. Two screens sitting beside each other
+disagreeing about "median turnaround" is the [1.32.0] divergence arriving by another door.
+
+**Chart colours are validated, not chosen.** `[1.62.0]` `components/charts/chartTheme.js` holds the
+pair and the evidence: `#53843b`/`#0a71a9` pass every check on both theme surfaces (ΔE 18.7 protan,
+19.2 normal). Lightening them for dark mode — the instinct — was tested and FAILS at ΔE 13.6, below
+the normal-vision floor. Same steps in both themes. Tritan separation is 5.2, so every chart using
+the pair also carries a legend and names both series in its tooltip; colour is never the only
+encoding. Median and p90 share one hue at two lightnesses because they are one distribution.
 
 **A money total never comes from the transaction list.** `GET /payments/transactions` is a log of
 receipts *issued*, and it includes ones later reversed — the cashier's cash-up is the screen that

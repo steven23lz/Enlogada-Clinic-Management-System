@@ -55,7 +55,11 @@ app.use(cors({
   // No extra preflight cost: every request already carries Authorization, which is itself a
   // non-simple header, so these endpoints were being preflighted regardless. maxAge lets the
   // browser reuse that preflight rather than repeating it before each poll.
-  exposedHeaders: ['ETag'],
+  // Content-Disposition joins it in [1.62.0] for the report CSV exports. The browser fetches
+  // those with XHR as a blob and has to read the server's filename off this header; without it
+  // being exposed, every export saves as the endpoint name with no extension and the clinic
+  // cannot tell one month's file from another.
+  exposedHeaders: ['ETag', 'Content-Disposition'],
   allowedHeaders: ['Content-Type', 'Authorization', 'If-None-Match'],
   maxAge: 600
 }));

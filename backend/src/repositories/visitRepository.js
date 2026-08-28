@@ -78,15 +78,43 @@ class VisitRepository {
     const summaryRes = await db.query(summaryQuery, params);
     const summary = summaryRes.rows[0];
 
+    // [1.62.0] Queue position and how many are still waiting IN FRONT of each visit.
+    //
+    // Computed in a CTE over the WHOLE active set — deliberately not inside the filtered query
+    // below. Position is a fact about the queue, not about the search results: filtering to
+    // "Dela Cruz" must not renumber that patient to #1, and paging to the second page must not
+    // restart the count. Both would be the result of ranking after the WHERE clause, and both
+    // would tell a patient something confidently false about where they stand.
+    //
+    // `patients_ahead` counts only 'Pending' predecessors. A 'Processing' visit has already been
+    // billed and released to a department — that person is no longer between this patient and the
+    // desk, and counting them would inflate every estimate by the whole morning's completed work.
+    //
+    // The frame `UNBOUNDED PRECEDING AND 1 PRECEDING` is what makes it "ahead of me" rather than
+    // "including me": without the `1 PRECEDING` bound, a Pending patient counts themselves and
+    // the person at the front of the queue is told one patient is ahead of them.
     let listQuery = `
+      WITH queue AS (
+        SELECT pv.id,
+               ROW_NUMBER() OVER (ORDER BY pv.created_at, pv.id)::int AS queue_position,
+               COALESCE(SUM(CASE WHEN pv.status = 'Pending' THEN 1 ELSE 0 END)
+                        OVER (ORDER BY pv.created_at, pv.id
+                              ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0)::int AS patients_ahead
+          FROM patient_visits pv
+         WHERE pv.created_at >= CURRENT_DATE
+           AND pv.created_at < (CURRENT_DATE + 1)
+           AND pv.status IN ('Pending', 'Processing')
+      )
       SELECT pv.*, p.first_name, p.last_name, p.contact_number,
              pt.name as patient_type_name,
              u.first_name as created_by_first_name, u.last_name as created_by_last_name,
-             pv.status as visit_status
+             pv.status as visit_status,
+             q.queue_position, q.patients_ahead
       FROM patient_visits pv
       JOIN patients p ON pv.patient_id = p.id
       JOIN patient_types pt ON p.patient_type_id = pt.id
       LEFT JOIN users u ON pv.created_by = u.id
+      JOIN queue q ON q.id = pv.id
       WHERE ${whereClause}
       ORDER BY pv.created_at ASC
     `;

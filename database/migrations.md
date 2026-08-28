@@ -1,5 +1,179 @@
 # Database Migration & Schema History
 
+## [1.62.0] - 2026-08-28 (Take the figures with you, read the receipt, name the wait)
+
+**No schema change, and no migration script.** All four features are reads over tables that
+already existed — nothing to run on a live database, which is the reason they could all ship at
+once. New modules: `utils/csvExport.js`, `utils/reportCsv.js`, `services/receiptOcrService.js`,
+`services/queueEstimateService.js`, and three chart components. One new dependency,
+`tesseract.js`.
+
+### The reports could be read and not taken
+
+`/reports/summary`, `/reports/operations` and `/reports/hmo-claims` returned JSON to a screen, and
+the only way to get a figure off that screen was to retype it or print the page. A printed page
+cannot be reconciled against a drawer. `?format=csv` on any report endpoint — including
+`/reports/staff-workload` and the new `/reports/analytics` — now returns the same figures as a
+file.
+
+Three properties this deliberately has. The **JSON path is untouched**: `wantsCsv` is false for a
+missing parameter, an empty one, and anything that is not `csv`, so every existing caller gets
+byte-identical responses. The **service runs first**, unchanged, and the format decision happens
+after it returns — so a CSV export cannot see figures a JSON request could not, and the operations
+report's per-slice permission checks apply exactly as before. And **validation precedes any
+header**: a bad date range throws its 400 before `Content-Disposition` is written, because a
+response that has begun as a file download cannot then become an error page.
+
+Two decisions inside the serialiser look wrong at a glance and are not.
+
+**Money is written as a bare `1450.00`, not `₱1,450.00`.** Matching what the screen shows would put
+a currency symbol and a thousands separator in the cell, and Excel reads that as TEXT — the column
+cannot be summed, sorted or charted, which is the entire reason somebody exports a CSV rather than
+printing the page. The unit moves into the header instead: `Collected (PHP)`. This is the one place
+in the codebase that deliberately does not use `formatCurrency`.
+
+**The file opens with a UTF-8 BOM.** Excel on Windows assumes the system codepage for a `.csv`
+unless one is present, so without it every `ñ` in a patient's name and every `₱` in a header
+renders as mojibake — on the machines this clinic actually uses. `charset=utf-8` in the
+Content-Type does not reach Excel; the file is opened from disk long after the header is gone.
+
+`Content-Disposition` joined `ETag` in the CORS `exposedHeaders`. Without that the browser cannot
+read the server's filename and every export saves as the endpoint name.
+
+A NULL money column exports as an EMPTY cell, never `0.00`. `Number(null)` is 0 and
+`Number.isFinite(0)` is true, so the obvious implementation states that the clinic collected
+nothing rather than that nothing is recorded — the same false-confidence failure as the dashboard
+that read "Today's Revenue ₱0.00" over a day that took ₱8,344.
+
+### Reading the receipt so the patient does not have to type it
+
+`POST /payments/scan-receipt` runs Tesseract over a GCash or bank screenshot and offers back the
+reference number and amount, plus whether that reference has been seen before.
+
+**It never decides money, and the shape of the file enforces that** — there is no write anywhere in
+it. [1.48.0] settled that the amount a patient CLAIMS is evidence and never the amount charged; an
+OCR pass is a third, weaker source — a guess about a claim about a payment. Letting it write would
+quietly promote the least reliable number in the system to the most authoritative. What it actually
+saves is transcribing thirteen digits off a phone screenshot, which is where the errors were: a
+transposed digit is a payment nobody can later find.
+
+**The duplicate check is the half with real value.** A reference number is the clinic's only handle
+on a transfer that happened inside somebody else's system. The same screenshot submitted twice —
+forwarded to a second visit, or re-sent because the patient was unsure it went through — is
+indistinguishable from two genuine payments unless something looks, and nothing was looking,
+because looking meant reading a number off an image and searching for it. BOTH tables are searched:
+`payment_submissions` catches a claim already queued or decided, and `payments` catches one a
+cashier settled at the counter. Checking only the first would miss the case that costs money.
+
+The warning does not BLOCK. A repeated reference is usually a mistake but not always — a patient
+correcting a rejected submission is re-sending the same one on purpose, and blocking would strand
+them with no way forward. The cashier decides, as they already do for the amount.
+
+Two bugs found by testing against a rendered receipt rather than by reading the regex. The
+reference capture used `\s`, which matches a newline, so it ran off the end of the reference line
+and swallowed the next: `Ref. No. E2E-1787890589109` followed by a date came back as
+`E2E-1787890589109Aug28` — a plausible-looking reference matching no record, so the duplicate check
+returned clean on exactly the receipt it was meant to catch. And a digits-only capture truncated
+`GC-1787890589109` to its numeric tail, breaking the same check on every bank receipt. Horizontal
+whitespace only now, and a token-aware clean that joins an OCR-split digit run but stops at the
+next field otherwise.
+
+The scan writes NOTHING to disk — `memoryStorage`, alone among the upload paths. Disk storage would
+orphan a file for every scan including every abandoned one, which is most of them, mixed in with
+real proofs and indistinguishable from them. An upload with no reader does not need a retention
+policy; it needs to not exist.
+
+### "You are number 12" is not an answer
+
+The clinic has issued queue tickets since [1.0.0] and has never been able to answer the one
+question every person holding one asks. `GET /visits/active` and `GET /appointments/my-bookings`
+now both carry `patients_ahead` and `estimated_wait_minutes`, through one shared
+`queueEstimateService` so the receptionist's screen and the patient's cannot disagree.
+
+**The multiplier is a service RATE, not a wait**, and this is the whole correctness of it.
+`getReceptionThroughput` already reports a median wait — check-in to billed — and on this clinic's
+data that is 36 to 96 minutes. Multiplying it by the number of people ahead, which is the obvious
+reading of "patients ahead × service duration", tells the fourth person in a queue they have a
+four-hour wait. It is wrong because a wait already CONTAINS the queue: everyone waiting shares the
+same forty minutes, they do not each add forty to the next person. What multiplies correctly is the
+interval between consecutive patients being SERVED — `LAG` over each day's settlements, partitioned
+by day so an overnight gap is never a sample, bounded to 0.5–60 minutes because an idle desk is not
+a slow desk.
+
+**It refuses to guess when it does not know.** Below ten observed gaps the measured median is
+noise, and it falls back to a stated default with `estimate_basis: 'default'` in the payload. On
+the current database that is exactly what happens — two usable gaps — and publishing a median of
+two numbers to a waiting patient as "about 4 minutes" would be inventing precision the data cannot
+support.
+
+`patients_ahead` counts only PENDING predecessors. A 'Processing' visit has been billed and
+released to a department; that person is no longer between this patient and the desk, and counting
+them would inflate every estimate by the whole morning's completed work. A visit past the desk gets
+no estimate at all rather than a zero — zero reads as "no wait", which is a claim rather than an
+absence. Rounded to five minutes, floored at five, capped at ninety: "about 20 minutes" is an
+estimate a clinic can keep and "18 minutes" is a promise it cannot.
+
+### Two more questions the reports could not answer
+
+`GET /reports/analytics` — turnaround against a target, arrivals by hour, and the revenue trend's
+comparative overlay. Ungated at the route like `/operations`, with each slice gated inside the
+service on `results:read` / `visits:read` / `billing:read`, and a caller holding none of the three
+refused outright rather than handed an empty object.
+
+**Turnaround is reported on two spans and neither is called just "turnaround".**
+`getDiagnosticThroughput` already publishes a median measured from PAYMENT to release, on the
+documented grounds that a visit registered at 8am and paid at 11am did not spend three hours in the
+lab. Registration-to-release is what the PATIENT experienced and is the more useful figure for
+asking where capacity goes. Both belong. What must not happen is a second query publishing a
+different number under the SAME name on a screen beside the first — that is the [1.32.0] divergence
+arriving by another door. So: `median_turnaround_minutes` is the department-owned span, identical
+in basis to the existing report and verified equal to it; `median_total_minutes` is the whole
+visit. A p90 is reported beside the median because a median hides its own tail by construction, and
+a department can hold a 36-minute median while one report in ten takes two hours — it is the
+two-hour patient who telephones.
+
+Targets are a clinic SETTING, not a measurement: `TURNAROUND_TARGETS` in the environment, with
+stated defaults. A department with no target is measured but not judged against a promise nobody
+made, and its rate is NULL rather than 0 — "not measured" and "never hit the target" are different
+facts.
+
+Arrivals come from `generate_series` over the clinic's own operating hours, LEFT JOINed to the
+data, so an hour with nobody in it draws a zero rather than vanishing. That distinction is the
+point of the chart: a gap at 11am and a quiet 11am look identical once the row is simply absent,
+and only one is worth acting on. Split walk-in against booked because a peak made of walk-ins is a
+desk to staff and the same peak made of bookings is a schedule to change — opposite responses to an
+identical bar.
+
+The revenue overlay aligns the two periods by POSITION, not by date — day one against day one — so
+the previous period's real date is carried through and named in the tooltip, or the reader could
+not tell which day they were looking at.
+
+### The chart palette was validated rather than chosen
+
+`#53843b` and `#0a71a9`, the clinic's own two logo colours, run through a colour-blindness
+validator against both theme surfaces: ΔE 18.7 protan, 19.2 normal vision, all checks pass in light
+and dark. The instinct to lighten both for dark mode was tested and FAILS — the 400-level steps
+fall below the chroma floor and land at ΔE 13.6 for normal vision, two series a fully sighted
+reader cannot reliably separate. The same two steps are used in both themes, measured rather than
+guessed. Tritan separation is 5.2, the weak axis for green/blue, which is why every chart using the
+pair also carries a legend and names both series in its tooltip.
+
+Median and p90 share a hue at two lightnesses — they are one distribution, and a categorical pair
+would imply they are independent quantities. The target line is recessive slate, not amber: those
+are reserved for states somebody must act on, and a benchmark is not a problem.
+
+### Testing
+
+`report-export.spec.js` (9) and `receipt-scan-queue.spec.js` (8) — 295 passing, up from 278.
+
+One pre-existing flake fixed on the way. `booking-picker.spec.js` took the FIRST slot rather than
+the first BOOKABLE one, on a quasi-random date nothing claimed; when that slot had been taken it
+retried a disabled button for the full timeout. It failed once in a full-suite run and passed three
+times in isolation afterwards, because `Date.now() % 30` had moved the date on — the exact
+signature CLAUDE.md warns about under "a booking spec must claim its own slot", and a trap for
+anyone who reads it as a regression in whatever they changed most recently.
+
+
 ## [1.61.0] - 2026-08-28 (Send the report, not a notice that one exists)
 
 No schema change. One new module, `services/resultEmailTemplate.js`.

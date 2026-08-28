@@ -4,6 +4,7 @@ const notificationService = require('./notificationService');
 const patientRepository = require('../repositories/patientRepository');
 const { assertReferralIfRequired, normaliseReferral } = require('./referralService');
 const { staffRolesForCategories } = require('../constants/modality');
+const queueEstimateService = require('./queueEstimateService');
 
 const VALID_VISIT_STATUSES = ['Pending', 'Processing', 'Completed', 'Cancelled'];
 
@@ -64,10 +65,19 @@ class VisitService {
     }
 
     const result = await visitRepository.findActiveVisits(opts);
+
+    // [1.62.0] "You are number 12" is not an answer to the question every person holding a ticket
+    // is actually asking. The repository supplies the queue position; the estimate is added here
+    // because it depends on a clinic-wide service rate that has nothing to do with this query.
+    //
+    // Additive only — `visits` keeps every field it had, so nothing that reads this response has
+    // to change, and a screen that ignores the new fields behaves exactly as it did.
+    const visits = await queueEstimateService.annotate(result.visits);
+
     if (limitNum) {
-      return { ...result, page: pageNum, limit: limitNum, totalPages: Math.max(1, Math.ceil(result.total / limitNum)) };
+      return { ...result, visits, page: pageNum, limit: limitNum, totalPages: Math.max(1, Math.ceil(result.total / limitNum)) };
     }
-    return result;
+    return { ...result, visits };
   }
 
   // The date default is derived in SQL, not here. [1.29.0]

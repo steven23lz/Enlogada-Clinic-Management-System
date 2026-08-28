@@ -199,7 +199,35 @@ class AppointmentRepository {
                FROM visit_tests vt
                JOIN tests t ON vt.test_id = t.id
                WHERE vt.patient_visit_id = pv.id
-             ) AS preparation_notes
+             ) AS preparation_notes,
+             -- How many people are still waiting in front of this patient, RIGHT NOW. [1.62.0]
+             --
+             -- The service layer turns this into a time; the count is done here because it is a
+             -- fact about today's queue that only SQL can answer, and answering it in JavaScript
+             -- would mean shipping the whole active queue to the portal to count it — the entire
+             -- day's patient list, to a patient, which is a PHI leak rather than a performance
+             -- problem.
+             --
+             -- NULL unless this booking is itself in today's queue and still Pending. A booking
+             -- for next Tuesday has no position, and a patient already billed is past the desk;
+             -- in both cases there is no wait to state, and stating zero would be a claim rather
+             -- than an absence.
+             CASE
+               WHEN pv.status = 'Pending'
+                    AND pv.created_at >= CURRENT_DATE
+                    AND pv.created_at < (CURRENT_DATE + 1)
+               THEN (
+                 SELECT COUNT(*)::int
+                   FROM patient_visits ahead
+                  WHERE ahead.status = 'Pending'
+                    AND ahead.created_at >= CURRENT_DATE
+                    AND ahead.created_at < (CURRENT_DATE + 1)
+                    -- Strictly earlier, with id breaking a tie the same way the staff queue's
+                    -- window function does, so the two screens agree on who is in front of whom.
+                    AND (ahead.created_at, ahead.id) < (pv.created_at, pv.id)
+               )
+               ELSE NULL
+             END AS patients_ahead
       FROM appointments a
       JOIN patient_visits pv ON a.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id

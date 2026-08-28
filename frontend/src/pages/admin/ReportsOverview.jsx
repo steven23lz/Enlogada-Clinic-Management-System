@@ -10,11 +10,13 @@ import {
   ReceptionThroughputPanel,
   TurnaroundPanel,
 } from '../../components/reports/OperationsPanels';
+import AnalyticsReport from '../../components/reports/AnalyticsPanels';
 import Toolbar, { ToolbarField, ToolbarSpacer } from '../../components/ui/toolbar';
 import EmptyState from '../../components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import ExportCsvButton from '../../components/ui/export-csv-button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import MetricCard from '../../components/ui/metric-card';
 import RevenueTrendChart from '../../components/charts/RevenueTrendChart';
@@ -234,7 +236,15 @@ const DateRangeReports = () => {
           </Button>
         </div>
         <ToolbarSpacer />
-        <div className="flex items-end self-stretch">
+        <div className="flex items-end self-stretch gap-2">
+          {/* Export sits BEFORE Print, and that order is deliberate: a file you can total is the
+              more useful of the two, and Print was the only option for long enough that it reads
+              as the default. */}
+          <ExportCsvButton
+            path="/reports/summary"
+            params={{ startDate, endDate }}
+            fallbackName={`clinic-summary-${startDate}_to_${endDate}.csv`}
+          />
           <Button variant="outline" onClick={() => printElement()}>
             <Printer className="h-3.5 w-3.5" />
             Print Reports
@@ -402,6 +412,15 @@ const HmoClaimsReport = () => {
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Apply</span>
           </Button>
+          {/* The exported file carries the receivable caveat in its own header block — see
+              reportCsv.hmoClaimsCsv. A claim total copied out of here without it is the one
+              mistake this report can cause. */}
+          <ExportCsvButton
+            path="/reports/hmo-claims"
+            params={{ startDate, endDate }}
+            fallbackName={`hmo-claims-${startDate}_to_${endDate}.csv`}
+            className="text-xs font-semibold"
+          />
         </div>
       </div>
 
@@ -651,6 +670,12 @@ const StaffWorkload = () => {
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Apply</span>
           </Button>
+          <ExportCsvButton
+            path="/reports/staff-workload"
+            params={{ startDate, endDate }}
+            fallbackName={`staff-workload-${startDate}_to_${endDate}.csv`}
+            className="text-xs font-semibold"
+          />
         </div>
       </div>
 
@@ -783,6 +808,13 @@ const OperationsReport = () => {
           </Button>
         </div>
         <ToolbarSpacer />
+        {/* The export contains exactly the slices the API returned, so an account that cannot see
+            takings gets a file without them rather than a file of zeroes. */}
+        <ExportCsvButton
+          path="/reports/operations"
+          params={{ startDate: range.startDate, endDate: range.endDate }}
+          fallbackName={`operations-${range.startDate}_to_${range.endDate}.csv`}
+        />
         <Button variant="outline" onClick={() => printElement()}>
           <Printer className="h-3.5 w-3.5" />
           Print
@@ -860,6 +892,9 @@ const ReportsOverview = () => {
           </TabGroup>
           <TabGroup label="Revenue &amp; Volume">
             <TabsTrigger value="range">Trends</TabsTrigger>
+            {/* [1.62.0] Sits beside Trends rather than under Clinic: both answer "how are we
+                doing over time", where Departments answers "what happened today". */}
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabGroup>
           <TabGroup label="HMO">
             <TabsTrigger value="hmo">Claim Value</TabsTrigger>
@@ -877,6 +912,9 @@ const ReportsOverview = () => {
         </TabsContent>
         <TabsContent value="range" className="m-0">
           <DateRangeReports />
+        </TabsContent>
+        <TabsContent value="analytics" className="m-0">
+          <AnalyticsReport />
         </TabsContent>
         <TabsContent value="hmo" className="m-0">
           <HmoClaimsReport />

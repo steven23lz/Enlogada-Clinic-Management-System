@@ -130,7 +130,18 @@ test.describe('Booking: choosing what to book', () => {
     const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     await dialog.locator('#slotpicker-label').fill(date);
-    const slot = dialog.locator('[data-testid^="slot-"]').first();
+    // The first BOOKABLE slot, not the first slot. [1.62.0]
+    //
+    // This took the first `[data-testid^="slot-"]` and clicked it. On a day whose 08:00 had
+    // already been taken — by an earlier spec in the same run, or by a previous run, since this
+    // date is quasi-random and nothing claims it — that button renders disabled, and Playwright
+    // retried the click for the full timeout before failing with "element is not enabled".
+    //
+    // Observed exactly once in a full-suite run and not reproducible afterwards, because
+    // `Date.now() % 30` had moved the date on by the time it was re-run. That is the signature
+    // CLAUDE.md warns about under "A booking spec must claim its own slot": a booking test that
+    // does not own its slot fails intermittently and blames whatever changed most recently.
+    const slot = dialog.locator('[data-testid^="slot-"]:not([disabled])').first();
     await expect(slot).toBeVisible({ timeout: 15000 });
     await slot.click();
 

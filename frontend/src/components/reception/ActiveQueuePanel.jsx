@@ -181,6 +181,22 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                               <Volume2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
+                          {/* [1.62.0] Under the ticket rather than in a column of its own: the
+                              receptionist is asked "how much longer?" while looking at this row,
+                              and an eighth column would push Actions off a laptop screen.
+
+                              Present only for a Pending visit — a 'Processing' one has been billed
+                              and belongs to a department now, where this front-desk estimate has
+                              nothing to say. */}
+                          {visit.estimated_wait_minutes != null && (
+                            <span className="mt-1 flex items-center gap-1 text-micro font-semibold text-slate-500">
+                              <Clock className="h-3 w-3" aria-hidden="true" />
+                              {visit.estimate_is_capped ? 'over 90 min' : `~${visit.estimated_wait_minutes} min`}
+                              <span className="font-normal text-slate-400">
+                                · {visit.patients_ahead === 0 ? 'next' : `${visit.patients_ahead} ahead`}
+                              </span>
+                            </span>
+                          )}
                         </TableCell>
 
                         <TableCell label="Patient Name" className="font-semibold text-slate-900">

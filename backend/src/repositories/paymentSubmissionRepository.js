@@ -164,6 +164,65 @@ class PaymentSubmissionRepository {
     );
     return result.rows[0];
   }
+
+  /**
+   * Has this reference number been seen before, in either table? [1.62.0]
+   *
+   * A reference number is the clinic's only handle on a transfer that happened inside GCash or a
+   * bank — money it can see the evidence of but not the ledger for. The same screenshot arriving
+   * twice, on two visits, is indistinguishable from two genuine payments unless somebody checks.
+   *
+   * BOTH tables, and the union is the point:
+   *
+   *   payment_submissions   a claim already queued, already verified, or already rejected
+   *   payments              a receipt a cashier settled at the counter, reference typed in by hand
+   *
+   * Searching only submissions would miss the case that actually costs money — a patient whose
+   * transfer was already accepted at the desk submitting it again online.
+   *
+   * A REJECTED submission still counts as a match and is reported as such. The caller decides what
+   * to do about it: re-submitting a reference the clinic previously turned down is a legitimate
+   * thing to do after a correction, and silently hiding it would leave the cashier deciding the
+   * same evidence twice with no idea they had seen it before. What the answer must not do is
+   * DECIDE — it is shown to a person.
+   *
+   * Trimmed and upper-cased on both sides: a reference read off a screenshot arrives with the
+   * casing and spacing OCR happened to produce, and 'GC1234' typed by a cashier must match
+   * 'gc1234 ' read from an image.
+   */
+  async findByReferenceNumber(referenceNumber) {
+    const result = await db.query(
+      `SELECT source, id, status, amount, reference_number, occurred_at, patient_visit_id
+         FROM (
+           SELECT 'submission'      AS source,
+                  ps.id,
+                  ps.status,
+                  ps.amount_claimed AS amount,
+                  ps.reference_number,
+                  ps.submitted_at   AS occurred_at,
+                  ps.patient_visit_id
+             FROM payment_submissions ps
+            WHERE UPPER(TRIM(ps.reference_number)) = UPPER(TRIM($1))
+           UNION ALL
+           SELECT 'payment'         AS source,
+                  pay.id,
+                  pay.payment_status AS status,
+                  pay.amount,
+                  pay.reference_number,
+                  pay.paid_at        AS occurred_at,
+                  pay.patient_visit_id
+             FROM payments pay
+            WHERE pay.reference_number IS NOT NULL
+              AND UPPER(TRIM(pay.reference_number)) = UPPER(TRIM($1))
+         ) matches
+        -- The most recent match is the one a person needs to see first; an older duplicate of the
+        -- same reference adds nothing to the decision.
+        ORDER BY occurred_at DESC
+        LIMIT 1`,
+      [referenceNumber]
+    );
+    return result.rows[0] || null;
+  }
 }
 
 module.exports = new PaymentSubmissionRepository();

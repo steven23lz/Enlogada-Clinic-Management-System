@@ -33,4 +33,14 @@ router.get('/hmo-claims', verifyToken, authorizeStaff, authorizePermissions('rep
 // what you are already allowed to see, assembled in one request instead of three.
 router.get('/operations', verifyToken, authorizeStaff, reportController.getOperations);
 
+// [1.62.0] Turnaround against target, arrivals by hour, and the revenue trend's comparative
+// overlay — the aggregations behind the analytics charts.
+//
+// Ungated at the route for the same reason /operations is, and NOT by oversight: each slice is
+// gated individually inside reportService (results:read / visits:read / billing:read), and a
+// caller holding none of them is refused outright. Requiring `reports:view` here would make the
+// screen Admin-only and defeat the point — a modality is meant to be able to see its own
+// turnaround against the clinic's target without being able to see the takings.
+router.get('/analytics', verifyToken, authorizeStaff, reportController.getAnalytics);
+
 module.exports = router;

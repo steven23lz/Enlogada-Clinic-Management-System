@@ -110,6 +110,9 @@ export default function AppointmentsTab({ bookings }) {
                           isPaid={appt.is_paid}
                           canPayOnline={bookings.gateway.available}
                           receiptNumber={appt.receipt_number}
+                          estimatedWaitMinutes={appt.estimated_wait_minutes ?? null}
+                          patientsAhead={appt.patients_ahead ?? null}
+                          estimateIsCapped={appt.estimate_is_capped ?? false}
                         />
                       ) : (
                         <span className="block font-mono text-micro text-slate-400">{appt.appointment_reference}</span>

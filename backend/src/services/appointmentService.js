@@ -10,6 +10,7 @@ const scheduleRepository = require('../repositories/scheduleRepository');
 const testRepository = require('../repositories/testRepository');
 const patientService = require('./patientService');
 const notificationService = require('./notificationService');
+const queueEstimateService = require('./queueEstimateService');
 const testService = require('./testService');
 const packageService = require('./packageService');
 const hmoService = require('./hmoService');
@@ -421,8 +422,26 @@ class AppointmentService {
     return appointment;
   }
 
+  /**
+   * The patient's own bookings, each carrying a wait estimate when it is in today's queue.
+   *
+   * [1.62.0] The estimate is applied through the SAME `queueEstimateService` the staff queue uses,
+   * with the same rate and the same rounding. Two independent calculations of "how long until I am
+   * seen" would disagree within a minute of each other, and the patient would be looking at one
+   * while the receptionist read the other — which is worse than neither screen having a number.
+   */
   async getClientBookings(userId) {
-    return await appointmentRepository.findByPatientUserId(userId);
+    const bookings = await appointmentRepository.findByPatientUserId(userId);
+    if (!bookings.length) return bookings;
+
+    // One rate for the whole list. Rows with a null `patients_ahead` are not in today's queue and
+    // are returned untouched, without an estimate.
+    const rate = await queueEstimateService.getServiceRate();
+    return bookings.map((booking) => (
+      booking.patients_ahead === null || booking.patients_ahead === undefined
+        ? booking
+        : { ...booking, ...queueEstimateService.estimateFor(booking.patients_ahead, rate) }
+    ));
   }
 
   async getAllAppointments({ status, dateFrom, dateTo, page, limit } = {}) {
