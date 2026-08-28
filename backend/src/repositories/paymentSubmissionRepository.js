@@ -96,6 +96,32 @@ class PaymentSubmissionRepository {
               (SELECT COALESCE(SUM(vt.price_at_time), 0)
                  FROM visit_tests vt
                 WHERE vt.patient_visit_id = pv.id) AS amount_due,
+              -- Has this reference been seen before? [1.63.0]
+              --
+              -- A reference number is the clinic's only handle on a transfer that happened inside
+              -- GCash or a bank — money it can see the evidence of but not the ledger for. The
+              -- same screenshot arriving twice, on two visits, is indistinguishable from two
+              -- genuine payments unless somebody checks, and checking meant reading a number off
+              -- an image and searching for it.
+              --
+              -- Counted here rather than fetched per row: the cashier's queue is the ONE screen
+              -- where this matters, and a second request per submission to answer it would be an
+              -- N+1 on a screen that polls.
+              --
+              -- Both tables, and the union is the point: a duplicate may be another pending claim
+              -- OR a receipt already settled at the counter. Checking only submissions would miss
+              -- the case that actually costs money.
+              (
+                SELECT COUNT(*)
+                  FROM payment_submissions other
+                 WHERE other.id <> ps.id
+                   AND UPPER(TRIM(other.reference_number)) = UPPER(TRIM(ps.reference_number))
+              ) + (
+                SELECT COUNT(*)
+                  FROM payments pay
+                 WHERE pay.reference_number IS NOT NULL
+                   AND UPPER(TRIM(pay.reference_number)) = UPPER(TRIM(ps.reference_number))
+              ) AS duplicate_count,
               pm.label AS method_label, pm.kind AS method_kind,
               p.first_name, p.last_name,
               pv.queue_number, pv.visit_type,
