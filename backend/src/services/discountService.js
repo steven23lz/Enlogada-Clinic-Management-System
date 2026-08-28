@@ -15,6 +15,14 @@ const {
 const { NotFoundError, ValidationError, ConflictError } = require('../errors');
 
 class DiscountService {
+  /**
+   * The discount types the clinic offers.
+   *
+   * @param {object} [params]
+   * @param {boolean} [params.includeInactive]  Staff screens need retired types so a historical
+   *   visit can still name the discount it was given.
+   * @returns {Promise<Array>}
+   */
   async getCatalogue({ includeInactive = false } = {}) {
     return await discountRepository.findAll({ includeInactive });
   }
@@ -92,6 +100,19 @@ class DiscountService {
     return describeDiscountStrategy({ percentage, isStatutory });
   }
 
+  /**
+   * Records a statutory or commercial discount against a visit.
+   *
+   * @param {number} visitId
+   * @param {object} params
+   * @param {number} params.discountTypeId
+   * @param {string} params.idNumber  The OSCA/PWD number. Mandatory where the type requires it:
+   *   without it a statutory discount is an unsupported deduction, which is what an audit looks for.
+   * @param {object} requestingUser  Audited — a deduction names who authorised it.
+   * @returns {Promise<object>}
+   * @throws {ConflictError} The visit is already paid. The receipt and the statutory register
+   *   would otherwise disagree, and there is no re-bill path — a correction goes through a refund.
+   */
   async applyToVisit(visitId, { discountTypeId, idNumber }, requestingUser) {
     const visit = await visitRepository.findVisitById(visitId);
     if (!visit) {

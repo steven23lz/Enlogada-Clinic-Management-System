@@ -14,14 +14,26 @@ const DATE_FORMAT = /^\d{4}-\d{2}-\d{2}$/;
  * because an analyser run has its own clock — and they are here so the chart has a reference line
  * at all, not because they are the right numbers.
  *
- * Overridable per environment (`TURNAROUND_TARGETS=Laboratory:90,Xray:30`) so the clinic can set
- * its real figures without a deployment. A table was the other option and would be the right one
- * once these are actually policy; building it now would dress three guesses up as a decision.
+ * ── There is no default, and that is the point [1.63.0] ────────────────────────────────────
  *
- * A department missing from this map gets a NULL target, and the SQL then reports its turnaround
- * with no rate — measured, but not judged against a promise nobody made.
+ * This shipped with `{ Laboratory: 60, Ultrasound: 45, Xray: 30 }` — plausible figures I chose so
+ * the chart would have a reference line. On the clinic's own data those render as Ultrasound
+ * hitting 7.7% and X-Ray 8.3%, drawn as a benchmark, on a screen an administrator reads as fact.
+ *
+ * Nobody at the clinic agreed them. A target line is a promise, and inventing one so a chart looks
+ * finished is the same error as printing a made-up TIN on a receipt to make it look official —
+ * `lib/clinic.js` refuses to do that for exactly this reason, and the refusal is what makes the
+ * real value get set.
+ *
+ * So the default is EMPTY. With nothing configured the chart reports measured medians and a p90
+ * and draws no benchmark, which is the truthful state: the clinic is measured and not yet judged.
+ * Setting `TURNAROUND_TARGETS=Laboratory:60,Ultrasound:45,Xray:30` turns the benchmark on, and the
+ * act of setting it is the clinic deciding what it is promising.
+ *
+ * A department missing from the map gets a NULL target and a NULL rate — measured, not judged
+ * against a promise nobody made. That path already existed; it is now simply the default one.
  */
-const DEFAULT_TURNAROUND_TARGETS = { Laboratory: 60, Ultrasound: 45, Xray: 30 };
+const DEFAULT_TURNAROUND_TARGETS = {};
 
 function parseTargets(raw) {
   if (!raw) return DEFAULT_TURNAROUND_TARGETS;
@@ -31,9 +43,10 @@ function parseTargets(raw) {
     const value = Number(minutes);
     if (name && Number.isFinite(value) && value > 0) parsed[name] = value;
   }
-  // An unparseable setting falls back rather than silently removing every target line: a chart
-  // that quietly stops drawing its benchmark looks like a clinic hitting no targets.
-  return Object.keys(parsed).length ? parsed : DEFAULT_TURNAROUND_TARGETS;
+  // An unparseable setting yields no targets rather than a guess. With the default now empty,
+  // "could not read the setting" and "nothing configured" land in the same honest place: measured,
+  // unjudged, and visibly missing a benchmark somebody has to supply.
+  return parsed;
 }
 
 const TURNAROUND_TARGET_MINUTES = parseTargets(process.env.TURNAROUND_TARGETS);

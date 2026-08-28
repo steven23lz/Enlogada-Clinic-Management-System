@@ -19,6 +19,23 @@ const RELEASE_BLOCKED = {
 };
 
 class VisitService {
+  /**
+   * Opens a visit and issues its queue ticket.
+   *
+   * @param {object} params
+   * @param {number} params.patientId
+   * @param {string} params.visitType  'Walk in' | 'Appointment' (`chk_visits_type`).
+   * @param {string} [params.notes]
+   * @param {number} params.createdBy   Whoever opened it — a receptionist, or the patient
+   *   themselves when booking online. Reports that count staff throughput must exclude the latter.
+   * @param {string} [params.referringPhysician]
+   * @param {string} [params.referringPhysicianPrc]
+   * @returns {Promise<object>} The visit, carrying its `queue_number`.
+   *
+   * The ticket comes from `daily_counters` via `INSERT … ON CONFLICT DO UPDATE … RETURNING`, not
+   * from `COUNT(*) + 1`: counting races between two receptionists and rewinds when a visit is
+   * cancelled, handing a number to two different patients.
+   */
   async registerVisit({ patientId, visitType, notes, createdBy, referringPhysician, referringPhysicianPrc }) {
     const referral = normaliseReferral({ referringPhysician, referringPhysicianPrc });
 
@@ -114,6 +131,12 @@ class VisitService {
     return { ...result, page: pageNum, limit: limitNum, totalPages: Math.max(1, Math.ceil(result.total / limitNum)) };
   }
 
+  /**
+   * One visit, with its attached tests.
+   *
+   * @param {number} id
+   * @returns {Promise<object|null>}
+   */
   async getVisitById(id) {
     const visit = await visitRepository.findVisitById(id);
     if (!visit) {
@@ -188,6 +211,17 @@ class VisitService {
     });
   }
 
+  /**
+   * Changes a visit's status, refusing the transitions that would break billing or release.
+   *
+   * @param {number} id
+   * @param {string} status  One of `VISIT_STATUSES`.
+   * @param {object} requestingUser
+   * @returns {Promise<object>}
+   *
+   * A receptionist cannot set 'Processing' to push an unpaid visit onto a worklist — release is
+   * the payment's job, and allowing it here would be a way round the ticket-release gate.
+   */
   async updateStatus(id, status, requestingUser) {
     if (!VALID_VISIT_STATUSES.includes(status)) {
       const error = new Error(`Invalid visit status. Must be one of: ${VALID_VISIT_STATUSES.join(', ')}`);
@@ -243,6 +277,12 @@ class VisitService {
     return await visitRepository.updateVisitStatus(id, status);
   }
 
+  /**
+   * Every visit for one patient, newest first.
+   *
+   * @param {number} patientId  A patient profile, not an account — an account may own several.
+   * @returns {Promise<Array>}
+   */
   async getVisitHistory(patientId) {
     return await visitRepository.findVisitsByPatientId(patientId);
   }

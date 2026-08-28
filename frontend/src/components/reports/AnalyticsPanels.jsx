@@ -179,14 +179,29 @@ const AnalyticsReport = () => {
                     <TurnaroundSlaChart data={turnaround} />
                     <ChartNote>
                       The median is the typical patient; the 90th percentile is the one who
-                      telephones. Targets are{' '}
-                      {Object.entries(targets).map(([name, mins], i) => (
-                        <React.Fragment key={name}>
-                          {i > 0 && ', '}
-                          <span className="font-semibold text-slate-600">{name} {mins} min</span>
-                        </React.Fragment>
-                      ))}
-                      {' '}— a clinic setting, not a measurement.
+                      telephones.{' '}
+                      {Object.keys(targets).length > 0 ? (
+                        <>
+                          Targets are{' '}
+                          {Object.entries(targets).map(([name, mins], i) => (
+                            <React.Fragment key={name}>
+                              {i > 0 && ', '}
+                              <span className="font-semibold text-slate-600">{name} {mins} min</span>
+                            </React.Fragment>
+                          ))}
+                          {' '}— a clinic setting, not a measurement.
+                        </>
+                      ) : (
+                        /* Says what is absent and how to supply it. [1.63.0] This used to draw
+                           invented targets — Ultrasound read 7.7% against a benchmark nobody had
+                           agreed. Measured and unjudged is the honest state until the clinic
+                           decides what it is promising. */
+                        <span>
+                          No turnaround targets are set, so these are measured but not compared
+                          against anything. Set <code className="font-mono">TURNAROUND_TARGETS</code>{' '}
+                          in the backend environment to show a benchmark.
+                        </span>
+                      )}
                     </ChartNote>
                   </>
                 ) : (

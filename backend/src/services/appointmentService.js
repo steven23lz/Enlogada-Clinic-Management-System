@@ -135,6 +135,16 @@ function formatDateOnly(value) {
 }
 
 class AppointmentService {
+  /**
+   * Bookable times for one date, from the weekly pattern plus any override for that date.
+   *
+   * @param {string} date  'YYYY-MM-DD', the clinic's LOCAL date.
+   * @returns {Promise<object>} Every slot in the day, each flagged available or not — not only the
+   *   free ones, so the picker can show a taken slot as taken rather than omitting it.
+   *
+   * A per-date override wins over the weekday pattern, which is how a public holiday closes or a
+   * Saturday runs shorter hours without anybody editing the weekly schedule.
+   */
   async getAvailableSlots(date) {
     // A day that has already passed is closed, whatever the operating hours say. [1.33.0]
     //
@@ -412,6 +422,15 @@ class AppointmentService {
     return outcome;
   }
 
+  /**
+   * Looks up a booking by the reference its QR encodes. This is the check-in scan.
+   *
+   * @param {string} reference
+   * @returns {Promise<object|null>}
+   *
+   * The QR carries this string and nothing else, precisely so a scan and a typed reference are the
+   * same lookup — packing a second value into the code would stop check-in working.
+   */
   async verifyByReference(reference) {
     const appointment = await appointmentRepository.findByReference(reference);
     if (!appointment) {
@@ -466,6 +485,14 @@ class AppointmentService {
     };
   }
 
+  /**
+   * Cancels a booking and frees its slot.
+   *
+   * @param {number} id
+   * @param {object} requestingUser  A Client may cancel only their own. Ownership is checked per
+   *   patient PROFILE, since one account may own several.
+   * @returns {Promise<object>}
+   */
   async cancelAppointment(id, requestingUser) {
     const appointment = await appointmentRepository.findById(id);
     if (!appointment) {

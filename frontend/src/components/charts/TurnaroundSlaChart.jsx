@@ -60,6 +60,11 @@ const ChartTooltip = ({ active, payload, label }) => {
 };
 
 const TurnaroundSlaChart = ({ data }) => {
+  // Whether a benchmark exists at all. [1.63.0] With no `TURNAROUND_TARGETS` configured every
+  // target is null, and rendering the series anyway would put "Target" in the legend pointing at
+  // a line that is not drawn — a legend entry for a promise nobody made.
+  const hasTargets = (data || []).some((row) => row.target_minutes != null);
+
   const chartData = (data || []).map((row) => ({
     ...row,
     median_turnaround_minutes: Number(row.median_turnaround_minutes) || 0,
@@ -116,18 +121,20 @@ const TurnaroundSlaChart = ({ data }) => {
           radius={[4, 4, 0, 0]}
           maxBarSize={44}
         />
-        <Line
-          dataKey="target_minutes"
-          name="Target"
-          stroke={AXIS.reference}
-          strokeWidth={2}
-          strokeDasharray="5 4"
-          dot={{ r: 4, fill: AXIS.reference, strokeWidth: 0 }}
-          activeDot={false}
-          // A department with no target configured is a gap in the line rather than a drop to
-          // zero — connectNulls would draw a benchmark nobody set.
-          connectNulls={false}
-        />
+        {hasTargets && (
+          <Line
+            dataKey="target_minutes"
+            name="Target"
+            stroke={AXIS.reference}
+            strokeWidth={2}
+            strokeDasharray="5 4"
+            dot={{ r: 4, fill: AXIS.reference, strokeWidth: 0 }}
+            activeDot={false}
+            // A department with no target configured is a gap in the line rather than a drop to
+            // zero — connectNulls would draw a benchmark nobody set.
+            connectNulls={false}
+          />
+        )}
       </ComposedChart>
     </ResponsiveContainer>
   );

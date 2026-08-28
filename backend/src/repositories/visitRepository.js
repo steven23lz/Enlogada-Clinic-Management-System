@@ -337,6 +337,17 @@ class VisitRepository {
   // that later rolled back would leave the visit already released to the modalities — a ticket
   // on a worklist with no payment behind it, which is the exact inverse of the bug the payment
   // transaction exists to prevent. Nested here, this joins the caller's transaction instead.
+  /**
+   * Hands a paid visit's tests to their departments.
+   *
+   * @param {number} visitId
+   * @returns {Promise<Array>} The categories the work reached, so the caller can notify exactly
+   *   those departments and no others.
+   *
+   * Moves `visit_tests` to 'Processing', which is what makes them visible on a modality worklist.
+   * Called from inside the payment transaction: a released visit with no settled receipt is work
+   * the clinic performed and cannot bill for.
+   */
   async releaseVisitToModalities(visitId) {
     return await db.withTransaction(async () => {
       const visitRes = await db.query(

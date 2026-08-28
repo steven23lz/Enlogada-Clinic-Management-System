@@ -52,6 +52,23 @@ class PaymentSubmissionService {
     }
   }
 
+  /**
+   * Records a patient's claim that they have paid, with their screenshot as evidence.
+   *
+   * @param {object} params
+   * @param {number} params.patientVisitId
+   * @param {number} [params.paymentMethodId]
+   * @param {string} params.referenceNumber  The clinic's only handle on a transfer that happened
+   *   inside GCash or a bank.
+   * @param {number} params.amountClaimed    EVIDENCE, never the amount charged — approval bills
+   *   the recomputed total.
+   * @param {object} file  The uploaded proof.
+   * @param {object} user  A Client may submit only against their own visit.
+   * @returns {Promise<object>} The 'Pending' submission. No money moves here.
+   *
+   * `uq_paysub_one_live_per_visit` allows one Pending claim per visit, so two cashiers cannot be
+   * handed the same money twice. It is partial, so a rejected claim never blocks a second attempt.
+   */
   async submit({ patientVisitId, paymentMethodId, referenceNumber, amountClaimed }, file, user) {
     if (!referenceNumber?.trim()) {
       discardPaymentFile(file);
@@ -132,6 +149,17 @@ class PaymentSubmissionService {
    *
    * The amount comes from the BILL, not from the claim. `processPayment` recomputes it and refuses
    * a mismatch, so this cannot be used to settle a visit for whatever the patient typed.
+   */
+  /**
+   * Turns a patient's claim into money, through the SAME writer the counter uses.
+   *
+   * @param {number} id
+   * @param {object} actor  The cashier. Needs `billing:process`.
+   * @returns {Promise<object>} The settled payment, with its receipt number.
+   *
+   * Calls `paymentService.processPayment`, deliberately — it earns a real receipt number, the
+   * visit release and the cash-up entry, and there is never a parallel money writer. The amount is
+   * the recomputed bill, NOT `amount_claimed`.
    */
   async verify(id, actor) {
     const submission = await paymentSubmissionRepository.findById(id);

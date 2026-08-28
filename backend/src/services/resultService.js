@@ -115,6 +115,15 @@ async function assertStaffOwnsVisitTest(requestingUser, visitTestId) {
 }
 
 class ResultService {
+  /**
+   * The worklist for one modality: tickets released to it and not yet reported.
+   *
+   * @param {string} categoryName  'Laboratory' | 'Xray' | 'Ultrasound'.
+   * @param {object} requestingUser  Checked against `departments` — a lab account asking for
+   *   X-Ray's worklist is refused, not merely shown an empty one.
+   * @returns {Promise<Array>} Only tickets the cashier has RELEASED. An unpaid visit's tests are
+   *   invisible here, which is the ticket-release gate.
+   */
   async getPendingByCategory(categoryName, requestingUser) {
     // The list is DIAGNOSTIC_CATEGORIES in constants/modality.js rather than a literal here, so
     // adding or retiring a department changes one file. It used to carry '2D Echo' as a fourth
@@ -160,6 +169,17 @@ class ResultService {
   // authorisation) or 'Completed'. It may NOT set 'Processing': a ticket arrives already
   // Processing, put there by the release. That is what "modality staff cannot start a process
   // on their own" means in enforcement terms.
+  /**
+   * Moves a ticket along the modality's own workflow.
+   *
+   * @param {number} visitTestId
+   * @param {string} status  Must be in `MODALITY_SETTABLE_TEST_STATUSES` — 'Waiting for Release'
+   *   or 'Completed'. 'Processing' is deliberately excluded: a ticket ARRIVES Processing, put
+   *   there by the payment release, so modality staff cannot pull an unreleased ticket into
+   *   their own queue.
+   * @param {object} requestingUser
+   * @returns {Promise<object>}
+   */
   async updateTestStatus(visitTestId, status, requestingUser) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
 
@@ -312,6 +332,17 @@ class ResultService {
   // since these are PHI. Ownership mirrors the two checks already used elsewhere in this file/
   // resultController: staff must own the test's category (assertStaffOwnsVisitTest, SuperAdmin/
   // Admin bypass); a Client must own the patient the test belongs to (getPatientHistory's check).
+  /**
+   * Streams a report file back, after checking who is asking.
+   *
+   * @param {number} visitTestId
+   * @param {object} requestingUser  Staff pass on department scope; a Client passes on OWNERSHIP.
+   * @returns {Promise<{path:string, originalName:string, mimeType:string}>}
+   *
+   * The stored filename is server-generated hex and is never derived from the uploader's, so the
+   * path cannot be steered by a request value. The original name is carried separately, for the
+   * download header only.
+   */
   async getResultFile(visitTestId, requestingUser) {
     const ownership = await resultRepository.findOwnershipInfoByVisitTestId(visitTestId);
     if (!ownership) {
@@ -526,6 +557,20 @@ class ResultService {
     return { emailedTo: patientInfo.email, emailedAt: fresh?.emailed_at, emailCount: fresh?.email_count };
   }
 
+  /**
+   * Releases a report to the patient — the clinical act this whole module builds up to.
+   *
+   * @param {object} params
+   * @param {number} params.visitTestId
+   * @param {number} params.releasedBy  Recorded separately from `recorded_by`: the clinician who
+   *   authorises release is not always the one who typed the findings.
+   * @param {object} requestingUser  Needs `results:release` AND cover for the department.
+   * @returns {Promise<object>}
+   *
+   * Completing the last outstanding test also completes the VISIT, so the two writes share a
+   * transaction. The patient email is sent AFTER the commit — an email is not rollback-able, and
+   * telling somebody their result is ready when the release failed is worse than a delay.
+   */
   async releaseResult({ visitTestId, releasedBy }, requestingUser) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
 
@@ -620,6 +665,15 @@ class ResultService {
 
   // Lets the modality re-open a ticket that is already 'Waiting for Release' and edit the
   // findings it recorded earlier, instead of overwriting them with a blank form.
+  /**
+   * The CURRENT version of one report.
+   *
+   * @param {number} visitTestId
+   * @param {object} requestingUser
+   * @returns {Promise<object|null>} Filtered on `is_current`. Superseded versions are reachable
+   *   only through `getVersionHistory`, which is the single intentional reader of them — a query
+   *   here that dropped `is_current` would show withdrawn findings beside live ones.
+   */
   async getResultByVisitTestId(visitTestId, requestingUser) {
     await assertStaffMayReadVisitTest(requestingUser, visitTestId);
     return await resultRepository.findResultByVisitTestId(visitTestId);
