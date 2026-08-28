@@ -15,8 +15,8 @@
 | Database tables (in `schema.sql`) | 31 | unchanged |
 | Indexes | 73 | unchanged |
 | API route definitions | 129 | +2 |
-| Routes gated by `authorizePermissions` | 91 | +1 |
-| Routes gated by `authorizeStaff` | 79 | +2 |
+| Routes gated by `authorizePermissions` | 77 | +1 |
+| Routes gated by `authorizeStaff` | 62 | +2 |
 | Seeded permission strings | 31 | unchanged |
 | Seeded roles | 8 | unchanged |
 | Additive migration scripts | 30 | unchanged |
@@ -349,7 +349,7 @@ Three composable gates, applied **together**:
 - **`permissions`** — the role template **plus** that account's own grants **minus** its revokes, with revoke applied last as a set difference so a conflict always resolves to *less* access.
 - **`departments`** — modalities implied by roles plus `user_departments`. `null` means unrestricted and is deliberately distinct from `[]`, "none" — collapsing the two is how an access check ends up inverted.
 
-**Coverage, measured:** 129 route definitions; **91 carry `authorizePermissions`**, **79 carry `authorizeStaff`**. 31 permissions across 8 modules, seeded by `setupRbac.js`.
+**Coverage, measured:** 129 route definitions; **77 carry `authorizePermissions`**, **62 carry `authorizeStaff`**, 28 carry an explicit `authorizeRoles` list, 13 are deliberately open. (Parsed per route definition. A bare `grep -c` returns 91/79 because it counts the `require` import line and comments too; 77 is corroborated by `verifyRbacWiring.js`.) 31 permissions across 8 modules, seeded by `setupRbac.js`.
 
 **Design note worth citing:** `authorizeStaff` **replaced hardcoded role lists on 45 routes** in `[1.20.0]`. Before that, `POST /payments` named `('SuperAdmin', 'Cashier')` explicitly, so granting a cashier's permission to Laboratory Staff saved successfully, reported success, and changed nothing — the matrix could not actually delegate, which is worse than having no matrix at all.
 

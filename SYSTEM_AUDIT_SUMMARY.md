@@ -26,6 +26,14 @@
 > current as written.
 >
 > See `database/migrations.md` `[1.62.0]` for the full reasoning behind each.
+>
+> **One measurement correction that also applies to the baseline.** The two route-gate counts above
+> were produced with `grep -c`, which counts every LINE mentioning the middleware — including the
+> `require(...)` import in each of the 19 route files and the explanatory comments — rather than
+> route definitions. Parsed per route, `[1.61.0]` had **76** permission-gated and **60**
+> staff-gated routes, not 90 and 77 (measured directly against commit `9692ce2`: 127 routes, 76 permission-gated, 61 staff-gated, 27 with an explicit role list). `SYSTEM_ROLE_DASHBOARD_INVENTORY.md` §1.3 shows the method
+> and the corroborating output from `verifyRbacWiring.js`. Every other figure in this document
+> stands.
 
 ### Measured scale
 
@@ -36,8 +44,8 @@
 | Database tables (in `schema.sql`) | 31 |
 | Indexes | 73 |
 | API route definitions | 127 |
-| Routes gated by `authorizePermissions` | 90 |
-| Routes gated by `authorizeStaff` | 77 |
+| Routes gated by `authorizePermissions` | 90 (line count; the per-route figure is 76 — see the note below) |
+| Routes gated by `authorizeStaff` | 77 (line count; per-route: 61) |
 | Seeded permission strings | 31 |
 | Seeded roles | 8 |
 | Additive migration scripts | 30 |
