@@ -29,7 +29,7 @@ export default function PaymentsTab({ payments }) {
               That coupled a passing test to a corner radius: changing the radius broke the
               spec, and the spec's failure said nothing about payments. */}
           <Panel data-testid="payment-history" className="max-w-2xl overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-[#e6ebf1] bg-slate-50/70 px-5 py-3.5">
+            <div className="flex items-center gap-2 border-b border-line bg-slate-50/70 px-5 py-3.5">
               <Receipt className="h-4 w-4 text-brand-600" />
               <h3 className="m-0 text-note font-semibold text-slate-900">Payment History</h3>
             </div>
@@ -53,7 +53,7 @@ export default function PaymentsTab({ payments }) {
                 />
               ) : (
                 paged.map((pay) => (
-                  <div key={pay.id} className="rounded-lg border border-[#e6ebf1] p-3">
+                  <div key={pay.id} className="rounded-lg border border-line p-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <span className="block text-lead font-bold tabular-nums text-slate-900">{formatCurrency(pay.amount)}</span>

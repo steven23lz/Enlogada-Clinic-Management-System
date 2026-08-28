@@ -96,7 +96,7 @@ const Home = ({ onNavigate }) => {
       </section>
 
       {/* Key Highlights Banner */}
-      <section className="bg-white py-10 sm:py-12 border-b border-[#e6ebf1]">
+      <section className="bg-surface py-10 sm:py-12 border-b border-line">
         <PageShell className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
           {/* One tone across all three, not three.
               These are one set of related claims about the clinic, and they wore a green, a blue
@@ -104,7 +104,7 @@ const Home = ({ onNavigate }) => {
               reasons to trust the same clinic. It is the same mistake the metric card's own notes
               describe: state the tone once, quietly, and let the content differ. Brand green,
               because these are the clinic's own promises and green is the clinic's colour. */}
-          <div className="flex items-start space-x-4 p-4 rounded-xl bg-slate-50/70 border border-[#e6ebf1]">
+          <div className="flex items-start space-x-4 p-4 rounded-xl bg-slate-50/70 border border-line">
             <div className="p-3 bg-brand-50 text-brand-600 rounded-xl">
               <ShieldCheck className="w-6 h-6" />
             </div>
@@ -114,7 +114,7 @@ const Home = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="flex items-start space-x-4 p-4 rounded-xl bg-slate-50/70 border border-[#e6ebf1]">
+          <div className="flex items-start space-x-4 p-4 rounded-xl bg-slate-50/70 border border-line">
             <div className="p-3 bg-brand-50 text-brand-600 rounded-xl">
               <Clock className="w-6 h-6" />
             </div>
@@ -124,7 +124,7 @@ const Home = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="flex items-start space-x-4 p-4 rounded-xl bg-slate-50/70 border border-[#e6ebf1]">
+          <div className="flex items-start space-x-4 p-4 rounded-xl bg-slate-50/70 border border-line">
             <div className="p-3 bg-brand-50 text-brand-600 rounded-xl">
               <Award className="w-6 h-6" />
             </div>

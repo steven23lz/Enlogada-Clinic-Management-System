@@ -104,7 +104,7 @@ const TodaySnapshot = () => {
   // beside them would still put a wrong peso figure on screen, and the figure is what gets read.
   if (snapshotError) {
     return (
-      <Card className="border-[#e6ebf1] rounded-xl bg-white">
+      <Card className="border-line rounded-xl bg-surface">
         <EmptyState
           tone="error"
           title="Today's figures are unavailable"
@@ -140,7 +140,7 @@ const TodaySnapshot = () => {
           caption="Active diagnostic services"
         />
 
-        <Card className="border-[#e6ebf1] rounded-xl bg-white p-5 space-y-1">
+        <Card className="border-line rounded-xl bg-surface p-5 space-y-1">
           <span className="field-label">Payment Methods (Today)</span>
           {loading ? (
             <div className="text-2xl font-extrabold text-slate-900">…</div>
@@ -260,13 +260,13 @@ const DateRangeReports = () => {
       )}
 
       <div className="print-area space-y-6">
-      <div className="hidden print:block text-center border-b border-[#e6ebf1] pb-3 mb-3">
+      <div className="hidden print:block text-center border-b border-line pb-3 mb-3">
         <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide m-0">Enlogada Ultrasound &amp; Diagnostic Clinic</h3>
         <p className="text-xs text-gray-500 m-0">Clinic Report — {startDate} to {endDate}</p>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
-          <CardHeader className="space-y-0.5 border-b border-[#e6ebf1] px-5 py-3.5">
+        <Card className="border-line rounded-xl bg-surface overflow-hidden">
+          <CardHeader className="space-y-0.5 border-b border-line px-5 py-3.5">
             <CardTitle className="text-note font-semibold text-slate-900">Revenue Trend</CardTitle>
             <p className="text-fine text-gray-500 m-0">Total for range: <span className="font-bold text-slate-900">{formatCurrency(totalRevenue)}</span></p>
           </CardHeader>
@@ -281,8 +281,8 @@ const DateRangeReports = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
+        <Card className="border-line rounded-xl bg-surface overflow-hidden">
+          <CardHeader className="border-b border-line px-5 py-3.5">
             <CardTitle className="text-note font-semibold text-slate-900">Service Volume by Category</CardTitle>
           </CardHeader>
           <CardContent className="p-5">
@@ -298,8 +298,8 @@ const DateRangeReports = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
+        <Card className="border-line rounded-xl bg-surface overflow-hidden">
+          <CardHeader className="border-b border-line px-5 py-3.5">
             <CardTitle className="text-note font-semibold text-slate-900">Visit Status Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="p-5">
@@ -319,8 +319,8 @@ const DateRangeReports = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
-          <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
+        <Card className="border-line rounded-xl bg-surface overflow-hidden">
+          <CardHeader className="border-b border-line px-5 py-3.5">
             <CardTitle className="text-note font-semibold text-slate-900">Payment Method Breakdown</CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
@@ -396,7 +396,7 @@ const HmoClaimsReport = () => {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#e6ebf1]">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-surface p-5 rounded-xl border border-line">
         <div className="space-y-1">
           <h3 className="text-sm font-bold text-slate-900 m-0">HMO Claim Value</h3>
           <p className="text-xs text-gray-500 m-0">
@@ -487,8 +487,8 @@ const HmoClaimsReport = () => {
             </span>
           </p>
 
-          <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
-            <CardHeader className="flex flex-row items-center gap-2.5 border-b border-[#e6ebf1] px-5 py-3.5">
+          <Card className="border-line rounded-xl bg-surface overflow-hidden">
+            <CardHeader className="flex flex-row items-center gap-2.5 border-b border-line px-5 py-3.5">
               <ShieldCheck className="w-4 h-4 text-brand-600" />
               <CardTitle className="text-note font-semibold text-slate-900">By Provider</CardTitle>
             </CardHeader>
@@ -558,8 +558,8 @@ const RbacMatrixReport = () => {
 
   return (
     <div className="space-y-3">
-      <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
-        <CardHeader className="border-b border-[#e6ebf1] px-5 py-3.5">
+      <Card className="border-line rounded-xl bg-surface overflow-hidden">
+        <CardHeader className="border-b border-line px-5 py-3.5">
           <CardTitle className="flex items-center gap-2 text-note font-semibold text-slate-900">
             <ShieldCheck className="w-4 h-4 text-brand-600" />
             <span>Roles &amp; Their Assigned Permissions</span>
@@ -657,7 +657,7 @@ const StaffWorkload = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-[#e6ebf1]">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-surface p-5 rounded-xl border border-line">
         <div className="space-y-1">
           <h3 className="text-sm font-bold text-slate-900 m-0">Per-Staff Workload</h3>
           <p className="text-xs text-gray-500 m-0">Reception check-ins and Diagnostic results released, by staff member.</p>
@@ -687,8 +687,8 @@ const StaffWorkload = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
-          <CardHeader className="flex flex-row items-center gap-2.5 border-b border-[#e6ebf1] px-5 py-3.5">
+        <Card className="border-line rounded-xl bg-surface overflow-hidden">
+          <CardHeader className="flex flex-row items-center gap-2.5 border-b border-line px-5 py-3.5">
             <Users className="w-4 h-4 text-brand-600" />
             <CardTitle className="text-note font-semibold text-slate-900">Reception — Check-Ins by Staff</CardTitle>
           </CardHeader>
@@ -718,8 +718,8 @@ const StaffWorkload = () => {
           </CardContent>
         </Card>
 
-        <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
-          <CardHeader className="flex flex-row items-center gap-2.5 border-b border-[#e6ebf1] px-5 py-3.5">
+        <Card className="border-line rounded-xl bg-surface overflow-hidden">
+          <CardHeader className="flex flex-row items-center gap-2.5 border-b border-line px-5 py-3.5">
             <FlaskConical className="w-4 h-4 text-brand-600" />
             <CardTitle className="text-note font-semibold text-slate-900">Diagnostic — Results Released by Staff</CardTitle>
           </CardHeader>

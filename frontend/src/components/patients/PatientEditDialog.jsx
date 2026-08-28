@@ -127,7 +127,7 @@ const PatientEditDialog = ({ open, onOpenChange, patient, patientTypes = [], onS
         <form onSubmit={submit} className="space-y-4">
           {/* Clinical fields first and fenced off, because they are the ones with consequences
               beyond this record. */}
-          <div className="space-y-3 rounded-xl border border-[#e6ebf1] bg-sunken p-3">
+          <div className="space-y-3 rounded-xl border border-line bg-sunken p-3">
             <p className="m-0 text-micro font-semibold uppercase tracking-[0.08em] text-slate-500">
               Used to interpret results
             </p>
@@ -236,7 +236,7 @@ const PatientEditDialog = ({ open, onOpenChange, patient, patientTypes = [], onS
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-2 border-t border-[#e6ebf1] pt-3">
+          <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
             <span className="text-micro text-slate-500">
               {changed.length === 0
                 ? 'No changes yet'

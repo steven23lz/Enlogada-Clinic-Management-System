@@ -57,7 +57,7 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
                     onClick={() => results.setCategory(cat)}
                     className={`cursor-pointer rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors ${
                       results.category === cat
-                        ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                        ? 'bg-surface text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
                         : 'bg-transparent text-slate-500 hover:text-slate-800'
                     }`}
                   >
@@ -83,7 +83,7 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
               <SkeletonList rows={3} />
             ) : results.filtered.length > 0 ? (
               results.filtered.map(item => (
-                <Card key={item.visit_test_id} className="border-[#e6ebf1] rounded-xl hover:shadow-raised transition-all">
+                <Card key={item.visit_test_id} className="border-line rounded-xl hover:shadow-raised transition-all">
                   <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="flex items-start space-x-3.5">
                       <div className="w-10 h-10 bg-gray-50 border border-gray-200/80 rounded-xl flex items-center justify-center flex-shrink-0 text-brand-600">
@@ -138,7 +138,7 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
                         {/* Attachment actions are on-screen only — a button on paper is
                             meaningless, and DiagnosticReport names the file in print instead. */}
                         {(item.file_path || item.file_url) && (
-                          <div className="no-print mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
+                          <div className="no-print mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-slate-50/80 p-3">
                             <span className="flex items-center gap-2">
                               <FileText className="h-4 w-4 text-brand-600" />
                               <span className="text-fine font-semibold text-slate-800">

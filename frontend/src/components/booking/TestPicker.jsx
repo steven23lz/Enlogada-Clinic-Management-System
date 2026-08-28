@@ -202,7 +202,7 @@ const TestPicker = ({
         </div>
       )}
 
-      <div className={`${maxHeight} space-y-3 overflow-y-auto rounded-xl border border-[#e6ebf1] bg-slate-50/70 p-3`}>
+      <div className={`${maxHeight} space-y-3 overflow-y-auto rounded-xl border border-line bg-slate-50/70 p-3`}>
         {grouped.length === 0 ? (
           <p className="m-0 py-3 text-center text-fine text-slate-400">No test matches that.</p>
         ) : (
@@ -214,14 +214,14 @@ const TestPicker = ({
             const panelId = `testpicker-${category.replace(/\W+/g, '-').toLowerCase()}`;
 
             return (
-              <div key={category} className="overflow-hidden rounded-lg border border-[#e6ebf1] bg-white">
+              <div key={category} className="overflow-hidden rounded-lg border border-line bg-surface">
                 <button
                   type="button"
                   onClick={() => toggleCategory(category)}
                   aria-expanded={open}
                   aria-controls={panelId}
                   disabled={searching}
-                  className="flex w-full cursor-pointer items-center gap-2 border-0 bg-white px-2.5 py-2 text-left transition-colors hover:bg-slate-50 disabled:cursor-default"
+                  className="flex w-full cursor-pointer items-center gap-2 border-0 bg-surface px-2.5 py-2 text-left transition-colors hover:bg-slate-50 disabled:cursor-default"
                 >
                   <ChevronRight
                     className={`h-3.5 w-3.5 flex-shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
@@ -249,11 +249,11 @@ const TestPicker = ({
                         `inert` leaves the layout intact and takes the checkboxes out of the tab
                         order and the accessibility tree, which is the part that actually matters
                         when a collapsed section is still in the DOM. */}
-                    <div id={panelId} inert={!open} className="space-y-1 border-t border-[#e6ebf1] p-2">
+                    <div id={panelId} inert={!open} className="space-y-1 border-t border-line p-2">
                     {items.map((t) => (
                       <label
                         key={t.id}
-                        className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e6ebf1] bg-white p-2 text-xs transition-colors hover:border-brand-300 hover:bg-brand-50/40"
+                        className="flex cursor-pointer items-center gap-3 rounded-lg border border-line bg-surface p-2 text-xs transition-colors hover:border-brand-300 hover:bg-brand-50/40"
                       >
                         <input
                           type="checkbox"

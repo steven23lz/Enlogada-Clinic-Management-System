@@ -32,7 +32,7 @@ export default function BillingQueuePanel({ queue, checkout }) {
 
             {/* Filters sit in a sunken well rather than loose in the panel body, so the list
                 below reads as the panel's content and these read as controls over it. */}
-            <div className="space-y-2 border-b border-[#e6ebf1] bg-slate-50/70 p-3">
+            <div className="space-y-2 border-b border-line bg-slate-50/70 p-3">
               <SearchInput
                 placeholder="Search ticket # or name..."
                 value={queue.searchQuery}
@@ -81,7 +81,7 @@ export default function BillingQueuePanel({ queue, checkout }) {
                       className={`w-full cursor-pointer rounded-lg border p-3 text-left transition-colors ${
                         isSelected
                           ? 'border-brand-400 bg-brand-50 ring-1 ring-brand-400'
-                          : 'border-[#e6ebf1] bg-white hover:border-slate-300 hover:bg-slate-50'
+                          : 'border-line bg-surface hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
                       <span className="flex items-start justify-between gap-2">
@@ -101,7 +101,7 @@ export default function BillingQueuePanel({ queue, checkout }) {
                           <WaitBadge since={visit.created_at} />
                         </span>
                       </span>
-                      <span className="mt-2 flex items-center justify-between border-t border-[#eef2f6] pt-2 text-fine">
+                      <span className="mt-2 flex items-center justify-between border-t border-line-soft pt-2 text-fine">
                         <span className="text-slate-500">{visit.tests?.length || 0} diagnostic item{visit.tests?.length === 1 ? '' : 's'}</span>
                         <span className={`font-semibold ${isSelected ? 'text-brand-700' : 'text-slate-400'}`}>
                           {isSelected ? 'Open in terminal' : 'Select for checkout →'}

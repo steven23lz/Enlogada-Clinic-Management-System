@@ -36,8 +36,8 @@ export default function AppointmentsTab({ bookings }) {
 
   return (
         <TabsContent value="appointments" className="m-0">
-          <Card className="border-[#e6ebf1] rounded-xl bg-white overflow-hidden">
-            <CardHeader className="bg-slate-50/80 border-b border-[#e6ebf1] py-3.5">
+          <Card className="border-line rounded-xl bg-surface overflow-hidden">
+            <CardHeader className="bg-slate-50/80 border-b border-line py-3.5">
               <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
                 <CalendarClock className="w-4 h-4 text-brand-600" />
                 <span>My Appointments</span>
@@ -91,7 +91,7 @@ export default function AppointmentsTab({ bookings }) {
                       key={appt.id}
                       data-testid="appointment-card"
                       data-reference={appt.appointment_reference}
-                      className="border border-[#e6ebf1] rounded-xl p-3 space-y-2 bg-slate-50/70"
+                      className="border border-line rounded-xl p-3 space-y-2 bg-slate-50/70"
                     >
                       <div className="flex justify-between items-start">
                         <div>

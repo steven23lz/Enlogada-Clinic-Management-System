@@ -57,7 +57,7 @@ const BookingConfirmation = ({
         </div>
       )}
 
-      <div className="print-area space-y-4 rounded-2xl border border-[#e6ebf1] bg-white p-5 text-center">
+      <div className="print-area space-y-4 rounded-2xl border border-line bg-surface p-5 text-center">
         <div className="space-y-0.5">
           <h3 className="m-0 text-sm font-extrabold uppercase tracking-wide text-slate-900">
             Enlogada Ultrasound &amp; Diagnostic Clinic
@@ -70,7 +70,7 @@ const BookingConfirmation = ({
             <div className="flex justify-center py-2">
               <div
                 data-testid="booking-pass-qr"
-                className="inline-block rounded-xl border border-gray-200 bg-white p-3"
+                className="inline-block rounded-xl border border-gray-200 bg-surface p-3"
               >
                 <QRCodeSVG value={referenceCode} size={144} />
               </div>
@@ -85,7 +85,7 @@ const BookingConfirmation = ({
              is simply no pass yet, and the screen says what produces one. */
           <div
             data-testid={isHmo ? 'booking-hmo-review' : 'booking-awaiting-payment'}
-            className="space-y-2 rounded-xl border border-[#e6ebf1] bg-slate-50 px-4 py-4 text-left"
+            className="space-y-2 rounded-xl border border-line bg-slate-50 px-4 py-4 text-left"
           >
             <p className="m-0 flex items-center gap-1.5 text-note font-bold text-slate-900">
               {isHmo ? (
@@ -113,7 +113,7 @@ const BookingConfirmation = ({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 border-t border-[#e6ebf1] pt-3">
+        <div className="grid grid-cols-2 gap-3 border-t border-line pt-3">
           <div className="space-y-0.5">
             <span className="field-label">Reference Code</span>
             <span className="font-mono text-sm font-extrabold text-slate-900">{referenceCode}</span>
@@ -125,7 +125,7 @@ const BookingConfirmation = ({
         </div>
 
         {awaitingPayment && (
-          <div className="grid grid-cols-2 gap-3 border-t border-[#e6ebf1] pt-3">
+          <div className="grid grid-cols-2 gap-3 border-t border-line pt-3">
             <div className="space-y-0.5">
               <span className="field-label">Amount Due</span>
               <span className="text-lg font-extrabold tabular-nums text-slate-900">
@@ -140,7 +140,7 @@ const BookingConfirmation = ({
         )}
 
         {(patientName || scheduledDate) && (
-          <div className="space-y-0.5 border-t border-[#e6ebf1] pt-3 text-xs text-gray-500">
+          <div className="space-y-0.5 border-t border-line pt-3 text-xs text-gray-500">
             {patientName && <p className="m-0 font-semibold">{patientName}</p>}
             {scheduledDate && (
               <p className="m-0">

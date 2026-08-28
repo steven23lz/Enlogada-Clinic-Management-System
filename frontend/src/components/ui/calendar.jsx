@@ -159,7 +159,7 @@ const Calendar = React.forwardRef(({
               value={view.m}
               onChange={(e) => setView((v) => ({ ...v, m: Number(e.target.value) }))}
               aria-label="Month"
-              className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-fine font-semibold text-slate-900 hover:border-slate-300"
+              className="rounded-lg border border-slate-200 bg-surface px-1.5 py-1 text-fine font-semibold text-slate-900 hover:border-slate-300"
             >
               {MONTHS.map((name, i) => <option key={name} value={i}>{name}</option>)}
             </select>
@@ -167,7 +167,7 @@ const Calendar = React.forwardRef(({
               value={view.y}
               onChange={(e) => setView((v) => ({ ...v, y: Number(e.target.value) }))}
               aria-label="Year"
-              className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-fine font-semibold text-slate-900 hover:border-slate-300"
+              className="rounded-lg border border-slate-200 bg-surface px-1.5 py-1 text-fine font-semibold text-slate-900 hover:border-slate-300"
             >
               {years.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>

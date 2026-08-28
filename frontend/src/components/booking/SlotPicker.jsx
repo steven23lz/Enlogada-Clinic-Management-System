@@ -205,8 +205,8 @@ const SlotPicker = ({
                           : isHeldByUs
                             ? 'border-brand-300 bg-brand-50 text-brand-700'
                             : selectable
-                              ? 'border-gray-200 bg-white text-slate-700 hover:border-brand-500'
-                              : 'cursor-not-allowed border-[#e6ebf1] bg-gray-100 text-gray-300 line-through'
+                              ? 'border-gray-200 bg-surface text-slate-700 hover:border-brand-500'
+                              : 'cursor-not-allowed border-line bg-gray-100 text-gray-300 line-through'
                       }`}
                     >
                       {formatTime12(slot.time)}

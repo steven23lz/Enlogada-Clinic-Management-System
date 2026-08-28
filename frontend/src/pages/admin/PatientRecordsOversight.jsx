@@ -508,7 +508,7 @@ const PatientRecordsOversight = () => {
                   <p className="m-0 text-fine text-slate-500">Patient Test Records — {selectedPatient?.first_name} {selectedPatient?.last_name} (PT-{selectedPatient?.id})</p>
                 </div>
                 {patientHistory.map(item => (
-                  <div key={item.visit_test_id} className="rounded-lg border border-[#e6ebf1] p-3">
+                  <div key={item.visit_test_id} className="rounded-lg border border-line p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-note font-semibold text-slate-900">
                         {item.test_name} <span className="text-fine font-normal text-slate-400">({item.category_name})</span>
@@ -520,14 +520,14 @@ const PatientRecordsOversight = () => {
                       {item.released_at && <span>Released {new Date(item.released_at).toLocaleDateString()}</span>}
                     </div>
                     {item.findings && (
-                      <p className="m-0 mt-2 whitespace-pre-wrap border-t border-[#eef2f6] pt-2 text-fine leading-relaxed text-slate-600">{item.findings}</p>
+                      <p className="m-0 mt-2 whitespace-pre-wrap border-t border-line-soft pt-2 text-fine leading-relaxed text-slate-600">{item.findings}</p>
                     )}
                     {/* The attachment was never surfaced on this screen at all — the query has
                         returned file_path since [1.7.0] and nothing rendered it, so the one
                         person most likely to be asked "what does the report actually say" could
                         read the findings text but not open the document itself. */}
                     {item.file_path && (
-                      <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#eef2f6] pt-2">
+                      <div className="mt-2 flex items-center justify-between gap-2 border-t border-line-soft pt-2">
                         <span className="flex min-w-0 items-center gap-1.5 text-fine text-slate-500">
                           <Paperclip className="h-3 w-3 flex-shrink-0" />
                           <span className="truncate">{item.file_original_name || 'Attached report'}</span>
@@ -552,7 +552,7 @@ const PatientRecordsOversight = () => {
                 ))}
               </div>
 
-              <div className="flex justify-end border-t border-[#e6ebf1] pt-3">
+              <div className="flex justify-end border-t border-line pt-3">
                 <Button type="button" variant="outline" onClick={() => printElement()}>
                   <Printer className="h-3.5 w-3.5" />
                   Print Patient Test Records

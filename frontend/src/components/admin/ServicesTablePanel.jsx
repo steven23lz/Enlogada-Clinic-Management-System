@@ -32,7 +32,7 @@ export default function ServicesTablePanel({ catalogue }) {
           onClick={() => catalogue.setFilterCategory('all')}
           className={`inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors ${
             catalogue.filterCategory === 'all'
-              ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+              ? 'bg-surface text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
               : 'bg-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
@@ -47,7 +47,7 @@ export default function ServicesTablePanel({ catalogue }) {
             onClick={() => catalogue.setFilterCategory(cat.id.toString())}
             className={`inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors ${
               catalogue.filterCategory === cat.id.toString()
-                ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                ? 'bg-surface text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
                 : 'bg-transparent text-slate-500 hover:text-slate-800'
             }`}
           >

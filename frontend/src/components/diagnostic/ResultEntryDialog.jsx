@@ -33,8 +33,8 @@ export default function ResultEntryDialog({ worklist, entry, patientHistory }) {
                 <span className="text-sm font-bold">Result released successfully.</span>
               </div>
 
-              <div className="print-area space-y-3 bg-white rounded-2xl border border-[#e6ebf1] p-5">
-                <div className="text-center border-b border-[#e6ebf1] pb-3 space-y-0.5">
+              <div className="print-area space-y-3 bg-surface rounded-2xl border border-line p-5">
+                <div className="text-center border-b border-line pb-3 space-y-0.5">
                   <h3 className="text-sm font-extrabold text-slate-900 uppercase tracking-wide m-0">Enlogada Ultrasound &amp; Diagnostic Clinic</h3>
                   <p className="text-xs text-gray-500 m-0">Diagnostic Result Certificate</p>
                 </div>
@@ -51,7 +51,7 @@ export default function ResultEntryDialog({ worklist, entry, patientHistory }) {
                     <p className="text-xs m-0">{entry.justReleased.result_remarks}</p>
                   </div>
                 )}
-                <p className="text-fine text-gray-400 m-0 pt-2 border-t border-[#e6ebf1]">
+                <p className="text-fine text-gray-400 m-0 pt-2 border-t border-line">
                   Released {formatDateTime(entry.justReleased.released_at)}
                   {entry.justReleased.released_by_first_name && ` by ${entry.justReleased.released_by_first_name} ${entry.justReleased.released_by_last_name}`}
                 </p>
@@ -217,7 +217,7 @@ export default function ResultEntryDialog({ worklist, entry, patientHistory }) {
               </span>
             </label>
 
-            <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
+            <div className="flex justify-end space-x-2 pt-2 border-t border-line">
               <Button type="button" variant="outline" onClick={entry.close}>Cancel</Button>
               <Button
                 type="submit"

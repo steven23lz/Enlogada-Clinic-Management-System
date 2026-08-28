@@ -36,7 +36,7 @@ export default function ResultViewerDialog({ result, onOpenChange, onPreviewDocu
               a button is meaningless on paper, and this one used to come out of the printer.
               DiagnosticReport names the file in print instead. */}
           {result?.file_path && (
-            <div className="no-print mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
+            <div className="no-print mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-slate-50/80 p-3">
               <span className="flex min-w-0 items-center gap-1.5 text-fine text-slate-600">
                 <Paperclip className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
                 <span className="truncate">{result.file_original_name || 'Attached report'}</span>
@@ -57,7 +57,7 @@ export default function ResultViewerDialog({ result, onOpenChange, onPreviewDocu
               </Button>
             </div>
           )}
-                    <div className="flex justify-end pt-2 border-t border-[#e6ebf1]">
+                    <div className="flex justify-end pt-2 border-t border-line">
             <Button onClick={() => printElement()} variant="outline">
               <Printer className="h-3.5 w-3.5" />
               Print Report

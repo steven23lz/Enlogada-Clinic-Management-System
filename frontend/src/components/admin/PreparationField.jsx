@@ -60,11 +60,11 @@ export default function PreparationField({ value, onChange, id = 'preparation' }
         <span className="ml-1 font-normal text-slate-400">(tick what applies)</span>
       </span>
 
-      <div className="space-y-1 rounded-xl border border-[#e6ebf1] bg-slate-50/70 p-2">
+      <div className="space-y-1 rounded-xl border border-line bg-slate-50/70 p-2">
         {PREPARATION_RULES.map((rule) => {
           const on = Boolean(selected[rule.id]);
           return (
-            <div key={rule.id} className="rounded-lg bg-white px-2 py-1.5 ring-1 ring-inset ring-line">
+            <div key={rule.id} className="rounded-lg bg-surface px-2 py-1.5 ring-1 ring-inset ring-line">
               <label className="flex cursor-pointer items-start gap-2.5">
                 <input
                   type="checkbox"

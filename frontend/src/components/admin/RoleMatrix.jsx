@@ -64,7 +64,7 @@ export default function RoleMatrix({ access }) {
                 onClick={() => access.changeMode(option.value)}
                 className={`cursor-pointer rounded-[7px] border-0 px-3 py-1.5 text-fine font-semibold transition-colors ${
                   access.mode === option.value
-                    ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                    ? 'bg-surface text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
                     : 'bg-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -79,7 +79,7 @@ export default function RoleMatrix({ access }) {
       {/* Subject picker + permission search. Both dropdowns, because the alternative — the old
           table of every role with an Edit button — does not scale to a staff list and gave no
           way to jump straight to the person you are being asked about. */}
-      <div className="flex flex-wrap items-end gap-3 border-b border-[#e6ebf1] bg-slate-50/70 p-4">
+      <div className="flex flex-wrap items-end gap-3 border-b border-line bg-slate-50/70 p-4">
         {access.mode === 'role' ? (
           <div className="flex min-w-0 flex-col gap-1">
             <label htmlFor="rbac-role" className="field-label m-0">Role</label>
@@ -157,7 +157,7 @@ export default function RoleMatrix({ access }) {
                     this screen is usually answering a question about a person, not editing —
                     and the answer should not require reading 27 checkboxes. */}
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-[#e6ebf1] p-3">
+                  <div className="rounded-lg border border-line p-3">
                     <span className="field-label">Roles held</span>
                     <div className="flex flex-wrap gap-1">
                       {access.selectedUser.roles.map((r) => (
@@ -165,14 +165,14 @@ export default function RoleMatrix({ access }) {
                       ))}
                     </div>
                   </div>
-                  <div className="rounded-lg border border-[#e6ebf1] p-3">
+                  <div className="rounded-lg border border-line p-3">
                     <span className="field-label">Effective permissions</span>
                     <span className="text-lead font-bold tabular-nums text-slate-900">
                       {access.selectedUser.effectivePermissions.length}
                       <span className="ml-1 text-fine font-normal text-slate-500">of {access.permissions.length}</span>
                     </span>
                   </div>
-                  <div className={`rounded-lg border p-3 ${access.overrideCount ? 'border-amber-200 bg-amber-50/60' : 'border-[#e6ebf1]'}`}>
+                  <div className={`rounded-lg border p-3 ${access.overrideCount ? 'border-amber-200 bg-amber-50/60' : 'border-line'}`}>
                     <span className="field-label">Exceptions</span>
                     <span className="flex items-center gap-2">
                       <span className="text-lead font-bold tabular-nums text-slate-900">{access.overrideCount}</span>
@@ -192,7 +192,7 @@ export default function RoleMatrix({ access }) {
                 {/* Departments. A separate axis from permissions: `results:write` says they may
                     write a result, this says whose. Roles imply their own and are shown ticked
                     and disabled — removing one means removing the role. */}
-                <div className="rounded-lg border border-[#e6ebf1] p-3">
+                <div className="rounded-lg border border-line p-3">
                   <span className="field-label">Department access</span>
                   <p className="m-0 mb-2 text-fine leading-relaxed text-slate-500">
                     Which modalities&apos; patients and results this person may open. Ticks from their
@@ -209,7 +209,7 @@ export default function RoleMatrix({ access }) {
                           className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-fine font-medium ${
                             fromRole
                               ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500'
-                              : 'cursor-pointer border-[#e6ebf1] hover:border-brand-300 hover:bg-brand-50/50'
+                              : 'cursor-pointer border-line hover:border-brand-300 hover:bg-brand-50/50'
                           }`}
                         >
                           <input
@@ -246,7 +246,7 @@ export default function RoleMatrix({ access }) {
                           className={`flex cursor-pointer items-center gap-2.5 rounded-lg border p-2 transition-colors ${
                             override
                               ? 'border-amber-200 bg-amber-50/50'
-                              : 'border-[#e6ebf1] hover:border-brand-300 hover:bg-brand-50/50'
+                              : 'border-line hover:border-brand-300 hover:bg-brand-50/50'
                           }`}
                         >
                           <input

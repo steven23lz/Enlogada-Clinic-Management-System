@@ -226,10 +226,10 @@ const DateField = React.forwardRef(({
           // the sidebar, clipping "Today" and "Last" clean off. Left-aligned it grows into the
           // content area instead, where there is room, and the fixed width makes the presets wrap
           // inside the calendar rather than dictating the size of the thing that contains them.
-          className="absolute left-0 z-50 mt-1 w-[17.5rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[#e6ebf1] bg-white shadow-float"
+          className="absolute left-0 z-50 mt-1 w-[17.5rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-line bg-surface shadow-float"
         >
           {presets?.length > 0 && (
-            <div className="flex flex-wrap gap-1 border-b border-[#e6ebf1] p-2">
+            <div className="flex flex-wrap gap-1 border-b border-line p-2">
               {presets.map((p) => (
                 <button
                   key={p.label}

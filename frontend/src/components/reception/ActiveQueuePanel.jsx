@@ -77,7 +77,7 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                 {hmo.pending.slice(0, 6).map(r => (
                   <span
                     key={r.id}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-0.5 text-fine font-medium leading-5 text-amber-900 ring-1 ring-inset ring-amber-200"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-surface px-2 py-0.5 text-fine font-medium leading-5 text-amber-900 ring-1 ring-inset ring-amber-200"
                   >
                     <span className="font-semibold">
                       {r.patient_first_name ? `${r.patient_first_name} ${r.patient_last_name}` : r.provider_name}

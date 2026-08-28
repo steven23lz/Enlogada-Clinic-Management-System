@@ -322,7 +322,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                         )}
 
                         {/* Step Indicators */}
-                        <div className="flex items-center justify-between border-b border-[#e6ebf1] pb-3">
+                        <div className="flex items-center justify-between border-b border-line pb-3">
                           <button 
                             type="button"
                             onClick={() => setBookingStep(1)}
@@ -458,7 +458,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                                       <img
                                         src={hmoCardPreview}
                                         alt="The HMO card photo you attached"
-                                        className="max-h-64 w-full rounded-xl border border-[#e6ebf1] bg-sunken object-contain"
+                                        className="max-h-64 w-full rounded-xl border border-line bg-sunken object-contain"
                                       />
                                       <p className="m-0 text-fine text-slate-600">
                                         Can you read your member number in this photo? If not, take another.
@@ -502,7 +502,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                               />
                             </div>
 
-                            <div className="flex justify-between pt-2 border-t border-[#e6ebf1]">
+                            <div className="flex justify-between pt-2 border-t border-line">
                               <Button type="button" variant="outline" onClick={() => setBookingStep(1)}>
                                 &larr; Back
                               </Button>

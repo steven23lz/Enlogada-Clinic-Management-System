@@ -153,16 +153,49 @@
    *   surface — a panel, card or table sitting on the canvas
    *   sunken  — a well *inside* a panel: table headers, read-only summaries, code-ish blocks
    */
-  --color-canvas: #f4f6f9;
+  /* ── Deepened in [1.63.0], because the app read as washed out and it was measurable ────────
+   * Panels were separating from the page at 1.08:1 — an 8% luminance step — so a white card on
+   * the canvas was barely an object at all. Every "flat", "washed out", "looks unfinished"
+   * complaint traces to this one number.
+   *
+   *   canvas  #f4f6f9 -> #eaeff5    separation 1.08 -> 1.16, roughly double the step
+   *   line    #e6ebf1 -> #dbe3ec    edge 1.20 -> 1.30 on white, and still 1.12 on the canvas
+   *   sunken  #f8fafc -> #f5f8fb    kept BETWEEN the other two, or the three levels collapse
+   *
+   * The hairline had to move WITH the canvas, and that is the constraint that makes this hard to
+   * do by eye: a border light enough to be quiet on white disappears entirely against a deeper
+   * page, so a panel gains an edge on one side of itself and loses it on the other. Both readings
+   * are checked by scripts/checkContrast.js.
+   */
+  --color-canvas: #eaeff5;
   --color-surface: #ffffff;
-  --color-sunken: #f8fafc;
-  --color-line: #e6ebf1;
-  --color-line-strong: #d3dae4;
+  --color-sunken: #f5f8fb;
+  --color-line: #dbe3ec;
+  --color-line-strong: #c8d3e0;
+  /* A divider INSIDE a panel — a table row rule, a summary's top border — as opposed to `line`,
+   * which is the panel's own edge against the canvas. The distinction already existed in the
+   * markup as a second hardcoded literal (`border-[#eef2f6]`, 8 uses beside 148 of the other);
+   * it just had no name, so it could not follow the theme and needed its own dark-mode override
+   * rule. Naming it is what let that rule be deleted. */
+  --color-line-soft: #e8eef5;
 
-  /* Ink. Three weights of text, matching the three that actually appear in the designs. */
+  /* Ink. Three weights of text, matching the three that actually appear in the designs, plus one
+   * for decoration.
+   *
+   * `ink-muted` moved #64748b -> #5b6b80 as a direct consequence of the canvas above: at the old
+   * value it measured 4.76:1 inside a panel and 4.12:1 on the page behind it — legible in one
+   * place and not the other, which no screenshot reveals. It now clears AA on all three surfaces.
+   *
+   * `ink-faint` is NEW and exists to give decoration somewhere honest to live. `text-slate-400`
+   * was doing that job in 135 places at 2.56:1 — a hard AA failure — including on receipt numbers
+   * and references, which are precisely the strings people read aloud and transcribe. A token held
+   * to the 3:1 UI threshold, and named as decorative, is what stops real content drifting back
+   * into it. Placeholder glyphs and separators only; never a sentence.
+   */
   --color-ink: #0f172a;
   --color-ink-soft: #475569;
-  --color-ink-muted: #64748b;
+  --color-ink-muted: #5b6b80;
+  --color-ink-faint: #78889e;
 
   /* Dark chrome — the sidebar rail and the hero panels. */
   --color-rail: #16212e;
@@ -223,17 +256,17 @@
 
   /* shadcn compatibility aliases, kept so the vendored primitives keep resolving. */
   --color-muted: #f1f5f9;
-  --color-muted-foreground: #64748b;
+  --color-muted-foreground: #5b6b80;
   --color-accent: #f1f5f9;
   --color-accent-foreground: #0f172a;
   --color-card: #ffffff;
   --color-card-foreground: #0f172a;
   --color-popover: #ffffff;
   --color-popover-foreground: #0f172a;
-  --color-border: #e6ebf1;
+  --color-border: #dbe3ec;
   --color-input: #e2e8f0;
   --color-ring: #53843b;
-  --color-background: #f4f6f9;
+  --color-background: #eaeff5;
   --color-foreground: #0f172a;
 
   /* ── Elevation ─────────────────────────────────────────────────────────────────────────────
@@ -909,9 +942,16 @@ body.printing-receipt {
     --color-surface: #131c2b;     --color-card: #131c2b;      --color-popover: #16202f;
     --color-sunken: #0f1726;      --color-muted: #1a2434;     --color-accent: #1a2434;
     --color-line: #26313f;        --color-border: #26313f;    --color-input: #2f3b4b;
+    /* [1.63.0] The in-panel divider, previously the hand-written override for
+       `border-[#eef2f6]`. Same value that rule used; it just has a name now. */
+    --color-line-soft: #1e2836;
     --color-line-strong: #34414f;
     --color-ink: #eef2f6;         --color-foreground: #eef2f6;
     --color-ink-soft: #a3b0c2;    --color-ink-muted: #8695a9;
+    /* Decorative only, and dimmer than ink-muted rather than brighter — on a dark
+       ground "faint" means closer to the surface, which is the opposite direction
+       from light mode. Held to the 3:1 UI threshold by checkContrast.js. */
+    --color-ink-faint: #6f7f95;
     --color-card-foreground: #eef2f6;   --color-popover-foreground: #eef2f6;
     --color-muted-foreground: #8695a9;  --color-accent-foreground: #eef2f6;
 
@@ -951,32 +991,24 @@ body.printing-receipt {
 
   /* ── The utilities no variable can reach ──────────────────────────────────────────────────
    *
-   * Arbitrary values compile to literals and shadows are inlined at build time, so these are
-   * hand-written against Tailwind's generated class names. Unlayered author CSS beats @layer
-   * utilities regardless of specificity, so none of this needs !important.
+   * This block held six hand-written rules patching ~260 hardcoded colour literals that could not
+   * follow a CSS variable — `border-[#e6ebf1]` (146 uses), `bg-white` (92), and the per-variant
+   * forms Tailwind generates as separate classes. Its own comment called it "the only thing
+   * stopping it becoming forty rules nobody dares delete".
    *
-   * Each line carries its occurrence count. Nothing goes in this list without one — it is the
-   * only thing stopping it becoming forty rules nobody dares delete. */
-  html[data-theme="dark"] .border-\[\#e6ebf1\] { border-color: var(--color-line); }   /* 145 */
-  html[data-theme="dark"] .border-\[\#eef2f6\] { border-color: #1e2836; }             /*   8 */
-  html[data-theme="dark"] .bg-white              { background-color: var(--color-surface); } /* 100 */
-  /* Tailwind generates a SEPARATE class per variant, so `.bg-white` above does not match
-     `data-[state=active]:bg-white` or `hover:bg-white` — the selected tab on Reports and on
-     Super Admin Management stayed a white slab with light text on it. Two forms exist in this
-     codebase; both are listed rather than reached with a wildcard, because `[class*=bg-white]`
-     would also swallow the rail's bg-white/[0.04] hover surfaces. */
-  html[data-theme="dark"] .data-\[state\=active\]\:bg-white[data-state="active"] {
-    background-color: var(--color-surface);                                            /* 1 */
-  }
-  html[data-theme="dark"] .hover\:bg-white:hover {
-    background-color: var(--color-surface);                                            /* 6 */
-  }
-
-  /* Only the three sticky headers. The rail's bg-white/[0.04] hover surfaces are NOT touched:
-     they are white-on-dark by design and already correct. */
-  html[data-theme="dark"] .bg-white\/85 {
-    background-color: color-mix(in oklab, var(--color-surface) 85%, transparent);
-  }
+   * [1.63.0] deleted all six, by removing what they existed to patch: the literals are now
+   * `border-line`, `border-line-soft` and `bg-surface`, which are variables and follow the theme
+   * on their own. The block is kept as a comment because the RULE it encodes still applies —
+   *
+   *   An arbitrary value (`bg-[#fff]`) or a bare literal (`bg-white`) cannot be themed. If you
+   *   write one, you are also signing up to hand-write its dark-mode override here, and to keep
+   *   the two in step forever. Reach for a token instead; add one if none fits.
+   *
+   * The one legitimate exception is PAPER. `Receipt.jsx`, `DiagnosticReport.jsx`,
+   * `ResultDocument.jsx` and `ReceiptView.jsx` keep a literal `bg-white`, because a receipt is
+   * white for the same reason paper is — not because a theme said so. Tokenising those would make
+   * the printed slip theme-dependent, which is exactly the blank-receipt bug the `@media screen`
+   * wrapper further up exists to prevent. */
 
   /* ── Status colour, remapped as pairs ────────────────────────────────────────────────────
    *

@@ -68,4 +68,4 @@ export const STACK_GAP = {
 
 /** Shared tooltip chrome, matching the two charts that predate these. */
 export const TOOLTIP_CLASS =
-  'bg-white border border-[#e6ebf1] rounded-lg shadow-float px-3 py-2 text-xs';
+  'bg-surface border border-line rounded-lg shadow-float px-3 py-2 text-xs';

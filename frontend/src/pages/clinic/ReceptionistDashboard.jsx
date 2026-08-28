@@ -209,7 +209,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                     return (
                       <li
                         key={line.id}
-                        className="flex items-center gap-2 rounded-lg border border-line bg-white px-2.5 py-1.5"
+                        className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5"
                       >
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-fine font-semibold text-slate-800">
@@ -261,7 +261,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 disabled={testAssignment.submitting}
               />
 
-              <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-line">
                 <Button type="button" variant="outline" onClick={testAssignment.close}>Cancel</Button>
                 <Button
                   type="submit"
@@ -349,7 +349,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                 />
               </div>
 
-              <div className="flex justify-end space-x-2 pt-2 border-t border-[#e6ebf1]">
+              <div className="flex justify-end space-x-2 pt-2 border-t border-line">
                 <Button type="button" variant="outline" onClick={hmo.close}>Cancel</Button>
                 <Button type="submit" className="font-bold">Log HMO Request</Button>
               </div>

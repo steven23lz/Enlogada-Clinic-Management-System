@@ -26,7 +26,7 @@ const buttonVariants = cva(
         // gave no feedback at all between the tap and whatever happened next. On the reception
         // terminal that is most of the buttons.
         outline:
-          "border border-slate-200 bg-white text-slate-700 shadow-[0_1px_2px_rgb(15_23_42_/_0.04)] hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100",
+          "border border-slate-200 bg-surface text-slate-700 shadow-[0_1px_2px_rgb(15_23_42_/_0.04)] hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100",
         // The dark counterpart to `default`, for a second high-emphasis action beside it.
         secondary: "bg-emphasis text-emphasis-foreground shadow-[0_1px_2px_rgb(15_23_42_/_0.10)] hover:bg-emphasis-hover active:bg-emphasis-active",
         subtle:

@@ -60,7 +60,7 @@ function CopyField({ label, value }) {
     }
   };
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg bg-white px-2.5 py-1.5 ring-1 ring-inset ring-line">
+    <div className="flex items-center justify-between gap-2 rounded-lg bg-surface px-2.5 py-1.5 ring-1 ring-inset ring-line">
       <span className="min-w-0">
         <span className="block text-micro font-semibold uppercase tracking-[0.1em] text-slate-400">{label}</span>
         <span className="block truncate font-mono text-note font-bold tabular-nums text-slate-900">{value}</span>
@@ -99,7 +99,7 @@ function ProofPreview({ file, onClear }) {
   if (!file) return null;
 
   return (
-    <div className="mt-2 flex items-center gap-2.5 rounded-lg border border-line bg-white p-2">
+    <div className="mt-2 flex items-center gap-2.5 rounded-lg border border-line bg-surface p-2">
       {src ? (
         <img src={src} alt="" className="h-16 w-16 flex-shrink-0 rounded-md border border-line object-cover" />
       ) : (
@@ -265,7 +265,7 @@ export default function PayBookingPanel({ visitId, amountDue, onSettled }) {
                 type="button"
                 onClick={() => pay.setMethodId(String(m.id))}
                 className={`cursor-pointer rounded-lg border px-2.5 py-1.5 text-fine font-semibold transition-colors ${
-                  on ? 'border-azure-400 bg-white text-azure-800' : 'border-line bg-white/60 text-slate-600 hover:bg-white'
+                  on ? 'border-azure-400 bg-surface text-azure-800' : 'border-line bg-white/60 text-slate-600 hover:bg-surface'
                 }`}
               >
                 {m.label}
@@ -353,7 +353,7 @@ export default function PayBookingPanel({ visitId, amountDue, onSettled }) {
             accept="image/jpeg,image/png,image/webp,application/pdf"
             onChange={(e) => pay.chooseProof(e.target.files?.[0] || null)}
             disabled={pay.submitting}
-            className="block w-full cursor-pointer rounded-lg border border-slate-200 bg-white p-2 text-fine text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-fine file:font-semibold file:text-slate-700"
+            className="block w-full cursor-pointer rounded-lg border border-slate-200 bg-surface p-2 text-fine text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-fine file:font-semibold file:text-slate-700"
           />
           {/* chooseProof(null) rather than setProof(null): clearing the file must also clear the
               scan, or a removed screenshot leaves its duplicate warning on screen attached to

@@ -148,7 +148,7 @@ const CashierMonitoring = () => {
               that contradict each other is worse than either alone, and the peso figure is the
               one a reader believes. */}
           {!loadError && !loading && (
-          <div className={`grid grid-cols-2 gap-px border-b border-[#e6ebf1] bg-[#e6ebf1] ${
+          <div className={`grid grid-cols-2 gap-px border-b border-line bg-[#e6ebf1] ${
             { 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' }[cardCount]
           }`}>
             {/* Named on the figure itself when a method filter is on. The strip's own note above
