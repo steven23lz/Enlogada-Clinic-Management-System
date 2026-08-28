@@ -411,3 +411,82 @@ test.describe('Where the report is sent', () => {
     await expect(page.getByText(/Released reports are sent here/i).first()).toBeVisible();
   });
 });
+
+/**
+ * The button belongs to every department, not just Laboratory. [1.61.0]
+ *
+ * `DiagnosticDashboard` is one file serving Laboratory, X-Ray and Ultrasound — a nav id ending
+ * `-history` puts it in history mode and it renders one `ResultHistoryPanel` with one `delivery`
+ * prop. So all three get the feature by construction, and this spec is what stops that being a
+ * claim: a future change that routes one department to its own panel, or forgets to pass the
+ * prop down a second path, breaks here rather than in the one department nobody demoed.
+ *
+ * Each of these logs in as that department's own technician, so the department scoping in
+ * `assertStaffAllowedCategory` is exercised at the same time — Ultrasound reaching its own
+ * history is a different assertion from Laboratory reaching Laboratory's.
+ */
+test.describe('Every department can send a report', () => {
+  const DEPARTMENTS = [
+    { account: 'lab@enlogada.com', nav: 'Laboratory History', category: 'Laboratory' },
+    { account: 'xray@enlogada.com', nav: 'X-Ray History', category: 'Xray' },
+    { account: 'ultrasound@enlogada.com', nav: 'Ultrasound History', category: 'Ultrasound' },
+  ];
+
+  for (const dept of DEPARTMENTS) {
+    test(`${dept.category} carries the delivery column and the action`, async ({ page }) => {
+      await signIn(page, dept.account);
+      await page.getByRole('button', { name: dept.nav }).first().click();
+
+      // Released and delivered are two different facts, in every department.
+      await expect(page.getByRole('columnheader', { name: 'Sent to patient' }))
+        .toBeVisible({ timeout: 20000 });
+
+      // And the filter that finds the reports nobody was told about.
+      await expect(page.getByRole('tab', { name: 'Not sent' })).toBeVisible();
+
+      const firstRow = page.locator('tbody tr').first();
+      await expect(firstRow).toBeVisible();
+
+      // Either an address to send to, or an explicit statement that there is none. What must
+      // never appear is a control that can only refuse, with nothing on screen saying why.
+      const button = firstRow.getByRole('button', { name: /Email|Send again/ });
+      await expect(button).toBeVisible();
+      if (await button.isDisabled()) {
+        await expect(firstRow).toContainText(/No email on file/i);
+      }
+    });
+  }
+
+  test('the API answers each department for its own results only', async () => {
+    const ctx = await request.newContext();
+
+    for (const dept of DEPARTMENTS) {
+      const token = await login(ctx, dept.account);
+      const res = await ctx.get(`${API}/results/released/${dept.category}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { days: 0, limit: 5 },
+      });
+      expect(res.status(), `${dept.category} reads its own history`).toBe(200);
+
+      const rows = (await res.json()).data.released;
+      if (rows.length) {
+        // The delivery state travels on every department's rows, not only Laboratory's.
+        for (const field of ['emailed_at', 'emailed_to', 'email_count', 'patient_email']) {
+          expect(rows[0], `${dept.category} row must carry ${field}`).toHaveProperty(field);
+        }
+      }
+
+      // And a department cannot read another's. This is the same check that gates the send, so
+      // asserting it here is asserting the send boundary too.
+      const other = DEPARTMENTS.find((d) => d.category !== dept.category);
+      expect(
+        (await ctx.get(`${API}/results/released/${other.category}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })).status(),
+        `${dept.category} must not read ${other.category}`
+      ).toBe(403);
+    }
+
+    await ctx.dispose();
+  });
+});
