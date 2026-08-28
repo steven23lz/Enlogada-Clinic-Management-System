@@ -54,7 +54,7 @@ const missingMailConfig = () => {
   return missing;
 };
 
-const sendEmail = async ({ to, subject, html }) => {
+const sendEmail = async ({ to, subject, html, attachments }) => {
   try {
     // Before the configuration check, because this is true whatever the clinic has configured.
     if (typeof to === 'string' && to.toLowerCase().endsWith(E2E_EMAIL_DOMAIN)) {
@@ -75,7 +75,10 @@ const sendEmail = async ({ to, subject, html }) => {
       from: env.SMTP_FROM,
       to,
       subject,
-      html
+      html,
+      // Only when there is something to attach. nodemailer accepts an empty array, but passing
+      // one on every send makes it harder to see at a glance which paths carry a document.
+      ...(attachments && attachments.length ? { attachments } : {})
     });
 
     logger.info(`Email sent to ${to}: ${info.messageId}`);

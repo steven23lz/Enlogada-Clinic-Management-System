@@ -405,27 +405,47 @@ class ResultRepository {
     return result.rows;
   }
 
+  /**
+   * Everything the released-result email needs: who to send it to, and what the report SAYS.
+   * [1.61.0]
+   *
+   * It used to return the address and the test name alone, because the email only announced that
+   * a result existed. Now that the report itself travels, the findings, the attachment and the
+   * demographics come with it — age and sex band the reference range a clinician reads the
+   * findings against, and the visit date is the date the examination was PERFORMED, which is not
+   * the date it was released.
+   *
+   * Joined on `is_current`. Without it a test with an amendment returns one row per version and
+   * the email could carry superseded findings beside live ones — the general rule CLAUDE.md sets
+   * out for this table, with the sharpest possible consequence.
+   */
   async findPatientEmailByVisitTestId(visitTestId) {
     const queryText = `
-      -- contact_number is here for the critical-result callback: the staff member who has to
-      -- telephone the patient should not have to go and look it up while a panic value is
-      -- sitting unactioned. Recipients of that notification (Receptionist/Admin/SuperAdmin) are
-      -- already entitled to patient contact details.
       -- The patient record's own address first, the owning ACCOUNT's second. [1.60.0]
       --
       -- The order matters because one account owns several patient profiles — a parent booking
       -- for dependents, which is why /patients/my-profiles is plural. The account address is the
       -- right default for a dependent, since the parent is who booked; but an address typed onto
       -- one patient's record is a deliberate statement about THAT patient and wins over an
-      -- inherited one. Falling back rather than replacing means no client-owned patient loses
-      -- the address they already had.
+      -- inherited one.
       SELECT COALESCE(NULLIF(p.email, ''), u.email) AS email,
-             p.first_name, p.last_name, p.contact_number, t.name as test_name
+             p.first_name, p.last_name, p.contact_number,
+             -- contact_number is here for the critical-result callback: the staff member who has
+             -- to telephone the patient should not have to go and look it up while a panic value
+             -- sits unactioned.
+             p.birthdate, p.sex,
+             t.name as test_name, tc.name as category_name,
+             pv.created_at as visit_date, pv.queue_number,
+             pv.referring_physician, pv.referring_physician_prc,
+             tr.findings, tr.remarks, tr.released_at, tr.version, tr.is_critical,
+             tr.file_path, tr.file_original_name, tr.file_mime_type, tr.file_size_bytes
       FROM visit_tests vt
       JOIN patient_visits pv ON vt.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
       LEFT JOIN users u ON p.user_id = u.id
       JOIN tests t ON vt.test_id = t.id
+      JOIN test_categories tc ON t.category_id = tc.id
+      LEFT JOIN test_results tr ON tr.visit_test_id = vt.id AND tr.is_current
       WHERE vt.id = $1
     `;
     const result = await db.query(queryText, [visitTestId]);

@@ -75,6 +75,24 @@ module.exports = {
   CLINIC_VAT_REGISTERED: process.env.CLINIC_VAT_REGISTERED !== 'false',
   VAT_RATE: parseFloat(process.env.VAT_RATE || '0.12'),
 
+  /**
+   * The clinic's own identity, for documents the backend composes on its own — currently the
+   * released-result email. [1.61.0]
+   *
+   * The defaults are the same values frontend/src/lib/clinic.js falls back to, and that is the
+   * point: a report emailed to a patient carries the letterhead they read on the website and on
+   * their receipt. Three sources drifting apart is a document nobody can rely on, which is the
+   * reasoning clinic.js already sets out for the printed receipt.
+   *
+   * TIN and business permit are deliberately absent. They belong on a BIR document, and a
+   * diagnostic report is not one — inventing them onto a clinical email would be worse than the
+   * receipt case, where at least the patient might file it for reimbursement.
+   */
+  CLINIC_NAME: process.env.CLINIC_NAME || 'Enlogada Ultrasound & Diagnostic Clinic',
+  CLINIC_ADDRESS: process.env.CLINIC_ADDRESS || 'Bugo, Cagayan de Oro, Philippines 9000',
+  CLINIC_PHONE: process.env.CLINIC_PHONE || '0936 132 0650',
+  CLINIC_EMAIL: process.env.CLINIC_EMAIL || 'enlogadaclinic2011@gmail.com',
+
   // Outbound mail. EMAIL_* is accepted as an alias for SMTP_* because that is how Gmail names
   // these when you generate an App Password, and an operator following Google's own wording
   // should not end up with a silently unconfigured mailer. SMTP_* wins where both are set, being

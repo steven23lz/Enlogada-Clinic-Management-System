@@ -8,6 +8,10 @@ const { sendEmail } = require('../config/email');
 const notificationService = require('./notificationService');
 const { UPLOAD_ROOT } = require('../config/upload');
 const auditService = require('./auditService');
+const env = require('../config/environment');
+const {
+  escapeHtml, wrapEmail, reportTable, findingsBlock, resolveReportAttachment,
+} = require('./resultEmailTemplate');
 const {
   DIAGNOSTIC_CATEGORIES,
   MODALITY_SETTABLE_TEST_STATUSES,
@@ -369,40 +373,78 @@ class ResultService {
   async deliverResultEmail({ patientInfo, isCritical, isAmendment, visitTestId }) {
     if (!patientInfo || !patientInfo.email) return 'no_email';
 
-    // A panic value must not go out with the same cheerful "your results are ready" wording as a
-    // normal CBC. The clinic still telephones — that is what the acknowledgement records — but
-    // the email must not read as routine in the meantime, and it must not put a clinical value in
-    // front of a patient with no clinician attached to it.
-    const subject = isCritical
-      ? `IMPORTANT: Please contact Enlogada Clinic about your ${patientInfo.test_name} result`
-      : isAmendment
-        ? `Updated ${patientInfo.test_name} result - Enlogada Clinic`
-        : `Your ${patientInfo.test_name} Results Are Ready - Enlogada Clinic`;
+    const patientName = `${patientInfo.first_name} ${patientInfo.last_name}`;
 
-    const body = isCritical
-      ? `<p>Your <strong>${patientInfo.test_name}</strong> result requires prompt discussion with a clinician.</p>
-         <p><strong>Please contact the clinic as soon as you can</strong>, or proceed to the nearest
-            emergency department if you feel unwell. A member of our staff will also be trying to
-            reach you by phone.</p>`
-      : isAmendment
-        ? `<p>Your <strong>${patientInfo.test_name}</strong> report has been <strong>updated</strong>, and the
-              revised version replaces the one issued earlier.</p>
-           <p>Please use the updated report, and discard or disregard any earlier copy.</p>`
-        : `<p>Your <strong>${patientInfo.test_name}</strong> results are now available.</p>
-           <p>You can view your results by logging in to your account or by visiting the clinic.</p>`;
+    /**
+     * A CRITICAL value does not travel by email. [1.61.0]
+     *
+     * Everything below sends the patient their actual report. This one case deliberately does
+     * not, and the reason is clinical rather than technical: a panic value read alone, at night,
+     * with no clinician attached to it, is how a patient ends up frightened and unadvised — or
+     * worse, reassured by a number they have misread. The clinic telephones for these, and
+     * `acknowledgeCritical` is the record that a human actually made contact.
+     *
+     * So the email says "please contact us", carries no findings and no attachment, and the
+     * report stays available in the portal and at the counter where somebody can explain it.
+     * This is a clinical policy decision, not a limitation — if the clinic decides otherwise,
+     * this is the one branch to change.
+     */
+    if (isCritical) {
+      const critical = await sendEmail({
+        to: patientInfo.email,
+        subject: `IMPORTANT: Please contact ${env.CLINIC_NAME} about your ${patientInfo.test_name} result`,
+        html: wrapEmail(`
+          <h2 style="margin:0 0 16px;font-size:18px;color:#0f172a;">Hello ${escapeHtml(patientName)},</h2>
+          <p>Your <strong>${escapeHtml(patientInfo.test_name)}</strong> result requires prompt discussion
+             with a clinician.</p>
+          <p><strong>Please contact the clinic as soon as you can</strong>, or proceed to the nearest
+             emergency department if you feel unwell. A member of our staff will also be trying to
+             reach you by phone.</p>
+          <p>We have not included the findings in this email on purpose. They are best read with
+             someone who can explain what they mean for you, and your full report is waiting at the
+             clinic and in your patient portal.</p>
+        `),
+      });
+      if (critical?.error || critical?.skipped) return 'failed';
+      await resultRepository.recordEmailDelivery(visitTestId, patientInfo.email);
+      return 'sent';
+    }
+
+    // ── The report itself ──────────────────────────────────────────────────────────────────
+    //
+    // Attached when the department uploaded a document, and set out in the body either way. Both,
+    // not one or the other: an attachment a patient cannot open on their phone is no report at
+    // all, and a body with no document is not what a referring physician will accept.
+    const attachment = resolveReportAttachment(patientInfo);
+
+    const subject = isAmendment
+      ? `Updated ${patientInfo.test_name} result - ${env.CLINIC_NAME}`
+      : `Your ${patientInfo.test_name} Results Are Ready - ${env.CLINIC_NAME}`;
+
+    const amendmentBanner = isAmendment
+      ? `<p style="margin:0 0 16px;padding:12px 14px;background:#fffbeb;border-left:3px solid #d97706;
+                  border-radius:6px;color:#78350f;">
+           <strong>This report replaces the one issued earlier.</strong> Please use this version and
+           discard any earlier copy.
+         </p>`
+      : '';
 
     const emailResult = await sendEmail({
       to: patientInfo.email,
       subject,
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <h2>Hello ${patientInfo.first_name} ${patientInfo.last_name},</h2>
-          ${body}
-          <br/>
-          <p>Thank you,</p>
-          <p><strong>Enlogada Ultrasound and Diagnostic Clinic</strong></p>
-        </div>
-      `,
+      html: wrapEmail(`
+        <h2 style="margin:0 0 16px;font-size:18px;color:#0f172a;">Hello ${escapeHtml(patientName)},</h2>
+        ${amendmentBanner}
+        <p>Your <strong>${escapeHtml(patientInfo.test_name)}</strong> report is ready, and is set out
+           below.${attachment ? ' A copy is attached to this email as well.' : ''}</p>
+        ${reportTable(patientInfo)}
+        ${findingsBlock(patientInfo)}
+        <p style="margin:20px 0 0;font-size:13px;color:#475569;">
+          These findings are for your doctor to interpret. If anything here is unclear, or if you
+          feel unwell, please contact the clinic on ${escapeHtml(env.CLINIC_PHONE)}.
+        </p>
+      `),
+      attachments: attachment ? [attachment] : undefined,
     });
 
     if (emailResult?.error || emailResult?.skipped) return 'failed';

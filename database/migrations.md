@@ -1,5 +1,72 @@
 # Database Migration & Schema History
 
+## [1.61.0] - 2026-08-28 (Send the report, not a notice that one exists)
+
+No schema change. One new module, `services/resultEmailTemplate.js`.
+
+### The email announced a result instead of delivering one
+
+Verified live to a real inbox: the message arrives, lands in the Inbox rather than Spam, correctly
+branded. And it said only this — *"Your results are now available. You can view your results by
+logging in to your account or by visiting the clinic."* A patient who reads it still has to make a
+trip or a login to learn anything.
+
+The clinic's own data said the report was sitting right there: **41 current results, 41 with
+findings text, 40 with an uploaded PDF.**
+
+The report travels now. **Both** in the body and as an attachment, not one or the other — an
+attachment a patient cannot open on their phone is no report at all, and a body with no document
+is not something a referring physician will accept. Those figures settle it: either alone would
+have failed some patient.
+
+The body carries a letterhead, then patient / age / sex / examination / department / date of
+examination / date released / referring physician, then the findings and remarks. Age and sex are
+there because they band the reference range a clinician reads the findings against, and the date
+of the EXAMINATION because that is the clinically meaningful one — routinely not the day the
+report was released.
+
+### A critical value still does not travel
+
+The one deliberate exception, and it is clinical rather than technical. A panic value read alone,
+at night, with no clinician attached, is how a patient ends up frightened and unadvised — or worse,
+reassured by a number they have misread. That email carries **no findings and no attachment**: it
+says to contact the clinic, says plainly that the findings were left out on purpose and why, and
+the report stays in the portal and at the counter where somebody can explain it. The clinic
+telephones for these anyway, and `acknowledgeCritical` is the record that a human made contact.
+
+This is a policy decision the clinic may reverse; it is one branch in `deliverResultEmail`.
+
+### Three guards on the attachment, each of which has to hold
+
+| | |
+|---|---|
+| **containment** | the path is rebuilt from `UPLOAD_ROOT` and re-checked with `resolve()`, the same rule the download route follows. `file_path` is server-generated random hex, never client input — but a stored value is still an input, and the cost of being wrong is emailing an arbitrary file off disk. Verified: a traversal path is refused. |
+| **existence** | a row outlives its file after a restored database or a cleared uploads directory. Degrades to body-only rather than throwing and losing the send. |
+| **size** | Gmail refuses over 25MB and fails the message as a whole. A report that will not send is worse than one with no attachment, because the patient then gets nothing. Capped at 20MB. |
+
+Every failure returns null instead of throwing, for the same reason: the findings are in the body,
+so the patient still receives their report.
+
+The attachment is renamed for the PATIENT — `Blood Urea Nitrogen (BUN) - Juan Dela Cruz.pdf` rather
+than whatever the technician's machine called it. `laboratory-report-de jesus.pdf` tells the
+recipient nothing about which of their tests it is.
+
+### Two smaller things this needed
+
+**Everything interpolated is escaped.** Findings are free text written by a technician, and
+`< 0.5 mmol/L` is an ordinary thing to write. Unescaped it becomes markup the mail client tries to
+interpret, and the value silently disappears from the report.
+
+**The letterhead comes from the same values as the receipt.** `CLINIC_NAME` / `ADDRESS` / `PHONE` /
+`EMAIL` were set in `.env` and never exposed by `environment.js`, so the backend could not read
+them. They now default to exactly what `frontend/src/lib/clinic.js` falls back to. Three sources
+drifting apart is a document nobody can rely on — the reasoning `clinic.js` already sets out for
+the printed receipt. TIN and business permit are deliberately absent: a diagnostic report is not a
+BIR document.
+
+Suite unchanged at 274, all passing.
+
+
 ## [1.60.0] - 2026-08-27 (An address to send it to)
 
 `patients.email`, plus one partial index. `migratePatientEmail.js` (`--rollback` reverses it).
