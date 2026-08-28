@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { QrCode, AlertCircle, ExternalLink, Clock } from 'lucide-react';
+import DataBadge from './ui/data-badge';
 
 /**
  * The scannable booking pass for a paid online appointment.
@@ -18,22 +19,16 @@ import { QrCode, AlertCircle, ExternalLink, Clock } from 'lucide-react';
  * paid booking ever need the encoder. Mirrors how QrScanner.jsx defers html5-qrcode.
  */
 /**
- * "About 20 minutes — 3 patients ahead of you." [1.62.0]
+ * The wait, presented for a person standing still. [1.63.0]
  *
- * ── Every word here is hedged on purpose ────────────────────────────────────────────────────
+ * Wraps the shared `EtaBadge` rather than re-implementing it. [1.62.0] hand-rolled this here and
+ * again in the reception queue, in two unrelated treatments; the badge is now one component and
+ * this is the one place that dresses it up.
  *
- * "About", and a number rounded to five minutes. The estimate is a queue length times a measured
- * service rate, and it cannot account for the patient in front who turns out to need three tests
- * explained. A clinic that says "18 minutes" has made a promise; one that says "about 20 minutes"
- * has given an estimate, and only the second is true.
- *
- * The head count is shown BESIDE the time rather than instead of it, because it is the part the
- * patient can verify. A number that ticks down from 3 to 2 to 1 is visibly working; a time on its
- * own, from a system that has been wrong before, is not believed.
- *
- * Renders nothing at all when there is no estimate — a booking for next week, or a patient already
- * past the desk. A "0 minute wait" on a booking three days out would be absurd, and an empty
- * placeholder saying "wait unknown" is worse than the silence this had before.
+ * The presentation genuinely differs and that is why the wrapper exists: a receptionist scans a
+ * column of these, so in a table the badge is small and dense. A patient reads this once, holding
+ * a phone, and the wait is the thing they came to the screen for — so it gets its own block, the
+ * time in full words, and the head count spelled out underneath.
  */
 const QueueWait = ({ minutes, ahead, capped }) => {
   if (minutes === null || minutes === undefined) return null;
@@ -44,7 +39,7 @@ const QueueWait = ({ minutes, ahead, capped }) => {
     : `${people} patient${people === 1 ? '' : 's'} ahead of you`;
 
   return (
-    <span className="mt-1.5 flex flex-col items-center gap-0.5 rounded-lg bg-brand-50 px-3 py-1.5 ring-1 ring-inset ring-brand-100">
+    <span className="mt-1.5 flex flex-col items-center gap-1 rounded-lg bg-brand-50 px-3 py-2 ring-1 ring-inset ring-brand-100">
       <span className="flex items-center gap-1.5 text-note font-bold text-brand-800">
         <Clock className="h-3.5 w-3.5" aria-hidden="true" />
         {capped ? 'Over 90 minutes' : `About ${minutes} minutes`}
@@ -123,7 +118,7 @@ const BookingPass = ({
         <div className="w-40 h-40 bg-skeleton rounded-lg animate-pulse" aria-hidden="true" />
       )}
 
-      <span className="font-mono text-note font-bold tracking-wide text-slate-900">{reference}</span>
+      <DataBadge variant="reference" label="Booking reference" copyable>{reference}</DataBadge>
       {queueNumber && (
         <span className="text-micro font-semibold text-slate-500">Queue Ticket {queueNumber}</span>
       )}
@@ -163,7 +158,7 @@ const BookingPass = ({
       {isPaid === true && receiptNumber && (
         <span className="mt-1.5 flex flex-col items-center gap-0.5">
           <span className="text-micro text-slate-500">
-            Receipt <span className="font-mono font-semibold text-slate-700">{receiptNumber}</span>
+            Receipt <DataBadge variant="receipt" label="Receipt number" copyable>{receiptNumber}</DataBadge>
           </span>
           <button
             type="button"

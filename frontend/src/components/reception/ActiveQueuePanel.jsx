@@ -1,5 +1,8 @@
 import React from 'react';
 import { AlertCircle, ClipboardList, Clock, ShieldAlert, UserCheck, UserPlus, Volume2, XCircle } from 'lucide-react';
+import DataBadge from '../ui/data-badge';
+import EtaBadge from '../ui/eta-badge';
+import WaitBadge from '../ui/wait-badge';
 import { Button } from '../ui/button';
 import { useAuth } from '../../contexts/AuthContext';
 import { Panel, PanelBody } from '../ui/panel';
@@ -166,9 +169,9 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                             {/* The ticket number is the thing a receptionist calls out and a
                                 patient reads back, so it is set larger than the row around it
                                 rather than smaller — it was 12px in a row of 12px text. */}
-                            <span className="rounded-md bg-emphasis px-2 py-1 text-fine font-bold tabular-nums text-emphasis-foreground">
+                            <DataBadge variant="queue" label="Queue ticket">
                               {visit.queue_number || `V-${visit.id}`}
-                            </span>
+                            </DataBadge>
                             {/* aria-label as well as title: `title` alone is not a reliable
                                 accessible name and is invisible on touch, so a screen reader
                                 announced two unlabelled buttons on every queue row. */}
@@ -188,20 +191,34 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                               Present only for a Pending visit — a 'Processing' one has been billed
                               and belongs to a department now, where this front-desk estimate has
                               nothing to say. */}
-                          {visit.estimated_wait_minutes != null && (
-                            <span className="mt-1 flex items-center gap-1 text-micro font-semibold text-slate-500">
-                              <Clock className="h-3 w-3" aria-hidden="true" />
-                              {visit.estimate_is_capped ? 'over 90 min' : `~${visit.estimated_wait_minutes} min`}
-                              <span className="font-normal text-slate-400">
-                                · {visit.patients_ahead === 0 ? 'next' : `${visit.patients_ahead} ahead`}
-                              </span>
-                            </span>
-                          )}
+                          {/* Elapsed AND predicted, together. [1.63.0] The billing queue and the
+                              diagnostic worklists have shown WaitBadge since it was extracted; this
+                              console showed only the ETA that [1.62.0] added inline. A receptionist
+                              is asked both questions — "how long have I been here" and "how much
+                              longer" — and answering one of them is answering the wrong half. */}
+                          <span className="mt-1 flex flex-wrap items-center gap-1">
+                            <WaitBadge since={visit.created_at} />
+                            {/* `compact` — time only, no head count — and that is a deliberate
+                                editorial call rather than a space saving. In a table ordered BY
+                                queue position, "2 ahead" is redundant: the two rows above this one
+                                are the two patients ahead. The count earns its place on the
+                                patient's own booking pass, where there is no list to read it from.
+
+                                It is also load-bearing for layout. Both badges at full width pushed
+                                the ticket column wide enough to clip the Actions column off the
+                                right of a 1440px screen — the primary controls on the screen,
+                                pushed off it by decoration. */}
+                            <EtaBadge
+                              minutes={visit.estimated_wait_minutes}
+                              capped={visit.estimate_is_capped}
+                              compact
+                            />
+                          </span>
                         </TableCell>
 
                         <TableCell label="Patient Name" className="font-semibold text-slate-900">
                           {visit.first_name} {visit.last_name}
-                          <span className="block font-mono text-micro font-normal text-slate-400">PT-{visit.patient_id}</span>
+                          <DataBadge variant="patient" label="Patient record" className="block">PT-{visit.patient_id}</DataBadge>
                         </TableCell>
 
                         <TableCell label="Visit Type">
