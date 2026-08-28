@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "test": "node --test \"tests/unit/*.test.js\"",
+    "test:watch": "node --test --watch \"tests/unit/*.test.js\"",
     "lint": "oxlint src",
     "retention": "node src/scripts/retention.js",
     "retention:apply": "node src/scripts/retention.js --confirm",
