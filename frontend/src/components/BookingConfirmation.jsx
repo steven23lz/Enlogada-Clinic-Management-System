@@ -3,8 +3,9 @@ import { printElement } from '../lib/printArea';
 import { QRCodeSVG } from 'qrcode.react';
 import { Button } from './ui/button';
 import { Printer, CheckCircle2, Wallet, ShieldCheck } from 'lucide-react';
-import { formatTime12 } from '../lib/date';
+import AppointmentTime from './ui/appointment-time';
 import { formatCurrency } from '../lib/currency';
+import DataBadge from './ui/data-badge';
 
 /**
  * What the patient sees the moment a booking succeeds.
@@ -31,6 +32,7 @@ const BookingConfirmation = ({
   patientName,
   scheduledDate,
   scheduledTime,
+  slotMinutes = null,
   amountDue = 0,
   isHmo = false,
   onClose,
@@ -116,7 +118,7 @@ const BookingConfirmation = ({
         <div className="grid grid-cols-2 gap-3 border-t border-line pt-3">
           <div className="space-y-0.5">
             <span className="field-label">Reference Code</span>
-            <span className="font-mono text-sm font-extrabold text-slate-900">{referenceCode}</span>
+            <DataBadge variant="reference" label="Reference code" copyable>{referenceCode}</DataBadge>
           </div>
           <div className="space-y-0.5">
             <span className="field-label">Queue Ticket</span>
@@ -143,10 +145,13 @@ const BookingConfirmation = ({
           <div className="space-y-0.5 border-t border-line pt-3 text-xs text-gray-500">
             {patientName && <p className="m-0 font-semibold">{patientName}</p>}
             {scheduledDate && (
-              <p className="m-0">
-                {scheduledDate}
-                {scheduledTime ? ` at ${formatTime12(scheduledTime)}` : ''}
-              </p>
+              <div className="m-0 space-y-1">
+                <p className="m-0 font-semibold text-ink">{scheduledDate}</p>
+                {/* Two named times, not one. [1.63.0] This said "at 9:00 AM" and a patient read
+                    that as when to turn up — so they arrived at 9:00, queued to check in, and
+                    their 9:00 slot started late through nobody's fault. */}
+                <AppointmentTime scheduledTime={scheduledTime} slotMinutes={slotMinutes} />
+              </div>
             )}
           </div>
         )}

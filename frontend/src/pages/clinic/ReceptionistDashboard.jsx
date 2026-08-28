@@ -156,15 +156,54 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           </div>
         )}
 
+        {/* Queue and registration together, on a screen wide enough to hold both. [1.63.0]
+            ── Why 2xl and not lg ──────────────────────────────────────────────────────────────
+            A reception monitor is 1920 wide; a laptop at the desk is 1280-1440. Splitting at `lg`
+            would squeeze the queue table — which has seven columns and is the primary content —
+            on exactly the machines that can least afford it. At 2xl there is genuinely room for
+            both, and below it the layout is unchanged, which is also why no existing test moves.
+
+            Registration is the SECOND column, not the first. The queue is what a receptionist
+            watches continuously; registering a walk-in is what they do intermittently. Putting
+            the form on the left would put the interruption where the attention lives.
+
+            The two views stay mutually exclusive elsewhere, so the form is never mounted twice —
+            `reception-walkin` still renders it alone, full width, for the narrower screens where
+            that is the only way to give it room. */}
         {view === 'reception-queue' && (
-          <ActiveQueuePanel
-            queue={queue}
-            disposition={disposition}
-            hmo={hmo}
-            testAssignment={testAssignment}
-            onCallPatient={speakQueueNumber}
-            onSelectNav={onSelectNav}
-          />
+          <div className="grid grid-cols-1 items-start gap-5 2xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
+            {/* The wrapper is load-bearing, not tidiness. ActiveQueuePanel returns a FRAGMENT, so
+                without it the panel's three children — the metric row, the HMO band and the queue
+                table — each became a separate grid item and got dealt alternately into the two
+                columns. Found by screenshotting it: the metrics sat left, the HMO band top-right,
+                the table left again.
+
+                `items-start` for the same class of reason: grid items stretch to the tallest row
+                by default, which inflated the metric cards into tall empty boxes to match the
+                band beside them.
+
+                3fr/1fr rather than 2fr/1fr because the queue table has seven columns. At 2fr it
+                fitted the viewport but clipped Actions — the primary controls — off its own right
+                edge. The table scrolls inside its panel as a backstop, but a horizontal scrollbar
+                to reach "Edit Tests" is a worse answer than giving the table the room. */}
+            <div className="min-w-0 space-y-5">
+              <ActiveQueuePanel
+                queue={queue}
+                disposition={disposition}
+                hmo={hmo}
+                testAssignment={testAssignment}
+                onCallPatient={speakQueueNumber}
+                onSelectNav={onSelectNav}
+              />
+            </div>
+            {/* Only for someone who may actually register one — the same permission the button in
+                the header answers to, and the same 403 it exists to avoid. */}
+            {hasPermission('visits:create') && (
+              <div className="hidden 2xl:block">
+                <WalkInPanel queue={queue} lookup={lookup} checkIn={checkIn} reference={reference} compact />
+              </div>
+            )}
+          </div>
         )}
 
         {view === 'reception-history' && (

@@ -24,6 +24,7 @@ import { Users, AlertCircle, Printer, FolderSearch, FileX2, Eye, Paperclip, Buil
 import { DateField, RANGE_PRESETS } from '../../components/ui/date-field';
 import { formatDate } from '../../lib/date';
 import { toastSuccess, toastError } from '../../lib/toast';
+import FindingsText from '../../components/diagnostic/FindingsText';
 
 // UI/UX Modernization Phase 4: search results come back in one shot with no server-side
 // pagination, so a client-side page size is proportionate (VISUAL_IDENTITY.md §3a #11).
@@ -520,7 +521,9 @@ const PatientRecordsOversight = () => {
                       {item.released_at && <span>Released {new Date(item.released_at).toLocaleDateString()}</span>}
                     </div>
                     {item.findings && (
-                      <p className="m-0 mt-2 whitespace-pre-wrap border-t border-line-soft pt-2 text-fine leading-relaxed text-slate-600">{item.findings}</p>
+                      <div className="mt-2 border-t border-line-soft pt-2 text-fine leading-relaxed text-slate-600">
+                        <FindingsText findings={item.findings} />
+                      </div>
                     )}
                     {/* The attachment was never surfaced on this screen at all — the query has
                         returned file_path since [1.7.0] and nothing rendered it, so the one

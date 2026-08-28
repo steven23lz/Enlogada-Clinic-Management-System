@@ -8,6 +8,7 @@ import { SearchInput } from '../ui/search-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import WaitBadge from '../ui/wait-badge';
 import { SkeletonList } from '../ui/skeleton';
+import DataBadge from '../ui/data-badge';
 
 /**
  * Tickets waiting to be charged, and picking one up.
@@ -87,7 +88,7 @@ export default function BillingQueuePanel({ queue, checkout }) {
                       <span className="flex items-start justify-between gap-2">
                         <span className="min-w-0">
                           <span className="block truncate text-note font-semibold text-slate-900">{visit.first_name} {visit.last_name}</span>
-                          <span className="block font-mono text-micro font-medium text-slate-400">{visit.queue_number || `V-${visit.id}`}</span>
+                          <DataBadge variant="patient" label="Queue ticket" className="block">{visit.queue_number || `V-${visit.id}`}</DataBadge>
                         </span>
                         <span className="flex flex-shrink-0 flex-col items-end gap-1">
                           <span className="flex items-center gap-1">

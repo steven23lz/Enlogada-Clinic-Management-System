@@ -1,6 +1,7 @@
 import React from 'react';
 import { useClinic, isSampleIdentity } from '../lib/clinic';
 import { formatDateTime } from '../lib/date';
+import FindingsText from './diagnostic/FindingsText';
 
 /**
  * The clinic's diagnostic report, as a document. [1.54.0]
@@ -143,11 +144,17 @@ export default function DiagnosticReport({ patient, result }) {
         <span className="block text-micro font-bold uppercase tracking-wider text-slate-500">
           Findings &amp; Impression
         </span>
-        {/* whitespace-pre-wrap: a technician's findings carry their own line breaks, and losing
-            them runs separate observations into one paragraph. */}
-        <p className="m-0 whitespace-pre-wrap text-fine leading-relaxed text-slate-900">
-          {result.findings || '—'}
-        </p>
+        {/* Out-of-range values are marked. [1.63.0] A CBC panel is eight lines of near-identical
+            text, and the two the clinician needs looked exactly like the six they did not.
+
+            FindingsText carries the flag as a bold HIGH/LOW tag as well as a tint, because this
+            block is inside a document the clinic PRINTS — browsers drop background colours, so a
+            colour-only signal is invisible on the copy that gets handed over. It marks abnormal
+            and never marks normal; an unparseable line renders exactly as typed. */}
+        <FindingsText
+          findings={result.findings}
+          className="text-fine leading-relaxed text-slate-900"
+        />
       </section>
 
       {result.result_remarks && (

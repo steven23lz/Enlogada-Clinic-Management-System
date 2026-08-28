@@ -17,6 +17,7 @@ import { isCrossDayReversal } from '../../lib/collections';
 import { BillingTotalsPanel, SalesByServicePanel } from '../reports/OperationsPanels';
 import { HISTORY_PAGE_SIZE } from '../../hooks/useTransactionHistory';
 import { DateField, RANGE_PRESETS } from '../ui/date-field';
+import DataBadge from '../ui/data-badge';
 
 /**
  * Receipts issued over a chosen range, for the daily cash-up.
@@ -116,12 +117,14 @@ export default function TransactionHistoryPanel({ history, receipt, refund, oper
                 ) : history.transactions.length > 0 ? (
                   history.transactions.map(t => (
                     <TableRow key={t.id}>
-                      <TableCell label="Receipt #" className="whitespace-nowrap font-mono text-fine font-semibold text-slate-900">{t.receipt_number || `OR-${t.id}`}</TableCell>
+                      <TableCell label="Receipt #" className="whitespace-nowrap">
+                        <DataBadge variant="receipt" label="Receipt number" copyable>{t.receipt_number || `OR-${t.id}`}</DataBadge>
+                      </TableCell>
                       <TableCell label="Patient" className="font-semibold text-slate-900">{t.patient_first_name} {t.patient_last_name}</TableCell>
                       <TableCell label="Method">
                         <Badge variant="outline" className="text-slate-600">{t.payment_method}</Badge>
                         {t.reference_number && (
-                          <span className="mt-0.5 block font-mono text-fine text-slate-500">{t.reference_number}</span>
+                          <DataBadge variant="reference" label="Payment reference" className="mt-1">{t.reference_number}</DataBadge>
                         )}
                       </TableCell>
                       <TableCell

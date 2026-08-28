@@ -10,6 +10,8 @@ import Pagination from '../ui/pagination';
 import BookingPass from '../BookingPass';
 import PayBookingPanel from './PayBookingPanel';
 import { formatAppointmentDate, formatTime12 } from '../../lib/date';
+import AppointmentTime from '../ui/appointment-time';
+import DataBadge from '../ui/data-badge';
 
 /**
  * Bookings this patient has, and the pass they present.
@@ -98,7 +100,10 @@ export default function AppointmentsTab({ bookings }) {
                           <span className="block text-xs font-extrabold text-slate-900">
                             {formatAppointmentDate(appt.scheduled_date)}
                           </span>
-                          <span className="block text-fine text-gray-500 font-medium">{formatTime12(appt.scheduled_time)}</span>
+                          {/* Inline variant — this is a dense list of cards, and the stacked
+                              two-line form belongs on the pass below rather than repeated in
+                              every row header. */}
+                          <AppointmentTime scheduledTime={appt.scheduled_time} variant="inline" />
                         </div>
                         <StatusBadge status={appt.status} />
                       </div>
@@ -115,7 +120,7 @@ export default function AppointmentsTab({ bookings }) {
                           estimateIsCapped={appt.estimate_is_capped ?? false}
                         />
                       ) : (
-                        <span className="block font-mono text-micro text-slate-400">{appt.appointment_reference}</span>
+                        <DataBadge variant="reference" label="Booking reference" copyable>{appt.appointment_reference}</DataBadge>
                       )}
 
 

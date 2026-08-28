@@ -171,8 +171,17 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                   </div>
                 )}
 
-                <form onSubmit={handleWalkInRegister} className="space-y-4">
-                  {/* Two columns above `lg`, split by QUESTION rather than by field count. [1.54.0]
+                <form onSubmit={handleWalkInRegister} className="@container space-y-4">
+                  {/* Two columns above `@3xl`, split by QUESTION rather than by field count. [1.54.0]
+
+                      CONTAINER queries, not viewport ones. [1.63.0] These were `sm:` and `lg:`,
+                      which ask how wide the WINDOW is — the wrong question once this same form
+                      also renders in the reception queue's 400px side column. At 1920 the viewport
+                      breakpoints all fired, so the narrow column got a three-across field row and
+                      rendered "Dela C", "S..." and "0917'". The form now asks how wide ITS OWN
+                      container is, and lays out correctly in both places with no prop to thread
+                      or duplicate.
+
                       This was one max-w-3xl column on a screen twice that wide: the right half of
                       a reception terminal sat empty while the form ran off the bottom, so the
                       person registering a patient standing at the desk was scrolling.
@@ -182,9 +191,9 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                       are answered at different moments of the same conversation, and keeping them
                       apart means the required half is complete and visible before the optional
                       half is even looked at. */}
-                  <div className="grid grid-cols-1 gap-x-8 gap-y-4 lg:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-x-8 gap-y-4 @3xl:grid-cols-2">
                   <div className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 @md:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="field-label" htmlFor="wi-first">First Name <span className="text-rose-600">*</span></label>
                       <Input
@@ -209,7 +218,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 @md:grid-cols-3 gap-4">
                     <div className="space-y-1 sm:col-span-2">
                       <label className="field-label" htmlFor="wi-birthdate">Birthdate <span className="text-rose-600">*</span></label>
                       <DateField
@@ -240,7 +249,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 @md:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="field-label" htmlFor="wi-contact">Contact Number</label>
                       <Input
