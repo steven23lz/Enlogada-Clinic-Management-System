@@ -41,9 +41,17 @@
   --text-stat: 1.875rem;    /* 30px */
 
   /* ── Brand ─────────────────────────────────────────────────────────────────────────────── */
-  --color-primary: #53843b;
-  --color-primary-hover: #477233;
-  --color-primary-active: #3a5c29;
+  /* #477233, not the #53843b it was. [1.65.0]
+     White on #53843b measures 4.44:1 — under the 4.50 floor for normal text — and this token
+     fills every primary action in the app. The hover state was already this value, so the button
+     was compliant on hover and not at rest, which is when it is read.
+
+     Deliberately NOT `brand-600`: the dark block remaps that step to #81a570 for its INK role, and
+     white on it is 2.78:1. A semantic token is not remapped, so one value serves both themes —
+     5.64:1 for white text, 3.32:1 against the dark canvas, 3.03:1 against the dark surface. */
+  --color-primary: #477233;
+  --color-primary-hover: #3a5c29;
+  --color-primary-active: #2b451f;
   --color-primary-foreground: #ffffff;
   /* One dark, not two.
    *

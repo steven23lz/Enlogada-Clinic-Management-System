@@ -19,6 +19,14 @@ first, every time.
 | Scattered, unrelated failures late in a run | Rate limiter tripped (20,000 requests / 15 min in dev) | Restart the backend. The counter resets |
 | Several unrelated specs go red at once, mid-run | A backend file was edited during the run — nodemon restarted and dropped in-flight requests | Re-run on a settled server before believing it |
 | A "today" screen is empty and its spec fails | Seeded data is from a previous day | `node src/scripts/seedDemoScenario.js` (needs both servers) |
+| A booking test times out at 30s, then passes on a re-run | **SMTP.** `POST /appointments` sends a real confirmation email through Gmail — measured at **~3s per booking**, and it spikes. Several bookings in one test can approach the timeout | Re-run. If it persists, unset `SMTP_USER` in `backend/.env` for the run — `sendEmail` skips cleanly when unconfigured |
+
+**Booking specs own separate date bands, and a new one must claim its own.** `POST /appointments`
+returns the EXISTING booking with 200 when the same patient re-submits the same date and time, so
+two specs reaching for the same day silently share a visit — and an assertion about a *fresh*
+booking then fails against one an earlier spec already paid for. Claimed so far:
+`nthWorkingDay(120…151)` and `nthWorkingDay(170+)`. Never probe forward from tomorrow; that week
+is where the demo seed lives.
 
 **Watch the skip count, not just the pass count.** A security check that quietly did not run reads
 exactly like one that passed. This has happened here: three ticket-release tests silently skipped
