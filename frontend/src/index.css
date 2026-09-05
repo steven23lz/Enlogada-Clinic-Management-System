@@ -496,9 +496,21 @@ select:focus-visible {
  *
  * This is one hue, the logo's azure, walked from mid to deep along a single diagonal. A single
  * hue cannot go muddy; it just gets darker. Clean, clinical, and unmistakably the brand's blue. */
+/* The brand's green belongs here too. [1.65.0]
+ *
+ * This was a flat azure diagonal with NO green in it, while every other dark surface in the app
+ * — the hero, the admin banner, the patient portal — is `.rail-gradient`: navy carrying a green
+ * wash top-left and an azure wash top-right. So the sign-in screen, which is the first branded
+ * surface most patients ever see, was the one surface that omitted the brand colour, and a green
+ * rail then appeared the moment they landed.
+ *
+ * The wash is placed at 10% 0% to mirror `.rail-gradient` exactly, and deliberately away from the
+ * white light source at 78% 8% below, so the two do not fight over the same corner. */
 .auth-panel {
   background-color: #07517a;
-  background-image: linear-gradient(152deg, #0a71a9 0%, #07517a 48%, #052f47 100%);
+  background-image:
+    radial-gradient(115% 135% at 10% 0%, rgba(83, 132, 59, 0.26) 0%, rgba(83, 132, 59, 0) 58%),
+    linear-gradient(152deg, #0a71a9 0%, #07517a 48%, #052f47 100%);
 }
 
 /* A soft light-source high on the panel, so the flat diagonal above gains some depth without
