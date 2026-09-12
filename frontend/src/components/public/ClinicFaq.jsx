@@ -1,6 +1,6 @@
 import React from 'react';
 import FaqAccordion from './FaqAccordion';
-import { useClinic } from '../../lib/clinic';
+import { useClinic, httpsUrl } from '../../lib/clinic';
 import { useClinicHours } from '../../hooks/useClinicHours';
 import { formatTime12 } from '../../lib/date';
 
@@ -59,6 +59,7 @@ function HoursAnswer() {
 export default function ClinicFaq() {
   const CLINIC = useClinic();
   const tel = CLINIC.phone.replace(/\s/g, '');
+  const facebook = httpsUrl(CLINIC.facebook);
 
   const items = [
     {
@@ -123,6 +124,15 @@ export default function ClinicFaq() {
           Call <a href={`tel:${tel}`} className={LINK}>{CLINIC.phone}</a>, email{' '}
           <a href={`mailto:${CLINIC.email}`} className={`${LINK} [overflow-wrap:anywhere]`}>{CLINIC.email}</a>, or visit
           us at {CLINIC.address}.
+          {facebook && (
+            <>
+              {' '}You can also message us on{' '}
+              <a href={facebook} target="_blank" rel="noopener noreferrer" className={LINK}>
+                Facebook<span className="sr-only"> (opens in a new tab)</span>
+              </a>
+              .
+            </>
+          )}
         </p>
       ),
     },

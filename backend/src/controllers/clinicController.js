@@ -38,6 +38,10 @@ class ClinicController {
             services: env('CLINIC_SERVICES'),
             phone: env('CLINIC_PHONE'),
             email: env('CLINIC_EMAIL'),
+            // The Facebook page the public site links to. [1.72.0] The frontend renders it only
+            // if it is an https:// address, so a mistyped value shows no link rather than a
+            // broken one.
+            facebook: env('CLINIC_FACEBOOK'),
             // A sole proprietorship's receipts name the proprietor; the clinic's own invoice
             // booklet prints "JESIE B. ENLOGADA - Prop." beneath the trade name.
             proprietor: env('CLINIC_PROPRIETOR'),

@@ -1,11 +1,12 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Phone, Mail, MapPin } from 'lucide-react';
-import { useClinic } from '../../lib/clinic';
+import FacebookIcon from './FacebookIcon';
+import { useClinic, httpsUrl, displayUrl } from '../../lib/clinic';
 import { cn } from '../../lib/utils';
 
 /**
- * "Contact Us" in the public header: the phone, the email and the address, one click from any
- * page. [1.72.0] The reference site's header carries the same control.
+ * "Contact Us" in the public header: the phone, the email, the Facebook page and the address, one
+ * click from any page. [1.72.0] The reference site's header carries the same control.
  *
  * Every value comes from useClinic() — the identity the receipt and the result form print — so the
  * header cannot disagree with a document the patient is holding. The footer and About page did
@@ -41,6 +42,7 @@ export default function ContactPopover({ className }) {
   }, [open]);
 
   const tel = CLINIC.phone.replace(/\s/g, '');
+  const facebook = httpsUrl(CLINIC.facebook);
 
   return (
     <div ref={wrapRef} className={cn('relative', className)}>
@@ -91,6 +93,24 @@ export default function ContactPopover({ className }) {
                 {CLINIC.email}
               </a>
             </li>
+            {facebook && (
+              <li>
+                {/* Facebook's own blue on the mark, so it is recognised at a glance. As a non-text
+                    mark it needs 3:1: 4.2:1 on white, and above 3:1 on the dark chip. */}
+                <a
+                  href={facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 rounded-lg px-2 py-2 text-note font-semibold text-ink no-underline transition-colors hover:bg-sunken"
+                >
+                  <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-azure-100 text-[#1877F2]">
+                    <FacebookIcon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{displayUrl(facebook)}</span>
+                  <span className="sr-only"> (Facebook, opens in a new tab)</span>
+                </a>
+              </li>
+            )}
             <li className="flex items-start gap-3 px-2 py-2 text-note leading-relaxed text-ink-soft">
               <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-azure-100 text-azure-700">
                 <MapPin className="h-4 w-4" aria-hidden="true" />

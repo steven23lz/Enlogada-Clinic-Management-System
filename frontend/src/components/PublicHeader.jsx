@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Logo from './Logo';
 import { useAuth } from '../contexts/AuthContext';
-import { useClinic } from '../lib/clinic';
+import { useClinic, httpsUrl } from '../lib/clinic';
 import { useScrolled } from '../hooks/useScrolled';
 import { scrollToSection } from '../lib/scroll';
 import { LogOut, User, Menu, X, Phone, Mail } from 'lucide-react';
 import { ThemeToggle } from './ui/theme-toggle';
 import { Button } from './ui/button';
 import ContactPopover from './public/ContactPopover';
+import FacebookIcon from './public/FacebookIcon';
 import { cn } from '../lib/utils';
 
 const NAV_LINKS = [
@@ -93,6 +94,7 @@ const PublicHeader = ({ currentTab = '', onNavigate, overlay = false }) => {
   };
 
   const tel = CLINIC.phone.replace(/\s/g, '');
+  const facebook = httpsUrl(CLINIC.facebook);
   const navButton = (active) =>
     cn(
       'cursor-pointer whitespace-nowrap rounded-full border-0 px-2 py-1.5 text-note font-semibold transition-colors xl:px-3',
@@ -254,6 +256,18 @@ const PublicHeader = ({ currentTab = '', onNavigate, overlay = false }) => {
                 <Mail className="h-4 w-4 flex-shrink-0 text-brand-700" aria-hidden="true" />
                 {CLINIC.email}
               </a>
+              {facebook && (
+                <a
+                  href={facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-ink-soft no-underline hover:bg-sunken"
+                >
+                  <FacebookIcon className="h-4 w-4 flex-shrink-0 text-[#1877F2]" />
+                  Facebook
+                  <span className="sr-only"> (opens in a new tab)</span>
+                </a>
+              )}
             </div>
 
             <div className="mt-2 space-y-2 border-t border-line pt-3">

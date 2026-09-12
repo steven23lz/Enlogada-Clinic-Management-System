@@ -45,6 +45,10 @@ export const CLINIC_DEFAULTS = Object.freeze({
   address: 'National Highway, Diesto Building, Bugo, Cagayan de Oro City, Misamis Oriental, 9000',
   phone: '0936 132 0650',
   email: 'enlogadaclinic2011@gmail.com',
+  // The clinic's Facebook page. [1.72.0] Linked from the footer, the header's Contact Us, the phone
+  // menu and the FAQ; CLINIC_FACEBOOK overrides it like every contact detail here. Render it
+  // through httpsUrl() below, never as a raw href.
+  facebook: 'https://www.facebook.com/enlogadaclinic',
   proprietor: '',
 
   // A string, not a boolean, so it merges through the same "use it if non-empty" rule as every
@@ -95,6 +99,21 @@ export const useClinic = () => useSyncExternalStore(subscribe, getSnapshot, getS
 
 /** The current values, for code outside React (printing, PDF generation). */
 export const getClinic = () => current;
+
+/**
+ * An https:// address, or '' for anything else. [1.72.0]
+ *
+ * The Facebook link is operator-configurable (CLINIC_FACEBOOK). A value that is not a web address —
+ * a typo, or a `javascript:` string — must render no link at all, rather than a link that does
+ * something other than open a page. Every external link on the public site goes through this.
+ */
+export const httpsUrl = (value) => {
+  const v = (value || '').trim();
+  return /^https:\/\/[^\s"'<>]+$/i.test(v) ? v : '';
+};
+
+/** A web address the way a person would say it: no scheme, no "www.", no trailing slash. */
+export const displayUrl = (value) => (value || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '');
 
 /**
  * Values that are obviously stand-ins: anything saying so in words, and anything whose digits are
