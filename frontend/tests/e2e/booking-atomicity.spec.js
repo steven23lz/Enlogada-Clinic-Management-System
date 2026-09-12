@@ -4,6 +4,7 @@ import { loginAs } from './helpers/ticketRelease.js';
 import { selfPayProfile } from './helpers/patients.js';
 import { daysAgoStr } from '../../src/lib/date.js';
 import { holdSlot, expireHold } from './helpers/slotHold.js';
+import { dateStr } from './helpers/dates.js';
 
 // Booking atomicity and duplicate handling.
 //
@@ -64,11 +65,36 @@ test.describe('Booking atomicity (API)', () => {
   // correctly answer 200/alreadyBooked, failing the tests that expect a fresh 201. Tracking the
   // slots here makes the spec assert the behaviour it is about rather than the value of a
   // dev-only configuration knob.
+  //
+  // `claimed` only knows about THIS run, so the slots this patient already holds on BOOKING_DATE
+  // are skipped as well. The E2E purge removes everything a run books inside its own window, but a
+  // run whose purge was skipped (E2E_SKIP_PURGE) or never reached leaves its bookings behind, and
+  // on a fixed date they stay. With the cap lifted a held slot still reads as free, so the "fresh"
+  // booking landed on one the patient already held and got the correct 200 instead of 201 — a
+  // failure that had been cleared once already by deleting rows by hand. Skipping them makes the
+  // spec independent of whatever an earlier run left, rather than dependent on that cleanup.
   const claimed = new Set();
+
+  async function heldTimes() {
+    const res = await apiContext.get(`${API}/appointments/my-bookings`, {
+      headers: { Authorization: `Bearer ${clientToken}` }
+    });
+    return new Set(
+      (await res.json()).data.bookings
+        // The server's own duplicate check, restated: this patient, this date, not cancelled.
+        // scheduled_date arrives as a UTC instant, so it is read back as a LOCAL date.
+        .filter((b) => b.patient_id === patientId
+          && b.status !== 'Cancelled'
+          && dateStr(new Date(b.scheduled_date)) === BOOKING_DATE)
+        // TIME comes back as '09:00:00'; compared on HH:MM so the two formats cannot disagree.
+        .map((b) => String(b.scheduled_time).slice(0, 5))
+    );
+  }
+
   async function claimSlot() {
-    const slots = await freeSlot(BOOKING_DATE);
-    const slot = slots.find((s) => !claimed.has(s.time));
-    expect(slot, `no unclaimed slot left on ${BOOKING_DATE}`).toBeTruthy();
+    const [slots, held] = await Promise.all([freeSlot(BOOKING_DATE), heldTimes()]);
+    const slot = slots.find((s) => !claimed.has(s.time) && !held.has(String(s.time).slice(0, 5)));
+    expect(slot, `no slot left on ${BOOKING_DATE} that this run has not used and this patient does not already hold`).toBeTruthy();
     claimed.add(slot.time);
     return slot.time;
   }
