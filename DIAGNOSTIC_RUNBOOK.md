@@ -19,7 +19,7 @@ first, every time.
 | Scattered, unrelated failures late in a run | Rate limiter tripped (20,000 requests / 15 min in dev) | Restart the backend. The counter resets |
 | Several unrelated specs go red at once, mid-run | A backend file was edited during the run — nodemon restarted and dropped in-flight requests | Re-run on a settled server before believing it |
 | A "today" screen is empty and its spec fails | Seeded data is from a previous day | `node src/scripts/seedDemoScenario.js` (needs both servers) |
-| A booking test times out at 30s, then passes on a re-run | **SMTP.** `POST /appointments` sends a real confirmation email through Gmail — measured at **~3s per booking**, and it spikes. Several bookings in one test can approach the timeout | Re-run. If it persists, unset `SMTP_USER` in `backend/.env` for the run — `sendEmail` skips cleanly when unconfigured |
+| A booking test times out at 30s, then passes on a re-run | **SMTP.** `POST /appointments` sends a real confirmation email through Gmail — measured at **~3s per booking**, and it spikes. Several bookings in one test can approach the timeout. On 2026-09-12 one full run lost **eight** booking tests this way, and all eight passed on re-run | Re-run. For a baseline you intend to write down, run with `npx playwright test --timeout=90000` — it absorbs the email latency without touching any config. If it persists, unset `SMTP_USER` in `backend/.env` for the run — `sendEmail` skips cleanly when unconfigured |
 
 **Booking specs own separate date bands, and a new one must claim its own.** `POST /appointments`
 returns the EXISTING booking with 200 when the same patient re-submits the same date and time, so
@@ -48,7 +48,7 @@ cd backend && node src/scripts/verifyRbacWiring.js  # expect: "All good", 0 warn
 cd backend && node src/scripts/verifyDiscountParity.js  # expect: "Exact parity"
 
 # ── 3. Frontend logic + design gates. ~3s, no server. ──────────────────────────
-cd frontend && npm run test:unit                    # expect: 30 pass
+cd frontend && npm run test:unit                    # expect: 44 pass
 cd frontend && npm run lint                         # expect: 0 violations on both gates
 cd frontend && npm run build                        # expect: clean build
 
@@ -56,7 +56,7 @@ cd frontend && npm run build                        # expect: clean build
 python scripts/prose_scan.py frontend/src           # expect: 0 prose damage
 
 # ── 5. Behaviour. ~8 minutes. NEEDS BOTH SERVERS RUNNING. ──────────────────────
-cd frontend && npx playwright test                  # expect: 318 pass
+cd frontend && npx playwright test                  # expect: 342 pass, 0 skipped
 ```
 
 ### Known-good baseline
@@ -64,13 +64,13 @@ cd frontend && npx playwright test                  # expect: 318 pass
 | Check | Expected |
 |---|---|
 | Backend unit | **64 passed** |
-| Frontend unit | **30 passed** |
-| Playwright E2E | **318 passed** |
-| `verifyRbacWiring` | `All good` — and **0 warnings** |
+| Frontend unit | **44 passed** |
+| Playwright E2E | **342 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
+| `verifyRbacWiring` | `All good`, **78 routes checked**, **0 warnings** |
 | `verifyDiscountParity` | `Exact parity` — 3,264 combinations |
-| `checkFillRoles` | 198 files, **0 violations** |
-| `checkContrast` | 44 token pairs, both themes, **0 violations** |
-| `prose_scan` | **0 prose damage** |
+| `checkFillRoles` | 200 files, **0 violations** |
+| `checkContrast` | 46 token pairs, both themes, **0 violations** |
+| `prose_scan` | 200 files, **0 prose damage** |
 
 Write today's numbers down before anyone touches anything. A diff against a known baseline is
 worth more than any amount of reading.
@@ -112,7 +112,7 @@ in `authorizeRoles` holds the route's permission; every role that *holds* it app
 API enforces.
 
 > **Read the ROUTE COUNT, not just the verdict.** It prints
-> `Checked 77 permission-gated route(s) — 61 decided by permission alone.`
+> `Checked 78 permission-gated route(s) — 62 decided by permission alone.`
 > If a gate is deleted the script still says "All good" — with a **smaller number**. That number
 > is the tamper signal.
 
@@ -214,6 +214,6 @@ something on a database with data you want.
 
 ---
 
-*Baseline recorded at commit `fed16a1`. Re-measure and update the numbers in §1 whenever the suite
+*Baseline recorded at commit `dea93c9`, 2026-09-12. Re-measure and update the numbers in §1 whenever the suite
 legitimately changes size — a stale baseline is worse than none, because it makes a real regression
 look like a documentation error.*
