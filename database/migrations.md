@@ -57,9 +57,39 @@ The FAQ's hours come from `GET /schedule/public`, so they follow Clinic Schedule
 stale on the page. It does not promise a day-before reminder: that script only runs if the clinic
 schedules it.
 
+### The footer
+
+Light, with a gradient hairline where the dark slab was. The clinic's contact details and Facebook
+page come from `useClinic()`, so the footer, the header's Contact Us and the printed result form
+cannot disagree about the address.
+
+### Sign In and Create Account: one card that turns over
+
+Four sign-in designs were built as a working gallery (a split page with a live Aurora panel, a
+frosted card on the Aurora, a sliding panel, and a flip card), each clickable at desktop and phone
+width, in both themes and with reduced motion, and each measured in every state before Steven
+chose. He chose the flip card, with sign-up on one page.
+
+The two forms are the two sides of one card. For the length of the 850ms turn both are mounted and
+the one turning away is `inert`; when the turn ends it unmounts, so outside a turn the document
+holds exactly one form, which is what `helpers/auth.js` relies on. App renders the page without a
+`key`, so the header's Sign In and Create Account turn the card rather than rebuilding the page.
+When the turn started on the card, focus moves to the side that arrives.
+
+Found on the way: the account-created timer outlived the form, so leaving within two seconds of
+registering pulled you back to Sign In. It is cleared on unmount now. And one trap the turn itself
+set: the Google button's width was measured with getBoundingClientRect, which under a turning card
+measures the projected shape, so a form mounted mid-turn would draw a half-width button that
+nothing measures again. It reads `clientWidth`, the layout width, instead.
+
+The new-password meter states one rule, the server's minimum of 8 characters, and treats length and
+variety above it as advice. Its unit test reads `backend/src/validations/passwordPolicy.js`, so the
+meter and the server cannot disagree without a test failing. The old two-column page's styles
+(`.auth-panel`, its dark-mode rebinding, the sliding swap and the tab pill) went with it.
+
 ### Still to come
 
-The footer, then Services, About, Privacy, Terms and the sign-in pages in the same language, a
+Services, About, Privacy, Terms and the forgot/reset password pages in the same language, a
 public-site spec, and real photographs in the hero once the clinic supplies them.
 
 ## [1.71.0] - 2026-09-09 (A package may claim a component the visit already had)

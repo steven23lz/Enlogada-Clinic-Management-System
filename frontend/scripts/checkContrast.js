@@ -206,7 +206,7 @@ function bodiesOf(css, selector) {
  * Each theme reads ONLY the rules that define it. [1.72.0] This used to read every `--color-*`
  * declaration in the file, last one winning — so the "light" theme silently held the DARK block's
  * values for every token that block remaps (light ink-soft measured as #a3b0c2), and the dark
- * theme picked up tokens rebound inside a scoped rule (`.auth-panel`'s azure). Light mode was
+ * theme picked up tokens rebound inside a scoped rule (the old sign-in panel's azure). Light mode was
  * therefore never actually measured for the remapped inks. Found when the Aurora checks reported
  * light-mode failures in colours the light theme does not use.
  */

@@ -5,11 +5,12 @@ import { isGoogleAuthConfigured } from '../../config/googleAuth';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { PasswordInput } from '../ui/password-input';
-import { AlertCircle, ArrowRight } from 'lucide-react';
+import AuthField from './AuthField';
+import { AlertCircle, ArrowRight, Lock, Mail } from 'lucide-react';
 
-// Card-only content, no shell/graphic — AuthPage.jsx owns the shared header/footer/graphic
-// panel and the login<->register crossfade.
-const LoginForm = ({ onNavigate }) => {
+// The front of the sign-in card: the form only. AuthPage.jsx owns the card, the turn between its
+// two sides and the page around it; `onCreateAccount` asks it to turn over.
+const LoginForm = ({ onNavigate, onCreateAccount }) => {
   const { login, googleLogin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -67,6 +68,11 @@ const LoginForm = ({ onNavigate }) => {
   const [rejections, setRejections] = useState(0);
 
   // GSI renders once at the width it is given, so this is measured rather than styled.
+  //
+  // `clientWidth`, not getBoundingClientRect(). This form can mount while the card is part-way
+  // through turning over, and a bounding box measures the PROJECTED shape: at 60 degrees the slot
+  // reads half its width, GSI draws a half-width button, and nothing measures it again, because a
+  // transform is not a resize. clientWidth is the layout width, which a turn does not change.
   const googleSlot = useRef(null);
   const [googleWidth, setGoogleWidth] = useState(240);
   useEffect(() => {
@@ -74,7 +80,7 @@ const LoginForm = ({ onNavigate }) => {
     if (!el || typeof ResizeObserver === 'undefined') return;
     const measure = () => {
       // 400 is Google's own cap; below that, fill the slot exactly.
-      const w = Math.min(400, Math.floor(el.getBoundingClientRect().width));
+      const w = Math.min(400, el.clientWidth);
       if (w > 0) setGoogleWidth(w);
     };
     measure();
@@ -101,93 +107,83 @@ const LoginForm = ({ onNavigate }) => {
 
   return (
     <div>
-      <div className="space-y-1">
-        <h1 className="m-0 text-2xl font-bold tracking-tight text-slate-900">Welcome Back</h1>
-        <p className="m-0 text-note leading-relaxed text-slate-500">
-          Sign in to your dashboard to manage records.
+      <div className="auth-rise text-center" style={{ '--i': 1 }}>
+        <h1 id="login-title" className="m-0 text-2xl font-bold tracking-tight text-slate-900">
+          Welcome back
+        </h1>
+        <p className="m-0 mt-1 text-note leading-relaxed text-slate-500">
+          Sign in to book tests and see your results.
         </p>
       </div>
 
-      <div className="mt-6 space-y-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* The shake is a head-shake: a rejection, shown as one. It rides ALONGSIDE the red
-              border, the icon and the message — never instead of them, because motion says nothing
-              to a screen reader or to anyone with reduced motion on, and both still get the whole
-              message. Keyed on the rejection count so a second wrong password shakes again rather
-              than sitting there looking already-answered. */}
-          {error && (
-            <div key={rejections} role="alert" className="alert alert-error animate-shake">
-              <AlertCircle />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* htmlFor/id, so the visible label is the field's accessible name and clicking it
-              focuses the input. Both were decorative <label> elements with no association — on
-              the one screen every single user has to get through. */}
-          <div className="space-y-1.5">
-            <label htmlFor="login-email" className="mb-1.5 block text-fine font-semibold text-slate-700">
-              Email Address
-            </label>
-            <Input
-              id="login-email"
-              name="email"
-              type="email"
-              // Lets a password manager and the browser offer the right value.
-              autoComplete="username"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="h-11"
-              disabled={submitting}
-            />
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        {/* The shake is a head-shake: a rejection, shown as one. It rides ALONGSIDE the red
+            border, the icon and the message — never instead of them, because motion says nothing
+            to a screen reader or to anyone with reduced motion on, and both still get the whole
+            message. Keyed on the rejection count so a second wrong password shakes again rather
+            than sitting there looking already-answered. */}
+        {error && (
+          <div key={rejections} role="alert" className="alert alert-error animate-shake">
+            <AlertCircle />
+            <span>{error}</span>
           </div>
+        )}
 
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center">
-              <label htmlFor="login-password" className="mb-1.5 block text-fine font-semibold text-slate-700">
-                Password
-              </label>
-              <button
-                type="button"
-                onClick={() => onNavigate('forgot-password')}
-                className="text-fine font-semibold text-brand-600 hover:underline bg-transparent border-0 cursor-pointer"
-              >
-                Forgot password?
-              </button>
-            </div>
-            <PasswordInput
-              id="login-password"
-              name="password"
-              autoComplete="current-password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="h-11"
-              disabled={submitting}
-            />
-          </div>
+        <AuthField id="login-email" label="Email Address" icon={Mail} index={2}>
+          <Input
+            id="login-email"
+            name="email"
+            type="email"
+            // Lets a password manager and the browser offer the right value.
+            autoComplete="username"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="h-11 pl-10"
+            disabled={submitting}
+          />
+        </AuthField>
 
-          {/* UI/UX Phase 4: reverses Phase 0's navy choice for this button — this card's
-              own top accent bar, heading, and links are all green, and Register's
-              sibling submit button is green, so navy here read as mismatched rather
-              than as "the brand's second color." */}
-          <Button
-            type="submit"
-            loading={submitting}
-            size="lg"
-            className="w-full"
-          >
+        <AuthField
+          id="login-password"
+          label="Password"
+          icon={Lock}
+          index={3}
+          action={
+            <button type="button" onClick={() => onNavigate('forgot-password')} className="auth-link text-fine">
+              Forgot password?
+            </button>
+          }
+        >
+          <PasswordInput
+            id="login-password"
+            name="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="h-11 pl-10"
+            disabled={submitting}
+          />
+        </AuthField>
+
+        {/* The page's one call to action, so it takes the public site's gradient. Its name must
+            stay exactly "Sign In": failure-states and mobile-patient click the LAST button with
+            that name, and the header's is the first. */}
+        <div className="auth-rise pt-1" style={{ '--i': 4 }}>
+          <Button type="submit" variant="brand" loading={submitting} size="lg" className="w-full rounded-full">
             <span>Sign In</span>
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="h-4 w-4" />
           </Button>
-        </form>
+        </div>
+      </form>
 
-        {/* Gated on the same condition as the button below, so the two always appear together.
-            It used to render unconditionally, which left the divider heading an empty gap on any
-            deployment that does not configure Google at all. */}
-        {isGoogleAuthConfigured && (
-          <div className="relative flex py-2 items-center">
+      {/* Gated on the same condition as the button inside, so the two always appear together.
+          It used to render unconditionally, which left the divider heading an empty gap on any
+          deployment that does not configure Google at all. */}
+      {isGoogleAuthConfigured && (
+        <div className="auth-rise mt-4 space-y-4" style={{ '--i': 5 }}>
+          <div className="relative flex items-center py-1">
             <div className="flex-grow border-t border-line"></div>
             {/* Just "or". The button directly beneath already says "Continue with Google" — that
                 wording comes from GSI's `text="continue_with"` and is fixed by Google's branding
@@ -196,19 +192,17 @@ const LoginForm = ({ onNavigate }) => {
             <span className="mx-3 flex-shrink text-fine font-medium text-slate-400">or</span>
             <div className="flex-grow border-t border-line"></div>
           </div>
-        )}
 
-        {/* `min-w-0` + `overflow-hidden` below are load-bearing, not tidiness. GSI renders at a
-            fixed pixel width, so without them an oversized button sets its own slot's min-content
-            width, which pushes the card, which pushes the page — and the measurement then reads
-            that inflated width back and can never converge. Clipped instead, the slot's width is
-            dictated by the card, the measurement is honest, and it self-corrects. */}
-        {isGoogleAuthConfigured && (
+          {/* `min-w-0` + `overflow-hidden` below are load-bearing, not tidiness. GSI renders at a
+              fixed pixel width, so without them an oversized button sets its own slot's min-content
+              width, which pushes the card, which pushes the page — and the measurement then reads
+              that inflated width back and can never converge. Clipped instead, the slot's width is
+              dictated by the card, the measurement is honest, and it self-corrects. */}
           <div ref={googleSlot} className="flex w-full min-w-0 justify-center overflow-hidden">
             {/* Google's Identity Services button takes a pixel width only — it rejects
                 percentages, which is why this cannot simply be the "100%" that matches the
                 form's full-width Sign In button above.
-                
+
                 It was a hard-coded 360, which overflowed: 360 plus the page's own `px-4` is
                 392px, so a 390px phone scrolled sideways by exactly 2px. Measuring the slot
                 instead makes it match the Sign In button at every width, and it cannot go stale
@@ -232,25 +226,33 @@ const LoginForm = ({ onNavigate }) => {
               width={googleWidth}
             />
           </div>
-        )}
+        </div>
+      )}
 
-        {/* No notice here, deliberately.
+      {/* No notice about Google, deliberately.
 
-            This used to print, on the public login page, that the client ID "does not list
-            http://localhost:5173 under Authorized JavaScript origins — add it at
-            console.cloud.google.com". That is a developer's instruction shown to a patient: it
-            names an internal address, tells them to open a Google Cloud console they have no
-            access to, and reads like the clinic is broken. The same block also fired when Google
-            Sign-In was simply never configured, which is not an error at all — it is a
-            deployment that does not offer Google.
+          This used to print, on the public login page, that the client ID "does not list
+          http://localhost:5173 under Authorized JavaScript origins — add it at
+          console.cloud.google.com". That is a developer's instruction shown to a patient: it
+          names an internal address, tells them to open a Google Cloud console they have no
+          access to, and reads like the clinic is broken. The same block also fired when Google
+          Sign-In was simply never configured, which is not an error at all — it is a
+          deployment that does not offer Google.
 
-            Either way the patient's answer is the same and is already on screen: sign in with
-            email and password. So the Google section disappears entirely and the page says
-            nothing about it. The diagnosis still exists for whoever needs it, in the console,
-            where a developer looks and a patient does not.
-        */}
+          Either way the patient's answer is the same and is already on screen: sign in with
+          email and password. So the Google section disappears entirely and the page says
+          nothing about it. The diagnosis still exists for whoever needs it, in the console,
+          where a developer looks and a patient does not.
+      */}
 
-      </div>
+      {/* "Create an account", never "Sign up" or "Register": the header's button says Create
+          Account, and the two must read as the same way in. */}
+      <p className="auth-rise m-0 mt-6 text-center text-note text-slate-500" style={{ '--i': 6 }}>
+        New to Enlogada?{' '}
+        <button type="button" onClick={onCreateAccount} className="auth-link">
+          Create an account
+        </button>
+      </p>
     </div>
   );
 };

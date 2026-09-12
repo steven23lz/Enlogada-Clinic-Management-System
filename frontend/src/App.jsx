@@ -136,7 +136,7 @@ const MainApp = () => {
       return <Home onNavigate={handleNavigate} section={pendingSection} />;
     }
     if (currentTab === 'register') {
-      return <AuthPage key={currentTab} initialMode="register" onNavigate={handleNavigate} />;
+      return <AuthPage mode="register" onNavigate={handleNavigate} />;
     }
     if (currentTab === 'forgot-password') {
       return <ForgotPassword onNavigate={handleNavigate} />;
@@ -144,8 +144,10 @@ const MainApp = () => {
     if (currentTab === 'reset-password') {
       return <ResetPassword token={resetToken} onNavigate={handleNavigate} />;
     }
-    // Default fallback to login
-    return <AuthPage key={currentTab} initialMode="login" onNavigate={handleNavigate} />;
+    // Default fallback to sign-in. Neither AuthPage above carries a `key`, deliberately: sign-in
+    // and create-account are the two sides of one card, so moving between them from the header
+    // must keep the same page and turn the card rather than rebuild it. See AuthPage.jsx.
+    return <AuthPage mode="login" onNavigate={handleNavigate} />;
   }
 
   // If user IS logged in

@@ -512,33 +512,6 @@ select:focus-visible {
  *
  * This is one hue, the logo's azure, walked from mid to deep along a single diagonal. A single
  * hue cannot go muddy; it just gets darker. Clean, clinical, and unmistakably the brand's blue. */
-/* The brand's green belongs here too. [1.65.0]
- *
- * This was a flat azure diagonal with NO green in it, while every other dark surface in the app
- * — the hero, the admin banner, the patient portal — is `.rail-gradient`: navy carrying a green
- * wash top-left and an azure wash top-right. So the sign-in screen, which is the first branded
- * surface most patients ever see, was the one surface that omitted the brand colour, and a green
- * rail then appeared the moment they landed.
- *
- * The wash is placed at 10% 0% to mirror `.rail-gradient` exactly, and deliberately away from the
- * white light source at 78% 8% below, so the two do not fight over the same corner. */
-.auth-panel {
-  background-color: #07517a;
-  background-image:
-    radial-gradient(115% 135% at 10% 0%, rgba(83, 132, 59, 0.26) 0%, rgba(83, 132, 59, 0) 58%),
-    linear-gradient(152deg, #0a71a9 0%, #07517a 48%, #052f47 100%);
-}
-
-/* A soft light-source high on the panel, so the flat diagonal above gains some depth without
-   introducing a second colour. */
-.auth-panel::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: radial-gradient(70% 55% at 78% 8%, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 60%);
-}
-
 /* Hairline grid used behind hero panels at very low opacity — enough texture to stop a large
    dark area looking like a rendering error, not enough to compete with the text on it. */
 .rail-grid::before {
@@ -685,24 +658,90 @@ select:focus-visible {
 }
 
 /* ── Sign-in motion ──────────────────────────────────────────────────────────────────────────
- * Timings here sit in the 120–220ms band that reads as responsive rather than as animation;
- * the one exception is the mode swap, which moves a whole form and gets 260ms.
- *
- * The swap is DIRECTIONAL. It used to slide in from the right whichever way you were going, so
- * going back to Sign In moved the same direction as leaving it — the motion contradicted the
- * navigation. Forward comes from the right, back comes from the left, matching the pill on the
- * toggle above it.
+ * Two movements [1.72.0]. The card TURNS OVER between Sign In and Create Account (`.auth-flip`,
+ * 850ms), and each side's contents rise into place one after another as it arrives
+ * (`.auth-rise`). Option D of the four Steven was shown. The turn is long on purpose: it is the
+ * one thing on the page that says the two forms are two sides of the same account. Everything
+ * else stays in the 120–220ms band that reads as responsive rather than as animation.
  */
-@keyframes authSwapFwd {
-  from { opacity: 0; transform: translate3d(18px, 0, 0); }
+.auth-scene { perspective: 1600px; }
+.auth-flip {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 850ms cubic-bezier(0.4, 0.2, 0.2, 1);
+}
+/* The height follows the showing side, set from AuthPage.jsx. It eases only WHILE the card turns;
+   at rest it follows at once, so an error appearing never leaves the side overflowing its card. */
+.auth-flip[data-turning] {
+  transition:
+    transform 850ms cubic-bezier(0.4, 0.2, 0.2, 1),
+    height 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.auth-flip[data-side='back'] { transform: rotateY(180deg); }
+.auth-face {
+  position: absolute;
+  inset: 0 0 auto 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  outline: none;
+}
+.auth-face-back { transform: rotateY(180deg); }
+
+/* A side's contents as it arrives: each piece rises into place just after the one before. `--i`
+   is set inline per piece (AuthField, the two forms, AuthPage's mark). */
+@keyframes authRise {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
   to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
-@keyframes authSwapBack {
-  from { opacity: 0; transform: translate3d(-18px, 0, 0); }
-  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+.auth-rise {
+  animation: authRise 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 55ms + 80ms);
 }
-[data-auth-dir='fwd']  { animation: authSwapFwd  0.26s cubic-bezier(0.22, 0.9, 0.28, 1) both; }
-[data-auth-dir='back'] { animation: authSwapBack 0.26s cubic-bezier(0.22, 0.9, 0.28, 1) both; }
+
+/* The mark at the top of each side sits on a disc that is white in BOTH themes: the logo's green
+   and azure measure only 2.8–4.3:1 on any dark surface. A literal, so no theme remap can reach it. */
+.auth-mark {
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgb(15 23 42 / 0.06), 0 8px 18px -10px rgb(15 23 42 / 0.45);
+}
+
+/* The links inside sentences on the card: "Forgot password?", "Create an account", "Sign in
+   instead". Buttons, because each changes what the page shows rather than going to an address. */
+.auth-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--color-brand-700);
+}
+.auth-link:hover { text-decoration: underline; }
+
+/* An account created: the tick pops in, then draws itself. */
+@keyframes authCheckPop {
+  0%   { opacity: 0; transform: scale(0.6); }
+  60%  { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes authCheckDraw { to { stroke-dashoffset: 0; } }
+.auth-check { animation: authCheckPop 550ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.auth-check circle { fill: none; stroke: currentColor; stroke-width: 3; opacity: 0.28; }
+.auth-check path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: authCheckDraw 500ms 300ms ease-out forwards;
+}
+
+/* The blanket reduced-motion rule makes these instant but leaves their DELAYS, which would hold a
+   field invisible for up to half a second and then snap it in. Same fix as [data-reveal]. */
+@media (prefers-reduced-motion: reduce) {
+  .auth-rise, .auth-check, .auth-check path { animation-delay: 0s !important; }
+}
 
 /* A wrong password is a rejection, and a head-shake is what a rejection looks like. Paired with
    the red border and the message text the alert already carries — never the motion alone, which
@@ -716,15 +755,14 @@ select:focus-visible {
   animation: authShake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
-/* The form's own surface. It had none — a bare form on a white column, which is why the page read
-   as unfinished no matter what the panel beside it did. A card with a soft shadow gives the eye
-   something to land on and separates the task from the page. */
+/* Each side of the sign-in card. The card is the only thing on that page, so it floats: a soft
+   shadow gives the eye somewhere to land and separates the task from the ground behind it. */
 .auth-card {
   background: #ffffff;
   border: 1px solid var(--color-line);
   box-shadow:
     0 1px 2px rgb(15 23 42 / 0.04),
-    0 12px 32px -12px rgb(15 23 42 / 0.12);
+    0 24px 48px -20px rgb(15 23 42 / 0.22);
 }
 
 /* …and something for it to sit ON. White-on-white gave the card nothing to separate from. */
@@ -1284,10 +1322,9 @@ body.printing-report {
   }
 
   /* The sign-in card and the ground it sits on. [1.40.0] Both hardcode a white/near-white field,
-     so on a dark theme the form column stayed a bright slab beside the azure panel — the one
-     screen where the two halves are meant to balance. The card keeps its separation from the
-     ground the same way it does in light mode, by being LIGHTER than what is behind it; the
-     shadow is replaced by a rim, because elevation is compile-time inlined and cannot be
+     so on a dark theme the card stayed a bright slab on a dark page. The card keeps its separation
+     from the ground the same way it does in light mode, by being LIGHTER than what is behind it;
+     the shadow is replaced by a rim, because elevation is compile-time inlined and cannot be
      re-themed. */
   html[data-theme="dark"] .auth-card {
     background: var(--color-surface);
@@ -1329,29 +1366,6 @@ body.printing-report {
     background-color: #3a5c29;
   }
   html[data-theme="dark"] .hover\:bg-azure-600:hover { background-color: #096293; }
-
-  /* The sign-in brand panel is FIXED dark, like the rail — it does not flip. So azure used as ink
-     on it must not follow the ramp, or three of its four text elements go dark-on-dark: the
-     eyebrow, all three trust points and the address footnote. Rebinding the tokens on the panel
-     itself covers the opacity variants (`text-azure-100/80`) too, which matching generated class
-     names would not, and covers any azure ink added here later. */
-  html[data-theme="dark"] .auth-panel {
-    --color-azure-50:  #f3f8fb;
-    --color-azure-100: #e2eef5;
-    --color-azure-200: #bfdae9;
-    --color-azure-600: #096293;
-    --color-azure-700: #07517a;
-    --color-azure-800: #063e5d;
-  }
-
-  /* The travelling tab pill is `bg-white`, which now resolves to the SAME value as the card it
-     sits on, and its shadow is an arbitrary literal that is inlined at build time. The one
-     indicator the redesign is built around therefore vanished. It needs to be lighter than the
-     card, the way it is lighter than the track in light mode. */
-  html[data-theme="dark"] [role="tablist"] > span[aria-hidden="true"] {
-    background-color: #24324a;
-    box-shadow: 0 1px 3px #0009;
-  }
 
   /* Split generated classes the main override list misses — Tailwind emits one class per variant,
      so `.border-[#e6ebf1]` never matches `.hover:border-[#e6ebf1]`, and `divide-*` compiles to a

@@ -1,210 +1,142 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import PublicHeader from '../../components/PublicHeader';
+import DecorBlobs from '../../components/public/DecorBlobs';
 import Logo from '../../components/Logo';
 import LoginForm from '../../components/auth/LoginForm';
 import RegisterForm from '../../components/auth/RegisterForm';
-import { useClinic } from '../../lib/clinic';
-import { cn } from '../../lib/utils';
-import { ShieldCheck, Clock, HeartHandshake, MapPin, Phone } from 'lucide-react';
 
-// The clinic's front door: sign in and create an account, in one page that owns the switch
-// between them.
+// The clinic's front door: Sign In and Create Account as the two sides of one card that turns
+// over between them. [1.72.0] Option D of the four built for Steven to choose from. It replaced a
+// two-column page, a form beside an azure brand panel, with a tab switch on top of the form.
 //
-// ── Why the page changed shape, twice ─────────────────────────────────────────────────────────
+// ── Only one form in the document, except while the card turns ─────────────────────────────
 //
-// [1.23.0] replaced a white form card floating between the public header and footer — four framed
-// rectangles, none obviously the thing to do next — with a two-column layout and no footer.
+// During the 850ms turn both sides are mounted, because the turn has to show the side arriving.
+// The moment it ends, the other side UNMOUNTS. That is load-bearing: every spec signs in through
+// helpers/auth.js, which fills `input[type="password"]` and clicks `button[type="submit"]`, and a
+// hidden second form would be a second match for both. The side turning away is `inert` for the
+// whole turn, so it can take neither a click nor focus.
 //
-// This pass fixes what that left behind:
+// ── App's tab decides the side ────────────────────────────────────────────────────────────────
 //
-//  * The dark column used `.rail-gradient`, which washes green AND azure over near-black. That is
-//    right for a hero band under a page of white content. Filling half the screen with it made a
-//    large muddy field where the two hues meet. `.auth-panel` is one hue — the logo's azure —
-//    walked from mid to deep along a single diagonal. A single hue cannot go muddy.
-//  * Switching between sign-in and register was a text link at the very bottom of the form, below
-//    the Google button, and the swap was a generic fade. The two modes are peers and the choice
-//    belongs at the TOP, so a segmented control states both, says which one you are on, and gives
-//    the transition something to actually transition between.
-//  * The panel carried a headline, three paragraphs and a full address block. It reads as a wall
-//    beside a five-field form. Trimmed: the reassurance is what a first-time patient needs, and
-//    the contact details are a quiet footnote rather than a fourth paragraph.
-const TRUST_POINTS = [
-  {
-    icon: ShieldCheck,
-    title: 'Licensed diagnostics',
-    body: 'Certified technologists and radiologists handle every test.',
-  },
-  {
-    icon: Clock,
-    title: 'Results you can reach',
-    body: 'Released to your account and emailed the moment they are signed off.',
-  },
-  {
-    icon: HeartHandshake,
-    title: 'HMO and senior/PWD',
-    body: 'Accredited providers, and statutory discounts applied at the counter.',
-  },
-];
+// `mode` is App's current tab, so the header's Sign In / Create Account and the links on the card
+// move the same state. App renders this without a `key`, so a header click turns the card rather
+// than rebuilding the page.
 
-const MODES = [
-  { id: 'login', label: 'Sign In' },
-  { id: 'register', label: 'Create Account' },
-];
+// Keep in step with `.auth-flip` in index.css.
+const TURN_MS = 850;
 
-const AuthPage = ({ initialMode = 'login', onNavigate }) => {
-  const [mode, setMode] = useState(initialMode);
-  // Which way the swap is travelling, so the form arrives from the side you came from rather than
-  // always from the right. A `ref` and not state: it is read during the same render that the mode
-  // changes, and storing it in state would need a second render to apply.
-  const dir = useRef('fwd');
-  const go = (next) => {
-    if (next === mode) return;
-    dir.current = next === 'register' ? 'fwd' : 'back';
-    setMode(next);
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+
+const AuthPage = ({ mode = 'login', onNavigate }) => {
+  // The side that was showing when the last turn finished. While `mode` differs from it, the card
+  // is mid-turn and both sides are mounted.
+  const [settled, setSettled] = useState(mode);
+  const turning = settled !== mode;
+
+  const loginSide = useRef(null);
+  const registerSide = useRef(null);
+
+  // Set when the turn was started from ON the card. The link that started it is on the side turning
+  // away, which goes inert and then unmounts, so focus would fall to <body>; the arriving side takes
+  // it instead, and a screen reader hears its heading. A turn started from the header leaves focus
+  // on the header.
+  const focusArriving = useRef(false);
+
+  useEffect(() => {
+    if (!turning) return undefined;
+    const timer = setTimeout(
+      () => {
+        setSettled(mode);
+        if (focusArriving.current) {
+          focusArriving.current = false;
+          (mode === 'login' ? loginSide : registerSide).current?.focus({ preventScroll: true });
+        }
+      },
+      // Under reduced motion index.css makes the turn instant, so there is nothing to wait for.
+      prefersReducedMotion() ? 0 : TURN_MS + 100
+    );
+    return () => clearTimeout(timer);
+  }, [turning, mode]);
+
+  // The card is as tall as the side showing. Both sides are stacked absolutely so they can turn
+  // about one axis, which takes them out of flow, so the height is measured: before paint on the
+  // first render, so the card never flashes at zero height, and again whenever the side grows or
+  // shrinks (an error appearing, the Google button arriving, a larger text size).
+  const [height, setHeight] = useState();
+  useLayoutEffect(() => {
+    const el = (mode === 'login' ? loginSide : registerSide).current;
+    if (!el) return undefined;
+    const measure = () => setHeight(el.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mode]);
+
+  const turnTo = (side) => {
+    focusArriving.current = true;
+    onNavigate(side);
   };
-  const activeIndex = MODES.findIndex((m) => m.id === mode);
-  // Runtime identity, so the address here and on the receipt cannot disagree. See lib/clinic.js.
-  const CLINIC = useClinic();
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface">
+    <div className="auth-ground relative flex min-h-screen flex-col">
+      <DecorBlobs />
       <PublicHeader currentTab={mode} onNavigate={onNavigate} />
 
-      <main className="flex flex-1 items-stretch">
-        {/* Form column. Each half owns its full height — the previous `max-w-6xl` + `items-center`
-            left a band of empty canvas above and below both columns. */}
-        <div className="auth-ground flex flex-1 items-center justify-center px-4 py-10 sm:px-6 lg:px-12">
-          <div className="w-full max-w-[27rem]">
-            {/* Below `lg` the panel is hidden, which left this page carrying no brand at all — on
-                the one screen a patient reaches before they have any context about who they are
-                handing their details to. */}
-            <div className="mb-7 flex items-center gap-3 lg:hidden">
-              <Logo className="h-10 w-10 flex-shrink-0" />
-              <div className="min-w-0 leading-tight">
-                <p className="m-0 text-note font-bold tracking-tight text-slate-900">{CLINIC.shortName}</p>
-                <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-azure-700">
-                  Ultrasound &amp; Diagnostic Clinic
-                </p>
-              </div>
-            </div>
-
-            {/* The form gets a surface of its own. It had none — a bare form on a flat white
-                column — which is the single reason the page read as unfinished whatever the panel
-                beside it was doing. A card with a soft shadow gives the eye somewhere to land and
-                separates the task from the page it sits on. */}
-            <div className="auth-card rounded-2xl p-6 sm:p-7">
-            {/* The mode switch, at the top where the decision is actually made. It was a text link
-                under the Google button, which is after everything else on the page — so somebody
-                who arrived at the wrong one filled in a form before finding out. */}
-            <div
-              role="tablist"
-              aria-label="Sign in or create an account"
-              className="relative mb-7 grid grid-cols-2 rounded-xl border border-line bg-slate-100/70 p-1"
-            >
-              {/* One pill that TRAVELS, rather than a white background blinking from one button to
-                  the other. It is the same 220ms as the form swap beside it, so the two read as
-                  one movement — the indicator leads and the form follows. transform only, so it
-                  is composited rather than laid out on every frame. */}
-              <span
-                aria-hidden="true"
-                className="absolute inset-y-1 left-1 rounded-lg bg-surface shadow-[0_1px_3px_rgb(15_23_42_/_0.10)] transition-transform duration-[220ms] ease-[cubic-bezier(0.22,0.9,0.28,1)]"
-                style={{
-                  width: 'calc(50% - 0.25rem)',
-                  transform: `translateX(${activeIndex * 100}%)`,
-                }}
-              />
-              {MODES.map((m) => {
-                const on = m.id === mode;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={on}
-                    onClick={() => go(m.id)}
-                    className={cn(
-                      'relative z-10 cursor-pointer rounded-lg border-0 bg-transparent px-3 py-2 text-note font-semibold transition-colors duration-150',
-                      on ? 'text-azure-800' : 'text-slate-500 hover:text-slate-800'
-                    )}
-                  >
-                    {m.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Keyed on the mode, so the animation replays on the swap and only on the swap. */}
-            <div key={mode} data-auth-dir={dir.current}>
-              {mode === 'login' ? (
-                <LoginForm onNavigate={onNavigate} />
-              ) : (
-                <RegisterForm onSwitchToLogin={() => go('login')} />
-              )}
-            </div>
-            </div>
+      {/* overflow-x-clip: halfway through a turn the near edge of the card is drawn wider than the
+          card itself, and on a phone that would scroll the page sideways for a moment. */}
+      <main className="relative flex flex-1 items-start justify-center overflow-x-clip px-4 pb-16 pt-6 sm:items-center sm:px-6 sm:py-12">
+        <div className="auth-scene w-full max-w-[28rem]">
+          <div
+            className="auth-flip"
+            data-side={mode === 'login' ? 'front' : 'back'}
+            data-turning={turning || undefined}
+            style={{ height }}
+          >
+            {(mode === 'login' || settled === 'login') && (
+              <section
+                ref={loginSide}
+                tabIndex={-1}
+                aria-labelledby="login-title"
+                inert={mode !== 'login'}
+                className="auth-face auth-card rounded-2xl px-6 pb-6 pt-7 sm:px-8 sm:pb-7"
+              >
+                <CardMark />
+                <LoginForm onNavigate={onNavigate} onCreateAccount={() => turnTo('register')} />
+              </section>
+            )}
+            {(mode === 'register' || settled === 'register') && (
+              <section
+                ref={registerSide}
+                tabIndex={-1}
+                aria-labelledby="register-title"
+                inert={mode !== 'register'}
+                className="auth-face auth-face-back auth-card rounded-2xl px-6 pb-6 pt-7 sm:px-8 sm:pb-7"
+              >
+                <CardMark />
+                <RegisterForm onSwitchToLogin={() => turnTo('login')} />
+              </section>
+            )}
           </div>
         </div>
-
-        {/* Brand and reassurance. Stays put across the swap — only the form changes. */}
-        <aside className="auth-panel relative hidden w-[46%] flex-shrink-0 items-center overflow-hidden text-white lg:flex xl:w-[44%]">
-          {/* The mark, oversized and barely there. Gives the panel a subject without an image. */}
-          <div aria-hidden="true" className="pointer-events-none absolute -right-24 -bottom-16 opacity-[0.07]">
-            <Logo className="h-[26rem] w-[26rem]" />
-          </div>
-
-          <div className="relative w-full px-10 py-14 xl:px-14">
-            <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10 ring-1 ring-inset ring-white/20">
-                <Logo className="h-8 w-8" />
-              </span>
-              <div className="leading-tight">
-                <p className="m-0 text-lead font-bold tracking-tight text-white">{CLINIC.shortName}</p>
-                <p className="m-0 text-micro font-semibold uppercase tracking-[0.14em] text-azure-200">
-                  Ultrasound &amp; Diagnostic Clinic
-                </p>
-              </div>
-            </div>
-
-            <h2 className="m-0 mt-10 max-w-md text-2xl font-bold leading-snug tracking-tight text-white xl:text-3xl">
-              Book a test, follow your visit, and collect your results in one place.
-            </h2>
-
-            <ul className="m-0 mt-9 list-none space-y-3 p-0">
-              {TRUST_POINTS.map(({ icon: Icon, title, body }) => (
-                <li
-                  key={title}
-                  className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.07] p-3.5 backdrop-blur-sm"
-                >
-                  <span className="mt-px flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white/15 text-white">
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-note font-semibold text-white">{title}</span>
-                    <span className="mt-0.5 block text-fine leading-relaxed text-azure-100/80">{body}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-
-            {/* A footnote, not a fourth paragraph. */}
-            <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-5 text-fine text-azure-100/70">
-              <span className="flex w-full items-start gap-1.5">
-                <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-                {/* Wraps rather than truncates. An address ending "Misamis Orient…" is not a
-                    shorter address, it is a wrong one — and this is the only place on the page
-                    that tells somebody where to physically turn up. */}
-                <span className="leading-relaxed">{CLINIC.address}</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Phone className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-                {CLINIC.phone}
-              </span>
-            </div>
-          </div>
-        </aside>
       </main>
     </div>
   );
 };
+
+/** The mark at the top of each side, on a disc that stays white in both themes (`.auth-mark`). */
+function CardMark() {
+  return (
+    <span
+      className="auth-rise auth-mark mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
+      style={{ '--i': 0 }}
+    >
+      <Logo className="h-9 w-9" alt="" />
+    </span>
+  );
+}
 
 export default AuthPage;

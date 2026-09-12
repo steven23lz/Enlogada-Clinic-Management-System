@@ -49,7 +49,7 @@ cd backend && node src/scripts/verifyRbacWiring.js  # expect: "All good", 0 warn
 cd backend && node src/scripts/verifyDiscountParity.js  # expect: "Exact parity"
 
 # ── 3. Frontend logic + design gates. ~3s, no server. ──────────────────────────
-cd frontend && npm run test:unit                    # expect: 44 pass
+cd frontend && npm run test:unit                    # expect: 53 pass
 cd frontend && npm run lint                         # expect: 0 violations on both gates
 cd frontend && npm run build                        # expect: clean build
 
@@ -65,13 +65,13 @@ cd frontend && npx playwright test                  # expect: 342 pass, 0 skippe
 | Check | Expected |
 |---|---|
 | Backend unit | **64 passed** |
-| Frontend unit | **44 passed** |
+| Frontend unit | **53 passed** |
 | Playwright E2E | **342 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
 | `verifyRbacWiring` | `All good`, **78 routes checked**, **0 warnings** |
 | `verifyDiscountParity` | `Exact parity` — 3,264 combinations |
-| `checkFillRoles` | 212 files, **0 violations** |
+| `checkFillRoles` | 216 files, **0 violations** |
 | `checkContrast` | 116 token pairs, both themes, **0 violations** |
-| `prose_scan` | 200 files, **0 prose damage** |
+| `prose_scan` | 216 files, **0 prose damage** |
 
 Write today's numbers down before anyone touches anything. A diff against a known baseline is
 worth more than any amount of reading.
@@ -146,7 +146,7 @@ Three gates in one command:
 **Blind spot:** its `HOOKS` list is its eyesight. A hook missing from that list is damage it cannot
 see.
 
-### `npx playwright test` — 318 E2E
+### `npx playwright test` — 342 E2E
 **Proves:** RBAC boundaries, the money path, ticket-release gating, result versioning, printing,
 revalidation, failure states, and the copy on several screens.
 **Cannot see:** anything about performance. A `column::date` filter forcing a sequential scan

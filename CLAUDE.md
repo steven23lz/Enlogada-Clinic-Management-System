@@ -750,7 +750,7 @@ Services Catalogue.
   fill and its ink are defined next to each other so the dark block cannot flip one without the
   other. `scripts/checkFillRoles.js` (wired into `npm run lint`) rejects the ink-only shades.
 - **A surface that is dark in BOTH themes must not carry themeable ink.** The rail, the hero
-  panels, `.auth-panel`, the public footer and the navy banners do not flip, so `text-slate-300`
+  panels, the public site's `.aurora` and the navy banners do not flip, so `text-slate-300`
   on them inverts to dark-on-dark. Use `text-rail-ink-*` and `border-rail-line`. This has now been
   found four separate times; it is the single most repeated dark-mode mistake in this codebase.
 - **The public site has a colouring layer of its own: Aurora (option A1).** `[1.72.0]` Steven kept
@@ -769,6 +769,16 @@ Services Catalogue.
   blanket reduced-motion rule does not reset; print shows everything. Never put a hover transform on
   the Reveal element itself — it owns `transition`, so the hover would move at the reveal's pace
   after the reveal's delay. Put it on a child, as `FeatureCard` does.
+- **Sign In and Create Account are the two sides of one card.** `[1.72.0]` `AuthPage` turns the
+  card over (850ms) and mounts BOTH sides only for the length of the turn; the side turning away is
+  `inert`, and it unmounts the moment the turn ends. That is load-bearing: `helpers/auth.js` fills
+  `input[type="password"]` and clicks `button[type="submit"]`, so a second form left in the
+  document is a second match for every sign-in in the suite. App renders `AuthPage` without a `key`
+  so the header's Sign In / Create Account turn the card instead of rebuilding the page. The submit
+  is named exactly "Sign In" and must stay the LAST button with that name (`failure-states`,
+  `mobile-patient`); the card's own way back reads "Sign in instead". The new-password meter
+  (`lib/passwordStrength.js`) may advise, but the only rule it states is the server's minimum, and
+  its unit test reads `backend/src/validations/passwordPolicy.js` so the two cannot drift.
 
 - **A result is a form, not a paragraph — for Ultrasound.** `[1.50.0]` `test_results.findings`
   still holds the narrative and the impression; the MEASUREMENT block is structured

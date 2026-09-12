@@ -50,10 +50,10 @@ const lum = (hex) => {
 
 // Shades the dark block turns LIGHT. Used as a fill, these invert.
 //
-// Scoped to the ROOT `html[data-theme="dark"] {` token block only. Scoped blocks further down
-// (e.g. `html[data-theme="dark"] .auth-panel`, which rebinds azure back to LIGHT values because
-// that panel is dark in both themes) would otherwise be read as ramp definitions and flag azure
-// as inverted — the opposite of true.
+// Scoped to the ROOT `html[data-theme="dark"] {` token block only. A scoped block further down
+// that rebinds a ramp back to LIGHT values for a surface dark in both themes (the old sign-in
+// panel did this for azure) would otherwise be read as ramp definitions and flag that ramp as
+// inverted — the opposite of true.
 function darkTokenBlock() {
   const css = fs.readFileSync(CSS, 'utf8');
   const start = css.indexOf('html[data-theme="dark"] {');
