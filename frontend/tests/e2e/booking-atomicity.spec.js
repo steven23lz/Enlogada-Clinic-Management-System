@@ -3,7 +3,7 @@ import { test, expect, request } from 'playwright/test';
 import { loginAs } from './helpers/ticketRelease.js';
 import { selfPayProfile } from './helpers/patients.js';
 import { daysAgoStr } from '../../src/lib/date.js';
-import { holdSlot, expireHold } from './helpers/slotHold.js';
+import { holdSlot, expireHold, releaseLeftoverBookings } from './helpers/slotHold.js';
 import { dateStr } from './helpers/dates.js';
 
 // Booking atomicity and duplicate handling.
@@ -45,6 +45,12 @@ test.describe('Booking atomicity (API)', () => {
 
     const testsRes = await apiContext.get(`${API}/tests`);
     testIds = (await testsRes.json()).data.tests.slice(0, 2).map((t) => t.id);
+
+    // A run stopped before its teardown leaves its bookings on BOOKING_DATE, and eighteen slots
+    // do not survive many of those — the spec then fails on "no slot left" for reasons that have
+    // nothing to do with booking. Release them first, so every run starts from a clean date.
+    // Measured on 2026-09-12: eleven leftovers from two interrupted runs. [1.72.0]
+    releaseLeftoverBookings(BOOKING_DATE);
   });
 
   test.afterAll(async () => {
