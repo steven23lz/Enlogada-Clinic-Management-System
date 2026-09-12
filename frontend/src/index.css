@@ -132,6 +132,18 @@
   --color-marine-800: #0c1c37;
   --color-marine-900: #081426;
 
+  /* ── Aurora — the public site's hero (option A1) [1.72.0] ─────────────────────────────────
+   * Today's palette, applied with more depth: the glows over this base are brand-500 and
+   * azure-500 plus a teal between them, so no new hue enters the identity. The hero is dark in
+   * BOTH themes, like the rail, so its inks are fixed values that never follow a ramp; only the
+   * base deepens in dark mode (see the dark block). scripts/checkContrast.js measures every ink
+   * here against the base AND each glow at its brightest, reading the `.aurora` rule itself. */
+  --color-aurora-base: #0e1826;
+  --color-aurora-ink: #ffffff;
+  --color-aurora-soft: #d3dde8;
+  --color-aurora-accent: #a8dc92;
+  --color-aurora-accent-2: #86cdf2;
+
   /* ── Neutral ramp ──────────────────────────────────────────────────────────────────────────
    * `gray` is remapped onto `slate`. Both ramps were already in use across every console —
    * Tailwind's gray is warm and its slate is cool, so a card with `border-gray-100` and
@@ -291,6 +303,10 @@
   --shadow-float: 0 2px 4px -2px rgb(15 23 42 / 0.06), 0 12px 28px -8px rgb(15 23 42 / 0.16);
   --shadow-overlay: 0 8px 12px -6px rgb(15 23 42 / 0.08), 0 32px 64px -16px rgb(15 23 42 / 0.24);
   --shadow-rail: 1px 0 0 0 rgb(15 23 42 / 0.06);
+  /* The one exception to "shadow means this floats". [1.72.0] A coloured light under the public
+     site's gradient call to action (`Button variant="brand"`) — decoration, not elevation, so it
+     is never used on a console and never on a panel. Azure, the gradient's far stop. */
+  --shadow-glow: 0 10px 24px -8px rgb(10 113 169 / 0.45);
 
   /* ── Radius ────────────────────────────────────────────────────────────────────────────────
    * Radius encodes size, not taste: the bigger the surface, the larger the corner. Previously a
@@ -535,6 +551,124 @@ select:focus-visible {
     linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
   background-size: 44px 44px;
   mask-image: linear-gradient(to bottom right, black, transparent 70%);
+}
+
+/* ── Aurora — the public site's colouring (option A1) [1.72.0] ─────────────────────────────
+ *
+ * Steven kept today's palette and asked for it applied with more depth. Nothing below adds a hue:
+ * the lights are brand-500 and azure-500 plus a teal between them, over a deeper rail. Each piece
+ * carries a measured constraint, and scripts/checkContrast.js enforces it by reading these rules —
+ * so changing a glow here is re-measured the next time anyone runs `npm run lint`.
+ *
+ *   .aurora               the hero. Text sits on the base AND on each glow at its brightest.
+ *   .text-gradient-aurora the highlighted headline word; display size only, both stops >= 3:1.
+ *   .glass-pill           the floating header. 0.88, not the 0.74 that looked nicer: at 0.74 the
+ *                         pill over the hero composites to #c0c3c7 and its nav text is 4.24:1.
+ *   .edge-gradient        a card whose hairline runs azure into green instead of a flat grey.
+ *   .wash-aurora          the page ground: the canvas with the two brand tints in its corners.
+ *   bg-gradient-brand     the call to action; white on both stops (5.64 and 5.32).
+ */
+.aurora {
+  background-color: var(--color-aurora-base);
+  background-image:
+    radial-gradient(60% 80% at 12% 10%, rgb(83 132 59 / 0.55) 0%, rgb(83 132 59 / 0) 62%),
+    radial-gradient(55% 75% at 88% 0%, rgb(10 113 169 / 0.6) 0%, rgb(10 113 169 / 0) 62%),
+    radial-gradient(70% 60% at 50% 110%, rgb(20 160 150 / 0.35) 0%, rgb(20 160 150 / 0) 62%);
+}
+
+.text-gradient-aurora {
+  background-image: linear-gradient(90deg, var(--color-aurora-accent), var(--color-aurora-accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Forced-colours mode (Windows High Contrast) drops background images, and transparent text over
+   no background is no text at all. It gets a real colour there. */
+@media (forced-colors: active) {
+  .text-gradient-aurora {
+    background-image: none;
+    color: CanvasText;
+  }
+}
+
+.glass-pill {
+  background: rgb(255 255 255 / 0.88);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+  border: 1px solid rgb(255 255 255 / 0.7);
+}
+
+/* Both stops are tokens the dark block remaps, so the edge darkens with the card it outlines. */
+.edge-gradient {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    linear-gradient(140deg, var(--color-azure-200), var(--color-brand-200)) border-box;
+}
+
+.wash-aurora {
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(45% 60% at 100% 0%, var(--color-brand-100) 0%, transparent 70%),
+    radial-gradient(45% 60% at 0% 100%, var(--color-azure-100) 0%, transparent 70%);
+}
+
+@utility bg-gradient-brand {
+  background-image: linear-gradient(135deg, var(--color-primary) 0%, var(--color-azure-500) 100%);
+}
+
+/* ── Public-site motion [1.72.0] ────────────────────────────────────────────────────────────
+ *
+ * Values measured from the reference site's bundle and reproduced in CSS rather than with its
+ * animation library: a section heading lifts 25px out of a 4px blur over 700ms on an ease-out
+ * curve; cards rise 40px from 94% scale on a spring-like overshoot; paired columns slide in from
+ * either side. Each element is revealed once, when it first scrolls into view (Reveal.jsx sets
+ * `data-revealed`), and a group staggers by 180ms per step.
+ *
+ * Only opacity, transform and filter move, so nothing is laid out again mid-animation.
+ */
+[data-reveal] {
+  transition-property: opacity, transform, filter;
+  transition-duration: 700ms;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: calc(var(--reveal-i, 0) * 180ms + 100ms);
+}
+[data-reveal][data-revealed='false'] { opacity: 0; }
+[data-reveal='fade-up'][data-revealed='false'] { transform: translate3d(0, 25px, 0); filter: blur(4px); }
+[data-reveal='slide-left'][data-revealed='false'] { transform: translate3d(-50px, 0, 0) scale(0.95); }
+[data-reveal='slide-right'][data-revealed='false'] { transform: translate3d(50px, 0, 0); }
+[data-reveal='rise'] {
+  transition-duration: 650ms;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+[data-reveal='rise'][data-revealed='false'] { transform: translate3d(0, 40px, 0) scale(0.94); }
+
+/* The blanket reduced-motion rule below zeroes durations but not DELAYS, so a staggered card would
+   still sit invisible for up to a second before snapping in. Reduced motion means content that is
+   simply there. */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] { transition-delay: 0s !important; }
+}
+
+/* Anything not yet scrolled to would print as a blank band. Print shows everything. */
+@media print {
+  [data-reveal] { opacity: 1 !important; transform: none !important; filter: none !important; }
+}
+
+.decor-blob {
+  position: absolute;
+  width: 24rem;
+  height: 24rem;
+  border-radius: 9999px;
+  filter: blur(64px);
+  opacity: 0.7;
+}
+.decor-blob-a { top: -7rem; right: -6rem; background: var(--color-brand-100); animation: blobFloat 12s ease-in-out infinite; }
+.decor-blob-b { bottom: -8rem; left: -6rem; background: var(--color-azure-100); animation: blobFloat 14s ease-in-out infinite reverse; }
+@keyframes blobFloat {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(14px, -18px, 0); }
 }
 
 /* Keyframe animations */
@@ -1050,6 +1184,9 @@ body.printing-report {
     /* Flips WITH the fill. This is the line whose absence produced the reported bug. */
     --color-emphasis-foreground: #0f172a;
     --color-skeleton: #2f3b4b;          /* 1.68:1 on a dark card, matching light mode's weight */
+    /* The hero stays dark in both themes; in the dark one it deepens so it does not glow brighter
+       than the page around it. Its inks need no change — a darker ground only raises them. */
+    --color-aurora-base: #0a121d;
   }
 
   /* ── The utilities no variable can reach ──────────────────────────────────────────────────
@@ -1126,6 +1263,21 @@ body.printing-report {
   html[data-theme="dark"] .glass-card {
     background: rgba(19, 28, 43, 0.72);
     border-color: rgba(255, 255, 255, 0.10);
+  }
+
+  /* Aurora in the dark theme: quieter lights over the deeper base the token block sets, so the
+     hero does not out-glow the page around it. Measured by checkContrast.js like the light rule. */
+  html[data-theme="dark"] .aurora {
+    background-image:
+      radial-gradient(60% 80% at 12% 10%, rgb(83 132 59 / 0.45) 0%, rgb(83 132 59 / 0) 62%),
+      radial-gradient(55% 75% at 88% 0%, rgb(10 113 169 / 0.5) 0%, rgb(10 113 169 / 0) 62%),
+      radial-gradient(70% 60% at 50% 110%, rgb(20 160 150 / 0.3) 0%, rgb(20 160 150 / 0) 62%);
+  }
+
+  /* The glass header, frosted dark rather than white. */
+  html[data-theme="dark"] .glass-pill {
+    background: rgb(19 28 43 / 0.78);
+    border-color: rgb(255 255 255 / 0.08);
   }
 
   /* The sign-in card and the ground it sits on. [1.40.0] Both hardcode a white/near-white field,

@@ -753,6 +753,22 @@ Services Catalogue.
   panels, `.auth-panel`, the public footer and the navy banners do not flip, so `text-slate-300`
   on them inverts to dark-on-dark. Use `text-rail-ink-*` and `border-rail-line`. This has now been
   found four separate times; it is the single most repeated dark-mode mistake in this codebase.
+- **The public site has a colouring layer of its own: Aurora (option A1).** `[1.72.0]` Steven kept
+  today's palette and chose to have it applied with more depth — a mesh-gradient hero (`.aurora`),
+  gradient headline text (`.text-gradient-aurora`), a frosted header (`.glass-pill`), gradient card
+  edges (`.edge-gradient`), a tinted page ground (`.wash-aurora`) and a gradient call to action
+  (`<Button variant="brand">`: `bg-gradient-brand` + `shadow-glow`). None of it adds a hue.
+  **Every piece is measured, not trusted:** `checkContrast.js` reads the `.aurora` and `.glass-pill`
+  rules out of index.css and measures each ink on the base AND on every glow at its brightest, and
+  the header's ink on the glass composited over each of those. That is how the header opacity that
+  looked best, 0.74, was caught at 4.24:1; it is 0.88. `shadow-glow` is the one exception to
+  "shadow means this floats" — the public call to action only, never a console, never a panel.
+- **Scroll-reveal is CSS, driven by `components/public/Reveal.jsx`.** `[1.72.0]` `variant` picks the
+  motion (fade-up, slide-left, slide-right, rise — timings measured from the reference site) and
+  `index` staggers a group by 180ms. Reduced motion makes it instant, including the DELAY, which the
+  blanket reduced-motion rule does not reset; print shows everything. Never put a hover transform on
+  the Reveal element itself — it owns `transition`, so the hover would move at the reveal's pace
+  after the reveal's delay. Put it on a child, as `FeatureCard` does.
 
 - **A result is a form, not a paragraph — for Ultrasound.** `[1.50.0]` `test_results.findings`
   still holds the narrative and the impression; the MEASUREMENT block is structured

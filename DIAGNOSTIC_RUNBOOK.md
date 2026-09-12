@@ -68,8 +68,8 @@ cd frontend && npx playwright test                  # expect: 342 pass, 0 skippe
 | Playwright E2E | **342 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
 | `verifyRbacWiring` | `All good`, **78 routes checked**, **0 warnings** |
 | `verifyDiscountParity` | `Exact parity` — 3,264 combinations |
-| `checkFillRoles` | 200 files, **0 violations** |
-| `checkContrast` | 46 token pairs, both themes, **0 violations** |
+| `checkFillRoles` | 205 files, **0 violations** |
+| `checkContrast` | 108 token pairs, both themes, **0 violations** |
 | `prose_scan` | 200 files, **0 prose damage** |
 
 Write today's numbers down before anyone touches anything. A diff against a known baseline is
@@ -127,10 +127,17 @@ Three gates in one command:
 - **oxlint** — unused imports, undefined identifiers.
 - **checkFillRoles** — an ink-only shade (`slate/gray-700…950`) used as a *fill*. Those invert in
   dark mode; this shipped white-on-white at 1.12:1 three times.
-- **checkContrast** — every ink token against every surface it lands on, in **both** themes.
+- **checkContrast** — every ink token against every surface it lands on, in **both** themes, plus
+  the public hero's gradient: each ink on the base and on every glow at its brightest, and the glass
+  header's ink on the glass composited over each. It reads those rules out of index.css, so it
+  measures what the browser paints.
 
-> **Blind spot, currently:** `checkContrast` tests `emphasis`, `destructive` and `rail` fill pairs.
-> It does **not** test `primary`, which measures 4.44:1 with white text — below AA.
+> **A blind spot, fixed 2026-09-12:** it used to read every `--color-*` in the file with the last
+> one winning, so the "light" theme was measured with the DARK block's values for every ink that
+> block remaps — light mode was not really checked for those inks. It now reads light tokens from
+> `@theme` only and dark tokens from the `html[data-theme="dark"]` root blocks only. Deliberately
+> broken twice to prove the new checks fire: the header glass at 0.74 and the azure glow at 0.95
+> each failed with the right colour named.
 
 ### `prose_scan.py`
 **Proves:** no rename walked into English prose. Real damage it exists to catch:

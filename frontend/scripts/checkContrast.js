@@ -46,10 +46,14 @@ const AA_LARGE = 3.0;
  * not automatically bring it under this check — that is deliberate: the list is a claim about
  * where a colour is USED, which only a person knows.
  */
+// brand-100 and azure-100 are the peaks of the public site's page wash (`.wash-aurora`) [1.72.0].
+// Text scrolls across them, so they are surfaces as much as the canvas beneath them is.
+const WASH = ['brand-100', 'azure-100'];
+
 const INK_ON_SURFACES = [
-  { ink: 'ink', surfaces: ['surface', 'canvas', 'sunken'], min: AA_BODY },
-  { ink: 'ink-soft', surfaces: ['surface', 'canvas', 'sunken'], min: AA_BODY },
-  { ink: 'ink-muted', surfaces: ['surface', 'canvas', 'sunken'], min: AA_BODY },
+  { ink: 'ink', surfaces: ['surface', 'canvas', 'sunken', ...WASH], min: AA_BODY },
+  { ink: 'ink-soft', surfaces: ['surface', 'canvas', 'sunken', ...WASH], min: AA_BODY },
+  { ink: 'ink-muted', surfaces: ['surface', 'canvas', 'sunken', ...WASH], min: AA_BODY },
   // Decorative only — placeholder glyphs, separators, disabled affordances. Held to the UI
   // threshold rather than the body threshold, and that exemption is the reason it exists: without
   // it, `slate-400` gets used for real content because there is nowhere else to reach for.
@@ -74,6 +78,36 @@ const PAIRS = [
   { fg: 'rail-ink', bg: 'rail', min: AA_BODY },
   { fg: 'rail-ink-soft', bg: 'rail', min: AA_BODY },
   { fg: 'rail-ink-muted', bg: 'rail', min: AA_LARGE, decorative: true },
+  // The far end of the public site's brand gradient (`bg-gradient-brand`). [1.72.0] The near end is
+  // `primary`, above. A gradient is only as legible as its worst stop.
+  { fg: 'primary-foreground', bg: 'azure-500', min: AA_BODY },
+];
+
+/**
+ * Dark hero meshes. [1.72.0] Text on one of these sits on the base colour AND on every glow at its
+ * brightest, so it is measured against all of them. The colours are read out of the CSS rule
+ * itself — the gradient the browser paints is the gradient that gets measured, and there is no
+ * second copy of it here to drift out of step.
+ *
+ * `glass` is a translucent surface floating over the same mesh (the header pill). What its ink
+ * actually sits on is the glass composited over each mesh colour, so that is what is measured. At
+ * 0.74 opacity the pill looked better and its nav text failed at 4.24:1.
+ */
+const MESHES = [
+  {
+    selector: '.aurora',
+    inks: [
+      { ink: 'aurora-ink', min: AA_BODY },
+      { ink: 'aurora-soft', min: AA_BODY },
+      // Gradient text, used only at display size.
+      { ink: 'aurora-accent', min: AA_LARGE },
+      { ink: 'aurora-accent-2', min: AA_LARGE },
+    ],
+    glass: {
+      selector: '.glass-pill',
+      inks: [{ ink: 'ink', min: AA_BODY }, { ink: 'ink-soft', min: AA_BODY }],
+    },
+  },
 ];
 
 // ── Colour maths ────────────────────────────────────────────────────────────────────────────
@@ -149,18 +183,37 @@ function readTokens(css) {
   return tokens;
 }
 
+/** Comments stripped first: a declaration quoted inside a comment is not a declaration. */
+const stripComments = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '');
+
+/** The bodies of every rule whose selector is exactly `selector` (`@theme`, the dark root). */
+function bodiesOf(css, selector) {
+  const out = [];
+  for (let at = css.indexOf(`${selector} {`); at !== -1; at = css.indexOf(`${selector} {`, at + 1)) {
+    const open = css.indexOf('{', at);
+    out.push(css.slice(open + 1, css.indexOf('}', open)));
+  }
+  return out;
+}
+
 /**
  * The dark theme is the LIGHT tokens with the dark block's overrides applied on top — which is
  * how the cascade actually resolves it. Measuring the dark block alone would miss every token it
  * does not redefine, and those are exactly the ones most likely to be wrong in dark mode.
+ *
+ * Each theme reads ONLY the rules that define it. [1.72.0] This used to read every `--color-*`
+ * declaration in the file, last one winning — so the "light" theme silently held the DARK block's
+ * values for every token that block remaps (light ink-soft measured as #a3b0c2), and the dark
+ * theme picked up tokens rebound inside a scoped rule (`.auth-panel`'s azure). Light mode was
+ * therefore never actually measured for the remapped inks. Found when the Aurora checks reported
+ * light-mode failures in colours the light theme does not use.
  */
-function buildThemes(css) {
-  const light = readTokens(css);
-
-  const darkStart = css.indexOf('html[data-theme="dark"]');
-  const dark = darkStart === -1 ? {} : { ...light, ...readTokens(css.slice(darkStart)) };
-
-  return { light, dark: darkStart === -1 ? light : dark };
+function buildThemes(rawCss) {
+  const css = stripComments(rawCss);
+  const light = Object.assign({}, ...bodiesOf(css, '@theme').map(readTokens));
+  const darkBodies = bodiesOf(css, 'html[data-theme="dark"]');
+  const dark = darkBodies.length ? Object.assign({ ...light }, ...darkBodies.map(readTokens)) : light;
+  return { light, dark };
 }
 
 // ── Reporting ───────────────────────────────────────────────────────────────────────────────
@@ -187,6 +240,87 @@ function assertContrast(theme, tokens, fgName, bgName, min, decorative) {
   }
 }
 
+// ── Meshes ──────────────────────────────────────────────────────────────────────────────────
+
+/** The body of the first rule whose selector is exactly `selector`, or null. */
+function ruleBody(css, selector) {
+  const at = css.indexOf(`${selector} {`);
+  return at === -1 ? null : css.slice(at, css.indexOf('}', at));
+}
+
+const RGBA = /rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*([\d.]+)\s*\)/;
+const toStop = (m) => ({ rgb: [m[1], m[2], m[3]].map((c) => Number(c) / 255), alpha: Number(m[4]) });
+
+/** The `rgb(r g b / a)` stops with a non-zero alpha — each glow, at its brightest. */
+const glowsIn = (body) => [...body.matchAll(new RegExp(RGBA.source, 'g'))].map(toStop).filter((g) => g.alpha > 0);
+
+/** `top` at `alpha`, composited over an opaque `bottom`. All channels 0-1. */
+const over = (top, alpha, bottom) => top.map((c, i) => alpha * c + (1 - alpha) * bottom[i]);
+const toHex = (rgb) => '#' + rgb.map((c) => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
+
+/**
+ * Every colour text can land on in a mesh, for one theme: its base, and each glow composited over
+ * it. A dark-theme rule, where one exists, supplies the dark glows; the base is resolved through
+ * the theme's tokens, so a dark base arrives through the dark block without a rule of its own.
+ */
+function meshSurfaces(css, selector, theme, tokens) {
+  const light = ruleBody(css, selector);
+  if (!light) return null;
+  const dark = theme === 'dark' ? ruleBody(css, `html[data-theme="dark"] ${selector}`) : null;
+  const BASE = /background-color:\s*(?:var\(--color-([a-z0-9-]+)\)|(#[0-9a-f]{6}))/i;
+  const decl = (dark && BASE.exec(dark)) || BASE.exec(light);
+  const base = decl && parseColor(decl[1] ? tokens[decl[1]] : decl[2]);
+  if (!base) return null;
+  const lights = dark && glowsIn(dark).length ? glowsIn(dark) : glowsIn(light);
+  return [base, ...lights.map((g) => over(g.rgb, g.alpha, base))];
+}
+
+/** The translucent pane a glass surface paints: its `background: rgb(r g b / a)`. */
+function glassPane(css, selector, theme) {
+  const body = (theme === 'dark' && ruleBody(css, `html[data-theme="dark"] ${selector}`)) || ruleBody(css, selector);
+  const m = body && new RegExp(`background:\\s*${RGBA.source}`).exec(body);
+  return m ? { rgb: [m[1], m[2], m[3]].map((c) => Number(c) / 255), alpha: Number(m[4]) } : null;
+}
+
+function assertOnSurfaces(theme, tokens, inkName, label, surfaces, min, decorative) {
+  const fg = parseColor(tokens[inkName]);
+  if (!fg) {
+    skipped.push(`${theme}: ${inkName} on ${label} — --color-${inkName} not defined`);
+    return;
+  }
+  for (const bg of surfaces) {
+    checked += 1;
+    const ratio = contrast(fg, bg);
+    if (ratio < min) {
+      failures.push({ theme, fgName: inkName, bgLabel: label, ratio, min, decorative, fgValue: tokens[inkName], bgValue: toHex(bg) });
+    }
+  }
+}
+
+function checkMeshes(css, themeName, tokens) {
+  for (const mesh of MESHES) {
+    const surfaces = meshSurfaces(css, mesh.selector, themeName, tokens);
+    if (!surfaces) {
+      skipped.push(`${themeName}: ${mesh.selector} — rule or base colour not found in index.css`);
+      continue;
+    }
+    const label = `${mesh.selector} (base + ${surfaces.length - 1} glows)`;
+    for (const { ink, min, decorative } of mesh.inks) {
+      assertOnSurfaces(themeName, tokens, ink, label, surfaces, min, decorative);
+    }
+    if (!mesh.glass) continue;
+    const pane = glassPane(css, mesh.glass.selector, themeName);
+    if (!pane) {
+      skipped.push(`${themeName}: ${mesh.glass.selector} — no translucent background found`);
+      continue;
+    }
+    const composited = surfaces.map((s) => over(pane.rgb, pane.alpha, s));
+    for (const { ink, min, decorative } of mesh.glass.inks) {
+      assertOnSurfaces(themeName, tokens, ink, `${mesh.glass.selector} over ${mesh.selector}`, composited, min, decorative);
+    }
+  }
+}
+
 function main() {
   const css = fs.readFileSync(CSS, 'utf8');
   const themes = buildThemes(css);
@@ -198,6 +332,7 @@ function main() {
     for (const { fg, bg, min, decorative } of PAIRS) {
       assertContrast(themeName, tokens, fg, bg, min, decorative);
     }
+    checkMeshes(css, themeName, tokens);
   }
 
   if (skipped.length) {
@@ -206,10 +341,11 @@ function main() {
   }
 
   if (failures.length) {
-    console.error(`\ncontrast check: ${failures.length} FAILING pair(s) of ${checked + failures.length} checked\n`);
+    // `checked` already counts the failures — every assertion increments it before it can fail.
+    console.error(`\ncontrast check: ${failures.length} FAILING pair(s) of ${checked} checked\n`);
     for (const f of failures) {
       console.error(
-        `  [${f.theme}] --color-${f.fgName} (${f.fgValue}) on --color-${f.bgName} (${f.bgValue})\n` +
+        `  [${f.theme}] --color-${f.fgName} (${f.fgValue}) on ${f.bgLabel || `--color-${f.bgName}`} (${f.bgValue})\n` +
         `        ${f.ratio.toFixed(2)}:1  — needs ${f.min}:1${f.decorative ? ' (decorative threshold)' : ''}`
       );
     }

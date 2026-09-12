@@ -19,6 +19,13 @@ const buttonVariants = cva(
         // takes a patient's money or releases a diagnostic report.
         default:
           "bg-primary text-primary-foreground shadow-[0_1px_2px_rgb(15_23_42_/_0.10)] hover:bg-primary-hover active:bg-primary-active",
+        // The public site's call to action. [1.72.0] The logo's two colours as one gradient with a
+        // coloured glow beneath it — the "advanced colouring" chosen for the redesign (option A1).
+        // Public pages only: a console's primary action stays the flat `default`, where a glow
+        // would compete with the data. Hover and press DARKEN, as `default` does, so the label's
+        // contrast only ever rises under the cursor (white on both stops: 5.64 and 5.32).
+        brand:
+          "bg-gradient-brand text-primary-foreground shadow-glow hover:brightness-95 active:brightness-90",
         destructive:
           "bg-destructive text-destructive-foreground shadow-[0_1px_2px_rgb(15_23_42_/_0.10)] hover:bg-destructive-hover active:bg-destructive-active",
         // `active:` on every variant, not only the filled ones. [1.54.0] outline and ghost had a

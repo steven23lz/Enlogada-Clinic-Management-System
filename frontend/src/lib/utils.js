@@ -42,7 +42,7 @@ const twMerge = extendTailwindMerge({
       // Keep in sync with the `--text-*` block in index.css.
       text: ['nano', 'micro', 'meta', 'fine', 'note', 'lead', 'stat'],
       // Keep in sync with the `--shadow-*` block in index.css.
-      shadow: ['raised', 'float', 'overlay', 'rail'],
+      shadow: ['raised', 'float', 'overlay', 'rail', 'glow'],
     },
   },
 })
