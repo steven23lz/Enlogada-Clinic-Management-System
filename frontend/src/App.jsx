@@ -53,6 +53,9 @@ const MainApp = () => {
   const [receiptNumber, setReceiptNumber] = useState(getInitialReceipt);
   const [currentTab, setCurrentTab] = useState(() => (getInitialResetToken() ? 'reset-password' : 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'reset-password', 'dashboard', 'account'
   const [activeNav, setActiveNav] = useState(null); // Active nav in staff/admin sidebar
+  // A section of the destination page to scroll to on arrival — the header's FAQ link sends a
+  // visitor to Home's #faq from any other page. [1.72.0] Cleared by any plain navigation.
+  const [pendingSection, setPendingSection] = useState(null);
 
   // Land each user on a destination they actually hold. This used to default to 'dashboard' —
   // an Admin/SuperAdmin-only destination — so every other role signed in pointing at an id it
@@ -83,8 +86,9 @@ const MainApp = () => {
     );
   }
 
-  const handleNavigate = (tab) => {
+  const handleNavigate = (tab, { section = null } = {}) => {
     setCurrentTab(tab);
+    setPendingSection(section);
   };
 
   /**
@@ -129,7 +133,7 @@ const MainApp = () => {
       return <AboutUs onNavigate={handleNavigate} />;
     }
     if (currentTab === 'home') {
-      return <Home onNavigate={handleNavigate} />;
+      return <Home onNavigate={handleNavigate} section={pendingSection} />;
     }
     if (currentTab === 'register') {
       return <AuthPage key={currentTab} initialMode="register" onNavigate={handleNavigate} />;

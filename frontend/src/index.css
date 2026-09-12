@@ -568,12 +568,15 @@ select:focus-visible {
  *   .wash-aurora          the page ground: the canvas with the two brand tints in its corners.
  *   bg-gradient-brand     the call to action; white on both stops (5.64 and 5.32).
  */
+/* The lights' POSITIONS are variables (--a1..--a3), so HeroCarousel can move them between slides.
+   Their colour and brightness stay literal in this rule, which is where checkContrast.js reads
+   them — a slide can move a light, never brighten one. */
 .aurora {
   background-color: var(--color-aurora-base);
   background-image:
-    radial-gradient(60% 80% at 12% 10%, rgb(83 132 59 / 0.55) 0%, rgb(83 132 59 / 0) 62%),
-    radial-gradient(55% 75% at 88% 0%, rgb(10 113 169 / 0.6) 0%, rgb(10 113 169 / 0) 62%),
-    radial-gradient(70% 60% at 50% 110%, rgb(20 160 150 / 0.35) 0%, rgb(20 160 150 / 0) 62%);
+    radial-gradient(60% 80% at var(--a1, 12% 10%), rgb(83 132 59 / 0.55) 0%, rgb(83 132 59 / 0) 62%),
+    radial-gradient(55% 75% at var(--a2, 88% 0%), rgb(10 113 169 / 0.6) 0%, rgb(10 113 169 / 0) 62%),
+    radial-gradient(70% 60% at var(--a3, 50% 110%), rgb(20 160 150 / 0.35) 0%, rgb(20 160 150 / 0) 62%);
 }
 
 .text-gradient-aurora {
@@ -1269,9 +1272,9 @@ body.printing-report {
      hero does not out-glow the page around it. Measured by checkContrast.js like the light rule. */
   html[data-theme="dark"] .aurora {
     background-image:
-      radial-gradient(60% 80% at 12% 10%, rgb(83 132 59 / 0.45) 0%, rgb(83 132 59 / 0) 62%),
-      radial-gradient(55% 75% at 88% 0%, rgb(10 113 169 / 0.5) 0%, rgb(10 113 169 / 0) 62%),
-      radial-gradient(70% 60% at 50% 110%, rgb(20 160 150 / 0.3) 0%, rgb(20 160 150 / 0) 62%);
+      radial-gradient(60% 80% at var(--a1, 12% 10%), rgb(83 132 59 / 0.45) 0%, rgb(83 132 59 / 0) 62%),
+      radial-gradient(55% 75% at var(--a2, 88% 0%), rgb(10 113 169 / 0.5) 0%, rgb(10 113 169 / 0) 62%),
+      radial-gradient(70% 60% at var(--a3, 50% 110%), rgb(20 160 150 / 0.3) 0%, rgb(20 160 150 / 0) 62%);
   }
 
   /* The glass header, frosted dark rather than white. */

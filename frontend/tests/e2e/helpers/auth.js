@@ -60,7 +60,10 @@ export async function signIn(page, email, password = E2E_PASSWORD) {
 export async function signInOnPhone(page, email, password = E2E_PASSWORD) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Open menu' }).click();
-  const menu = page.locator('header div.md\\:hidden').last();
+  // By test id, not by `header div.md:hidden`: that selector tied this helper to the header's
+  // breakpoint, and moving the breakpoint (to fix an overflow at the Larger text size) would have
+  // broken sign-in for every phone spec. [1.72.0]
+  const menu = page.getByTestId('public-menu');
   await menu.getByRole('button', { name: 'Sign In' }).click();
 
   await page.fill('input[type="email"]', email);

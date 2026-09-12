@@ -105,7 +105,9 @@ const MESHES = [
     ],
     glass: {
       selector: '.glass-pill',
-      inks: [{ ink: 'ink', min: AA_BODY }, { ink: 'ink-soft', min: AA_BODY }],
+      // ink-muted is deliberately absent: it measures 4.46:1 on this glass, so the header never
+      // uses it. brand-700 is the current-page link.
+      inks: [{ ink: 'ink', min: AA_BODY }, { ink: 'ink-soft', min: AA_BODY }, { ink: 'brand-700', min: AA_BODY }],
     },
   },
 ];

@@ -26,6 +26,11 @@ const buttonVariants = cva(
         // contrast only ever rises under the cursor (white on both stops: 5.64 and 5.32).
         brand:
           "bg-gradient-brand text-primary-foreground shadow-glow hover:brightness-95 active:brightness-90",
+        // A second action ON the dark hero. [1.72.0] Frosted white over the Aurora — every other
+        // variant assumes a light ground, and on the hero `outline` is a white slab. The ink is
+        // aurora-ink, the hero's fixed white, so it does not follow a ramp into dark mode.
+        glass:
+          "border border-white/40 bg-white/10 text-aurora-ink backdrop-blur-sm hover:bg-white/20 active:bg-white/25",
         destructive:
           "bg-destructive text-destructive-foreground shadow-[0_1px_2px_rgb(15_23_42_/_0.10)] hover:bg-destructive-hover active:bg-destructive-active",
         // `active:` on every variant, not only the filled ones. [1.54.0] outline and ghost had a

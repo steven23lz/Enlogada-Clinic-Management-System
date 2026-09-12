@@ -1,174 +1,300 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import PublicHeader from '../../components/PublicHeader';
 import PublicFooter from '../../components/PublicFooter';
 import PageShell from '../../components/ui/page-shell';
-import Logo from '../../components/Logo';
 import { Button } from '../../components/ui/button';
+import { LogoFull } from '../../components/Logo';
 import HeroQuickDock from '../../components/public/HeroQuickDock';
-import { ShieldCheck, Clock, Award, ChevronRight, Stethoscope, FlaskConical, Scan } from 'lucide-react';
+import HeroCarousel from '../../components/public/HeroCarousel';
+import SectionHeading from '../../components/public/SectionHeading';
+import FeatureCard from '../../components/public/FeatureCard';
+import DecorBlobs from '../../components/public/DecorBlobs';
+import Reveal from '../../components/public/Reveal';
+import ClinicFaq from '../../components/public/ClinicFaq';
+import { scrollToSection } from '../../lib/scroll';
+import {
+  ShieldCheck,
+  Clock,
+  Award,
+  Stethoscope,
+  FlaskConical,
+  Scan,
+  ArrowRight,
+  CalendarCheck,
+  CircleQuestionMark,
+  HeartHandshake,
+} from 'lucide-react';
 
-// Mirrors the 5 seeded test_categories rows exactly (database/schema.sql), same icon mapping
-// ClientDashboard.jsx already uses per category — static/decorative, not live data, so the
-// hero's right column doesn't need a fabricated stat to fill the space.
-// 2D Echo and ECG were removed here when the clinic confirmed it does not offer them. Their
-// test_categories rows still exist, because historical results point at them and a past visit has
-// to keep being able to say what it was for — but nothing advertises or sells them.
-const SERVICE_PREVIEW = [
-  { label: 'Ultrasound', icon: Stethoscope },
-  { label: 'Laboratory', icon: FlaskConical },
-  { label: 'Digital X-Ray', icon: Scan },
+/**
+ * The public front page, on the reference site's structure. [1.72.0]
+ *
+ * Top to bottom: a full-height Aurora hero under the floating header; the three errands a visitor
+ * arrives to run (HeroQuickDock, unchanged in behaviour); why patients choose the clinic; its three
+ * departments; an About teaser; how a visit works; the FAQ; a closing call to action. Each section
+ * reveals once as it scrolls into view, with the reference site's timings (Reveal).
+ *
+ * The hero keeps "Book Now" and "View Services", NOT "Book an Appointment": the dock's primary card
+ * carries that name and public-queue-status.spec.js finds it by role, so a second match would be a
+ * strict-mode failure on the one test proving the live queue card renders signed-out.
+ *
+ * Every sentence states something the system does. The staff titles are the report signatories'
+ * own; the payment channels are the ones `payments` accepts.
+ */
+
+// The three departments the clinic runs. 2D Echo and ECG are not offered and are not advertised
+// (see CLAUDE.md) — historical results still name them, a sales page must not.
+const DEPARTMENTS = [
+  {
+    id: 'ultrasound',
+    icon: Stethoscope,
+    name: 'Ultrasound',
+    body: 'Abdominal, pelvic, thyroid, kidney and prostate scans, each read and signed by a radiologist-sonologist.',
+  },
+  {
+    id: 'laboratory',
+    icon: FlaskConical,
+    name: 'Laboratory',
+    body: 'Blood chemistry, CBC, urinalysis, blood typing and more — with any fasting instruction printed beside the test.',
+  },
+  {
+    id: 'xray',
+    icon: Scan,
+    name: 'Digital X-Ray',
+    body: 'Chest and other views on digital X-ray, released together with the rest of your results.',
+  },
 ];
 
-const Home = ({ onNavigate }) => {
+const STEPS = [
+  {
+    title: 'Book online, or walk in',
+    body: 'Reserve a time from your phone and we will tell you when to arrive — or come in during clinic hours and join the queue.',
+  },
+  {
+    title: 'Check in and get tested',
+    body: 'Show your booking pass or give your name at the desk, settle the bill by cash, GCash or bank transfer, and go to the department.',
+  },
+  {
+    title: 'Receive your results',
+    body: 'Released results are emailed to you, and saved in your patient portal if you have an account.',
+  },
+];
+
+const Home = ({ onNavigate, section = null }) => {
+  // Arriving from another page's FAQ link: App passes the section down, and it is scrolled to once
+  // this page has rendered. Plain navigation passes null, so returning to Home does not jump.
+  useEffect(() => {
+    if (section) scrollToSection(section);
+  }, [section]);
+
+  const go = (tab) => onNavigate?.(tab);
+
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
-      <PublicHeader currentTab="home" onNavigate={onNavigate} />
+      <PublicHeader overlay currentTab="home" onNavigate={onNavigate} />
 
-      {/* Hero Banner Section */}
-      <section className="rail-gradient rail-grid relative flex min-h-[420px] items-center overflow-hidden text-white sm:min-h-[500px]">
-        {/* UI/UX Phase 4: replaces a generic, unrelated stock photo with a brand-forward
-            treatment — the clinic's own mark, large and faint, plus a subtle dot grid — so the
-            hero reads as this clinic's, not a stock library's. */}
-        <div
-          className="absolute inset-0 opacity-[0.05]"
-          style={{
-            backgroundImage: 'radial-gradient(circle, #ffffff 1.5px, transparent 1.5px)',
-            backgroundSize: '28px 28px'
-          }}
-        />
-        <div className="absolute -right-20 top-1/2 -translate-y-1/2 opacity-[0.08] pointer-events-none hidden md:block">
-          <Logo className="w-[30rem] h-[480px]" />
-        </div>
-
-        {/* The flat left-to-right overlay that used to sit here was primary-navy fading into
-            primary-navy — the same colour at three opacities, so it darkened the hero without
-            adding anything. The shared `rail-gradient` on the section carries the light source
-            now, and it is the logo's own azure and green. */}
-
-        <PageShell className="relative py-14 sm:py-20 z-10 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-          <div className="space-y-5 sm:space-y-6">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">
-              ENLOGADA - Your Trusted Diagnostic Partner
-            </h1>
-            <p className="text-rail-ink-soft text-sm sm:text-base leading-relaxed max-w-lg">
-              Professional ultrasound and diagnostic services with all the care and attention you deserve. We're experienced healthcare professionals dedicated to your well-being.
-            </p>
-
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 pt-2">
-              <Button
-                onClick={() => onNavigate && onNavigate('login')}
-                size="lg"
-                className="w-full sm:w-auto"
+      {/* ── Hero ────────────────────────────────────────────────────────────────────────────── */}
+      <section
+        aria-labelledby="hero-heading"
+        className="relative isolate flex min-h-[100svh] flex-col overflow-hidden bg-aurora-base"
+      >
+        <HeroCarousel />
+        <div className="relative z-[1] flex flex-1 items-end pb-32 pt-36 sm:pb-40">
+          <PageShell className="flex flex-col items-center text-center">
+            {/* Each department wraps as a whole — on a phone the plain string broke inside "X-Ray". */}
+            <Reveal as="p" className="m-0 text-meta font-semibold uppercase tracking-[0.2em] text-aurora-soft">
+              <span className="whitespace-nowrap">Ultrasound ·</span>{' '}
+              <span className="whitespace-nowrap">Laboratory ·</span>{' '}
+              <span className="whitespace-nowrap">Digital X-Ray</span>
+            </Reveal>
+            <Reveal index={1}>
+              <h1
+                id="hero-heading"
+                className="m-0 mt-4 max-w-4xl text-3xl font-black uppercase leading-tight tracking-[0.06em] text-aurora-ink sm:text-5xl sm:tracking-[0.1em] lg:text-6xl"
               >
+                Your trusted <span className="text-gradient-aurora">diagnostic</span> partner
+              </h1>
+            </Reveal>
+            <Reveal as="p" index={2} className="m-0 mt-5 max-w-2xl text-sm leading-relaxed text-aurora-soft sm:text-lg">
+              Ultrasound, laboratory and digital X-ray in Bugo, Cagayan de Oro — with your results released
+              straight to your inbox.
+            </Reveal>
+            <Reveal index={3} className="mt-8 flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row">
+              <Button variant="brand" size="lg" onClick={() => go('login')} className="rounded-full px-8">
                 Book Now
               </Button>
-              <Button
-                onClick={() => onNavigate && onNavigate('services')}
-                variant="outline"
-                size="lg"
-                className="w-full sm:w-auto"
-              >
+              <Button variant="glass" size="lg" onClick={() => go('services')} className="rounded-full px-8">
                 View Services
               </Button>
-            </div>
-          </div>
-
-          {/* UI/UX Modernization Phase 8: the right column previously rendered nothing but the
-              faint background logo — filled with a static services-preview card instead of a
-              stock photo or a fabricated stat (e.g. "10,000+ patients"), consistent with Phase
-              4's earlier decision to keep this hero brand-forward rather than reach for imagery. */}
-          <div className="flex justify-center">
-            <div className="glass-card w-full max-w-sm rounded-2xl p-6 shadow-float sm:p-7">
-              <span className="text-micro font-semibold uppercase tracking-[0.14em] text-brand-700">What We Offer</span>
-              <h2 className="mb-5 mt-1 text-lg font-bold tracking-tight text-slate-900">Our Diagnostic Services</h2>
-              <ul className="space-y-3 list-none p-0 m-0">
-                {SERVICE_PREVIEW.map(({ label, icon: Icon }) => (
-                  <li key={label} className="flex items-center space-x-3">
-                    <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
-                      <Icon className="w-4.5 h-4.5" />
-                    </span>
-                    <span className="text-sm font-semibold text-slate-700">{label}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </PageShell>
+            </Reveal>
+          </PageShell>
+        </div>
       </section>
 
-      {/* The three errands a visitor arrives to run. [1.63.0] The hero's own two buttons sit
-          inside a dark banner competing with a headline, so somebody who came to check a result
-          had to read past a marketing paragraph to find out where to go. The dock straddles the
-          seam, which is where the eye lands after the headline, and names errands rather than
-          screens. */}
+      {/* The three errands, straddling the hero's lower edge. [1.63.0] */}
       <HeroQuickDock onNavigate={onNavigate} />
 
-      {/* Key Highlights Banner */}
-      {/* No `bg-surface` here any more. [1.65.0] The page ran dark hero -> white -> canvas ->
-          dark slab -> dark footer: five stacked grounds, three of them dark and unrelated to one
-          another, which is what made it read as banded. The body is now one ground — canvas, the
-          same page ground every console uses — and the things ON it are panels. */}
-      <section className="pb-10 pt-14 sm:pb-12 sm:pt-16">
-        <PageShell className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-          {/* One tone across all three, not three.
-              These are one set of related claims about the clinic, and they wore a green, a blue
-              and an indigo — so they read as three different KINDS of thing rather than three
-              reasons to trust the same clinic. It is the same mistake the metric card's own notes
-              describe: state the tone once, quietly, and let the content differ. Brand green,
-              because these are the clinic's own promises and green is the clinic's colour. */}
-          <div className="flex items-start space-x-4 p-4 rounded-xl bg-surface border border-line">
-            <div className="p-3 bg-brand-50 text-brand-600 rounded-xl">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="m-0 text-lead font-bold tracking-tight text-slate-900">Licensed Diagnostics</h3>
-              <p className="m-0 text-fine leading-relaxed text-slate-500">Certified laboratory tech & radiologists handling your medical tests.</p>
-            </div>
-          </div>
-
-          <div className="flex items-start space-x-4 p-4 rounded-xl bg-surface border border-line">
-            <div className="p-3 bg-brand-50 text-brand-600 rounded-xl">
-              <Clock className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="m-0 text-lead font-bold tracking-tight text-slate-900">Fast & Accurate Results</h3>
-              <p className="m-0 text-fine leading-relaxed text-slate-500">Digital result releasing notified directly to your email inbox.</p>
-            </div>
-          </div>
-
-          <div className="flex items-start space-x-4 p-4 rounded-xl bg-surface border border-line">
-            <div className="p-3 bg-brand-50 text-brand-600 rounded-xl">
-              <Award className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="m-0 text-lead font-bold tracking-tight text-slate-900">HMO & Private Support</h3>
-              <p className="m-0 text-fine leading-relaxed text-slate-500">HMO verification integrated with manual authorization code tracking.</p>
-            </div>
+      {/* ── Why Enlogada ────────────────────────────────────────────────────────────────────── */}
+      <section aria-labelledby="why-heading" className="wash-aurora relative overflow-hidden py-20 sm:py-24">
+        <DecorBlobs />
+        <PageShell className="relative">
+          <SectionHeading
+            id="why-heading"
+            icon={ShieldCheck}
+            title="Why patients choose Enlogada"
+            subtitle="Licensed people, fast digital results and HMO support — under one roof in Bugo since 2011."
+          />
+          <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
+            <FeatureCard index={0} icon={ShieldCheck} title="Licensed Diagnostics">
+              Licensed medical technologists, a pathologist and a radiologist-sonologist — the people whose
+              names are on your report.
+            </FeatureCard>
+            <FeatureCard index={1} icon={Clock} title="Fast, Digital Results">
+              Released results reach your email and your patient portal, with no second trip to collect a
+              printout.
+            </FeatureCard>
+            <FeatureCard index={2} icon={Award} title="HMO & Private Support">
+              Accredited HMO providers, private and self-pay billing, and the Senior Citizen and PWD discount
+              at the counter.
+            </FeatureCard>
           </div>
         </PageShell>
       </section>
 
-      {/* Call to Action Bar */}
-      <PageShell as="section" className="py-12 sm:py-16">
-        {/* A panel, not a second dark slab. [1.65.0] This carried the same `rail-gradient` as the
-            hero half a page above it, so the page had two identical dark moments competing to be
-            the important one — and the footer made three. The hero keeps that treatment because it
-            opens the page; this closes it, and the green button is now the only saturated thing in
-            the lower half, which is where the eye should land. */}
-        <div className="relative flex flex-col items-center justify-between gap-5 overflow-hidden rounded-2xl border border-line bg-surface p-6 shadow-raised sm:p-10 md:flex-row">
-          <div className="relative space-y-2 text-center md:text-left">
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">Need a Diagnostic Appointment?</h2>
-            <p className="text-xs sm:text-sm text-ink-soft">Sign in to your account or register to schedule an appointment today.</p>
+      {/* ── Departments ─────────────────────────────────────────────────────────────────────── */}
+      <section aria-labelledby="services-heading" className="py-20 sm:py-24">
+        <PageShell>
+          <SectionHeading
+            id="services-heading"
+            icon={Stethoscope}
+            title="Our diagnostic services"
+            subtitle="Three departments, one visit. Every test and its price is on the price list — no account needed."
+          />
+          <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
+            {DEPARTMENTS.map(({ id, icon: Icon, name, body }, i) => (
+              <Reveal key={id} variant="rise" index={i} className="h-full">
+                <article className="edge-gradient flex h-full flex-col rounded-2xl p-6 transition duration-200 hover:-translate-y-0.5 hover:shadow-raised">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-brand text-primary-foreground"
+                  >
+                    <Icon className="h-6 w-6" />
+                  </span>
+                  <h3 className="m-0 mt-5 text-lg font-bold tracking-tight text-ink">{name}</h3>
+                  <p className="m-0 mt-2 flex-1 text-note leading-relaxed text-ink-soft">{body}</p>
+                </article>
+              </Reveal>
+            ))}
           </div>
-          <Button
-            onClick={() => onNavigate && onNavigate('login')}
-            size="lg"
-            className="relative w-full flex-shrink-0 md:w-auto"
-          >
-            <span>Access Portal</span>
-            <ChevronRight className="w-4 h-4" />
+          <Reveal className="mt-10 flex justify-center">
+            <Button variant="outline" size="lg" onClick={() => go('services')} className="rounded-full px-7">
+              See the full price list
+              <ArrowRight />
+            </Button>
+          </Reveal>
+        </PageShell>
+      </section>
+
+      {/* ── About teaser ────────────────────────────────────────────────────────────────────── */}
+      <section aria-labelledby="about-heading" className="wash-aurora relative overflow-hidden py-20 sm:py-24">
+        <PageShell className="grid items-center gap-12 md:grid-cols-2 md:gap-16">
+          {/* The reference site's offset panel behind a photograph: wider than the card and running
+              below it, so it shows on three sides. Until the clinic sends a photograph, the full logo
+              lockup stands in — on a fixed white card, because the mark always gets a light ground. */}
+          <Reveal variant="slide-left" className="relative mx-auto w-full max-w-sm pb-8">
+            <div aria-hidden="true" className="aurora absolute inset-x-0 bottom-0 top-[22%] rounded-2xl" />
+            <div className="relative mx-auto flex aspect-[4/5] w-[78%] flex-col items-center justify-center gap-5 rounded-2xl bg-white p-8 text-center shadow-raised">
+              <LogoFull className="h-40 sm:h-48" />
+              <p className="m-0 text-meta font-semibold uppercase tracking-[0.18em] text-primary">
+                Serving Bugo since 2011
+              </p>
+            </div>
+          </Reveal>
+          <div>
+            <SectionHeading
+              id="about-heading"
+              icon={HeartHandshake}
+              align="left"
+              title="About Enlogada"
+              className="items-center text-center md:items-start md:text-left"
+            />
+            <Reveal as="p" index={1} className="m-0 mt-6 text-center text-sm leading-relaxed text-ink-soft sm:text-base md:text-left">
+              Enlogada Ultrasound &amp; Diagnostic Clinic brings hospital-grade diagnostics — laboratory
+              testing, digital X-ray and ultrasound — to patients without the wait and overhead of a full
+              hospital visit. Walk-ins, scheduled appointments and HMO-referred patients are seen side by
+              side, under one roof.
+            </Reveal>
+            <Reveal index={2} className="mt-8 flex justify-center md:justify-start">
+              <Button variant="outline" size="lg" onClick={() => go('about')} className="rounded-full px-7">
+                Learn more about us
+                <ArrowRight />
+              </Button>
+            </Reveal>
+          </div>
+        </PageShell>
+      </section>
+
+      {/* ── How a visit works ───────────────────────────────────────────────────────────────── */}
+      <section aria-labelledby="how-heading" className="py-20 sm:py-24">
+        <PageShell>
+          <SectionHeading
+            id="how-heading"
+            icon={CalendarCheck}
+            title="How a visit works"
+            subtitle="Book ahead or walk in — either way, it is three steps."
+          />
+          <ol className="m-0 mt-12 grid list-none grid-cols-1 gap-5 p-0 md:grid-cols-3 md:gap-6">
+            {STEPS.map((step, i) => (
+              <Reveal as="li" key={step.title} variant="rise" index={i} className="h-full">
+                <div className="edge-gradient flex h-full flex-col rounded-2xl p-6">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-brand text-lead font-bold text-primary-foreground"
+                  >
+                    {i + 1}
+                  </span>
+                  <h3 className="m-0 mt-4 text-lg font-bold tracking-tight text-ink">{step.title}</h3>
+                  <p className="m-0 mt-2 text-note leading-relaxed text-ink-soft">{step.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </ol>
+        </PageShell>
+      </section>
+
+      {/* ── FAQ ─────────────────────────────────────────────────────────────────────────────── */}
+      <section
+        id="faq"
+        aria-labelledby="faq-heading"
+        className="wash-aurora relative scroll-mt-20 overflow-hidden py-20 sm:py-24"
+      >
+        <DecorBlobs />
+        <PageShell width="5xl" className="relative">
+          <SectionHeading
+            id="faq-heading"
+            icon={CircleQuestionMark}
+            title="Frequently asked questions"
+            subtitle="What patients ask us most. For anything else, call or email us."
+          />
+          <Reveal className="mt-10">
+            <ClinicFaq />
+          </Reveal>
+        </PageShell>
+      </section>
+
+      {/* ── Closing call to action ──────────────────────────────────────────────────────────── */}
+      <PageShell as="section" aria-labelledby="cta-heading" className="py-20 sm:py-24">
+        <Reveal className="aurora relative overflow-hidden rounded-2xl px-6 py-12 text-center sm:px-12 sm:py-16">
+          <h2 id="cta-heading" className="m-0 text-2xl font-bold tracking-tight text-aurora-ink sm:text-3xl">
+            Need a diagnostic appointment?
+          </h2>
+          <p className="m-0 mx-auto mt-3 max-w-xl text-sm leading-relaxed text-aurora-soft sm:text-base">
+            Sign in to book a time and follow your visit, or create an account in a minute.
+          </p>
+          <Button variant="brand" size="lg" onClick={() => go('login')} className="mt-8 rounded-full px-8">
+            Access Portal
+            <ArrowRight />
           </Button>
-        </div>
+        </Reveal>
       </PageShell>
 
       <PublicFooter onNavigate={onNavigate} />

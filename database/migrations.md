@@ -1,5 +1,67 @@
 # Database Migration & Schema History
 
+## [1.72.0] - 2026-09-12 (The public site, on the reference design)
+
+No migration. The public pages are being rebuilt on the structure, layout and motion of the
+reference site Steven chose (peak-review-center), in slices. This entry grows with each one.
+
+### The colouring: today's palette, applied with more depth
+
+Steven turned down the reference site's grey-and-gold palette, then five palettes independent of
+the logo, and chose to keep today's (the logo's green and azure on slate) with "advanced
+colouring". Nine options were built as a gallery with a Flat/Advanced switch and every one was
+measured before he chose; A1, "Aurora", won. The layer is `.aurora` (a mesh-gradient hero),
+`.text-gradient-aurora`, `.glass-pill`, `.edge-gradient`, `.wash-aurora`, and
+`<Button variant="brand">` / `variant="glass"`. It adds no hue.
+
+### The contrast gate measures it, and had not been measuring light mode
+
+`checkContrast.js` now reads the `.aurora` and `.glass-pill` rules out of index.css and measures
+each ink on the base and on every glow at its brightest, and the header's ink on the glass
+composited over each. It caught the header opacity that looked best: at 0.74 the pill over the hero
+composites to #c0c3c7 and its nav text is 4.24:1. It ships at 0.88. Both new checks were proven by
+breaking them on purpose.
+
+Writing them exposed an older fault in the gate. It read every `--color-*` in the file with the
+last one winning, so the "light" theme was measured with the DARK block's values for every ink the
+dark block remaps. Light mode was never actually checked for those inks. Each theme now reads only
+the rules that define it. 46 checks became 116, and no real violation turned up.
+
+### The header: a floating glass pill
+
+The reference navbar over the Aurora: fixed over Home's full-height hero, sticky everywhere else,
+tightening as the page scrolls. "Contact Us" opens the phone, email and address from
+`useClinic()`; FAQ scrolls to Home's FAQ from any page (`handleNavigate(tab, { section })`); the
+current page carries `aria-current`.
+
+Measured at 390–1440px at the default text size and at Larger, because a patient's choice in the
+portal carries over to these pages. The first cut overflowed the pill by 35px at 768 and by 109px
+at 1024 under Larger text, and at 768 the wordmark ran under the Home link while the pill reported
+no overflow at all — the brand was allowed to shrink. The desktop row now starts at 1024 and stays
+compact until 1280, and the brand never shrinks, so a squeeze is measurable rather than silent.
+
+`helpers/auth.js` found the phone menu with `header div.md:hidden`, a test tied to a breakpoint
+class (CLAUDE.md: don't couple a test to a class name) and the one thing standing in the way of
+that fix. It uses `data-testid="public-menu"` now.
+
+### Home
+
+A full-height Aurora hero whose lights drift between three positions every 10 s (a slide can move
+a light, never brighten one, so every slide stays measured; pausable, and still under reduced
+motion); the existing quick dock; why patients choose the clinic; the three departments; an About
+teaser; how a visit works; the FAQ; a closing call to action. Sections reveal once on scroll with
+the reference site's timings, in CSS. Reduced motion resets the stagger DELAY too — the blanket
+rule does not — and print shows everything.
+
+The FAQ's hours come from `GET /schedule/public`, so they follow Clinic Schedule rather than going
+stale on the page. It does not promise a day-before reminder: that script only runs if the clinic
+schedules it.
+
+### Still to come
+
+The footer, then Services, About, Privacy, Terms and the sign-in pages in the same language, a
+public-site spec, and real photographs in the hero once the clinic supplies them.
+
 ## [1.71.0] - 2026-09-09 (A package may claim a component the visit already had)
 
 No migration. One conflict clause, one dead file, and the open questions written down.
