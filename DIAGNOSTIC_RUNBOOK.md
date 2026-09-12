@@ -68,8 +68,8 @@ cd frontend && npx playwright test                  # expect: 342 pass, 0 skippe
 | Playwright E2E | **342 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
 | `verifyRbacWiring` | `All good`, **78 routes checked**, **0 warnings** |
 | `verifyDiscountParity` | `Exact parity` — 3,264 combinations |
-| `checkFillRoles` | 205 files, **0 violations** |
-| `checkContrast` | 108 token pairs, both themes, **0 violations** |
+| `checkFillRoles` | 212 files, **0 violations** |
+| `checkContrast` | 116 token pairs, both themes, **0 violations** |
 | `prose_scan` | 200 files, **0 prose damage** |
 
 Write today's numbers down before anyone touches anything. A diff against a known baseline is

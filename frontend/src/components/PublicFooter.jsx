@@ -1,75 +1,129 @@
 import React from 'react';
 import Logo from './Logo';
+import { useAuth } from '../contexts/AuthContext';
+import { useClinic } from '../lib/clinic';
+import { scrollToSection } from '../lib/scroll';
 import { Phone, Mail, MapPin } from 'lucide-react';
 
+/**
+ * The public site's footer. [1.72.0]
+ *
+ * The reference site closes on a quiet, light footer. This one keeps what a clinic's footer is
+ * actually for — where it is and how to reach it — on the page's own surface, instead of a third
+ * dark slab beneath the dark call-to-action band.
+ *
+ * Every contact detail comes from useClinic(). The previous footer typed them in, so when the
+ * address was corrected on the printed result form it went on showing the old, shorter one: the
+ * page and the paper in the patient's hand disagreeing about where to go.
+ */
 const PublicFooter = ({ onNavigate }) => {
-  return (
-    <footer className="w-full bg-primary-navy text-rail-ink-soft pt-12 pb-8 border-t border-rail-line">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-10">
+  const { user } = useAuth();
+  const CLINIC = useClinic();
+  const tel = CLINIC.phone.replace(/\s/g, '');
+  const year = new Date().getFullYear();
 
-        {/* Brand Summary */}
+  const go = (tab, options) => onNavigate?.(tab, options);
+
+  // Scrolls if this page has the FAQ (Home); otherwise goes to Home and lets it scroll. Offered
+  // signed-out only, for the same reason as the header: a signed-in patient's home is a dashboard.
+  const goFaq = () => {
+    if (!scrollToSection('faq')) go('home', { section: 'faq' });
+  };
+
+  const linkClass =
+    'cursor-pointer border-0 bg-transparent p-0 text-left text-note text-ink-soft transition-colors hover:text-brand-700';
+
+  return (
+    <footer className="relative border-t border-line bg-surface">
+      {/* The brand gradient as a hairline, so the footer's top edge carries the colouring too. */}
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-0.5 bg-gradient-brand" />
+
+      <div className="mx-auto grid w-full max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr] lg:px-8">
         <div className="space-y-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-[#ffffff] rounded-full">
-              <Logo className="w-8 h-8" />
+          <div className="flex items-center gap-3">
+            {/* A white chip in both themes: the mark always gets a light ground. */}
+            <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-line">
+              <Logo className="h-8 w-8" />
+            </span>
+            <div className="leading-tight">
+              <p className="m-0 text-lead font-bold tracking-tight text-ink">ENLOGADA</p>
+              <p className="m-0 text-micro font-semibold uppercase tracking-[0.12em] text-ink-soft">
+                Ultrasound &amp; Diagnostic Clinic
+              </p>
             </div>
-            <span className="text-xl font-bold text-white tracking-wider">Enlogada</span>
           </div>
-          <p className="text-xs text-rail-ink-muted leading-relaxed max-w-sm">
-            Quality diagnostic care with professional service, transparency, and compassionate expertise.
+          <p className="m-0 max-w-sm text-note leading-relaxed text-ink-soft">
+            Quality diagnostic care with professional service, transparency and compassionate expertise —
+            in Bugo since 2011.
           </p>
         </div>
 
-        {/* Our Services Quick Links */}
+        <nav aria-label="Footer" className="space-y-3">
+          <h2 className="m-0 text-fine font-bold uppercase tracking-[0.12em] text-ink">Explore</h2>
+          <ul className="m-0 list-none space-y-2 p-0">
+            <li>
+              <button type="button" onClick={() => go('services')} className={linkClass}>
+                Services &amp; prices
+              </button>
+            </li>
+            <li>
+              <button type="button" onClick={() => go('about')} className={linkClass}>
+                About us
+              </button>
+            </li>
+            {!user && (
+              <li>
+                <button type="button" onClick={goFaq} className={linkClass}>
+                  FAQ
+                </button>
+              </li>
+            )}
+            <li>
+              <button type="button" onClick={() => go('privacy')} className={linkClass}>
+                Privacy Policy
+              </button>
+            </li>
+            <li>
+              <button type="button" onClick={() => go('terms')} className={linkClass}>
+                Terms of Service
+              </button>
+            </li>
+          </ul>
+        </nav>
+
         <div className="space-y-3">
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Our Services</h2>
-          <ul className="space-y-2 text-xs text-rail-ink-muted list-none p-0">
-            <li className="hover:text-white cursor-pointer transition-colors" onClick={() => onNavigate && onNavigate('services')}>Ultrasound Services</li>
-            <li className="hover:text-white cursor-pointer transition-colors" onClick={() => onNavigate && onNavigate('services')}>Laboratory Testing</li>
-            <li className="hover:text-white cursor-pointer transition-colors" onClick={() => onNavigate && onNavigate('services')}>Digital X-Ray</li>
+          <h2 className="m-0 text-fine font-bold uppercase tracking-[0.12em] text-ink">Contact</h2>
+          <ul className="m-0 list-none space-y-2.5 p-0 text-note text-ink-soft">
+            <li>
+              <a href={`tel:${tel}`} className="flex items-center gap-2.5 text-ink-soft no-underline hover:text-brand-700">
+                <Phone className="h-4 w-4 flex-shrink-0 text-brand-700" aria-hidden="true" />
+                {CLINIC.phone}
+              </a>
+            </li>
+            <li>
+              <a
+                href={`mailto:${CLINIC.email}`}
+                className="flex items-center gap-2.5 text-ink-soft no-underline [overflow-wrap:anywhere] hover:text-brand-700"
+              >
+                <Mail className="h-4 w-4 flex-shrink-0 text-brand-700" aria-hidden="true" />
+                {CLINIC.email}
+              </a>
+            </li>
+            <li className="flex items-start gap-2.5">
+              <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-700" aria-hidden="true" />
+              {/* Wraps rather than truncates — a clipped address is a wrong address. */}
+              <span className="leading-relaxed">{CLINIC.address}</span>
+            </li>
           </ul>
         </div>
-
-        {/* Contact Info */}
-        <div className="space-y-3">
-          {/* h2 like its sibling above. These are peer sections of the footer, so they take the
-              same level — one at h2 and one at h4 reads as a subsection of the other. */}
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Contact Info</h2>
-          <div className="space-y-2.5 text-xs text-rail-ink-muted">
-            <div className="flex items-center space-x-2.5">
-              <Phone className="w-4 h-4 text-brand-600" />
-              <span>0936 132 0650</span>
-            </div>
-            <div className="flex items-center space-x-2.5">
-              <Mail className="w-4 h-4 text-brand-600" />
-              <span>enlogadaclinic2011@gmail.com</span>
-            </div>
-            <div className="flex items-start space-x-2.5">
-              <MapPin className="w-4 h-4 text-brand-600 flex-shrink-0 mt-0.5" />
-              <span>Bugo, Cagayan de Oro, Philippines 9000</span>
-            </div>
-          </div>
-        </div>
-
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 mt-8 border-t border-rail-line flex flex-col md:flex-row items-center justify-between text-xs text-rail-ink-faint">
-        <p>© 2026 Enlogada Ultrasound & Diagnostic Clinic. All rights reserved.</p>
-        <div className="flex items-center space-x-6 mt-4 md:mt-0">
-          <button
-            type="button"
-            onClick={() => onNavigate && onNavigate('privacy')}
-            className="hover:underline cursor-pointer border-0 bg-transparent p-0 text-rail-ink-faint hover:text-white transition-colors"
-          >
-            Privacy Policy
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate && onNavigate('terms')}
-            className="hover:underline cursor-pointer border-0 bg-transparent p-0 text-rail-ink-faint hover:text-white transition-colors"
-          >
-            Terms of Service
-          </button>
+      <div className="border-t border-line">
+        <div className="mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-2 px-4 py-5 text-center text-fine text-ink-muted sm:flex-row sm:px-6 sm:text-left lg:px-8">
+          <p className="m-0">
+            © {year} {CLINIC.name}. All rights reserved.
+          </p>
+          <p className="m-0">Ultrasound · Laboratory · Digital X-Ray</p>
         </div>
       </div>
     </footer>
