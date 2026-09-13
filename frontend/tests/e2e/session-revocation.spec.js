@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { registerClient } from './helpers/accounts.js';
 
 // Changing a password must end sessions that predate it.
 //
@@ -32,10 +33,9 @@ test.describe('Password change ends older sessions', () => {
   test.beforeAll(async () => {
     apiContext = await request.newContext();
     email = `revoke_${Date.now()}_${Math.floor(Math.random() * 10000)}@enlogada-e2e.test`;
-    const registered = await apiContext.post(`${API}/auth/register`, {
-      data: { firstName: 'Isagani', lastName: 'Cadiz', email, password: firstPassword, contactNumber: '09170000000' },
+    await registerClient(apiContext, {
+      firstName: 'Isagani', lastName: 'Cadiz', email, password: firstPassword, contactNumber: '09170000000',
     });
-    expect(registered.ok()).toBeTruthy();
   });
 
   test.afterAll(async () => {

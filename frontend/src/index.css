@@ -717,6 +717,19 @@ select:focus-visible {
 }
 .auth-link:hover { text-decoration: underline; }
 
+/* The caret in the next empty box of CodeInput, standing in for the real input's, which is
+   transparent on top of the boxes. Under reduced motion the blanket rule stops the blink and it
+   simply stays lit. [1.73.0] */
+.code-caret {
+  display: block;
+  width: 2px;
+  height: 1.4rem;
+  border-radius: 1px;
+  background: var(--color-azure-500);
+  animation: codeCaret 1s steps(1) infinite;
+}
+@keyframes codeCaret { 50% { opacity: 0; } }
+
 /* An account created: the tick pops in, then draws itself. */
 @keyframes authCheckPop {
   0%   { opacity: 0; transform: scale(0.6); }

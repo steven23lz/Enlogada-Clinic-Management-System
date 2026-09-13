@@ -37,7 +37,8 @@ const INDEXES = [
   ['idx_user_roles_role', 'user_roles(role_id)'],
   ['idx_role_permissions_role', 'role_permissions(role_id)'],
   ['idx_notification_reads_event', 'notification_reads(event_id)'],
-  ['idx_password_reset_tokens_user', 'password_reset_tokens(user_id)'],
+  // password_reset_tokens(user_id) was indexed here. That table was replaced by auth_codes in
+  // [1.73.0], whose own migration creates its indexes, so re-running this no longer names it.
   ['idx_tests_category', 'tests(category_id)'],
 
   // --- Status / lookup columns behind the queue screens ---------------------------------------

@@ -72,6 +72,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Sign-up is two steps now. [1.73.0] This one creates nothing: it returns the ticket that, with
+  // the code emailed to the address, finishes the sign-up in verifySignup below.
   const register = async ({ firstName, lastName, email, password, contactNumber }) => {
     try {
       const response = await api.post('/auth/register', {
@@ -81,25 +83,49 @@ export const AuthProvider = ({ children }) => {
         password,
         contactNumber
       });
-      return response.data;
+      return response.data.data; // { ticket, email, expiresInSeconds, resendAfterSeconds }
     } catch (err) {
       throw err.response?.data?.message || 'Registration failed';
     }
   };
 
+  /** The right code creates the account and signs it in, like a login. */
+  const verifySignup = async (ticket, code) => {
+    try {
+      const response = await api.post('/auth/register/verify', { ticket, code });
+      const { token, user: userData } = response.data.data;
+      localStorage.setItem('token', token);
+      setUser(userData);
+      return userData;
+    } catch (err) {
+      throw err.response?.data?.message || 'That code could not be checked. Please try again.';
+    }
+  };
+
+  /** A fresh code for a sign-up or a reset already under way. Resolves to { resendAfterSeconds }. */
+  const resendCode = async (ticket) => {
+    try {
+      const response = await api.post('/auth/codes/resend', { ticket });
+      return response.data.data;
+    } catch (err) {
+      throw err.response?.data?.message || 'A new code could not be sent. Please try again.';
+    }
+  };
+
+  // Resolves the same way for every address, real or not: { ticket, message, resendAfterSeconds }.
   const forgotPassword = async (email) => {
     try {
       const response = await api.post('/auth/forgot-password', { email });
-      return response.data.message;
+      return { ...response.data.data, message: response.data.message };
     } catch (err) {
       throw err.response?.data?.message || 'Could not process the password reset request.';
     }
   };
 
-  const resetPassword = async (token, newPassword) => {
+  const resetPassword = async (ticket, code, newPassword) => {
     try {
-      const response = await api.post('/auth/reset-password', { token, newPassword });
-      return response.data.message;
+      const response = await api.post('/auth/reset-password', { ticket, code, newPassword });
+      return { message: response.data.message, email: response.data.data?.email };
     } catch (err) {
       throw err.response?.data?.message || 'Could not reset the password.';
     }
@@ -186,7 +212,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, googleLogin, forgotPassword, resetPassword, updateProfile, changePassword, updateAvatarFlag, logout, hasPermission, hasRole }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifySignup, resendCode, googleLogin, forgotPassword, resetPassword, updateProfile, changePassword, updateAvatarFlag, logout, hasPermission, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

@@ -3,7 +3,7 @@ const env = require('./config/environment');
 const logger = require('./config/logger');
 const db = require('./config/database');
 
-const { reportPendingRepairs, reportGatewayConfiguration } = require('./config/startupAdvisory');
+const { reportPendingRepairs, reportGatewayConfiguration, reportAccountMail } = require('./config/startupAdvisory');
 
 const server = app.listen(env.PORT, () => {
   logger.info(`Server running in ${env.NODE_ENV} mode on port ${env.PORT}`);
@@ -11,6 +11,7 @@ const server = app.listen(env.PORT, () => {
   // delay the port opening or fail the boot. It reports and returns; it repairs nothing. [1.32.0]
   reportPendingRepairs();
   reportGatewayConfiguration();
+  reportAccountMail();
 });
 
 // Handle unhandled promise rejections

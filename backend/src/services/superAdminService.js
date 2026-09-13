@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const userRepository = require('../repositories/userRepository');
 const db = require('../config/database');
+const { normaliseAccountEmail } = require('../validations/email');
 
 // Module 13 (Super Admin Management): "elevated account management beyond what Admin can do."
 // Mirrors adminService.js's staff-management pattern (Module 12), but for Admin/SuperAdmin
@@ -20,7 +21,9 @@ class SuperAdminService {
       throw error;
     }
 
-    const existingUser = await userRepository.findByEmail(email);
+    // Stored lower-case, like every account address, so the capitals can never make a second one.
+    const address = normaliseAccountEmail(email);
+    const existingUser = await userRepository.findByEmail(address);
     if (existingUser) {
       const error = new Error('Email is already registered');
       error.statusCode = 400;
@@ -34,7 +37,7 @@ class SuperAdminService {
     // a half-created Admin or SuperAdmin is an elevated account whose privileges did not land.
     // It looks like an administrator in the user list and behaves like a locked-out one.
     const user = await db.withTransaction(async () => {
-      const created = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
+      const created = await userRepository.createUser(firstName, lastName, address, passwordHash, contactNumber);
 
       const roleId = await userRepository.findRoleIdByName(role);
       if (!roleId) {

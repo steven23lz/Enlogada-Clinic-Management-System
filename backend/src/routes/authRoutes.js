@@ -5,7 +5,12 @@ const { uploadAvatarMiddleware } = require('../config/upload');
 
 const router = express.Router();
 
+// Rate limits for the unauthenticated routes are applied in app.js, where every limiter lives:
+// the code-sending bucket on /register, /codes/resend and /forgot-password, and the failed-attempt
+// bucket on /login, /register/verify and /reset-password.
 router.post('/register', authController.register);
+router.post('/register/verify', authController.verifyRegistration);
+router.post('/codes/resend', authController.resendCode);
 router.post('/login', authController.login);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);

@@ -1,19 +1,47 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { PasswordInput } from '../ui/password-input';
 import AuthField from './AuthField';
 import PasswordMeter from './PasswordMeter';
+import CodeInput from './CodeInput';
+import ResendCode from './ResendCode';
 import { MIN_PASSWORD_LENGTH } from '../../lib/passwordStrength';
+import { toastSuccess } from '../../lib/toast';
 import { cn } from '../../lib/utils';
 import { AlertCircle, ArrowRight, Lock, Mail, Phone, User } from 'lucide-react';
 
-// The back of the sign-in card: the form only. AuthPage.jsx owns the card, the turn between its
-// two sides and the page around it. `onSwitchToLogin` turns the card back over — from the link at
-// the bottom, and by itself two seconds after an account is created.
+// A sign-up waiting for its code, kept for this tab only. Reloading — or a phone discarding the tab
+// while the person fetches the code from their email — brings them back to the code, not to an
+// empty form. The ticket is useless without the code, and gone when the tab closes. [1.73.0]
+const PENDING_KEY = 'enlogada:pending-signup';
+const PENDING_TTL_MS = 60 * 60 * 1000;
+
+const readPending = () => {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(PENDING_KEY) || 'null');
+    return saved && Date.now() - saved.savedAt < PENDING_TTL_MS ? saved : null;
+  } catch {
+    return null;
+  }
+};
+
+const writePending = (value) => {
+  try {
+    if (value) sessionStorage.setItem(PENDING_KEY, JSON.stringify(value));
+    else sessionStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* storage blocked: the code step still works, it just does not survive a reload */
+  }
+};
+
+// The back of the sign-in card, Create Account: the details, then the code emailed to the
+// address. [1.73.0] Nothing exists until the code is entered — the server keeps the details as a
+// pending sign-up, and the right code turns them into an account and signs it in. AuthPage.jsx owns
+// the card; `onSwitchToLogin` turns it back over.
 const RegisterForm = ({ onSwitchToLogin }) => {
-  const { register } = useAuth();
+  const { register, verifySignup, resendCode } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -22,21 +50,25 @@ const RegisterForm = ({ onSwitchToLogin }) => {
     confirmPassword: '',
     contactNumber: ''
   });
+  const [pending, setPending] = useState(readPending);
+  const [resendWait, setResendWait] = useState(60);
+  const [code, setCode] = useState('');
   const [error, setError] = useState('');
-  const [created, setCreated] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   // Counts rejections rather than holding a flag, so React sees a NEW element each time and
   // replays the shake. A boolean would sit there already-true and the second wrong attempt would
   // look like nothing happened.
   const [rejections, setRejections] = useState(0);
 
-  // The hand-over to Sign In after success, cleared if the form goes first. The timer used to
-  // outlive the form, so someone who left for another page within two seconds of registering was
-  // pulled back to Sign In.
-  const handOver = useRef(null);
-  useEffect(() => () => clearTimeout(handOver.current), []);
-
   const update = (field) => (e) => setFormData((d) => ({ ...d, [field]: e.target.value }));
+  const reject = (message) => {
+    setError(message);
+    setRejections((n) => n + 1);
+  };
+  const remember = (value) => {
+    setPending(value);
+    writePending(value);
+  };
 
   // Said while they type, not after they submit. The mismatch is the one error on this form the
   // browser can detect without asking the server, and finding out at submit time means retyping
@@ -44,15 +76,11 @@ const RegisterForm = ({ onSwitchToLogin }) => {
   const passwordsMismatch =
     formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword;
 
-  const handleSubmit = async (e) => {
+  const handleDetails = async (e) => {
     e.preventDefault();
     setError('');
 
     const { firstName, lastName, email, password, confirmPassword, contactNumber } = formData;
-    const reject = (message) => {
-      setError(message);
-      setRejections((n) => n + 1);
-    };
 
     if (!firstName || !lastName || !email || !password) {
       reject('Please fill in all required fields.');
@@ -73,43 +101,124 @@ const RegisterForm = ({ onSwitchToLogin }) => {
 
     setSubmitting(true);
     try {
-      await register({
-        firstName,
-        lastName,
-        email,
-        password,
-        contactNumber
-      });
-      setCreated(true);
-      handOver.current = setTimeout(onSwitchToLogin, 2000);
+      const started = await register({ firstName, lastName, email, password, contactNumber });
+      remember({ ticket: started.ticket, email: started.email, firstName: firstName.trim(), savedAt: Date.now() });
+      setResendWait(started.resendAfterSeconds ?? 60);
+      setCode('');
     } catch (err) {
-      setError(err);
+      reject(err);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // The whole side becomes the confirmation. A green line above a form that is still sitting there,
-  // filled in, reads as "something happened" rather than "you are done here".
-  if (created) {
+  // Called with the code itself by CodeInput on the sixth digit, so it never reads a stale value.
+  const handleVerify = async (value = code) => {
+    if (value.length !== 6) {
+      reject('Enter all six digits of the code.');
+      return;
+    }
+    setError('');
+    setSubmitting(true);
+    try {
+      await verifySignup(pending.ticket, value);
+      writePending(null);
+      // The session has landed, so the app is already moving to the portal and this form is on its
+      // way out. The toast outlives it and says what just happened, by name.
+      toastSuccess(`Welcome, ${pending.firstName}. Your account is ready.`);
+    } catch (err) {
+      reject(err);
+      setCode('');
+      setSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError('');
+    try {
+      const result = await resendCode(pending.ticket);
+      return result?.resendAfterSeconds;
+    } catch (err) {
+      reject(err);
+      return undefined;
+    }
+  };
+
+  // Back to the details, still filled in, to correct the address.
+  const startOver = () => {
+    remember(null);
+    setCode('');
+    setError('');
+  };
+
+  const errorAlert = error && (
+    <div key={rejections} role="alert" className="alert alert-error animate-shake">
+      <AlertCircle />
+      <span>{error}</span>
+    </div>
+  );
+
+  if (pending) {
     return (
-      <div role="status" className="py-6 text-center">
-        <svg className="auth-check mx-auto h-20 w-20 text-brand-600" viewBox="0 0 52 52" aria-hidden="true">
-          <circle cx="26" cy="26" r="24" />
-          <path d="M15 27l7 7 15-15" />
-        </svg>
-        <h2 id="register-title" className="m-0 mt-4 text-2xl font-bold tracking-tight text-slate-900">
-          Account created
-        </h2>
-        <p className="m-0 mt-1 text-note leading-relaxed text-slate-500">
-          You can now sign in. Taking you there…
-        </p>
+      <div key="code">
+        <div className="auth-rise text-center" style={{ '--i': 1 }}>
+          <h1 id="register-title" className="m-0 text-2xl font-bold tracking-tight text-slate-900">
+            Check your email
+          </h1>
+          <p className="m-0 mt-1 text-note leading-relaxed text-slate-500">
+            We sent a 6-digit code to{' '}
+            <span className="break-all font-semibold text-slate-700">{pending.email}</span>. Enter it to finish
+            creating your account.
+          </p>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleVerify();
+          }}
+          className="mt-6 space-y-4"
+        >
+          {errorAlert}
+
+          <div className="auth-rise" style={{ '--i': 2 }}>
+            <label htmlFor="register-code" className="mb-1.5 block text-fine font-semibold text-slate-700">
+              Verification code
+            </label>
+            <CodeInput
+              id="register-code"
+              value={code}
+              onChange={setCode}
+              onComplete={handleVerify}
+              disabled={submitting}
+              invalid={Boolean(error)}
+              autoFocus
+            />
+          </div>
+
+          <div className="auth-rise pt-1" style={{ '--i': 3 }}>
+            <Button type="submit" variant="brand" loading={submitting} size="lg" className="w-full rounded-full">
+              <span>Confirm email</span>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </form>
+
+        <div className="auth-rise mt-5 space-y-2" style={{ '--i': 4 }}>
+          <ResendCode key={pending.ticket} waitSeconds={resendWait} onResend={handleResend} disabled={submitting} />
+          <p className="m-0 text-center text-note text-slate-500">
+            Wrong address?{' '}
+            <button type="button" onClick={startOver} className="auth-link">
+              Use a different email
+            </button>
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div key="details">
       <div className="auth-rise text-center" style={{ '--i': 1 }}>
         <h1 id="register-title" className="m-0 text-2xl font-bold tracking-tight text-slate-900">
           Create your account
@@ -119,13 +228,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        {error && (
-          <div key={rejections} role="alert" className="alert alert-error animate-shake">
-            <AlertCircle />
-            <span>{error}</span>
-          </div>
-        )}
+      <form onSubmit={handleDetails} className="mt-6 space-y-4">
+        {errorAlert}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-3">
           <AuthField id="registerform-first-name" label="First Name" icon={User} index={2}>

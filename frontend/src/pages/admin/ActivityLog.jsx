@@ -23,6 +23,8 @@ const ACTION_TONES = {
   'payment.refunded': 'text-rose-700 bg-rose-50 ring-rose-200',
   'payment.cancelled': 'text-rose-700 bg-rose-50 ring-rose-200',
   'staff.password_reset': 'text-indigo-700 bg-indigo-50 ring-indigo-200',
+  'auth.password_reset': 'text-indigo-700 bg-indigo-50 ring-indigo-200',
+  'auth.account_created': 'text-emerald-700 bg-emerald-50 ring-emerald-200',
   'staff.activated': 'text-emerald-700 bg-emerald-50 ring-emerald-200',
   'staff.deactivated': 'text-slate-600 bg-slate-100 ring-slate-200',
   'hmo_provider.created': 'text-emerald-700 bg-emerald-50 ring-emerald-200',

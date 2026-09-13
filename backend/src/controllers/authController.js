@@ -2,6 +2,10 @@ const authService = require('../services/authService');
 const { validatePassword } = require('../validations/passwordPolicy');
 
 class AuthController {
+  /**
+   * Starts a sign-up. The answer carries a ticket, never a token: nothing can sign in until the
+   * code emailed to the address is entered. [1.73.0]
+   */
   async register(req, res, next) {
     try {
       const { firstName, lastName, email, password, contactNumber } = req.body;
@@ -19,7 +23,7 @@ class AuthController {
         return res.status(400).json({ status: 'error', message: passwordError });
       }
 
-      const user = await authService.registerClient({
+      const result = await authService.startSignup({
         firstName,
         lastName,
         email,
@@ -29,8 +33,48 @@ class AuthController {
 
       return res.status(201).json({
         status: 'success',
-        message: 'Registration successful.',
-        data: { user }
+        message: `We sent a 6-digit code to ${result.email}. Enter it to finish creating your account.`,
+        data: { verificationRequired: true, ...result }
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /** Finishes a sign-up with the emailed code, creates the account, and signs it in. */
+  async verifyRegistration(req, res, next) {
+    try {
+      const { ticket, code } = req.body;
+      if (!ticket || !code) {
+        return res.status(400).json({ status: 'error', message: 'Enter the 6-digit code from the email.' });
+      }
+
+      const result = await authService.completeSignup({ ticket: String(ticket), code: String(code).trim() });
+
+      return res.status(201).json({
+        status: 'success',
+        message: 'Your email is confirmed and your account is ready.',
+        data: result
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /** Sends a fresh code for a sign-up or a reset already under way. */
+  async resendCode(req, res, next) {
+    try {
+      const { ticket } = req.body;
+      if (!ticket) {
+        return res.status(400).json({ status: 'error', message: 'Start again to get a new code.' });
+      }
+
+      const result = await authService.resendCode({ ticket: String(ticket) });
+
+      return res.status(200).json({
+        status: 'success',
+        message: 'If a new code can be sent, it is on its way.',
+        data: result
       });
     } catch (err) {
       next(err);
@@ -130,6 +174,9 @@ class AuthController {
     }
   }
 
+  /**
+   * Step one of forgot-password: the same answer, with a ticket, for every address. [1.73.0]
+   */
   async forgotPassword(req, res, next) {
     try {
       const { email } = req.body;
@@ -141,25 +188,26 @@ class AuthController {
         });
       }
 
-      const result = await authService.forgotPassword(email);
+      const { message, ...data } = authService.requestPasswordReset(email);
 
-      return res.status(200).json({
-        status: 'success',
-        message: result.message
-      });
+      return res.status(200).json({ status: 'success', message, data });
     } catch (err) {
       next(err);
     }
   }
 
+  /**
+   * Step two: the ticket, the emailed code and a new password. The password is judged first, so
+   * a weak one never spends one of the code's tries.
+   */
   async resetPassword(req, res, next) {
     try {
-      const { token, newPassword } = req.body;
+      const { ticket, code, newPassword } = req.body;
 
-      if (!token || !newPassword) {
+      if (!ticket || !code || !newPassword) {
         return res.status(400).json({
           status: 'error',
-          message: 'Token and new password are required.'
+          message: 'The code from the email and a new password are required.'
         });
       }
 
@@ -168,11 +216,16 @@ class AuthController {
         return res.status(400).json({ status: 'error', message: resetError });
       }
 
-      const result = await authService.resetPassword(token, newPassword);
+      const result = await authService.resetPassword({
+        ticket: String(ticket),
+        code: String(code).trim(),
+        newPassword
+      });
 
       return res.status(200).json({
         status: 'success',
-        message: result.message
+        message: result.message,
+        data: { email: result.email }
       });
     } catch (err) {
       next(err);

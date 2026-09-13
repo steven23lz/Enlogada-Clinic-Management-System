@@ -20,7 +20,7 @@ The paths in the audit request do not exist in this repository. The real locatio
 | `src/components/navigation/`, `src/components/Sidebar.jsx` | `frontend/src/config/navigation.js` + `frontend/src/components/SidebarLayout.jsx` |
 | `scripts/verifyRbacWiring.js` | `backend/src/scripts/verifyRbacWiring.js` ✅ exists |
 
-**There is no client-side router.** `App.jsx` performs manual, role-based conditional rendering from `user.roles` plus local `currentTab` / `activeNav` state. **Consequently there are no URL routes like `/admin/dashboard`.** Where this report says "landing destination" it means a **nav id** resolved through `defaultNavForRoles()`, not a URL. The only two deep links in the entire app are `?reset_token=` and `?receipt=RCT-…`.
+**There is no client-side router.** `App.jsx` performs manual, role-based conditional rendering from `user.roles` plus local `currentTab` / `activeNav` state. **Consequently there are no URL routes like `/admin/dashboard`.** Where this report says "landing destination" it means a **nav id** resolved through `defaultNavForRoles()`, not a URL. The only deep link in the entire app is `?receipt=RCT-…`; the emailed `?reset_token=` link was retired in [1.73.0], and an old one now opens the forgot-password card.
 
 ---
 
@@ -89,10 +89,10 @@ Request
 
 > **Methodology note, because it changes the numbers.** A `grep -c authorizePermissions backend/src/routes/*.js` returns **91** — but that counts every *line mentioning* the string, including the `require(...)` import in each of the 19 route files and the explanatory comments. The per-route figure is **77**, and it is independently corroborated by `verifyRbacWiring.js`, which reports *"Checked 77 permission-gated route(s) — 61 decided by permission alone."* Any earlier document of mine quoting 90/91 or 77/79 was counting lines; these are the route counts.
 
-**The 13 deliberately open routes** — all either pre-authentication or public reference data:
+**The 15 deliberately open routes** — all either pre-authentication or public reference data:
 
 ```
-POST /api/auth/register | /login | /forgot-password | /reset-password | /google
+POST /api/auth/register | /register/verify | /codes/resend | /login | /forgot-password | /reset-password | /google
 GET  /api/clinic                     — clinic identity for the public header
 GET  /api/tests | /categories | /:id — the public services catalogue
 GET  /api/packages                   — active package deals

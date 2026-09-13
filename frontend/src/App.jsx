@@ -9,8 +9,6 @@ import ServicesPage from './pages/public/ServicesPage';
 import PrivacyPolicy from './pages/public/PrivacyPolicy';
 import TermsOfService from './pages/public/TermsOfService';
 import AuthPage from './pages/auth/AuthPage';
-import ForgotPassword from './pages/auth/ForgotPassword';
-import ResetPassword from './pages/auth/ResetPassword';
 import ClientDashboard from './pages/portal/ClientDashboard';
 import ClientProfile from './pages/portal/ClientProfile';
 import ReceptionistDashboard from './pages/clinic/ReceptionistDashboard';
@@ -21,14 +19,16 @@ import ServicesCatalog from './pages/admin/ServicesCatalog';
 import StaffAccountSettings from './pages/StaffAccountSettings';
 import ReceiptView from './pages/ReceiptView';
 
-// Read a one-time deep-link param from the URL (e.g. an emailed password-reset link) without
-// introducing a router — this app deliberately has none (see PROJECT_STRUCTURE.md). Read once
-// on initial mount only; nothing else in the app reads or writes the URL.
-const getInitialResetToken = () => {
-  if (typeof window === 'undefined') return null;
-  const params = new URLSearchParams(window.location.search);
-  return params.get('reset_token');
-};
+// An emailed password-reset LINK, from before [1.73.0] replaced links with a 6-digit code. Some are
+// still sitting in inboxes. One opens the forgot-password card with a word of explanation, and its
+// token is stripped from the address bar: it no longer does anything, and it should not sit in
+// history looking as though it might. Read once, on the first render, without a router — this app
+// deliberately has none (see PROJECT_STRUCTURE.md).
+const hadLegacyResetLink = () =>
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('reset_token');
+
+const LEGACY_RESET_NOTICE =
+  'Reset links are no longer used. Enter your email below and we will send you a 6-digit code instead.';
 
 /**
  * `?receipt=RCT-…` — one receipt, on its own page, in its own tab. [1.52.0]
@@ -49,13 +49,21 @@ const getInitialReceipt = () => {
 
 const MainApp = () => {
   const { user, loading } = useAuth();
-  const [resetToken] = useState(getInitialResetToken);
+  const [legacyResetLink] = useState(hadLegacyResetLink);
   const [receiptNumber, setReceiptNumber] = useState(getInitialReceipt);
-  const [currentTab, setCurrentTab] = useState(() => (getInitialResetToken() ? 'reset-password' : 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'reset-password', 'dashboard', 'account'
+  const [currentTab, setCurrentTab] = useState(() => (hadLegacyResetLink() ? 'forgot-password' : 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'dashboard', 'account'
   const [activeNav, setActiveNav] = useState(null); // Active nav in staff/admin sidebar
   // A section of the destination page to scroll to on arrival — the header's FAQ link sends a
   // visitor to Home's #faq from any other page. [1.72.0] Cleared by any plain navigation.
   const [pendingSection, setPendingSection] = useState(null);
+
+  // Take a legacy reset token out of the address bar once it has been noticed. [1.73.0]
+  useEffect(() => {
+    if (!legacyResetLink) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('reset_token');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [legacyResetLink]);
 
   // Land each user on a destination they actually hold. This used to default to 'dashboard' —
   // an Admin/SuperAdmin-only destination — so every other role signed in pointing at an id it
@@ -138,11 +146,16 @@ const MainApp = () => {
     if (currentTab === 'register') {
       return <AuthPage mode="register" onNavigate={handleNavigate} />;
     }
+    // The back of the sign-in card, like 'register' — the same page, so moving here from Sign In
+    // turns the card rather than loading a new screen. [1.73.0]
     if (currentTab === 'forgot-password') {
-      return <ForgotPassword onNavigate={handleNavigate} />;
-    }
-    if (currentTab === 'reset-password') {
-      return <ResetPassword token={resetToken} onNavigate={handleNavigate} />;
+      return (
+        <AuthPage
+          mode="forgot-password"
+          notice={legacyResetLink ? LEGACY_RESET_NOTICE : undefined}
+          onNavigate={handleNavigate}
+        />
+      );
     }
     // Default fallback to sign-in. Neither AuthPage above carries a `key`, deliberately: sign-in
     // and create-account are the two sides of one card, so moving between them from the header

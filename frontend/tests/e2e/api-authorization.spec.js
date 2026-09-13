@@ -2,6 +2,7 @@
 import { test, expect, request } from 'playwright/test';
 import { selfPayTypeId } from './helpers/patients.js';
 import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
+import { registerClient } from './helpers/accounts.js';
 
 // Backend API-level authorization tests. These hit the Express API directly (no browser),
 // exercising a real end-to-end workflow and regression-testing the five ownership/IDOR
@@ -29,15 +30,8 @@ async function registerAndLoginClient(apiContext, prefix) {
   // clinic screen. The person is a person. See tests/e2e/helpers/people.js.
   const person = fixturePerson();
 
-  const registerRes = await apiContext.post(`${API}/auth/register`, {
-    data: {
-      ...person,
-      email,
-      password,
-      contactNumber: FIXTURE_CONTACT,
-    },
-  });
-  expect(registerRes.ok()).toBeTruthy();
+  // Through the real sign-up, emailed code and all. See helpers/accounts.js.
+  await registerClient(apiContext, { ...person, email, password, contactNumber: FIXTURE_CONTACT });
 
   const loginRes = await apiContext.post(`${API}/auth/login`, {
     data: { email, password },

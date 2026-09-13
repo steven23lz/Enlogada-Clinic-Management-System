@@ -47,6 +47,7 @@
 const db = require('./database');
 const paymentGatewayService = require('../services/paymentGatewayService');
 const logger = require('./logger');
+const { missingMailConfig } = require('./email');
 
 async function reportPendingRepairs() {
   try {
@@ -94,4 +95,23 @@ function reportGatewayConfiguration() {
   );
 }
 
-module.exports = { reportPendingRepairs, reportGatewayConfiguration };
+/**
+ * Says, once at boot, when email is not configured — because two account flows now need it. [1.73.0]
+ *
+ * A new account is confirmed with a 6-digit code sent by email, and so is a password reset. With
+ * no mail, sign-up answers 503 and says why, which is honest but only reaches the person trying.
+ * This reaches whoever starts the server. Existing accounts sign in exactly as before.
+ *
+ * Deliberately not a startup failure, for the reason reportGatewayConfiguration gives.
+ */
+function reportAccountMail() {
+  const missing = missingMailConfig();
+  if (missing.length === 0) return;
+  logger.warn(
+    `[mail] Email is not configured (${missing.join(', ')}), so new accounts cannot be confirmed and ` +
+    'forgotten passwords cannot be reset — both send a 6-digit code by email. Existing accounts can ' +
+    'still sign in. Set it in backend/.env and restart. See .env.example.'
+  );
+}
+
+module.exports = { reportPendingRepairs, reportGatewayConfiguration, reportAccountMail };

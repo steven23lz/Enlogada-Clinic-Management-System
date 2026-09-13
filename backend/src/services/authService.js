@@ -4,16 +4,36 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const userRepository = require('../repositories/userRepository');
-const passwordResetRepository = require('../repositories/passwordResetRepository');
+const authCodeRepository = require('../repositories/authCodeRepository');
 const db = require('../config/database');
 const env = require('../config/environment');
-const { sendEmail } = require('../config/email');
-const { departmentsForUser } = require("../constants/modality");
+const logger = require('../config/logger');
+const { departmentsForUser } = require('../constants/modality');
 const { AVATAR_UPLOAD_ROOT } = require('../config/upload');
 const auditService = require('./auditService');
 const notificationService = require('./notificationService');
-
-const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const accountEmailService = require('./accountEmailService');
+const { canonicalEmail, normaliseAccountEmail } = require('../validations/email');
+const {
+  AppError,
+  ConflictError,
+  ServiceUnavailableError,
+  UpstreamServiceError,
+  ValidationError,
+} = require('../errors');
+const {
+  CODE_TTL_MINUTES,
+  MAX_ATTEMPTS,
+  RESEND_COOLDOWN_SECONDS,
+  MAX_SENDS_PER_TICKET,
+  MAX_CODES_PER_EMAIL_PER_HOUR,
+  generateCode,
+  generateTicket,
+  hashTicket,
+  createCodeHasher,
+  isWellFormedCode,
+  isWellFormedTicket,
+} = require('../utils/authCodes');
 
 // Lockout policy — deliberately forgiving, because the obvious design is dangerous here.
 //
@@ -26,49 +46,307 @@ const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 const FAILED_LOGIN_THRESHOLD = 10;
 const LOCK_DURATION_MINUTES = 15;
 
-const hashToken = (rawToken) => crypto.createHash('sha256').update(rawToken).digest('hex');
+// Keyed from JWT_SECRET, so a copy of the database alone cannot turn a stored code hash back into
+// its six digits by trying all million. See utils/authCodes.js.
+const { hashCode, codeMatches } = createCodeHasher(env.JWT_SECRET);
+
+// Codes older than this are deleted whenever a new sign-up starts. See authCodeRepository.
+const STALE_CODE_HOURS = 24;
+
+// One answer for every way a reset code can fail. Answering "expired" for a ticket that matched
+// nothing and "wrong, 4 tries left" for a real one would tell whoever asked for the reset whether
+// the address has an account — the one thing POST /forgot-password is built never to reveal.
+const RESET_CODE_REFUSED =
+  'That code is wrong or has expired. Check the newest email from us, or send a new code.';
+
+const SIGNUP_GONE = 'This sign-up has expired or is already finished. Start again, or sign in.';
+
+const CODE_TIMING = {
+  expiresInSeconds: CODE_TTL_MINUTES * 60,
+  resendAfterSeconds: RESEND_COOLDOWN_SECONDS,
+};
+
+/** The JWT and the user object every sign-in path returns. It was written out three times. */
+function sessionFor(user) {
+  const roles = (user.roles || []).filter((r) => r !== null);
+  const permissions = (user.permissions || []).filter((p) => p !== null);
+  // The token proves IDENTITY only — roles and permissions are re-read from the database on every
+  // request, so a grant or a revoke takes effect immediately rather than at token expiry.
+  const token = jwt.sign({ userId: user.id, roles, permissions }, env.JWT_SECRET, {
+    expiresIn: env.JWT_EXPIRES_IN,
+  });
+  return {
+    token,
+    user: {
+      id: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      email: user.email,
+      contactNumber: user.contact_number,
+      roles,
+      permissions,
+      departments: departmentsForUser(user),
+      hasAvatar: Boolean(user.avatar_path),
+    },
+  };
+}
+
+/**
+ * A client account and its role, as one unit. Call inside db.withTransaction.
+ *
+ * These were two independent writes once. If the second failed, registration left behind a user
+ * with valid credentials and no role at all: it can sign in, every console check finds an empty
+ * role list, so it lands nowhere and shows nothing, and only an administrator can repair it.
+ */
+async function createClientAccount({ firstName, lastName, email, passwordHash, contactNumber }) {
+  const created = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
+  const clientRoleId = await userRepository.findRoleIdByName('Client');
+  if (!clientRoleId) {
+    // Failing loudly rolls the account back, so a misconfigured RBAC seed surfaces here rather
+    // than as a mysteriously empty account later.
+    throw new Error('The Client role is missing. Run `node src/scripts/setupRbac.js` to seed roles.');
+  }
+  await userRepository.assignRoleToUser(created.id, clientRoleId);
+  return created;
+}
+
+/** A sign-up code that never left cannot be entered, so say so now rather than at the code screen. */
+function assertDelivered(result) {
+  if (result?.missing) {
+    throw new ServiceUnavailableError(
+      "The clinic can't send email right now, so a new account can't be confirmed. Please try again later, or ask at the front desk."
+    );
+  }
+  if (result?.error) {
+    throw new UpstreamServiceError("We couldn't send a code to that address. Check it and try again.");
+  }
+}
+
+const triesLeft = (row) => {
+  const left = MAX_ATTEMPTS - row.attempts;
+  return left > 0
+    ? `That code isn't right. ${left} ${left === 1 ? 'try' : 'tries'} left.`
+    : "That code isn't right, and that was the last try. Send a new code.";
+};
+
+/**
+ * The work behind a forgot-password request, after the answer has already been decided.
+ *
+ * Only an active account gets a code, and only the newest code works: an older one sitting in an
+ * inbox is one more thing to intercept.
+ */
+async function issueResetCode(address, ticket) {
+  const user = await userRepository.findByEmail(address);
+  if (!user || !user.status) return;
+
+  const email = canonicalEmail(user.email);
+  if ((await authCodeRepository.countIssuedSince('password_reset', email, 60)) >= MAX_CODES_PER_EMAIL_PER_HOUR) {
+    logger.warn(`Password reset for user ${user.id} not sent: ${MAX_CODES_PER_EMAIL_PER_HOUR} codes already this hour.`);
+    return;
+  }
+
+  const code = generateCode();
+  await db.withTransaction(async () => {
+    await authCodeRepository.consumeOpenForUser('password_reset', user.id);
+    await authCodeRepository.create({
+      purpose: 'password_reset',
+      email,
+      userId: user.id,
+      ticketHash: hashTicket(ticket),
+      codeHash: hashCode(code),
+      ttlMinutes: CODE_TTL_MINUTES,
+    });
+  });
+
+  reportUndelivered(user.id, await accountEmailService.sendResetCode({ to: user.email, firstName: user.first_name, code }));
+}
+
+function reportUndelivered(userId, result) {
+  if (result?.error || result?.missing) {
+    logger.warn(`Password email for user ${userId} was not delivered: ${result.error || result.missing.join(', ')}`);
+  }
+}
+
+/** A resent reset code. Not awaited by the caller, for the reason requestPasswordReset gives. */
+function sendResetCodeInBackground({ userId, email, code }) {
+  userRepository
+    .findById(userId)
+    .then((user) => accountEmailService.sendResetCode({ to: user?.email || email, firstName: user?.first_name, code }))
+    .then((result) => reportUndelivered(userId, result))
+    .catch((err) => logger.error('Password reset code could not be resent', err));
+}
+
+function notifyPasswordChanged(userId) {
+  userRepository
+    .findById(userId)
+    .then((user) => (user ? accountEmailService.sendPasswordChanged({ to: user.email, firstName: user.first_name }) : null))
+    .then((result) => reportUndelivered(userId, result))
+    .catch((err) => logger.error('Password-changed notice could not be sent', err));
+}
 
 class AuthService {
-  async registerClient({ firstName, lastName, email, password, contactNumber }) {
-    // 1. Check if user already exists
-    const existingUser = await userRepository.findByEmail(email);
-    if (existingUser) {
-      const error = new Error('Email is already registered');
-      error.statusCode = 400;
-      throw error;
+  /**
+   * Starts a sign-up and emails the 6-digit code. No account exists yet. [1.73.0]
+   *
+   * The account is created only when the code is entered (completeSignup). Until then this is a
+   * row in `auth_codes`, not in `users`, so nothing half-made exists for anyone to take over: if a
+   * stranger starts a sign-up with your address, there is no account under it, and the day you
+   * sign in with Google — which links by email — you land in an account of your own, not theirs.
+   *
+   * @returns {Promise<{ticket: string, email: string, expiresInSeconds: number, resendAfterSeconds: number}>}
+   *   `ticket` is for the browser that asked: finishing needs it AND the code from the email.
+   * @throws {ConflictError} An account already uses the address (409).
+   * @throws {ServiceUnavailableError} Email is not configured, so the code could not be sent (503).
+   */
+  async startSignup({ firstName, lastName, email, password, contactNumber }) {
+    const address = normaliseAccountEmail(email);
+    const first = String(firstName ?? '').trim();
+    const last = String(lastName ?? '').trim();
+    const contact = String(contactNumber ?? '').trim();
+    if (!first || !last) throw new ValidationError('First name and last name are required fields.');
+    // The columns' own limits, checked here so an overlong value is a sentence rather than a 500.
+    if (first.length > 100 || last.length > 100) throw new ValidationError('A name can be at most 100 characters.');
+    if (contact.length > 20) throw new ValidationError('That contact number is too long.');
+
+    // Says the account exists. The lockout message already does too (see login), and a person who
+    // forgot they signed up is far better told to sign in than sent a code that cannot help them.
+    if (await userRepository.findByEmail(address)) {
+      throw new ConflictError('An account already uses this email. Sign in, or reset your password if you have forgotten it.');
+    }
+    if ((await authCodeRepository.countIssuedSince('signup', address, 60)) >= MAX_CODES_PER_EMAIL_PER_HOUR) {
+      throw new AppError('Several sign-ups were started for this email in the last hour. Please wait a while, then try again.', 429);
     }
 
-    // 2. Hash password. Deliberately outside the transaction below: bcrypt is ~100ms of CPU, and
-    // holding a pooled database connection idle for that long under load starves other requests.
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
+    // Outside any transaction: bcrypt is ~100ms of CPU and must not hold a pooled connection.
+    const passwordHash = await bcrypt.hash(password, await bcrypt.genSalt(10));
+    const ticket = generateTicket();
+    const code = generateCode();
 
-    // 3. Create the account and grant its role as one unit.
-    //
-    // These were two independent writes. If the second failed — role table locked, connection
-    // dropped, process restarted mid-request — registration left behind a user with valid
-    // credentials and no role at all. That account can log in, and then every console check finds
-    // an empty role list, so it lands nowhere and shows nothing. It is not self-repairing and the
-    // patient cannot fix it; it needs an administrator to notice and assign the role by hand.
-    const user = await db.withTransaction(async () => {
-      const created = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
-
-      const clientRoleId = await userRepository.findRoleIdByName('Client');
-      if (!clientRoleId) {
-        // Previously this was `if (clientRoleId)` — a missing Client role silently produced the
-        // roleless account described above. Failing loudly rolls the user back instead, so a
-        // misconfigured RBAC seed surfaces as an error at registration rather than as a
-        // mysteriously broken account later.
-        throw new Error('The Client role is missing. Run `node src/scripts/setupRbac.js` to seed roles.');
-      }
-      await userRepository.assignRoleToUser(created.id, clientRoleId);
-      return created;
+    await authCodeRepository.pruneOlderThan(STALE_CODE_HOURS);
+    const pending = await authCodeRepository.create({
+      purpose: 'signup',
+      email: address,
+      ticketHash: hashTicket(ticket),
+      codeHash: hashCode(code),
+      firstName: first,
+      lastName: last,
+      contactNumber: contact,
+      passwordHash,
+      ttlMinutes: CODE_TTL_MINUTES,
     });
 
-    return {
-      ...user,
-      roles: ['Client']
-    };
+    const sent = await accountEmailService.sendSignupCode({ to: address, firstName: first, code });
+    try {
+      assertDelivered(sent);
+    } catch (err) {
+      await authCodeRepository.deleteById(pending.id);
+      throw err;
+    }
+
+    return { ticket, email: address, ...CODE_TIMING };
+  }
+
+  /**
+   * Finishes a sign-up: the right code for this ticket creates the account and signs it in.
+   *
+   * @returns {Promise<{token: string, user: object}>}
+   * @throws {ValidationError} Wrong, expired, used up, or no such sign-up (400 — never 401, which
+   *   the browser treats as "you have been signed out").
+   */
+  async completeSignup({ ticket, code }) {
+    if (!isWellFormedCode(code)) throw new ValidationError('Enter the 6-digit code from the email.');
+    const ticketHash = isWellFormedTicket(ticket) ? hashTicket(ticket) : null;
+    const row = ticketHash ? await authCodeRepository.findByTicketHash(ticketHash, RESEND_COOLDOWN_SECONDS) : null;
+
+    if (!row || row.purpose !== 'signup' || row.consumed_at) throw new ValidationError(SIGNUP_GONE);
+    if (row.expired) throw new ValidationError('This code has expired. Send a new one.');
+    if (row.attempts >= MAX_ATTEMPTS) throw new ValidationError('Too many wrong codes. Send a new one.');
+
+    // The guess is spent before the code is compared, in one statement, so two requests racing
+    // cannot both get a free try.
+    const claimed = await authCodeRepository.claimAttempt(ticketHash, 'signup', MAX_ATTEMPTS);
+    if (!claimed) throw new ValidationError('Too many wrong codes. Send a new one.');
+    if (!codeMatches(code, claimed.code_hash)) throw new ValidationError(triesLeft(claimed));
+
+    let created;
+    try {
+      created = await db.withTransaction(async () => {
+        if (!(await authCodeRepository.consume(claimed.id))) {
+          throw new ConflictError('This code has already been used. Sign in instead.');
+        }
+        // Something else may have made the account in the last ten minutes: Google sign-in, or a
+        // second tab finishing first.
+        if (await userRepository.findByEmail(claimed.email)) {
+          throw new ConflictError('An account already uses this email. Sign in instead.');
+        }
+        const account = await createClientAccount({
+          firstName: claimed.first_name,
+          lastName: claimed.last_name,
+          email: claimed.email,
+          passwordHash: claimed.password_hash,
+          contactNumber: claimed.contact_number,
+        });
+        await authCodeRepository.consumeOpenForEmail('signup', claimed.email);
+        return account;
+      });
+    } catch (err) {
+      // Two sign-ups for one address finishing in the same instant: the unique index decides.
+      if (err.code === '23505') throw new ConflictError('An account already uses this email. Sign in instead.');
+      throw err;
+    }
+
+    await auditService.log({
+      actorId: created.id,
+      action: 'auth.account_created',
+      entityType: 'user',
+      entityId: created.id,
+      description: `Created an account for ${created.email}, confirmed with an emailed code`,
+    });
+
+    return sessionFor(await userRepository.findByEmail(created.email));
+  }
+
+  /**
+   * A fresh code for a sign-up or a reset already under way: after 60 seconds, at most three
+   * times per ticket.
+   *
+   * For a reset, every refusal looks like success — an unknown ticket, the cooldown and the send
+   * limit all answer the same — so a stranger holding a ticket learns nothing about the address.
+   */
+  async resendCode({ ticket }) {
+    const generic = { ...CODE_TIMING };
+    if (!isWellFormedTicket(ticket)) return generic;
+
+    const row = await authCodeRepository.findByTicketHash(hashTicket(ticket), RESEND_COOLDOWN_SECONDS);
+    const isSignup = row?.purpose === 'signup';
+
+    if (!row || row.consumed_at) {
+      if (isSignup) throw new ValidationError(SIGNUP_GONE);
+      return generic;
+    }
+    if (row.resend_wait > 0) return { ...CODE_TIMING, resendAfterSeconds: row.resend_wait };
+    if (row.sends >= MAX_SENDS_PER_TICKET) {
+      if (isSignup) {
+        throw new AppError('That is the most codes one sign-up can send. Please start again in a few minutes.', 429);
+      }
+      return generic;
+    }
+
+    const code = generateCode();
+    const reissued = await authCodeRepository.reissue(row.id, hashCode(code), {
+      ttlMinutes: CODE_TTL_MINUTES,
+      cooldownSeconds: RESEND_COOLDOWN_SECONDS,
+      maxSends: MAX_SENDS_PER_TICKET,
+    });
+    // Lost a race with another resend on the same ticket; that one sent the code.
+    if (!reissued) return generic;
+
+    if (isSignup) {
+      assertDelivered(await accountEmailService.sendSignupCode({ to: row.email, firstName: row.first_name, code }));
+    } else {
+      sendResetCodeInBackground({ userId: row.user_id, email: row.email, code });
+    }
+    return generic;
   }
 
   /**
@@ -77,17 +355,15 @@ class AuthService {
    * @param {object} credentials
    * @param {string} credentials.email
    * @param {string} credentials.password
-   * @returns {Promise<object>} A JWT and the user. The token proves IDENTITY only — roles and
-   *   permissions are re-read from the database on every request, so a grant or a revoke takes
-   *   effect immediately rather than at token expiry.
+   * @returns {Promise<object>} A JWT and the user.
    * @throws {UnauthorizedError} Wrong credentials. Deliberately the same message for an unknown
    *   email and a wrong password, so the response cannot be used to enumerate accounts.
    * @throws {LockedError} Too many failed attempts (423).
    * @throws {ForbiddenError} The account has been deactivated.
    */
   async login({ email, password }) {
-    // 1. Find user by email
-    const user = await userRepository.findByEmail(email);
+    // 1. Find user by email, whatever capitals it was typed with.
+    const user = await userRepository.findByEmail(canonicalEmail(email));
     if (!user || !user.status) {
       const error = new Error('Invalid email or password');
       error.statusCode = 401;
@@ -150,114 +426,76 @@ class AuthService {
     // into a lockout.
     await userRepository.clearLoginFailures(user.id);
 
-    // Filter out null values in array_agg if user has no role or is newly created
-    const cleanRoles = (user.roles || []).filter(role => role !== null);
-    const cleanPermissions = (user.permissions || []).filter(p => p !== null);
-
-    // 3. Generate JWT Token
-    const payload = {
-      userId: user.id,
-      roles: cleanRoles,
-      permissions: cleanPermissions
-    };
-
-    const token = jwt.sign(payload, env.JWT_SECRET, {
-      expiresIn: env.JWT_EXPIRES_IN
-    });
-
-    return {
-      token,
-      user: {
-        id: user.id,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        email: user.email,
-        contactNumber: user.contact_number,
-        roles: cleanRoles,
-        permissions: cleanPermissions,
-        departments: departmentsForUser(user),
-        hasAvatar: Boolean(user.avatar_path)
-      }
-    };
-  }
-
-  async forgotPassword(email) {
-    // Always returns the same generic result regardless of whether the email is
-    // registered — never confirm/deny account existence to an unauthenticated caller.
-    const user = await userRepository.findByEmail(email);
-
-    if (user && user.status) {
-      const rawToken = crypto.randomBytes(32).toString('hex');
-      const tokenHash = hashToken(rawToken);
-      const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
-
-      // Invalidate any previously requested, still-unused tokens for this user first. Atomic so a
-      // failure cannot revoke the user's outstanding link without issuing the replacement, which
-      // would leave them holding a dead link and no way to tell it had been superseded.
-      await db.withTransaction(async () => {
-        await passwordResetRepository.deleteAllForUser(user.id);
-        await passwordResetRepository.createToken(user.id, tokenHash, expiresAt);
-      });
-
-      const frontendBaseUrl = env.FRONTEND_URL;
-      const resetLink = `${frontendBaseUrl}/?reset_token=${rawToken}`;
-
-      await sendEmail({
-        to: user.email,
-        subject: 'Reset your Enlogada Clinic password',
-        html: `
-          <div style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2>Hello ${user.first_name},</h2>
-            <p>We received a request to reset your Enlogada Clinic account password.</p>
-            <p><a href="${resetLink}">Click here to reset your password</a> (link expires in 1 hour).</p>
-            <p>If you didn't request this, you can safely ignore this email — your password will not change.</p>
-            <br/>
-            <p>Thank you,</p>
-            <p><strong>Enlogada Ultrasound and Diagnostic Clinic</strong></p>
-          </div>
-        `
-      });
-    }
-
-    return { message: 'If that email is registered, a password reset link has been sent.' };
+    return sessionFor(user);
   }
 
   /**
-   * Completes a password reset and ends every older session.
+   * The first step of forgot-password. The same answer, in the same time, for every address. [1.73.0]
    *
-   * @param {string} rawToken  The token from the email. Only its HASH is stored, so a leaked
-   *   database row cannot be replayed as a reset link.
-   * @param {string} newPassword
-   * @returns {Promise<object>}
+   * The work is started and deliberately NOT awaited: the answer is decided before anything is
+   * looked up, so a real account and an unknown address take the same time to answer. The link
+   * flow this replaced waited for a database write and an SMTP round trip for a real account only,
+   * which could be timed from outside.
+   *
+   * @returns {{ticket: string, message: string, expiresInSeconds: number, resendAfterSeconds: number}}
+   *   A ticket is returned for every address, real or not, and looks the same either way.
+   */
+  requestPasswordReset(email) {
+    const ticket = generateTicket();
+    issueResetCode(canonicalEmail(email), ticket).catch((err) =>
+      logger.error('Password reset code could not be issued', err)
+    );
+    return { ticket, ...CODE_TIMING, message: 'If an account uses that email, we have sent it a 6-digit code.' };
+  }
+
+  /**
+   * Completes a password reset with the emailed code, and ends every other session. [1.73.0]
    *
    * Stamps `password_changed_at`, which `verifyToken` compares against each JWT's `iat`. That is
    * what makes a reset the real answer to a stolen token: without it the attacker keeps their
-   * session until it expires on its own.
+   * session until it expires on its own. Also clears a sign-in lock — proving the inbox is proving
+   * who you are, and a lock that outlives that only makes the person wait out a window meant for
+   * somebody guessing.
+   *
+   * The new password is checked by the controller BEFORE this runs, so a weak one never spends one
+   * of the code's five tries.
    */
-  async resetPassword(rawToken, newPassword) {
-    const tokenHash = hashToken(rawToken);
-    const tokenRecord = await passwordResetRepository.findValidByTokenHash(tokenHash);
+  async resetPassword({ ticket, code, newPassword }) {
+    if (!isWellFormedCode(code)) throw new ValidationError('Enter the 6-digit code from the email.');
+    const claimed = isWellFormedTicket(ticket)
+      ? await authCodeRepository.claimAttempt(hashTicket(ticket), 'password_reset', MAX_ATTEMPTS)
+      : null;
+    if (!claimed || !codeMatches(code, claimed.code_hash)) throw new ValidationError(RESET_CODE_REFUSED);
 
-    if (!tokenRecord) {
-      const error = new Error('This password reset link is invalid or has expired. Please request a new one.');
-      error.statusCode = 400;
-      throw error;
-    }
+    const passwordHash = await bcrypt.hash(newPassword, await bcrypt.genSalt(10));
 
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(newPassword, salt);
-
-    // Changing the password and burning the token must be one unit. Split, as they were, a
-    // failure between them leaves the password changed and the reset link still valid — a
-    // single-use credential that was never consumed, sitting in an inbox, reusable by anyone who
-    // reads that mailbox later. The token is the weaker credential precisely because it is
-    // delivered over email, so it must not outlive its one use.
-    await db.withTransaction(async () => {
-      await userRepository.updatePasswordHash(tokenRecord.user_id, passwordHash);
-      await passwordResetRepository.markUsed(tokenRecord.id);
+    // The code is burned and the password changed as one unit: split, a failure between them would
+    // leave a single-use credential unconsumed in an inbox after it had done its job. And `consume`
+    // succeeds for exactly one caller, so two requests carrying the same code cannot both reset —
+    // the link flow looked its token up and marked it used in two statements, and both could.
+    const account = await db.withTransaction(async () => {
+      if (!(await authCodeRepository.consume(claimed.id))) throw new ValidationError(RESET_CODE_REFUSED);
+      const updated = await userRepository.updatePasswordHash(claimed.user_id, passwordHash);
+      await userRepository.clearLoginFailures(claimed.user_id);
+      await authCodeRepository.consumeOpenForUser('password_reset', claimed.user_id);
+      return updated;
     });
 
-    return { message: 'Your password has been reset. You can now log in with your new password.' };
+    await auditService.log({
+      actorId: claimed.user_id,
+      action: 'auth.password_reset',
+      entityType: 'user',
+      entityId: claimed.user_id,
+      description: 'Reset their password with an emailed code; every other session was signed out',
+    });
+
+    // After the commit, and not awaited: the change has happened whether or not the notice arrives.
+    notifyPasswordChanged(claimed.user_id);
+
+    return {
+      email: account?.email,
+      message: 'Your password has been changed, and every other session has been signed out. Sign in with your new password.',
+    };
   }
 
   async updateProfile(userId, { firstName, lastName, contactNumber }) {
@@ -299,19 +537,10 @@ class AuthService {
     // that from logging people out of their own password change — the revocation is aimed at a
     // stolen token on some other device, not at the person doing the changing.
     const user = await userRepository.findById(userId);
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        roles: (user.roles || []).filter((r) => r !== null),
-        permissions: (user.permissions || []).filter((p) => p !== null)
-      },
-      env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN }
-    );
 
     return {
       message: 'Password changed successfully. Other devices have been signed out.',
-      token
+      token: sessionFor(user).token
     };
   }
 
@@ -322,7 +551,7 @@ class AuthService {
       error.statusCode = 404;
       throw error;
     }
-    
+
     // Filter out null from array_agg
     const cleanRoles = (user.roles || []).filter(role => role !== null);
     const cleanPermissions = (user.permissions || []).filter(p => p !== null);
@@ -373,36 +602,31 @@ class AuthService {
       throw error;
     }
 
-    // Check if user exists
-    let user = await userRepository.findByEmail(email);
+    // Google has verified the address, which is why this path needs no emailed code. [1.73.0]
+    const address = canonicalEmail(email);
+    let user = await userRepository.findByEmail(address);
 
     if (!user) {
-      // Create user with random password hash
-      const crypto = require('crypto');
+      // A random password nobody knows. The person signs in with Google, or sets one through
+      // forgot-password.
       const randomPassword = crypto.randomBytes(16).toString('hex');
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(randomPassword, salt);
 
-      // Same atomicity requirement as registerClient: an account without its role is a broken
-      // account. More so here, because this path auto-provisions on first sign-in with no human
-      // in the loop to notice something went wrong.
+      // Same atomicity requirement as a sign-up: an account without its role is a broken account.
+      // More so here, because this path auto-provisions on first sign-in with no human in the loop
+      // to notice something went wrong.
       await db.withTransaction(async () => {
-        const newUser = await userRepository.createUser(
-          given_name || 'Google',
-          family_name || 'User',
-          email,
+        await createClientAccount({
+          firstName: given_name || 'Google',
+          lastName: family_name || 'User',
+          email: address,
           passwordHash,
-          ''
-        );
-
-        const clientRoleId = await userRepository.findRoleIdByName('Client');
-        if (!clientRoleId) {
-          throw new Error('The Client role is missing. Run `node src/scripts/setupRbac.js` to seed roles.');
-        }
-        await userRepository.assignRoleToUser(newUser.id, clientRoleId);
+          contactNumber: '',
+        });
       });
 
-      user = await userRepository.findByEmail(email);
+      user = await userRepository.findByEmail(address);
     }
 
     if (!user.status) {
@@ -411,33 +635,7 @@ class AuthService {
       throw error;
     }
 
-    const cleanRoles = (user.roles || []).filter(role => role !== null);
-    const cleanPermissions = (user.permissions || []).filter(p => p !== null);
-
-    const jwtPayload = {
-      userId: user.id,
-      roles: cleanRoles,
-      permissions: cleanPermissions
-    };
-
-    const token = jwt.sign(jwtPayload, env.JWT_SECRET, {
-      expiresIn: env.JWT_EXPIRES_IN
-    });
-
-    return {
-      token,
-      user: {
-        id: user.id,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        email: user.email,
-        contactNumber: user.contact_number,
-        roles: cleanRoles,
-        permissions: cleanPermissions,
-        departments: departmentsForUser(user),
-        hasAvatar: Boolean(user.avatar_path)
-      }
-    };
+    return sessionFor(user);
   }
 
   // UI/UX Modernization Phase 8: self-service profile photo. Replacing an existing avatar

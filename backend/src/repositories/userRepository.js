@@ -96,7 +96,8 @@ class UserRepository {
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id AND ${ACTIVE_ROLE_GRANT}
       LEFT JOIN roles r ON ur.role_id = r.id
-      WHERE u.email = $1
+      -- Whatever capitals the address was typed with. Served by uq_users_email_lower. [1.73.0]
+      WHERE LOWER(u.email) = LOWER($1)
       GROUP BY u.id
     `;
     const result = await db.query(queryText, [email]);

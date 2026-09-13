@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { fixturePerson } from './helpers/people.js';
+import { registerClient } from './helpers/accounts.js';
 
 // Module 14 (Payment) coverage — the shared data/logic layer behind Module 8 (Cashier) and
 // Client-side payment visibility. Three real gaps found on inspection, all fixed here (this
@@ -42,9 +43,8 @@ async function registerClientWithPatient(apiContext, prefix, patientTypeName = '
   const email = uniqueName(prefix) + '@enlogada-e2e.test';
   const password = 'TestPass123!';
   const person = fixturePerson();
-  await apiContext.post(`${API}/auth/register`, { data: { ...person, email, password, contactNumber: '' } });
-  const loginRes = await apiContext.post(`${API}/auth/login`, { data: { email, password } });
-  const token = (await loginRes.json()).data.token;
+  // Through the real sign-up, emailed code and all. See helpers/accounts.js.
+  const { token } = await registerClient(apiContext, { ...person, email, password, contactNumber: '' });
 
   const typesRes = await apiContext.get(`${API}/patients/types`, { headers: { Authorization: `Bearer ${token}` } });
   const patientType = (await typesRes.json()).data.patientTypes.find((t) => t.name === patientTypeName);

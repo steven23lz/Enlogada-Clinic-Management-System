@@ -9,10 +9,12 @@ import AuthField from './AuthField';
 import { AlertCircle, ArrowRight, Lock, Mail } from 'lucide-react';
 
 // The front of the sign-in card: the form only. AuthPage.jsx owns the card, the turn between its
-// two sides and the page around it; `onCreateAccount` asks it to turn over.
-const LoginForm = ({ onNavigate, onCreateAccount }) => {
+// two sides and the page around it; `onCreateAccount` and `onForgotPassword` ask it to turn over.
+// `initialEmail` is the address a password reset just finished for, so only the new password is
+// left to type. [1.73.0]
+const LoginForm = ({ onForgotPassword, onCreateAccount, initialEmail = '' }) => {
   const { login, googleLogin } = useAuth();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -150,7 +152,7 @@ const LoginForm = ({ onNavigate, onCreateAccount }) => {
           icon={Lock}
           index={3}
           action={
-            <button type="button" onClick={() => onNavigate('forgot-password')} className="auth-link text-fine">
+            <button type="button" onClick={onForgotPassword} className="auth-link text-fine">
               Forgot password?
             </button>
           }

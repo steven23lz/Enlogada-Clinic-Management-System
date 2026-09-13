@@ -132,8 +132,34 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/forgot-password', authLimiter);
 app.use('/api/auth/reset-password', authLimiter);
+// app.post, not app.use: app.use matches a PREFIX, so a limiter mounted on '/register' would also
+// count every '/register/verify'. These two match exactly.
+app.post('/api/auth/register/verify', authLimiter);
+
+// A third bucket, for the routes that SEND an email. [1.73.0]
+//
+// authLimiter counts only failures, and these succeed by design — forgot-password answers 200 for
+// every address so it cannot be used to discover accounts — so it never counted them at all. Each
+// request here costs the clinic a real email out of a Gmail account with a daily limit, and could
+// bury somebody's inbox. So this counts EVERY request, per IP, on top of the per-address and
+// per-ticket limits authService enforces in the database (5 codes an hour per address, a 60-second
+// resend cooldown, 3 resends per ticket).
+//
+// Generous outside production for the reason given above: the Playwright suite signs people up.
+const codeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 10 : 2000,
+  message: {
+    status: 'error',
+    message: 'Too many codes have been requested from this connection. Please wait 15 minutes and try again.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.post('/api/auth/register', codeLimiter);
+app.post('/api/auth/codes/resend', codeLimiter);
+app.post('/api/auth/forgot-password', codeLimiter);
 
 // 5. Health Check Endpoint
 app.get('/health', (req, res) => {

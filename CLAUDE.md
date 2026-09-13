@@ -99,6 +99,7 @@ node src/scripts/migrateResultDelivery.js      # [1.59.0] record that a released
 node src/scripts/migratePatientEmail.js        # [1.60.0] an address on the patient record, so a walk-in can be sent their result (--rollback reverses it)
 node src/scripts/migrateRemove2dEcho.js       # [1.50.0] remove the 2D Echo category and its tests; REFUSES if any visit_tests still reference them (--rollback restores)
 node src/scripts/migrateResultSignatureMode.js # [1.64.0] which disclaimer a lab form prints, and how it captions the technologist (--rollback reverses it)
+node src/scripts/migrateAuthCodes.js           # [1.73.0] emailed codes for sign-up and password reset; one account per address (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -221,8 +222,9 @@ start releasing their slot after 15 minutes ([1.35.0] — HMO and staff bookings
 the client's booking cards begin offering GCash instead of "pay at the counter".
 
 **Outbound email is configured and working.** `[1.50.0]` The clinic sends from
-`enlogada2011@gmail.com` via Gmail SMTP — released results, booking confirmations, password
-resets. `SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` in `backend/.env` (gitignored, untracked);
+`enlogada2011@gmail.com` via Gmail SMTP — released results, booking confirmations, and the
+6-digit codes for sign-up and password reset `[1.73.0]`, so without it nobody can create an
+account online (sign-up answers 503 and says why). `SMTP_USER`/`SMTP_PASS`/`SMTP_FROM` in `backend/.env` (gitignored, untracked);
 `EMAIL_USER`/`EMAIL_APP_PASSWORD`/`EMAIL_FROM` are accepted as aliases because that is how Google
 names them. The App Password lives **only** in that file — never in source, git, logs or docs.
 `sendEmail` now requires BOTH halves and names the missing one: checking the username alone let a
@@ -281,6 +283,21 @@ This layering is enforced convention in this codebase (checked by the "Project A
 - Navigation gates on the same three axes (`canSee` in `frontend/src/config/navigation.js`: `staffOnly`, `permission`, `department`), so the sidebar cannot advertise a screen the API will refuse. `AuthContext` re-reads `/auth/me` every 60s and on tab focus, so a change reaches a signed-in user without a re-login.
 - Roles/permissions are DB-driven (`roles`, `permissions`, `user_roles`, `user_permissions`, `user_departments`), seeded via `setupRbac.js`.
 - Google OAuth: `POST /api/auth/google` verifies an ID token via `google-auth-library`, then logs in or auto-creates a Client user.
+- **Sign-up and password reset are confirmed by a 6-digit code sent to the address.** `[1.73.0]`
+  A sign-up waits in `auth_codes`, and the `users` row is created only when its code is entered, so
+  no unproven account ever exists. That matters because Google sign-in links by email: a
+  stranger's unverified account under your address would have become yours, with their password,
+  the first time you used Google. Finishing needs the browser's TICKET and the emailed CODE; the
+  ticket is stored as SHA-256, the code as an HMAC keyed from JWT_SECRET (`utils/authCodes.js`,
+  unit-tested). A guess is spent before comparing and a code is consumed by exactly one request
+  (`authCodeRepository`). A wrong code is **400, never 401**, which `api.js` treats as a sign-out.
+  Forgot-password answers every address the same, in the same time (its work is not awaited), so
+  it cannot find accounts; a reset ends every session, clears a lock and is audited. Every background
+  send ends in a `.catch`, because `server.js` shuts down on an unhandled rejection. Account emails
+  are normalised (`validations/email.js`) and `uq_users_email_lower` enforces one account per
+  address. Specs cannot read email, so `helpers/accounts.js` `registerClient()` signs up through the
+  real endpoints and sets a known code with `e2eAuthCode.js` (test addresses only). Use it for any
+  throwaway client; a bare `POST /auth/register` no longer makes an account.
 - Frontend session handling: `frontend/src/config/api.js` (Axios) fires a global `auth:unauthorized` window event on HTTP 401; `AuthContext.jsx` listens for it to clear user state without breaking SPA navigation — follow this pattern rather than throwing/catching 401s locally in components.
 
 ### Where a file goes
@@ -670,7 +687,7 @@ a copy of RCT-…", asked weeks later, had no answer. `pages/ReceiptView.jsx` re
 Monitoring (Admin/SuperAdmin), and from the patient's own booking pass. Not a PDF and not a second
 rendering path — the browser prints it at 80mm through the same `printing-receipt` body class.
 
-The second deep link in the app, following `?reset_token=`; this app has no router by design. Only
+The second deep link in the app, after the old `?reset_token=` (retired in [1.73.0]); this app has no router by design. Only
 the receipt NUMBER travels in the URL — the session comes from localStorage, already shared across
 tabs of the same origin. A link carrying a token ends up in history, a chat message and a screenshot.
 
@@ -769,7 +786,9 @@ Services Catalogue.
   blanket reduced-motion rule does not reset; print shows everything. Never put a hover transform on
   the Reveal element itself — it owns `transition`, so the hover would move at the reveal's pace
   after the reveal's delay. Put it on a child, as `FeatureCard` does.
-- **Sign In and Create Account are the two sides of one card.** `[1.72.0]` `AuthPage` turns the
+- **Sign In is the front of one card; Create Account and Forgot Password are its back.** `[1.72.0]`
+  `[1.73.0]` Steps inside a side (details, then the emailed code) replace one another, so they never
+  add a second form. `AuthPage` turns the
   card over (850ms) and mounts BOTH sides only for the length of the turn; the side turning away is
   `inert`, and it unmounts the moment the turn ends. That is load-bearing: `helpers/auth.js` fills
   `input[type="password"]` and clicks `button[type="submit"]`, so a second form left in the

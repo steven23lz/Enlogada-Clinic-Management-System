@@ -9,6 +9,8 @@ DROP TABLE IF EXISTS notification_reads CASCADE;
 DROP TABLE IF EXISTS notification_events CASCADE;
 DROP TABLE IF EXISTS clinic_schedule_overrides CASCADE;
 DROP TABLE IF EXISTS clinic_operating_hours CASCADE;
+DROP TABLE IF EXISTS auth_codes CASCADE;
+-- Replaced by auth_codes in [1.73.0]; still dropped so a database built before then comes out clean.
 DROP TABLE IF EXISTS password_reset_tokens CASCADE;
 DROP TABLE IF EXISTS role_permissions CASCADE;
 DROP TABLE IF EXISTS permissions CASCADE;
@@ -127,16 +129,40 @@ CREATE INDEX idx_user_permissions_user ON user_permissions(user_id);
 -- (user_departments lives further down, immediately after test_categories — it references that
 -- table, and this file is applied top to bottom by migrateDb.js.)
 
--- Password reset tokens (Module 1: Authentication). Only the SHA-256 hash of the emailed
--- token is stored — never the raw token itself.
-CREATE TABLE password_reset_tokens (
+-- Emailed 6-digit codes: a pending sign-up, or a password reset. [1.73.0]
+--
+-- A pending SIGN-UP lives here, not in `users`: the account is created only when the code from the
+-- email is entered, so an unproven account never exists for anybody to take over. It carries what
+-- the account will be made from. A RESET points at its account.
+--
+-- Finishing needs the ticket held by the browser that asked AND the code from the email. The
+-- ticket is stored as its SHA-256; the code, being only a million possibilities, as an HMAC keyed
+-- from the server secret — see backend/src/utils/authCodes.js. Replaced password_reset_tokens.
+CREATE TABLE auth_codes (
     id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL,
-    token_hash TEXT NOT NULL UNIQUE,
+    purpose VARCHAR(20) NOT NULL,
+    email VARCHAR(150) NOT NULL,
+    user_id INT,
+    ticket_hash VARCHAR(64) NOT NULL UNIQUE,
+    code_hash VARCHAR(64) NOT NULL,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    contact_number VARCHAR(20),
+    password_hash TEXT,
+    -- Guesses spent (5 allowed), codes sent on this ticket (4 allowed), and when the last one went.
+    attempts SMALLINT NOT NULL DEFAULT 0,
+    sends SMALLINT NOT NULL DEFAULT 1,
+    last_sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP NOT NULL,
-    used_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_password_reset_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    consumed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_auth_codes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT chk_auth_codes_purpose CHECK (purpose IN ('signup', 'password_reset')),
+    CONSTRAINT chk_auth_codes_shape CHECK (
+      (purpose = 'password_reset' AND user_id IS NOT NULL AND password_hash IS NULL)
+      OR (purpose = 'signup' AND user_id IS NULL AND password_hash IS NOT NULL
+          AND first_name IS NOT NULL AND last_name IS NOT NULL)
+    )
 );
 
 -- 2. Patients (Only human profiles)
@@ -978,7 +1004,11 @@ CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id);
 CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role_id);
 CREATE INDEX IF NOT EXISTS idx_notification_reads_event ON notification_reads(event_id);
-CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id);
+-- The per-address limit ("5 codes an hour") and each account's open codes. [1.73.0]
+CREATE INDEX IF NOT EXISTS idx_auth_codes_purpose_email ON auth_codes (purpose, email, created_at);
+CREATE INDEX IF NOT EXISTS idx_auth_codes_user ON auth_codes (user_id) WHERE user_id IS NOT NULL;
+-- One account per address, whatever the capitals; also serves sign-in's case-insensitive lookup.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_lower ON users (LOWER(email));
 CREATE INDEX IF NOT EXISTS idx_tests_category ON tests(category_id);
 CREATE INDEX IF NOT EXISTS idx_patient_visits_status ON patient_visits(status);
 CREATE INDEX IF NOT EXISTS idx_visit_tests_status ON visit_tests(status);

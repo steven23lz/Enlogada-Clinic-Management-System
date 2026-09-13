@@ -2,6 +2,7 @@
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
 import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
+import { registerClient } from './helpers/accounts.js';
 
 /**
  * Getting the report to the patient, and being able to say that you did. [1.59.0]
@@ -358,11 +359,9 @@ test.describe('Where the report is sent', () => {
   test('the record address wins over the account it belongs to', async () => {
     const stamp = Date.now();
     const accountEmail = `owner.${stamp}@enlogada-e2e.test`;
-    await ctx.post(`${API}/auth/register`, {
-      data: {
-        firstName: 'Owner', lastName: 'Probe', email: accountEmail,
-        password: PASSWORD, contactNumber: FIXTURE_CONTACT,
-      },
+    await registerClient(ctx, {
+      firstName: 'Owner', lastName: 'Probe', email: accountEmail,
+      password: PASSWORD, contactNumber: FIXTURE_CONTACT,
     });
     const owner = await login(ctx, accountEmail);
     const types = (await (await ctx.get(`${API}/patients/types`, { headers: auth(owner) })).json()).data.patientTypes;

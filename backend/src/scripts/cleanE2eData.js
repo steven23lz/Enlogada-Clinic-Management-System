@@ -150,7 +150,9 @@ async function main() {
       ['patients', `DELETE FROM patients WHERE id IN (SELECT id FROM _fx_patients)`],
       ['audit_log', `DELETE FROM audit_log WHERE actor_id IN (SELECT id FROM _e2e_users)`],
       ['notification_reads', `DELETE FROM notification_reads WHERE user_id IN (SELECT id FROM _e2e_users)`],
-      ['password_reset_tokens', `DELETE FROM password_reset_tokens WHERE user_id IN (SELECT id FROM _e2e_users)`],
+      // By account, and by address for a sign-up that never became one. [1.73.0]
+      ['auth_codes', `DELETE FROM auth_codes WHERE user_id IN (SELECT id FROM _e2e_users)
+         OR email LIKE '%@enlogada-e2e.test'`],
       ['user_roles', `DELETE FROM user_roles WHERE user_id IN (SELECT id FROM _e2e_users)`],
       ['users', `DELETE FROM users WHERE id IN (SELECT id FROM _e2e_users)`],
     ];

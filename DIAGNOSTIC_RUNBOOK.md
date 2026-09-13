@@ -2,7 +2,7 @@
 
 **For when something is broken and you have to find it.**
 
-This system has five automated gates and 412 tests. Finding a fault here is a matter of running
+This system has five automated gates and 484 tests. Finding a fault here is a matter of running
 things in the right order and reading which one goes red — not of reading code until you spot it.
 Work down this page; do not skip to the seven-minute suite.
 
@@ -20,6 +20,8 @@ first, every time.
 | Several unrelated specs go red at once, mid-run | A backend file was edited during the run — nodemon restarted and dropped in-flight requests | Re-run on a settled server before believing it |
 | A "today" screen is empty and its spec fails | Seeded data is from a previous day | `node src/scripts/seedDemoScenario.js` (needs both servers) |
 | A booking test times out at 30s, then passes on a re-run | **SMTP.** `POST /appointments` sends a real confirmation email through Gmail — measured at **~3s per booking**, and it spikes. Several bookings in one test can approach the timeout. On 2026-09-12 one full run lost **eight** booking tests this way, and all eight passed on re-run | Re-run. For a baseline you intend to write down, run with `npx playwright test --timeout=90000` — it absorbs the email latency without touching any config. If it persists, unset `SMTP_USER` in `backend/.env` for the run — `sendEmail` skips cleanly when unconfigured |
+| Sign-up answers **"The clinic can't send email right now, so a new account can't be confirmed"** (503) | Email is not configured. Since [1.73.0] a new account is confirmed with a 6-digit code sent by email, and so is a password reset. The backend also says so once at startup: `[mail] Email is not configured` | Set `SMTP_USER` and `SMTP_PASS` in `backend/.env` and restart. Existing accounts sign in as before |
+| Every spec that makes a throwaway client fails with **"auth-code failed: no open signup code"**, or sign-up returns 500 naming `auth_codes` | The [1.73.0] migration has not been run on this database | `cd backend && node src/scripts/migrateAuthCodes.js` (safe to re-run) |
 | `booking-atomicity` fails with **"no slot left on 2026-11-18 that this run has not used and this patient does not already hold"** | A run was **stopped before it finished**, so its teardown never removed the bookings it made on the spec's fixed date — and that date has only 18 slots. Measured 2026-09-12: eleven leftovers from two interrupted runs | The spec now releases them itself before it starts. By hand: `cd backend && node src/scripts/e2eReleaseTestDate.js --date=2026-11-18` lists them (changes nothing), then add `--confirm`. It only touches test accounts' unpaid, result-less, claim-less bookings on a future date |
 
 **Booking specs own separate date bands, and a new one must claim its own.** `POST /appointments`
@@ -42,7 +44,7 @@ you less.
 
 ```bash
 # ── 1. Pure logic. ~0.4s, no server, no database. ──────────────────────────────
-cd backend && npm test                              # expect: 64 pass
+cd backend && npm test                              # expect: 76 pass
 
 # ── 2. Wiring checks. Seconds. Need the database only. ─────────────────────────
 cd backend && node src/scripts/verifyRbacWiring.js  # expect: "All good", 0 warnings
@@ -57,21 +59,21 @@ cd frontend && npm run build                        # expect: clean build
 python scripts/prose_scan.py frontend/src           # expect: 0 prose damage
 
 # ── 5. Behaviour. ~8 minutes. NEEDS BOTH SERVERS RUNNING. ──────────────────────
-cd frontend && npx playwright test                  # expect: 342 pass, 0 skipped
+cd frontend && npx playwright test                  # expect: 355 pass, 0 skipped
 ```
 
 ### Known-good baseline
 
 | Check | Expected |
 |---|---|
-| Backend unit | **64 passed** |
+| Backend unit | **76 passed** |
 | Frontend unit | **53 passed** |
-| Playwright E2E | **342 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
+| Playwright E2E | **355 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
 | `verifyRbacWiring` | `All good`, **78 routes checked**, **0 warnings** |
 | `verifyDiscountParity` | `Exact parity` — 3,264 combinations |
-| `checkFillRoles` | 216 files, **0 violations** |
+| `checkFillRoles` | 217 files, **0 violations** |
 | `checkContrast` | 116 token pairs, both themes, **0 violations** |
-| `prose_scan` | 216 files, **0 prose damage** |
+| `prose_scan` | 217 files, **0 prose damage** |
 
 Write today's numbers down before anyone touches anything. A diff against a known baseline is
 worth more than any amount of reading.
@@ -146,7 +148,7 @@ Three gates in one command:
 **Blind spot:** its `HOOKS` list is its eyesight. A hook missing from that list is damage it cannot
 see.
 
-### `npx playwright test` — 342 E2E
+### `npx playwright test` — 355 E2E
 **Proves:** RBAC boundaries, the money path, ticket-release gating, result versioning, printing,
 revalidation, failure states, and the copy on several screens.
 **Cannot see:** anything about performance. A `column::date` filter forcing a sequential scan

@@ -1,5 +1,70 @@
 # Database Migration & Schema History
 
+## [1.73.0] - 2026-09-13 (Sign-up and password reset by emailed code)
+
+Run: `node src/scripts/migrateAuthCodes.js` (additive, safe to re-run; `--rollback` reverses it).
+
+### What Steven asked for
+
+A 6-digit code emailed when someone signs up with an email and password, and forgot-password
+"re-engineered a more secure way", with both on the sign-in card. His choices: the code is
+required before the first sign-in (Google sign-ups skip it, and existing accounts are untouched),
+and forgot-password becomes a code that works for 10 minutes with 5 tries, then a new password.
+
+### A pending sign-up is not an account
+
+`auth_codes` holds pending sign-ups and reset codes. A sign-up's details wait there, and the
+`users` row is created only when the code is entered, so an unproven account never exists. Before
+this, anyone could register someone else's address, and because Google sign-in links to any
+account with the same email, the owner's first Google sign-in would have put them in an account
+whose password a stranger knew. It also meant no `email_verified` column, no backfill, and no
+change to staff creation, Google sign-in or the seed scripts.
+
+### A code belongs to the browser that asked
+
+Starting a sign-up or a reset gives the browser a ticket (32 random bytes, stored as SHA-256) and
+emails a code (6 digits, stored as an HMAC keyed from the server secret, because a million codes
+can be tried in a second against a plain hash). Finishing needs both, so a code sent for a
+stranger's attempt cannot finish yours. Limits: 5 tries a code, 10 minutes, a new code after 60
+seconds, 3 resends a ticket, 5 codes an address an hour, and a per-IP limiter that counts every
+request to the three routes that send email. A guess is spent before the code is compared, and a
+code is consumed by exactly one request.
+
+### Forgot password says nothing about who has an account
+
+Every address gets the same answer, in the same time, with a ticket that looks the same: the work
+starts after the answer is decided and is not awaited. The link flow waited for a database write
+and an SMTP round trip for real accounts only, which could be timed from outside. Its token was
+also looked up and marked used in two statements, so two requests could both reset, and a reset
+did not clear a lockout, was not audited and sent no notice. A reset now ends every session,
+clears the lock, is audited as `auth.password_reset` and emails "your password was changed".
+`password_reset_tokens` is dropped; an old link opens the forgot card with a notice and is taken out
+of the address bar.
+
+### One account per address
+
+Emails were never normalised and matched case-sensitively, so `John@x` and `john@x` could be two
+accounts, and a reset typed with different capitals silently found nobody. Every path that creates
+or looks up an account normalises now (`validations/email.js`), and `uq_users_email_lower` makes it
+a rule. The migration refuses to create that index when two accounts already differ only by case,
+and lists them. On the development database it found none.
+
+### The card
+
+Forgot Password moved onto the back of the sign-in card, beside Create Account, and both gained a
+code step: one real input drawn as six boxes (`CodeInput`, so paste, a phone's one-time-code
+autofill and screen readers all work), a resend countdown, and "use a different email". A pending
+sign-up survives a reload in sessionStorage, so fetching the code from another app does not lose
+the form. The old ForgotPassword and ResetPassword pages are gone.
+
+### Tests
+
+The suite cannot read email (test addresses are never mailed) and codes are stored hashed, so
+`e2eAuthCode.js` (test addresses only, never in production) puts a known code on the newest open
+row, and `helpers/accounts.js` `registerClient()` signs up through the real endpoints with it. The
+six specs that registered throwaway clients use it; `account-codes.spec.js` covers the rules above.
+The three cleanup scripts delete `auth_codes` in place of the old table.
+
 ## [1.72.0] - 2026-09-12 (The public site, on the reference design)
 
 No migration. The public pages are being rebuilt on the structure, layout and motion of the
@@ -89,8 +154,9 @@ meter and the server cannot disagree without a test failing. The old two-column 
 
 ### Still to come
 
-Services, About, Privacy, Terms and the forgot/reset password pages in the same language, a
-public-site spec, and real photographs in the hero once the clinic supplies them.
+Services, About, Privacy and Terms in the same language (forgot password moved onto the sign-in
+card in [1.73.0]), a public-site spec, and real photographs in the hero once the clinic supplies
+them.
 
 ## [1.71.0] - 2026-09-09 (A package may claim a component the visit already had)
 

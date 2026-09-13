@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const userRepository = require('../repositories/userRepository');
 const db = require('../config/database');
 const auditService = require('./auditService');
+const { normaliseAccountEmail } = require('../validations/email');
 
 // Module 12 (Admin Dashboard) manages the 5 operational staff roles only. Creating or managing
 // Admin/SuperAdmin accounts is Module 13 (Super Admin Management)'s explicit responsibility —
@@ -42,7 +43,9 @@ class AdminService {
       throw error;
     }
 
-    const existingUser = await userRepository.findByEmail(email);
+    // Stored lower-case, like every account address, so the capitals can never make a second one.
+    const address = normaliseAccountEmail(email);
+    const existingUser = await userRepository.findByEmail(address);
     if (existingUser) {
       const error = new Error('Email is already registered');
       error.statusCode = 400;
@@ -58,7 +61,7 @@ class AdminService {
     // created one: a staff member with working credentials and no role, who logs in to an empty
     // console. Inside a transaction the same check now rolls the account back.
     const user = await db.withTransaction(async () => {
-      const created = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
+      const created = await userRepository.createUser(firstName, lastName, address, passwordHash, contactNumber);
 
       const roleId = await userRepository.findRoleIdByName(role);
       if (!roleId) {
@@ -126,8 +129,9 @@ class AdminService {
       throw error;
     }
 
-    if (email !== user.email) {
-      const existing = await userRepository.findByEmail(email);
+    const address = normaliseAccountEmail(email);
+    if (address !== user.email) {
+      const existing = await userRepository.findByEmail(address);
       if (existing && existing.id !== Number(userId)) {
         const error = new Error('Email is already registered to another account.');
         error.statusCode = 400;
@@ -135,7 +139,7 @@ class AdminService {
       }
     }
 
-    const updated = await userRepository.updateStaffDetails(userId, { firstName, lastName, email, contactNumber });
+    const updated = await userRepository.updateStaffDetails(userId, { firstName, lastName, email: address, contactNumber });
 
     await auditService.log({
       actorId: requestingUser?.userId,

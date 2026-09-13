@@ -60,7 +60,9 @@ const TRANSACTIONAL_TABLES = [
   'visit_tests',
   'appointments',
   'patient_visits',
-  'password_reset_tokens',
+  // Pending sign-ups and reset codes. Emptied whole: every one is dead within ten minutes, and a
+  // pending sign-up has no account to protect. Replaced password_reset_tokens. [1.73.0]
+  'auth_codes',
 ];
 
 /**

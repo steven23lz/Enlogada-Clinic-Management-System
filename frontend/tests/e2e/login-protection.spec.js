@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { registerClient } from './helpers/accounts.js';
 
 // Account lockout, and PHI read auditing.
 //
@@ -33,10 +34,9 @@ test.describe('Account lockout after repeated failures', () => {
   test.beforeAll(async () => {
     apiContext = await request.newContext();
     email = `lockout_${Date.now()}_${Math.floor(Math.random() * 10000)}@enlogada-e2e.test`;
-    const registered = await apiContext.post(`${API}/auth/register`, {
-      data: { firstName: 'Perlita', lastName: 'Ilagan', email, password: PASSWORD, contactNumber: '09170000000' },
+    await registerClient(apiContext, {
+      firstName: 'Perlita', lastName: 'Ilagan', email, password: PASSWORD, contactNumber: '09170000000',
     });
-    expect(registered.ok()).toBeTruthy();
   });
 
   test.afterAll(async () => {

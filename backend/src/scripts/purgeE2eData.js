@@ -153,11 +153,15 @@ async function main() {
   await db.query('DELETE FROM appointments WHERE patient_visit_id = ANY($1)', v);
   await db.query('DELETE FROM patient_visits WHERE id = ANY($1)', v);
 
+  // Emailed codes for test addresses. By ADDRESS rather than by account, because a pending sign-up
+  // has no account yet — it is exactly the row the run made and never finished. [1.73.0]
+  await db.query('DELETE FROM auth_codes WHERE email LIKE $1', [E2E_EMAIL_PATTERN]);
+
   if (userIds.length) {
     const u = [userIds];
     await db.query('DELETE FROM patients WHERE user_id = ANY($1)', u);
     await db.query('DELETE FROM notification_reads WHERE user_id = ANY($1)', u);
-    await db.query('DELETE FROM password_reset_tokens WHERE user_id = ANY($1)', u);
+    await db.query('DELETE FROM auth_codes WHERE user_id = ANY($1)', u);
     await db.query('DELETE FROM user_roles WHERE user_id = ANY($1)', u);
     await db.query('DELETE FROM users WHERE id = ANY($1)', u);
   }
