@@ -238,11 +238,24 @@ export default function TransactionHistoryPanel({ history, receipt, refund, oper
             statutory discounts this week". These are the same panels the Admin roll-up shows,
             so a question asked upward is answered from the same numbers.
 
-            Its own 7-day range, independent of the receipt list above: reconciling one day's
-            drawer and seeing which services carry the week are different jobs. */}
+            The same dates as the receipt list above. [1.74.0] They had their own fixed 7 days
+            while the header said "in this range", so the two halves of one screen disagreed about
+            the same day's money with nothing to say why. Pick a week above to see the week. */}
         <div className="mt-4 space-y-4">
-          <BillingTotalsPanel billing={operations.report?.billing} loading={operations.loading} />
-          <SalesByServicePanel billing={operations.report?.billing} loading={operations.loading} limit={10} />
+          <BillingTotalsPanel
+            billing={operations.report?.billing}
+            loading={operations.loading}
+            error={operations.error}
+            onRetry={operations.refresh}
+          />
+          {/* One request feeds both panels, so a failure is shown once, on Takings above. */}
+          {!operations.error && (
+            <SalesByServicePanel
+              billing={operations.report?.billing}
+              loading={operations.loading}
+              limit={10}
+            />
+          )}
         </div>
       </div>
   );

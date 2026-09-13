@@ -49,12 +49,13 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
 
   return (
         <>
-          {/* KPI Metrics Header */}
+          {/* KPI Metrics Header. On a failed load these read "—", not the 0 the counters start
+              at: "0 waiting" over a broken request is a false statement about the clinic. [1.74.0] */}
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-            <MetricCard label="Active Queue Visits" value={queue.total} icon={UserCheck} tone="green" />
-            <MetricCard label="Pending Intake" value={queue.pendingCount} icon={Clock} tone="amber" />
-            <MetricCard label="In Diagnostic" value={queue.processingCount} icon={ClipboardList} tone="indigo" />
-            <MetricCard label="Walk-Ins Today" value={queue.walkinCount} icon={UserPlus} tone="emerald" />
+            <MetricCard label="Active Queue Visits" value={queue.error ? '—' : queue.total} icon={UserCheck} tone="green" />
+            <MetricCard label="Pending Intake" value={queue.error ? '—' : queue.pendingCount} icon={Clock} tone="amber" />
+            <MetricCard label="In Diagnostic" value={queue.error ? '—' : queue.processingCount} icon={ClipboardList} tone="indigo" />
+            <MetricCard label="Walk-Ins Today" value={queue.error ? '—' : queue.walkinCount} icon={UserPlus} tone="emerald" />
           </div>
 
           {/* UI/UX Modernization Phase 10: read-only visibility into pending HMO requests —
@@ -118,9 +119,11 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                 </SelectContent>
               </Select>
               <ToolbarSpacer />
-              <span className="whitespace-nowrap text-fine font-medium text-slate-500 tabular-nums">
-                Showing {queue.visits.length} of {queue.total} visit{queue.total === 1 ? '' : 's'}
-              </span>
+              {!queue.error && (
+                <span className="whitespace-nowrap text-fine font-medium text-slate-500 tabular-nums">
+                  Showing {queue.visits.length} of {queue.total} visit{queue.total === 1 ? '' : 's'}
+                </span>
+              )}
             </Toolbar>
 
           {/* Active Queue Table */}

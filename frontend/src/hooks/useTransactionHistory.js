@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import api from '../config/api';
 import { todayStr } from '../lib/date';
 
@@ -26,8 +26,13 @@ export const HISTORY_PAGE_SIZE = 15;
  * the first load fires once and only once. That belonged in the component as a `historyLoaded`
  * boolean and an effect keyed on the view — a piece of bookkeeping the screen had to remember to
  * do, which is exactly the kind of thing that belongs behind an interface rather than in a page.
+ *
+ * `onRangeLoad(startDate, endDate)` is told the dates each time the list loads a range — on Apply,
+ * and whenever a page or a filter fetches with dates that differ from the last ones announced. The
+ * Takings panels under the list follow it, so they always answer for the dates the list shows.
+ * [1.74.0]
  */
-export function useTransactionHistory({ enabled = false } = {}) {
+export function useTransactionHistory({ enabled = false, onRangeLoad } = {}) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -46,11 +51,21 @@ export function useTransactionHistory({ enabled = false } = {}) {
   // selected. The server already accepted `method` — nothing on screen ever sent it.
   const [method, setMethod] = useState('All');
 
+  // The newest callback, read at call time, so `fetch` below can stay stable.
+  const onRangeLoadRef = useRef(onRangeLoad);
+  useEffect(() => { onRangeLoadRef.current = onRangeLoad; }, [onRangeLoad]);
+  const announcedRange = useRef('');
+
   // Paged at the server, not here. [1.29.0] This used to pull every settled payment in the range
   // and slice fifteen out of it in the browser. Measured at 570 bytes a payment, a year-wide
   // range is a 2.0 MB response to fill a fifteen-row table — on the screen a cashier opens for
   // the daily cash-up.
-  const fetch = useCallback(async (from, to, nextPage = 1, term = '', payMethod = 'All') => {
+  const fetch = useCallback(async (from, to, nextPage = 1, term = '', payMethod = 'All', announce = false) => {
+    const rangeKey = `${from}|${to}`;
+    if (announce || rangeKey !== announcedRange.current) {
+      announcedRange.current = rangeKey;
+      onRangeLoadRef.current?.(from, to);
+    }
     setLoading(true);
     setError('');
     setAppliedSearch(term);
@@ -81,7 +96,7 @@ export function useTransactionHistory({ enabled = false } = {}) {
   useEffect(() => {
     if (enabled && !loadedOnce) {
       setLoadedOnce(true);
-      fetch(startDate, endDate);
+      fetch(startDate, endDate, 1, '', 'All', true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
@@ -100,7 +115,7 @@ export function useTransactionHistory({ enabled = false } = {}) {
      */
     setMethod: (next) => { setMethod(next); fetch(startDate, endDate, 1, appliedSearch, next); },
     /** Re-run for the dates, search and method currently chosen — Apply and the retry link. */
-    reload: () => fetch(startDate, endDate, 1, search, method),
+    reload: () => fetch(startDate, endDate, 1, search, method, true),
     /** Jump to a page, keeping the range AND the filters — a page 2 that drops one is a bug. */
     goToPage: (next) => fetch(startDate, endDate, next, appliedSearch, method),
     /** Clear the box and re-run, so the list matches what the reader can see in the field. */

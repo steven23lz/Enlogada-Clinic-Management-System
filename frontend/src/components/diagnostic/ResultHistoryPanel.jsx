@@ -14,6 +14,7 @@ import { formatDateTime } from '../../lib/date';
 import { SkeletonRows } from '../ui/skeleton';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { TurnaroundPanel } from '../reports/OperationsPanels';
+import { useAuth } from '../../contexts/AuthContext';
 
 /**
  * Reports this department has already released, and its throughput beside them.
@@ -23,6 +24,14 @@ import { TurnaroundPanel } from '../reports/OperationsPanels';
  */
 export default function ResultHistoryPanel({ worklist, entry, operations, onViewResult, delivery }) {
   const categoryLabel = categoryLabelFor(worklist.category);
+
+  // Each action is gated on the permission its own endpoint demands. [1.74.0] An Admin reads every
+  // department's history (`results:read`) but holds neither `results:release` (POST /:id/email) nor
+  // `results:write` (POST /:id, the amendment), and was offered both: two buttons that could only
+  // answer 403. The borrowed-screen rule, CLAUDE.md [1.53.0], one screen further along.
+  const { hasPermission } = useAuth();
+  const canSend = hasPermission('results:release');
+  const canAmend = hasPermission('results:write');
 
   // Client-side, because the worklist a department holds at once is small — a handful of
   // tickets, not the payments table. Filtering here keeps the search instant while the polling
@@ -181,27 +190,31 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                           <Eye className="w-3.5 h-3.5" />
                           <span>View Report</span>
                         </Button>
-                        <Button
-                          onClick={() => delivery.requestSend(test)}
-                          variant="outline"
-                          size="xs"
-                          loading={delivery.sendingId === test.visit_test_id}
-                          disabled={!test.patient_email}
-                          title={test.patient_email
-                            ? `Send this report to ${test.patient_email}`
-                            : 'This patient has no email address on file. Add one in Patient Records first.'}
-                        >
-                          <Mail className="h-3 w-3" />
-                          <span>{test.emailed_at ? 'Send again' : 'Email'}</span>
-                        </Button>
-                        <Button
-                          onClick={() => entry.openForEdit(test)}
-                          variant="outline"
-                          size="xs"
-                        >
-                          <Pencil className="h-3 w-3" />
-                          <span>Edit</span>
-                        </Button>
+                        {canSend && (
+                          <Button
+                            onClick={() => delivery.requestSend(test)}
+                            variant="outline"
+                            size="xs"
+                            loading={delivery.sendingId === test.visit_test_id}
+                            disabled={!test.patient_email}
+                            title={test.patient_email
+                              ? `Send this report to ${test.patient_email}`
+                              : 'This patient has no email address on file. Add one in Patient Records first.'}
+                          >
+                            <Mail className="h-3 w-3" />
+                            <span>{test.emailed_at ? 'Send again' : 'Email'}</span>
+                          </Button>
+                        )}
+                        {canAmend && (
+                          <Button
+                            onClick={() => entry.openForEdit(test)}
+                            variant="outline"
+                            size="xs"
+                          >
+                            <Pencil className="h-3 w-3" />
+                            <span>Edit</span>
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -250,7 +263,10 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
         <TurnaroundPanel
           diagnostics={operations.report?.diagnostics}
           loading={operations.loading}
+          error={operations.error}
+          onRetry={operations.refresh}
           title="Your turnaround"
+          description="From payment to released report, last 7 days"
         />
       </div>
       </div>

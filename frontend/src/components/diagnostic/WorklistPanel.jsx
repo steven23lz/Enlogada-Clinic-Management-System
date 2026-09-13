@@ -16,6 +16,7 @@ import Pagination from '../ui/pagination';
 import { ageFromBirthdate } from '../../lib/date';
 import WaitBadge from '../ui/wait-badge';
 import { SkeletonRows } from '../ui/skeleton';
+import { useAuth } from '../../contexts/AuthContext';
 
 /**
  * What this department has to do today, and the state each ticket is in.
@@ -25,11 +26,22 @@ import { SkeletonRows } from '../ui/skeleton';
  */
 export default function WorklistPanel({ worklist, entry, criticals }) {
   const categoryLabel = categoryLabelFor(worklist.category);
+  // Each action gated on the permission its own endpoint demands. [1.74.0] The worklist itself is
+  // gated on `results:write` in navigation.js, so whoever sees it can record; releasing is
+  // `results:release`, a separate permission a role can be granted write without. CLAUDE.md [1.53.0].
+  const { hasPermission } = useAuth();
+  const canRecord = hasPermission('results:write');
+  const canRelease = hasPermission('results:release');
   const modalityIcon = categoryIcon(worklist.category);
   // 'Processing' = released to this department, exam not yet done.
   // 'Waiting for Release' = exam done and findings recorded, awaiting authorisation.
   const processingCount = worklist.pending.filter((t) => t.test_status === 'Processing').length;
   const awaitingReleaseCount = worklist.pending.filter((t) => t.test_status === 'Waiting for Release').length;
+  // A failed load empties `pending`, so the counts above would read 0. That is a claim about the
+  // department's workload, and a false one — the tiles say they don't know instead. [1.74.0]
+  const worklistFailed = Boolean(worklist.worklistError);
+  const criticalCount = criticals.outstanding.length;
+  const criticalsFailed = Boolean(criticals.error);
 
   // Client-side, because the worklist a department holds at once is small — a handful of
   // tickets, not the payments table. Filtering here keeps the search instant while the polling
@@ -52,8 +64,9 @@ export default function WorklistPanel({ worklist, entry, criticals }) {
       <>
       {/* Department Modality Worklist Header Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <MetricCard label="Awaiting Exam" value={processingCount} caption="Paid and released to you" captionTone="slate" icon={Clock} tone="indigo" />
-        <MetricCard label="Awaiting Release" value={awaitingReleaseCount} caption="Findings recorded, not authorised" captionTone="slate" icon={FileText} tone="amber" />
+        {/* "—" on a failure, and the table below says why with its Retry — not a caption here too. */}
+        <MetricCard label="Awaiting Exam" value={worklistFailed ? '—' : processingCount} caption="Paid and released to you" captionTone="slate" icon={Clock} tone="indigo" />
+        <MetricCard label="Awaiting Release" value={worklistFailed ? '—' : awaitingReleaseCount} caption="Findings recorded, not authorised" captionTone="slate" icon={FileText} tone="amber" />
         {/* The tile this replaced said "Active Modality: Laboratory — Your department", which
             is the page title, the breadcrumb and the sidebar selection restated a fourth time
             in a third of the metric strip. A metric strip is the most valuable space on an
@@ -66,19 +79,22 @@ export default function WorklistPanel({ worklist, entry, criticals }) {
 
             It stays visible at zero, deliberately: a counter that only appears when it is
             non-zero teaches people not to look for it, and "0 outstanding" is the reassurance
-            the tile exists to give. */}
+            the tile exists to give. Which is exactly why a failed check must never say it: it
+            reads "Couldn't check" and opens the list with a Try again. [1.74.0] */}
         <MetricCard
           label="Critical Callbacks"
-          value={criticals.outstanding.length}
+          value={criticalsFailed && criticalCount === 0 ? '—' : criticalCount}
           caption={
-            criticals.outstanding.length
-              ? 'Patient still to be telephoned'
-              : 'Nothing outstanding'
+            criticalsFailed
+              ? (criticalCount ? "Couldn't refresh — open to retry" : "Couldn't check — open to retry")
+              : criticalCount
+                ? 'Patient still to be telephoned'
+                : 'Nothing outstanding'
           }
-          captionTone={criticals.outstanding.length ? 'rose' : 'slate'}
+          captionTone={criticalsFailed || criticalCount ? 'rose' : 'slate'}
           icon={AlertTriangle}
-          tone={criticals.outstanding.length ? 'rose' : 'slate'}
-          onClick={criticals.outstanding.length ? () => criticals.setExpanded(true) : undefined}
+          tone={criticalsFailed || criticalCount ? 'rose' : 'slate'}
+          onClick={criticalsFailed || criticalCount ? () => criticals.setExpanded(true) : undefined}
         />
       </div>
 
@@ -188,15 +204,17 @@ export default function WorklistPanel({ worklist, entry, criticals }) {
 
                     <TableCell className="py-3.5 text-right">
                       <div className="flex items-center justify-end space-x-2">
-                        <Button
-                          onClick={() => entry.openFor(test)}
-                          variant="outline"
-                          size="xs"
-                        >
-                          <FileText className="h-3 w-3" />
-                          <span>{test.test_status === 'Waiting for Release' ? 'Edit Findings' : 'Record Findings'}</span>
-                        </Button>
-                        {test.test_status === 'Waiting for Release' && (
+                        {canRecord && (
+                          <Button
+                            onClick={() => entry.openFor(test)}
+                            variant="outline"
+                            size="xs"
+                          >
+                            <FileText className="h-3 w-3" />
+                            <span>{test.test_status === 'Waiting for Release' ? 'Edit Findings' : 'Record Findings'}</span>
+                          </Button>
+                        )}
+                        {canRelease && test.test_status === 'Waiting for Release' && (
                           <Button onClick={() => entry.openRelease(test)} size="xs">
                             <Send className="h-3 w-3" />
                             <span>Release Result</span>

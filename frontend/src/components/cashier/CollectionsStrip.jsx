@@ -17,6 +17,22 @@ import { formatCurrency } from '../../lib/currency';
  * would count it as though it were.
  */
 export default function CollectionsStrip({ queue }) {
+  // No summary means no figure. [1.74.0] `Number(undefined || 0)` is ₱0.00, so a failed fetch —
+  // or the second before the first one answers — stated that the clinic had taken nothing today.
+  // failure-states.spec.js caught the same falsehood on Reports in [1.28.0]; this strip had it too.
+  if (queue.collectionsError || !queue.summary) {
+    // "—" and nothing more: the queue panel below says why, once, with the one Try again. A
+    // "Couldn't load" on each of four tiles is the same sentence four times.
+    return (
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <MetricCard label="Collected Today" value="—" icon={DollarSign} tone="green" />
+        <MetricCard label="Cash Collected" value="—" icon={Banknote} tone="emerald" />
+        <MetricCard label="E-Wallet" value="—" icon={Wallet} tone="indigo" />
+        <MetricCard label="Receipts Issued" value="—" icon={Receipt} tone="slate" />
+      </div>
+    );
+  }
+
   // Straight off the endpoint's SQL summary. Reducing `queue.transactions` instead would count
   // reversed receipts as revenue — that list is a log of what was ISSUED, not what was kept.
   const totalCollectionsToday = Number(queue.summary?.collected || 0);

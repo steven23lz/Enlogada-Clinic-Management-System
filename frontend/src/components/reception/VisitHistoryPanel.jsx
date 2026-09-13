@@ -161,9 +161,14 @@ export default function VisitHistoryPanel({ history, operations }) {
           {/* How the desk is performing, not just what it did. The queue KPIs count who is
               waiting; this is the only place that says how long they wait to be billed. */}
           <div className="mt-4">
+            {/* Its own 7 days, not the dates above, and it says so: under a date-range table an
+                unlabelled figure reads as covering the same range. [1.74.0] */}
             <ReceptionThroughputPanel
               reception={operations.report?.reception}
               loading={operations.loading}
+              error={operations.error}
+              onRetry={operations.refresh}
+              description="Check-in to payment, last 7 days"
             />
           </div>
         </div>

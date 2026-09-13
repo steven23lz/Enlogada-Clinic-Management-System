@@ -28,7 +28,12 @@ export function useBillingQueue({ enabled = true, paused = false } = {}) {
   const [loading, setLoading] = useState(true);
   // A failed fetch used to reach console.error and stop there, so the queue rendered its EMPTY
   // state over a 500 — "nobody is waiting" while the server was down.
-  const [error, setError] = useState('');
+  //
+  // Two errors, one per fetch. [1.74.0] They shared one, and the queue's success cleared it
+  // (`setError('')`) whichever order the two answered in — so a failed collections fetch could
+  // vanish from the screen while the strip went on showing ₱0.00 for money it never received.
+  const [queueError, setQueueError] = useState('');
+  const [collectionsError, setCollectionsError] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -38,10 +43,10 @@ export function useBillingQueue({ enabled = true, paused = false } = {}) {
     try {
       const response = await api.get('/visits/active');
       setActiveVisits(response.data.data.visits || []);
-      setError('');
+      setQueueError('');
     } catch (err) {
       console.error('Failed to fetch active visits:', err);
-      setError('Could not load the billing queue. Please try again.');
+      setQueueError('Could not load the billing queue. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -52,9 +57,10 @@ export function useBillingQueue({ enabled = true, paused = false } = {}) {
       const response = await api.get('/payments/transactions');
       setTransactions(response.data.data.transactions || []);
       setSummary(response.data.data.summary || null);
+      setCollectionsError('');
     } catch (err) {
       console.error('Failed to fetch transaction logs:', err);
-      setError("Could not load today's collections. Please try again.");
+      setCollectionsError("Could not load today's collections. Please try again.");
     }
   }, []);
 
@@ -112,7 +118,15 @@ export function useBillingQueue({ enabled = true, paused = false } = {}) {
 
   return {
     visits, transactions, summary, patientTypes, paidVisitIds,
-    loading, error,
+    loading,
+    /** Whichever fetch failed, the queue's first — for a caller that wants one message. */
+    error: queueError || collectionsError,
+    queueError,
+    /**
+     * Today's receipts did not load. The strip and the shift panel must not state a figure, and
+     * the queue cannot tell who has already paid — `paidVisitIds` comes from those receipts.
+     */
+    collectionsError,
     searchQuery, setSearchQuery,
     typeFilter, setTypeFilter,
     sortOrder, setSortOrder,

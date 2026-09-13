@@ -13,6 +13,8 @@ import { formatCurrency } from '../../lib/currency';
  * shift nothing is selected. It used to hold one grey sentence.
  */
 export default function ShiftSummaryPanel({ queue }) {
+  // Without a summary there are no shift figures to show, and ₱0.00 is not "unknown". [1.74.0]
+  const figuresMissing = Boolean(queue.collectionsError) || !queue.summary;
   const collected = Number(queue.summary?.collected || 0);
   const receipts = Number(queue.summary?.receipts || 0);
   const statutoryDiscounts = Number(queue.summary?.discounts || 0);
@@ -41,6 +43,9 @@ export default function ShiftSummaryPanel({ queue }) {
                   )}
                 </div>
 
+                {/* Left out entirely while the figures are missing, rather than shown as ₱0.00 or as a
+                    second "couldn't load" beside the queue panel's own. [1.74.0] */}
+                {!figuresMissing && (
                 <div className="border-t border-line pt-5">
                   <span className="text-meta font-bold uppercase tracking-wider text-gray-500 block mb-3">
                     This shift so far
@@ -99,6 +104,7 @@ export default function ShiftSummaryPanel({ queue }) {
                     </div>
                   )}
                 </div>
+                )}
 
                 {queue.transactions.length > 0 && (
                   <div>

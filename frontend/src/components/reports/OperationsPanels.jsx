@@ -2,6 +2,7 @@ import React from 'react';
 import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import EmptyState from '../ui/empty-state';
+import { Button } from '../ui/button';
 import { SkeletonRows } from '../ui/skeleton';
 import { formatCurrency } from '../../lib/currency';
 import { formatDuration } from '../../lib/duration';
@@ -37,6 +38,28 @@ const Stat = ({ label, value, hint, tone = 'default' }) => (
 );
 
 /**
+ * A panel whose figures did not arrive. [1.74.0]
+ *
+ * Each panel below takes `error` (and `onRetry`) now. Without them a failed report showed a
+ * skeleton that never ended, or — worse — an empty "Nothing sold in this range" and "₱0.00 net",
+ * which is a claim about the clinic's money rather than an admission that it is unknown.
+ * OperationsReport has its own banner and does not render the panels at all without a report, so
+ * this is for the consoles that embed them.
+ */
+const PanelError = ({ what, error, onRetry }) => (
+  <EmptyState
+    compact
+    tone="error"
+    icon={AlertTriangle}
+    title={`Couldn't load ${what}`}
+    description={error === 'forbidden' ? "This account can't see these figures." : error}
+    action={onRetry && error !== 'forbidden' ? (
+      <Button variant="outline" size="sm" onClick={onRetry}>Try again</Button>
+    ) : undefined}
+  />
+);
+
+/**
  * What the clinic actually sold.
  *
  * `net` rather than `gross` is the headline because net is the money that reached the drawer —
@@ -44,7 +67,7 @@ const Stat = ({ label, value, hint, tone = 'default' }) => (
  * shown: a manager comparing a service's list price to its yield needs the pair, and a report
  * whose total does not reconcile with the cash-up is one nobody trusts twice.
  */
-export const SalesByServicePanel = ({ billing, loading, limit }) => {
+export const SalesByServicePanel = ({ billing, loading, error, onRetry, limit }) => {
   const rows = billing?.byService || [];
   const shown = limit ? rows.slice(0, limit) : rows;
   const totalNet = rows.reduce((sum, r) => sum + parseFloat(r.net || 0), 0);
@@ -56,7 +79,7 @@ export const SalesByServicePanel = ({ billing, loading, limit }) => {
         description={limit && rows.length > limit ? `Top ${limit} of ${rows.length} services` : 'Every service sold in this range'}
         icon={Layers}
         actions={
-          !loading && (
+          !loading && !error && (
             <span className="text-fine font-semibold tabular-nums text-slate-600">
               {formatCurrency(totalNet)} net
             </span>
@@ -75,7 +98,13 @@ export const SalesByServicePanel = ({ billing, loading, limit }) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
+            {error ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={5} className="p-0">
+                  <PanelError what="sales by service" error={error} onRetry={onRetry} />
+                </TableCell>
+              </TableRow>
+            ) : loading ? (
               <SkeletonRows rows={5} columns={5} />
             ) : shown.length === 0 ? (
               <TableRow className="hover:bg-transparent">
@@ -109,13 +138,15 @@ export const SalesByServicePanel = ({ billing, loading, limit }) => {
 };
 
 /** Cash-up summary: taken, given away, reversed. */
-export const BillingTotalsPanel = ({ billing, loading }) => {
+export const BillingTotalsPanel = ({ billing, loading, error, onRetry }) => {
   const t = billing?.totals;
   return (
     <Panel>
       <PanelHeader title="Takings" description="Settled payments in this range" icon={TrendingUp} />
       <PanelBody>
-        {loading || !t ? (
+        {error ? (
+          <PanelError what="the takings" error={error} onRetry={onRetry} />
+        ) : loading || !t ? (
           <div className="h-16 animate-pulse rounded-lg bg-skeleton" />
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -144,11 +175,13 @@ export const BillingTotalsPanel = ({ billing, loading }) => {
  * the right way round: one patient who arrived at 08:00 and paid at 17:00 drags a mean into
  * uselessness, while the median still describes a normal morning.
  */
-export const ReceptionThroughputPanel = ({ reception, loading }) => (
+export const ReceptionThroughputPanel = ({ reception, loading, error, onRetry, description = 'Check-in to payment' }) => (
   <Panel>
-    <PanelHeader title="Front desk" description="Check-in to payment" icon={Users} />
+    <PanelHeader title="Front desk" description={description} icon={Users} />
     <PanelBody>
-      {loading || !reception ? (
+      {error ? (
+        <PanelError what="the front desk figures" error={error} onRetry={onRetry} />
+      ) : loading || !reception ? (
         <div className="h-16 animate-pulse rounded-lg bg-skeleton" />
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -174,7 +207,11 @@ export const ReceptionThroughputPanel = ({ reception, loading }) => (
  * three hours in the lab, and blaming the department for the queue in front of it makes the
  * number useless for the thing it exists to answer.
  */
-export const TurnaroundPanel = ({ diagnostics, loading, title = 'Turnaround by department' }) => {
+export const TurnaroundPanel = ({
+  diagnostics, loading, error, onRetry,
+  title = 'Turnaround by department',
+  description = 'From payment to released report',
+}) => {
   const rows = diagnostics?.byCategory || [];
   const outstanding = diagnostics?.outstanding || [];
   const backlogFor = (name) => outstanding.find((o) => o.category_name === name);
@@ -183,7 +220,7 @@ export const TurnaroundPanel = ({ diagnostics, loading, title = 'Turnaround by d
     <Panel className="overflow-hidden">
       <PanelHeader
         title={title}
-        description="From payment to released report"
+        description={description}
         icon={Timer}
         actions={
           diagnostics?.scope ? (
@@ -204,7 +241,13 @@ export const TurnaroundPanel = ({ diagnostics, loading, title = 'Turnaround by d
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
+            {error ? (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={6} className="p-0">
+                  <PanelError what="turnaround" error={error} onRetry={onRetry} />
+                </TableCell>
+              </TableRow>
+            ) : loading ? (
               <SkeletonRows rows={4} columns={6} />
             ) : rows.length === 0 ? (
               <TableRow className="hover:bg-transparent">

@@ -417,7 +417,14 @@ class AppointmentService {
     // confirmation screen that vanishes when the tab closes — taking the reference the front desk
     // asks for with it. The email also carries the preparation instructions, which is the part
     // that stops somebody arriving unable to be tested.
-    await this.emailBookingConfirmation(outcome.appointment.id);
+    //
+    // Sent after the reply, not before it. [1.74.0] Awaiting it made every booking wait on Gmail:
+    // 3–4 seconds a send on an ordinary run, and 44 seconds for one on 2026-09-14 — the patient's
+    // Book button spinning for all of it, and three specs failing at their 90-second timeout. The
+    // booking is committed and correct before this line and emailBookingConfirmation never throws,
+    // so there is nothing for the caller to wait for. The .catch is the rule for background work:
+    // server.js shuts down on an unhandled rejection. Cancel and reschedule do the same.
+    this.emailBookingConfirmation(outcome.appointment.id).catch(() => {});
 
     return outcome;
   }
@@ -526,18 +533,15 @@ class AppointmentService {
 
     // After the commit. A patient who cancels needs a record that it actually happened, and one
     // whose appointment was cancelled *for* them needs to find out some way other than turning up.
-    try {
-      if (ctx) {
-        await appointmentEmailService.sendCancellationNotice({
-          to: ctx.email,
-          patientName: `${ctx.first_name} ${ctx.last_name}`,
-          reference: ctx.appointment_reference,
-          date: ctx.scheduled_date,
-          time: ctx.scheduled_time,
-        });
-      }
-    } catch (err) {
-      logger.error(`Cancellation email failed for appointment ${id}: ${err.message}`);
+    // Not awaited, for the reason given in createAppointment. [1.74.0]
+    if (ctx) {
+      appointmentEmailService.sendCancellationNotice({
+        to: ctx.email,
+        patientName: `${ctx.first_name} ${ctx.last_name}`,
+        reference: ctx.appointment_reference,
+        date: ctx.scheduled_date,
+        time: ctx.scheduled_time,
+      }).catch((err) => logger.error(`Cancellation email failed for appointment ${id}: ${err.message}`));
     }
 
     return updated;
@@ -677,6 +681,14 @@ class AppointmentService {
 
     // The patient needs this one more than staff do, and especially when reception moved it on
     // their behalf over the phone — otherwise the only record of the new time is a conversation.
+    // Not awaited, for the reason given in createAppointment. [1.74.0]
+    this.emailRescheduleNotice(id, previous, { date: scheduledDate, time: scheduledTime }).catch(() => {});
+
+    return { ...updated, queue_number: appointment.queue_number, previous };
+  }
+
+  /** The reschedule notice. Never throws: a mail problem is logged, never reported as a failed move. */
+  async emailRescheduleNotice(id, previous, moved) {
     try {
       const ctx = await appointmentRepository.findEmailContextById(id);
       if (ctx) {
@@ -685,15 +697,13 @@ class AppointmentService {
           patientName: `${ctx.first_name} ${ctx.last_name}`,
           reference: ctx.appointment_reference,
           from: previous,
-          moved: { date: scheduledDate, time: scheduledTime },
+          moved,
           queueNumber: ctx.queue_number,
         });
       }
     } catch (err) {
       logger.error(`Reschedule email failed for appointment ${id}: ${err.message}`);
     }
-
-    return { ...updated, queue_number: appointment.queue_number, previous };
   }
 
   async updateStatus(id, status) {

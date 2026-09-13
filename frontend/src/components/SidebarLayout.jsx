@@ -432,7 +432,9 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
             </nav>
             {isActingOutsideOwnRole && (
               <span
-                title={`You hold Admin access, not ${activeOpsNativeRole}. Actions here are recorded under your name.`}
+                // The person's own roles. [1.74.0] It said "You hold Admin access" to everyone,
+                // including the Cashier this chip most often appears for, on the Active Queue.
+                title={`Signed in as ${userRoles.join(', ') || 'staff'}, not ${activeOpsNativeRole}. Actions here are recorded under your name.`}
                 className="hidden flex-shrink-0 items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-micro font-semibold text-amber-800 ring-1 ring-inset ring-amber-200 md:inline-flex"
               >
                 <Eye className="h-3 w-3" />

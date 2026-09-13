@@ -82,6 +82,59 @@ test("the Reports snapshot refuses to state a revenue figure it could not load",
   expect(body).not.toMatch(/vs yesterday/i);
 });
 
+// The screens sign-in lands on. [1.74.0]
+//
+// Each role's first screen opens with counters that start at zero, and a failed load left them
+// there: the till read "Collected Today ₱0.00" and "Nothing awaiting payment", the front desk
+// "Active Queue Visits 0", the worklist "Critical Callbacks 0 — Nothing outstanding". The last
+// is the most confident possible way to be wrong about a panic value.
+//
+// Reloaded after breaking the API, because a landing screen has already loaded once, successfully,
+// by the time the route is intercepted. The nav click covers a role that lands somewhere else.
+const LANDING_SCREENS = [
+  {
+    email: 'cashier@enlogada.com', screen: 'Billing Queue',
+    mustSay: [/couldn.t load the billing queue/i, /collected today\s+—/i],
+    mustNotSay: [/₱0\.00/, /nothing awaiting payment/i, /\b0 waiting\b/i],
+  },
+  {
+    email: 'receptionist@enlogada.com', screen: 'Active Queue',
+    mustSay: [/active queue visits\s+—/i],
+    mustNotSay: [/active queue visits\s+0\b/i, /showing 0 of 0/i, /nobody is waiting/i],
+  },
+  {
+    email: 'lab@enlogada.com', screen: 'Laboratory Worklist',
+    mustSay: [/awaiting exam\s+—/i, /couldn.t check/i],
+    mustNotSay: [/awaiting exam\s+0\b/i, /nothing outstanding/i, /nothing waiting in/i],
+  },
+];
+
+for (const { email, screen, mustSay, mustNotSay } of LANDING_SCREENS) {
+  test(`the ${screen} counters say they could not load, not zero`, async ({ page }) => {
+    await signInThenBreakApi(page, email);
+    await page.reload();
+    await page.getByRole('button', { name: screen, exact: true }).first().click({ timeout: 20000 });
+    await page.waitForTimeout(2200);
+
+    const body = await page.evaluate(() => document.body.innerText);
+    expect(body, `${screen} failed silently`).toMatch(/could not|couldn.t|unavailable|failed|try again/i);
+    for (const pattern of mustSay) expect(body, `${screen} should say ${pattern}`).toMatch(pattern);
+    for (const pattern of mustNotSay) expect(body, `${screen} stated ${pattern} over a 500`).not.toMatch(pattern);
+  });
+}
+
+test('the critical-callback list says it could not check, not that every call was made', async ({ page }) => {
+  await signInThenBreakApi(page, 'lab@enlogada.com');
+  await page.reload();
+
+  // A button only while there is something to open — which a failed check now is.
+  await page.getByRole('button', { name: /Critical Callbacks/ }).click({ timeout: 20000 });
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText(/couldn't check for critical results/i)).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(dialog.getByText(/every critical result has been called through/i)).toHaveCount(0);
+});
+
 test('the public services page does not tell a stranger the clinic offers nothing', async ({ page }) => {
   // No sign-in: this is the one page with no account behind it, so nobody internal ever sees it
   // fail, and it is the page a prospective patient judges the clinic by.

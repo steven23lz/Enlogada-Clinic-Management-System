@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpDown, Inbox, Receipt } from 'lucide-react';
+import { AlertCircle, ArrowUpDown, Inbox, Receipt } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Panel, PanelHeader } from '../ui/panel';
 import EmptyState from '../ui/empty-state';
@@ -25,9 +25,11 @@ export default function BillingQueuePanel({ queue, checkout }) {
               title="Pending Billing Queue"
               icon={Receipt}
               actions={
-                <Badge variant="outline" className="border-brand-200 bg-brand-50 text-brand-700">
-                  {queue.visits.length} waiting
-                </Badge>
+                !(queue.queueError || queue.collectionsError) && (
+                  <Badge variant="outline" className="border-brand-200 bg-brand-50 text-brand-700">
+                    {queue.visits.length} waiting
+                  </Badge>
+                )
               }
             />
 
@@ -65,7 +67,25 @@ export default function BillingQueuePanel({ queue, checkout }) {
             </div>
 
             <div className="max-h-[520px] space-y-2 overflow-y-auto p-3">
-              {queue.loading ? (
+              {/* Before the empty state, not after it. [1.74.0] A failed fetch left the list empty
+                  and fell through to "Nothing awaiting payment" — sending the cashier to ask the
+                  front desk why nobody was coming, while the server was the one not answering.
+                  A failed receipts fetch counts too: without today's receipts the list cannot tell
+                  a paid ticket from an unpaid one. */}
+              {queue.queueError || queue.collectionsError ? (
+                <EmptyState
+                  compact
+                  tone="error"
+                  icon={AlertCircle}
+                  title="Couldn't load the billing queue"
+                  description={queue.queueError || "Today's receipts didn't load, so this list can't tell who has already paid."}
+                  action={
+                    <Button variant="outline" size="sm" onClick={queue.refresh}>
+                      Try again
+                    </Button>
+                  }
+                />
+              ) : queue.loading ? (
                 <SkeletonList rows={4} />
               ) : queue.visits.length > 0 ? (
                 queue.visits.map(visit => {

@@ -51,15 +51,23 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // use when a patient comes back three weeks later disputing a charge.
   const { user } = useAuth();
   // Sales analysis belongs on the History screen, not the till: a cashier mid-transaction does
-  // not want a report, and a cashier doing the cash-up does. Only fetched when that view is open.
-  const operations = useOperationsReport({ days: 7, enabled: view === 'cashier-history' });
+  // not want a report, and a cashier doing the cash-up does.
+  //
+  // It answers for the SAME dates as the receipt list above it, and the list is what loads it
+  // (`onRangeLoad` below), so it never fetches on its own. [1.74.0] It was a fixed 7 days under a
+  // header reading "Settled payments in this range": on 13 Sep the list said 0 receipts for the
+  // day while Takings said ₱17,200 from 25.
+  const operations = useOperationsReport({ enabled: false });
 
   // Nine pieces of state, a fetch, a pagination handler and a lazy-load effect, behind one name.
   //
   // Deliberately separate from `queue.transactions` above, which stays pinned to *today* — it also
   // drives queue.paidVisitIds and the queue's collections metrics. Sharing one list between the two
   // would mean picking a date range in History silently changes what "Today's Collections" means.
-  const history = useTransactionHistory({ enabled: view === 'cashier-history' });
+  const history = useTransactionHistory({
+    enabled: view === 'cashier-history',
+    onRangeLoad: operations.load,
+  });
   // Only polls while its own screen is open, like the two above it.
   const review = usePaymentReview({ enabled: view === 'cashier-payments' });
 
@@ -118,13 +126,9 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
         {view === 'cashier-queue' && (
         <>
-        {queue.error && (
-          <div role="alert" className="alert alert-error">
-            <AlertCircle />
-            <span>{queue.error}</span>
-            <button type="button" onClick={queue.refresh} className="ml-auto cursor-pointer border-0 bg-transparent p-0 font-bold text-rose-800 underline underline-offset-2">Retry</button>
-          </div>
-        )}
+        {/* No banner here. [1.74.0] A failed load is said once, in the queue panel, with the one
+            Try again — the banner above it repeated the same message with a second Retry. That is
+            how the front desk's queue has always reported it. */}
 
         {/* Collections Overview Metrics Bar */}
         <CollectionsStrip queue={queue} />

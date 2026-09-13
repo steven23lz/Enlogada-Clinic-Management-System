@@ -1,5 +1,98 @@
 # Database Migration & Schema History
 
+## [1.74.0] - 2026-09-14 (Recording a critical call, and failures that no longer read as zero)
+
+No migration. Frontend only.
+
+### What Steven asked for
+
+He asked to restructure the whole staff side, saying it "doesn't have dashboard" and "so many
+lacking", and chose to fix what was broken first, then the staff screens, then the patient portal.
+This is the first part. Nothing is redesigned here; the audit that came before the redesign found
+these faults, and they are fixed on their own so the redesign starts from screens that tell the
+truth.
+
+### A critical-result call can be recorded
+
+[1.15.0] built the callback log at the API (`POST /results/:id/acknowledge-critical`, audited, 409
+on a second attempt), and [1.28.0] put a tile on every worklist counting the calls still owed, with
+a dialog that said "record the call". Nothing on screen called the route. A call that was made
+could not be written down, and the list only grew. Each row in the dialog now has a short note (who
+was reached) and a Record the call button. The note is optional, as it is at the API. A 409 means
+someone else recorded the call first, so it reads as done. The note is an `<input>`, not a
+`<textarea>`, because `laboratory.spec.js` drives the result entry dialog with a bare
+`page.locator('textarea')`.
+
+### A failed load never reads as zero
+
+[1.28.0] fixed six screens that showed a 500 as an empty list. The screens each role lands on
+every morning were not among them:
+- the till: "Collected Today ₱0.00" and "Nothing awaiting payment". Its two fetches shared one
+  error, and the queue's success cleared a collections failure whichever order they answered in.
+- the front desk: "Active Queue Visits 0" and "Showing 0 of 0".
+- the worklists: "Awaiting Exam 0" and "Critical Callbacks 0, Nothing outstanding".
+  `useCriticalCallbacks` turned any failure into an empty list, which is the most confident way to
+  be wrong about a panic value.
+- the History screens' report panels: a skeleton that never ended, or "Nothing sold in this range"
+  beside "₱0.00 net".
+
+A figure that could not load now reads "—", and the list beneath it says why, once, with one Try
+again. The till's banner is gone for the same reason: it repeated the queue panel's message with a
+second Retry. That is how the front desk's queue has always reported it. Takings and Sales by
+service come from one request, so a failure is shown once, on Takings.
+
+### Takings cover the list's dates
+
+On Transaction History, Takings and Sales by service were a fixed 7 days under a header reading
+"Settled payments in this range". On 13 Sep the list said 0 receipts while Takings said ₱17,200
+from 25. The receipt list now loads them for its own dates, on opening and on Apply
+(`useTransactionHistory`'s `onRangeLoad` calls `useOperationsReport`'s new `load`). The report also
+ignores an answer that arrives after a newer request. The panels on Visit History and on the
+departments' History screens keep their 7 days, and now say "last 7 days".
+
+### No button that can only answer 403
+
+An Admin reads every department's history but holds neither `results:write` nor `results:release`,
+and History offered them Edit and Email. Both are now gated on the permission their own endpoint
+demands, the [1.53.0] rule. On the worklist, Release is gated the same way; the worklist itself
+already required `results:write` in the sidebar, so an Admin never reaches it.
+
+### A booking no longer waits for its email
+
+Found by the full run, not by the audit. Booking, cancelling and rescheduling each awaited their
+email after the commit, so the patient's reply waited on Gmail. On an ordinary run that is 3–4
+seconds a send. On 2026-09-14 one send took 44 seconds, and three specs (two in
+`appointment-reschedule.spec.js`, one in `reschedule-ui.spec.js`) failed at their 90-second timeout
+while each booking sat committed and correct. The three emails now go out after the reply
+(`appointmentService`: `emailBookingConfirmation`, `sendCancellationNotice`, the new
+`emailRescheduleNotice`), each with a `.catch`. Nothing else changes: the same email, to the same
+address, still logged if it fails.
+
+The run also showed that the suite sends real email through the clinic's Gmail to the seeded
+`@enlogada.com` accounts, about 25 in one run. [1.50.0] stopped this for `@enlogada-e2e.test`; the
+seeded accounts were left out. This entry does not change that; it is noted for a decision.
+
+### The Acting-as note names the person
+
+The chip's tooltip said "You hold Admin access, not Receptionist" to everyone, including the Cashier
+it most often appears for. It now names the signed-in roles.
+
+### Tests
+
+- `failure-states.spec.js`: the three landing screens, and the callback dialog's error state. Each
+  reloads after breaking the API, because a landing screen has already loaded once, successfully, by
+  the time the route is intercepted.
+- `critical-callback.spec.js` (new): a lab tech records the call from the worklist; the note reaches
+  the record; a second attempt answers 409.
+- `takings-range.spec.js` (new): the report is asked for the list's dates, on opening and on Apply.
+- `borrowed-screen-actions.spec.js`: an Admin on Laboratory History gets View Report but not Edit or
+  Email, the lab keeps both, and the API refuses the Admin; the Acting-as tooltip names the Cashier.
+  Its queue checks now run against a visit of their own. An empty queue let the Cashier's "no Edit
+  Tests" pass without testing anything, and failed the Receptionist's "keeps Edit Tests" whenever it
+  ran before anyone had registered a patient that day.
+
+The full suite: 379 passed, 0 skipped, in 7.0 minutes. Unit tiers 76 and 53.
+
 ## [1.73.0] - 2026-09-13 (Sign-up and password reset by emailed code)
 
 Run: `node src/scripts/migrateAuthCodes.js` (additive, safe to re-run; `--rollback` reverses it).
