@@ -786,6 +786,13 @@ Services Catalogue.
   blanket reduced-motion rule does not reset; print shows everything. Never put a hover transform on
   the Reveal element itself — it owns `transition`, so the hover would move at the reveal's pace
   after the reveal's delay. Put it on a child, as `FeatureCard` does.
+- **A public page is assembled from `components/public/`, not copied from another.** `[1.72.0]`
+  `PageHero` opens every inner page (pass `overlay` to `PublicHeader`; its top padding clears the
+  floating header), `CtaBand` closes Home, Services and About, `LegalDocument` lays out Privacy and
+  Terms, `ClinicHours` is the one live opening-hours list (FAQ and About), and `LogoShowcase` stands
+  in for a photograph until the clinic sends one. Contact details come from `useClinic()` and never
+  from a string in the page — About's typed-in address is the bug that rule came from, and
+  `public-site.spec.js` now compares it with the footer's.
 - **Sign In is the front of one card; Create Account and Forgot Password are its back.** `[1.72.0]`
   `[1.73.0]` Steps inside a side (details, then the emailed code) replace one another, so they never
   add a second form. `AuthPage` turns the

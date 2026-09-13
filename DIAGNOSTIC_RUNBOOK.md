@@ -2,7 +2,7 @@
 
 **For when something is broken and you have to find it.**
 
-This system has five automated gates and 484 tests. Finding a fault here is a matter of running
+This system has five automated gates and 497 tests. Finding a fault here is a matter of running
 things in the right order and reading which one goes red — not of reading code until you spot it.
 Work down this page; do not skip to the seven-minute suite.
 
@@ -59,7 +59,7 @@ cd frontend && npm run build                        # expect: clean build
 python scripts/prose_scan.py frontend/src           # expect: 0 prose damage
 
 # ── 5. Behaviour. ~8 minutes. NEEDS BOTH SERVERS RUNNING. ──────────────────────
-cd frontend && npx playwright test                  # expect: 355 pass, 0 skipped
+cd frontend && npx playwright test                  # expect: 368 pass, 0 skipped
 ```
 
 ### Known-good baseline
@@ -68,12 +68,12 @@ cd frontend && npx playwright test                  # expect: 355 pass, 0 skippe
 |---|---|
 | Backend unit | **76 passed** |
 | Frontend unit | **53 passed** |
-| Playwright E2E | **355 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
+| Playwright E2E | **368 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
 | `verifyRbacWiring` | `All good`, **78 routes checked**, **0 warnings** |
 | `verifyDiscountParity` | `Exact parity` — 3,264 combinations |
-| `checkFillRoles` | 217 files, **0 violations** |
+| `checkFillRoles` | 222 files, **0 violations** |
 | `checkContrast` | 116 token pairs, both themes, **0 violations** |
-| `prose_scan` | 217 files, **0 prose damage** |
+| `prose_scan` | 222 files, **0 prose damage** |
 
 Write today's numbers down before anyone touches anything. A diff against a known baseline is
 worth more than any amount of reading.
@@ -148,9 +148,9 @@ Three gates in one command:
 **Blind spot:** its `HOOKS` list is its eyesight. A hook missing from that list is damage it cannot
 see.
 
-### `npx playwright test` — 355 E2E
+### `npx playwright test` — 368 E2E
 **Proves:** RBAC boundaries, the money path, ticket-release gating, result versioning, printing,
-revalidation, failure states, and the copy on several screens.
+revalidation, failure states, the copy on several screens, and that every public page fits a phone.
 **Cannot see:** anything about performance. A `column::date` filter forcing a sequential scan
 (measured: 50.7ms vs 0.84ms) passes every test in this suite.
 

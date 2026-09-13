@@ -1,8 +1,7 @@
 import React from 'react';
 import FaqAccordion from './FaqAccordion';
+import ClinicHours from './ClinicHours';
 import { useClinic, httpsUrl } from '../../lib/clinic';
-import { useClinicHours } from '../../hooks/useClinicHours';
-import { formatTime12 } from '../../lib/date';
 
 /**
  * The clinic's FAQ, on Home. [1.72.0]
@@ -19,40 +18,14 @@ import { formatTime12 } from '../../lib/date';
 
 const LINK = 'font-semibold text-brand-700 underline-offset-2 hover:underline';
 
-// Monday first. The endpoint numbers days from Sunday, which is how a database counts them and not
-// how a clinic's week reads.
-const mondayFirst = (a, b) => ((a.dayOfWeek + 6) % 7) - ((b.dayOfWeek + 6) % 7);
-
+// The same live week the About page shows, through the same component, so the two cannot disagree.
 function HoursAnswer() {
-  const CLINIC = useClinic();
-  const { week, failed } = useClinicHours();
-
-  if (week === null) return <p className="m-0">Loading the clinic&apos;s hours…</p>;
-
-  if (failed || !week.some((d) => d.isOpen)) {
-    return (
-      <p className="m-0">
-        Please call us on <strong className="text-ink">{CLINIC.phone}</strong> for our hours.
-      </p>
-    );
-  }
-
   return (
-    <>
-      <ul className="m-0 max-w-sm list-none p-0">
-        {[...week].sort(mondayFirst).map((d) => (
-          <li key={d.dayOfWeek} className="flex justify-between gap-6 border-b border-line-soft py-1.5 last:border-0">
-            <span className="font-semibold text-ink">{d.dayName}</span>
-            <span className="tabular-nums">
-              {d.isOpen ? `${formatTime12(d.openTime)} – ${formatTime12(d.closeTime)}` : 'Closed'}
-            </span>
-          </li>
-        ))}
-      </ul>
+    <ClinicHours className="max-w-sm">
       <p className="m-0 mt-3">
         Holidays and other closed dates are marked on the booking calendar before you pick a time.
       </p>
-    </>
+    </ClinicHours>
   );
 }
 

@@ -3,7 +3,6 @@ import PublicHeader from '../../components/PublicHeader';
 import PublicFooter from '../../components/PublicFooter';
 import PageShell from '../../components/ui/page-shell';
 import { Button } from '../../components/ui/button';
-import { LogoFull } from '../../components/Logo';
 import HeroQuickDock from '../../components/public/HeroQuickDock';
 import HeroCarousel from '../../components/public/HeroCarousel';
 import SectionHeading from '../../components/public/SectionHeading';
@@ -11,6 +10,8 @@ import FeatureCard from '../../components/public/FeatureCard';
 import DecorBlobs from '../../components/public/DecorBlobs';
 import Reveal from '../../components/public/Reveal';
 import ClinicFaq from '../../components/public/ClinicFaq';
+import LogoShowcase from '../../components/public/LogoShowcase';
+import CtaBand from '../../components/public/CtaBand';
 import { scrollToSection } from '../../lib/scroll';
 import {
   ShieldCheck,
@@ -197,18 +198,8 @@ const Home = ({ onNavigate, section = null }) => {
       {/* ── About teaser ────────────────────────────────────────────────────────────────────── */}
       <section aria-labelledby="about-heading" className="wash-aurora relative overflow-hidden py-20 sm:py-24">
         <PageShell className="grid items-center gap-12 md:grid-cols-2 md:gap-16">
-          {/* The reference site's offset panel behind a photograph: wider than the card and running
-              below it, so it shows on three sides. Until the clinic sends a photograph, the full logo
-              lockup stands in — on a fixed white card, because the mark always gets a light ground. */}
-          <Reveal variant="slide-left" className="relative mx-auto w-full max-w-sm pb-8">
-            <div aria-hidden="true" className="aurora absolute inset-x-0 bottom-0 top-[22%] rounded-2xl" />
-            <div className="relative mx-auto flex aspect-[4/5] w-[78%] flex-col items-center justify-center gap-5 rounded-2xl bg-white p-8 text-center shadow-raised">
-              <LogoFull className="h-40 sm:h-48" />
-              <p className="m-0 text-meta font-semibold uppercase tracking-[0.18em] text-primary">
-                Serving Bugo since 2011
-              </p>
-            </div>
-          </Reveal>
+          {/* The logo on the reference site's offset panel, until the clinic sends a photograph. */}
+          <LogoShowcase />
           <div>
             <SectionHeading
               id="about-heading"
@@ -282,20 +273,16 @@ const Home = ({ onNavigate, section = null }) => {
       </section>
 
       {/* ── Closing call to action ──────────────────────────────────────────────────────────── */}
-      <PageShell as="section" aria-labelledby="cta-heading" className="py-20 sm:py-24">
-        <Reveal className="aurora relative overflow-hidden rounded-2xl px-6 py-12 text-center sm:px-12 sm:py-16">
-          <h2 id="cta-heading" className="m-0 text-2xl font-bold tracking-tight text-aurora-ink sm:text-3xl">
-            Need a diagnostic appointment?
-          </h2>
-          <p className="m-0 mx-auto mt-3 max-w-xl text-sm leading-relaxed text-aurora-soft sm:text-base">
-            Sign in to book a time and follow your visit, or create an account in a minute.
-          </p>
-          <Button variant="brand" size="lg" onClick={() => go('login')} className="mt-8 rounded-full px-8">
-            Access Portal
-            <ArrowRight />
-          </Button>
-        </Reveal>
-      </PageShell>
+      <CtaBand
+        id="cta-heading"
+        title="Need a diagnostic appointment?"
+        body="Sign in to book a time and follow your visit, or create an account in a minute."
+      >
+        <Button variant="brand" size="lg" onClick={() => go('login')} className="rounded-full px-8">
+          Access Portal
+          <ArrowRight />
+        </Button>
+      </CtaBand>
 
       <PublicFooter onNavigate={onNavigate} />
     </div>

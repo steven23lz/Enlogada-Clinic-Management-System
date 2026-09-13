@@ -152,11 +152,29 @@ variety above it as advice. Its unit test reads `backend/src/validations/passwor
 meter and the server cannot disagree without a test failing. The old two-column page's styles
 (`.auth-panel`, its dark-mode rebinding, the sliding swap and the tab pill) went with it.
 
+### Services, About, Privacy and Terms
+
+The last four public pages in the old look, rebuilt from shared parts rather than copies of Home's
+markup: `PageHero` (the Aurora band under the floating header, which these pages now float too),
+`CtaBand` (the closing call to action, which Home uses as well), `LogoShowcase` (Home's About
+panel, shared with About), `ClinicHours` (the live week, one component behind both the FAQ and
+About) and `LegalDocument` (Privacy and Terms: readable sections with an "On this page" list on a
+wide screen). The wording of the policy and the terms is unchanged.
+
+Fixed on the way: About typed in the clinic's old short address, phone and email, so it disagreed
+with the footer and the printed result form (it reads `useClinic()` now, and a spec compares it
+with the footer); the legal pages typed in the email too; and the Services search box suggested
+"ECG", which the clinic does not offer.
+
+`public-site.spec.js` holds all five pages to one heading and no sideways scroll at phone width,
+and checks a pausable hero that never moves under reduced motion, the FAQ by keyboard, Contact Us,
+the legal pages' contents links, the footer's FAQ link from another page, and a price list that
+never advertises ECG or 2D Echo. Also measured by hand at 390, 768 and 1440 px, in dark mode and at
+the Larger text size: one h1 and no sideways scroll on every page.
+
 ### Still to come
 
-Services, About, Privacy and Terms in the same language (forgot password moved onto the sign-in
-card in [1.73.0]), a public-site spec, and real photographs in the hero once the clinic supplies
-them.
+Real photographs in the hero once the clinic supplies them.
 
 ## [1.71.0] - 2026-09-09 (A package may claim a component the visit already had)
 
