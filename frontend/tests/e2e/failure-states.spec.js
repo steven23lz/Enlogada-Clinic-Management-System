@@ -1,5 +1,7 @@
 // @ts-check
 import { test, expect } from 'playwright/test';
+import { signIn } from './helpers/auth.js';
+import { openPortalTab } from './helpers/portal.js';
 
 // A failed request must never render as an empty one. [1.28.0]
 //
@@ -123,6 +125,27 @@ for (const { email, screen, mustSay, mustNotSay } of LANDING_SCREENS) {
     for (const pattern of mustNotSay) expect(body, `${screen} stated ${pattern} over a 500`).not.toMatch(pattern);
   });
 }
+
+// The patient's own bookings. [1.80.0]
+//
+// useMyAppointments logged a failed load and carried on, so the Appointments tab told a patient
+// holding a paid booking for tomorrow "No appointments booked yet." — the one sentence that sends
+// them to book the slot they already have. Only this request is broken, so the rest of the portal
+// loads and the failure has nowhere to hide.
+test("a patient's Appointments say they could not load, not that none are booked", async ({ page }) => {
+  await signIn(page, 'client@enlogada.com');
+  await page.route('**/api/appointments/my-bookings**', (route) => route.fulfill({
+    status: 500,
+    contentType: 'application/json',
+    body: JSON.stringify({ status: 'error', message: 'Simulated server failure.' }),
+  }));
+  await page.reload();
+  await openPortalTab(page, 'appointments');
+
+  await expect(page.getByText(/couldn.t load your appointments/i)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(page.getByText(/no appointments booked/i)).toHaveCount(0);
+});
 
 // Today, where every member of staff lands since [1.77.0]. Its figures start empty and each of its
 // lists could say "nothing"; over a 500 each has to say what it could not load instead, and "Needs

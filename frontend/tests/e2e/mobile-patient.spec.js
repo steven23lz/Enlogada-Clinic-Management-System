@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect } from 'playwright/test';
 import { signInOnPhone } from './helpers/auth.js';
+import { PORTAL_TABS, openBooking } from './helpers/portal.js';
 
 // The patient journey on a phone. [1.26.0]
 //
@@ -26,7 +27,7 @@ test('a patient can sign in and reach their bookings on a phone', async ({ page 
 
   // Every tab has to be reachable, not merely present. A tab strip that overflows its container
   // silently drops the last items off the right edge.
-  for (const tab of ['Diagnostic Results', 'Appointments', 'Payments', 'Profile']) {
+  for (const tab of Object.values(PORTAL_TABS)) {
     const trigger = page.getByRole('tab', { name: tab });
     await expect(trigger, `${tab} tab should exist`).toHaveCount(1);
     await trigger.click();
@@ -47,15 +48,14 @@ test('no screen in the patient journey scrolls sideways on a phone', async ({ pa
     return Math.max(0, d.scrollWidth - d.clientWidth);
   });
 
-  for (const tab of ['Diagnostic Results', 'Appointments', 'Payments', 'Profile']) {
+  for (const tab of Object.values(PORTAL_TABS)) {
     await page.getByRole('tab', { name: tab }).click();
     await page.waitForTimeout(700);
     expect(await overflowOf(), `${tab} overflows horizontally`).toBe(0);
   }
 
   // And the booking dialog, which is the densest thing a patient opens.
-  await page.getByRole('button', { name: 'Book Schedule' }).first().click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await openBooking(page);
   await page.waitForTimeout(600);
   expect(await overflowOf(), 'the booking dialog overflows horizontally').toBe(0);
 

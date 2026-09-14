@@ -302,41 +302,34 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                         <DialogDescription>
                           Schedule a diagnostic test for <strong>{selectedProfile?.first_name} {selectedProfile?.last_name}</strong>.
                         </DialogDescription>
-
-                        {/* Visual Step Progress Bar */}
-                        <div className="flex items-center justify-between pt-3 pb-1 border-b border-slate-100 my-2">
-                          <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 1 ? 'text-brand-600' : 'text-slate-400'}`}>
-                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-meta ${bookingStep === 1 ? 'bg-primary text-primary-foreground' : 'bg-slate-200 text-slate-600'}`}>1</span>
-                            <span>Select Tests</span>
-                          </div>
-                          <div className="h-[2px] flex-1 mx-3 bg-slate-200" />
-                          <div className={`flex items-center space-x-2 text-xs font-bold ${bookingStep === 2 ? 'text-brand-600' : 'text-slate-400'}`}>
-                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-meta ${bookingStep === 2 ? 'bg-primary text-primary-foreground' : 'bg-slate-200 text-slate-600'}`}>2</span>
-                            <span>Schedule & HMO</span>
-                          </div>
-                        </div>
                       </DialogHeader>
 
                       <form onSubmit={handleBookAppointment} className="space-y-4 pt-2">
                         {bookingError && (
-                          <div role="alert" className="bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
+                          <div role="alert" className="alert alert-error">
                             <AlertCircle className="w-4 h-4 flex-shrink-0" />
                             <span>{bookingError}</span>
                           </div>
                         )}
 
-                        {/* Step Indicators */}
+                        {/* The steps, once. [1.80.0] A numbered progress bar in the header called them
+                            "Select Tests" and "Schedule & HMO", and these pills right under it called
+                            the same two steps "Schedule & Services" and "HMO / Payment Note": one
+                            wizard with two sets of names. The pills stay, because they also move
+                            between the steps. */}
                         <div className="flex items-center justify-between border-b border-line pb-3">
-                          <button 
+                          <button
                             type="button"
                             onClick={() => setBookingStep(1)}
+                            aria-current={bookingStep === 1 ? 'step' : undefined}
                             className={`text-xs font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${bookingStep === 1 ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-500'}`}
                           >
                             1. Schedule & Services
                           </button>
-                          <button 
+                          <button
                             type="button"
                             onClick={() => setBookingStep(2)}
+                            aria-current={bookingStep === 2 ? 'step' : undefined}
                             className={`text-xs font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${bookingStep === 2 ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-500'}`}
                           >
                             2. HMO / Payment Note
@@ -374,6 +367,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                                 selectedPackageIds={bookingData.packageIds}
                                 onTogglePackage={handlePackageSelection}
                                 disabled={isBooking}
+                                audience="patient"
                               />
                             </div>
 

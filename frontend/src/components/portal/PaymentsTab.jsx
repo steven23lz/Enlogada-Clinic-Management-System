@@ -1,13 +1,12 @@
 import React from 'react';
 
 const LIST_PAGE_SIZE = 8;
-import { Receipt } from 'lucide-react';
+import { ExternalLink, Receipt } from 'lucide-react';
 import { Panel } from '../ui/panel';
 import EmptyState from '../ui/empty-state';
 import { Button } from '../ui/button';
 import { SkeletonList } from '../ui/skeleton';
 import { StatusBadge } from '../ui/status-badge';
-import { TabsContent } from '../ui/tabs';
 import Pagination from '../ui/pagination';
 import { formatCurrency } from '../../lib/currency';
 
@@ -23,11 +22,10 @@ export default function PaymentsTab({ payments }) {
   const paged = payments.payments.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE);
 
   return (
-        <TabsContent value="payments" className="m-0">
-          {/* data-testid, because payment.spec.js needs to scope its assertions to this panel
-              and was doing it by walking up to the nearest element with a `rounded-2xl` class.
-              That coupled a passing test to a corner radius: changing the radius broke the
-              spec, and the spec's failure said nothing about payments. */}
+          // data-testid, because payment.spec.js needs to scope its assertions to this panel
+          // and was doing it by walking up to the nearest element with a `rounded-2xl` class.
+          // That coupled a passing test to a corner radius: changing the radius broke the
+          // spec, and the spec's failure said nothing about payments.
           <Panel data-testid="payment-history" className="max-w-2xl overflow-hidden">
             <div className="flex items-center gap-2 border-b border-line bg-slate-50/70 px-5 py-3.5">
               <Receipt className="h-4 w-4 text-brand-600" />
@@ -62,7 +60,23 @@ export default function PaymentsTab({ payments }) {
                       <StatusBadge status={pay.payment_status} />
                     </div>
                     <div className="mt-1.5 flex items-center justify-between text-micro text-slate-400">
-                      <span className="font-mono">{pay.receipt_number || `OR-${pay.id}`}</span>
+                      {/* The receipt, one press away. [1.80.0] The number was printed as text, so the
+                          document an HMO or an employer asks a patient to produce had no way to it
+                          from the list of what they paid. It opens at its own address, and the
+                          server checks the receipt is theirs. */}
+                      {pay.receipt_number ? (
+                        <a
+                          href={`?receipt=${encodeURIComponent(pay.receipt_number)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-mono font-semibold text-azure-700 underline underline-offset-2 hover:text-azure-800"
+                        >
+                          {pay.receipt_number}
+                          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                        </a>
+                      ) : (
+                        <span className="font-mono">{`OR-${pay.id}`}</span>
+                      )}
                       <span>{new Date(pay.paid_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                     </div>
                   </div>
@@ -78,6 +92,5 @@ export default function PaymentsTab({ payments }) {
               />
             )}
           </Panel>
-        </TabsContent>
   );
 }

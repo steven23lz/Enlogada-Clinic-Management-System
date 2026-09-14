@@ -3,7 +3,8 @@ import { Pencil, ShieldCheck, User } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
-import { TabsContent } from '../ui/tabs';
+
+const listFormat = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
 
 /**
  * The account details behind the patient.
@@ -11,9 +12,15 @@ import { TabsContent } from '../ui/tabs';
  * Lifted out of ClientDashboard, which rendered the profile switcher, two profile dialogs,
  * a hero and four tab panels from one 1,044-line file. The props are the hooks it reads.
  */
-export default function ProfileTab({ profiles }) {
+export default function ProfileTab({ profiles, reference }) {
+  // The providers the clinic is accredited with, from the list the booking dialog offers. This
+  // card used to name "1CoopHealth" in a sentence typed into this file, and would have gone on
+  // naming it whatever the clinic's accreditations became. [1.80.0]
+  const providers = (reference?.hmoProviders || []).map((p) => p.name).filter(Boolean);
+  const accredited = providers.length ? listFormat.format(providers) : '';
+
   return (
-        <TabsContent value="profile" className="m-0 space-y-4 max-w-2xl">
+        <div className="space-y-4">
           {profiles.selected && (
             <Card className="border-line rounded-xl bg-surface overflow-hidden">
               <CardHeader className="bg-slate-50/80 border-b border-line py-3.5 flex-row items-center justify-between space-y-0">
@@ -63,9 +70,13 @@ export default function ProfileTab({ profiles }) {
               <h3 className="font-bold text-sm text-white m-0">HMO Accreditation</h3>
             </div>
             <p className="text-rail-ink-soft text-xs leading-relaxed">
-              Enlogada Clinic is partnered with accredited HMO providers like <strong>1CoopHealth</strong>. Present your HMO LOA or Approval Code during booking.
+              {accredited ? (
+                <>Enlogada Clinic is accredited with <strong>{accredited}</strong>. Choose your provider when you book, and add a photo of your HMO card.</>
+              ) : (
+                <>Choose your HMO provider when you book, and add a photo of your HMO card. The clinic confirms your coverage before your visit.</>
+              )}
             </p>
           </Card>
-        </TabsContent>
+        </div>
   );
 }

@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
+import { openBooking } from './helpers/portal.js';
 import { selfPayProfile } from './helpers/patients.js';
 
 // What the patient is told about their own booking. [1.24.0]
@@ -132,9 +133,7 @@ test('the booking wizard shows preparation for the test the patient picks', asyn
 
   await signIn(page, 'client@enlogada.com');
 
-  await page.getByRole('button', { name: 'Book Schedule' }).first().click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
+  const dialog = await openBooking(page);
 
   // Nothing is shown until a test is actually chosen — a note against every line in a scrolling
   // catalogue is wallpaper, and the point is that it is read.
@@ -151,6 +150,12 @@ test('the booking wizard shows preparation for the test the patient picks', asyn
   }
 
   expect(shown, 'at least one seeded test should show its preparation once selected').toBe(true);
+
+  // Said to the patient, not about them. [1.80.0] The picker is shared with reception, where the
+  // heading is "Tell the patient before they leave"; in the patient's own dialog that read as a
+  // note meant for somebody else.
+  await expect(dialog.getByText('Before your visit')).toBeVisible();
+  await expect(dialog.getByText(/tell the patient/i)).toHaveCount(0);
   expect(errors, `page errors: ${errors.join(' | ')}`).toHaveLength(0);
 });
 

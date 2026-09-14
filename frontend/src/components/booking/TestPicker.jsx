@@ -39,6 +39,12 @@ const TestPicker = ({
   onTogglePackage,
   disabled = false,
   maxHeight = 'max-h-72',
+  /**
+   * Who is reading the preparation notes. [1.80.0] At the desk the receptionist tells the
+   * patient before they leave; in the portal the patient is reading them. The same notes,
+   * addressed to whoever is holding the screen.
+   */
+  audience = 'staff',
 }) => {
   const [query, setQuery] = useState('');
 
@@ -335,13 +341,14 @@ const TestPicker = ({
         <span data-testid="picker-total" className="text-note font-extrabold tabular-nums text-slate-900">{formatCurrency(total)}</span>
       </div>
 
-      {/* Preparation, at the desk. The person handing over the queue ticket saying "come back
-          fasting" lands far better than the same sentence in an email. */}
+      {/* Preparation. At the desk, the person handing over the queue ticket saying "come back
+          fasting" lands far better than the same sentence in an email; in the portal the patient
+          reads it themselves, so it is addressed to them. [1.80.0] */}
       {preparation.length > 0 && (
         <div className="space-y-1 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-inset ring-amber-200">
           <p className="m-0 flex items-center gap-1.5 text-fine font-semibold text-amber-900">
             <AlertTriangle className="h-3 w-3 flex-shrink-0" />
-            Tell the patient before they leave
+            {audience === 'patient' ? 'Before your visit' : 'Tell the patient before they leave'}
           </p>
           <ul className="m-0 list-disc space-y-0.5 pl-5 text-fine leading-relaxed text-amber-800">
             {preparation.map((t) => (

@@ -16,6 +16,10 @@ import api from '../config/api';
 export function useMyAppointments() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed load used to be logged and dropped, so the tab said "No appointments booked yet." to
+  // a patient holding a paid booking for tomorrow — the one sentence that sends them to book a
+  // slot they already have. [1.80.0]
+  const [error, setError] = useState('');
   const [page, setPage] = useState(1);
 
   const [cancelTarget, setCancelTarget] = useState(null);
@@ -30,11 +34,13 @@ export function useMyAppointments() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const response = await api.get('/appointments/my-bookings');
       setAppointments(response.data.data.bookings || []);
     } catch (err) {
       console.error('Failed to fetch appointments:', err);
+      setError(err.response?.data?.message || 'Your bookings are safe; this screen could not read them.');
     } finally {
       setLoading(false);
     }
@@ -107,7 +113,7 @@ export function useMyAppointments() {
   const clearPayError = () => setPayError('');
 
   return {
-    appointments, loading, page, setPage,
+    appointments, loading, error, page, setPage,
     cancelTarget, cancelling, cancelError, requestCancel, dismissCancel, confirmCancel,
     rescheduling, openReschedule, closeReschedule,
     gateway, payingId, payError, payOnline, notePaymentCancelled, clearPayError,

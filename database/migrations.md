@@ -1,5 +1,44 @@
 # Database Migration & Schema History
 
+## [1.80.0] - 2026-09-15 (The patient portal, part 1: what was broken)
+
+No migration. Frontend only. The first of the three commits that rebuild the patient portal as A2
+in the Flat colouring, which Steven picked. This one fixes what was broken and leaves the layout
+alone.
+
+### What changed
+
+- **A failed load of your appointments says so.** `useMyAppointments` logged the failure and
+  carried on, so the Appointments tab told a patient holding a paid booking "No appointments booked
+  yet." It now reads "Couldn't load your appointments", with Try again.
+- **The Details button is gone.** It sat on every result not yet released and had no handler. The
+  row now says the result is not released yet and will appear once the clinic releases it.
+- **A receipt number on Payments opens the receipt**, at its own address in a new tab. It was
+  printed as text. The server already checks that the receipt is the patient's.
+- **One tab panel per tab.** Results, Appointments, Payments and Profile each wrapped themselves in
+  a `TabsContent`, inside the one ClientDashboard already gave them.
+- **The booking dialog names its steps once.** A numbered progress bar ("Select Tests", "Schedule &
+  HMO") sat above pills naming the same two steps differently. The pills stay, because they also
+  move between steps. The error box is the standard `.alert`.
+- **Preparation is addressed to the patient** in their own dialog: "Before your visit". Reception
+  still reads "Tell the patient before they leave" (`TestPicker`'s new `audience` prop).
+- **Profile names the clinic's real HMO providers**, from the list the booking dialog offers,
+  instead of "1CoopHealth" typed into the sentence.
+- `data-testid="appointment-scheduled-time"` marks the scheduled time, so
+  appointment-communication.spec.js's "the arrival time is never larger" check runs instead of
+  skipping itself.
+
+### Tests
+
+- `tests/e2e/helpers/portal.js` (new): `PORTAL_TABS`, `openPortalTab(page, key)` and
+  `openBooking(page)`. The nine specs that clicked a portal tab or "Book Schedule" by its words use
+  it, so the renames in the next commit happen in one file.
+- failure-states: a failed `/appointments/my-bookings` shows the error, not "none booked".
+- payment: the receipt number is a link to `?receipt=` that opens in a new tab.
+- booking-communication: the patient's dialog says "Before your visit", never "Tell the patient".
+
+The full suite: 421 passed, 0 skipped.
+
 ## [1.79.0] - 2026-09-14 (The staff side, tidied)
 
 No migration. Frontend only.

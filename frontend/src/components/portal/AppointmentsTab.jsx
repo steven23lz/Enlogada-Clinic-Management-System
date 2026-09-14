@@ -5,7 +5,7 @@ import { AlertTriangle, CalendarClock, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { StatusBadge } from '../ui/status-badge';
-import { TabsContent } from '../ui/tabs';
+import EmptyState from '../ui/empty-state';
 import Pagination from '../ui/pagination';
 import BookingPass from '../BookingPass';
 import PayBookingPanel from './PayBookingPanel';
@@ -229,7 +229,6 @@ export default function AppointmentsTab({ bookings }) {
   };
 
   return (
-        <TabsContent value="appointments" className="m-0">
           <Card className="border-line rounded-xl bg-surface overflow-hidden">
             <CardHeader className="bg-slate-50/80 border-b border-line py-3.5">
               <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
@@ -244,7 +243,17 @@ export default function AppointmentsTab({ bookings }) {
                   <span>{bookings.payError}</span>
                 </div>
               )}
-              {bookings.loading ? (
+              {bookings.error ? (
+                // Before "none booked", never after it: an empty list over a failed request tells a
+                // patient holding a booking that they have none. [1.80.0]
+                <EmptyState
+                  tone="error"
+                  compact
+                  title="Couldn't load your appointments"
+                  description={bookings.error}
+                  action={<Button variant="outline" size="sm" onClick={bookings.reload}>Try again</Button>}
+                />
+              ) : bookings.loading ? (
                 <p className="text-xs text-gray-400 text-center py-4">Loading appointments…</p>
               ) : bookings.appointments.length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-4 italic">No appointments booked yet.</p>
@@ -272,7 +281,7 @@ export default function AppointmentsTab({ bookings }) {
                 </>
               )}
             </CardContent>
-            {bookings.appointments.length > 0 && (
+            {!bookings.error && bookings.appointments.length > 0 && (
               <Pagination
                 page={safePage}
                 totalPages={totalPages}
@@ -282,6 +291,5 @@ export default function AppointmentsTab({ bookings }) {
               />
             )}
           </Card>
-        </TabsContent>
   );
 }

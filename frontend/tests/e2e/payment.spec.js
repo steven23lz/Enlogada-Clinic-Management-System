@@ -2,6 +2,7 @@
 import { test, expect, request } from 'playwright/test';
 import { fixturePerson } from './helpers/people.js';
 import { registerClient } from './helpers/accounts.js';
+import { openPortalTab } from './helpers/portal.js';
 
 // Module 14 (Payment) coverage — the shared data/logic layer behind Module 8 (Cashier) and
 // Client-side payment visibility. Three real gaps found on inspection, all fixed here (this
@@ -291,7 +292,7 @@ test.describe('Payment — browser flow', () => {
     await page.fill('input[type="password"]', 'TestPass123!');
     await page.locator('button[type="submit"]').click();
     // UI/UX Phase 1: Payment History moved from an always-visible sidebar card into its own tab.
-    await page.getByRole('tab', { name: 'Payments' }).click();
+    await openPortalTab(page, 'payments');
     await expect(page.getByText('Payment History', { exact: true })).toBeVisible({ timeout: 10000 });
 
     // Scoped by test id, not by walking up to the nearest element with a `rounded-2xl` class.
@@ -301,5 +302,12 @@ test.describe('Payment — browser flow', () => {
     const paymentCard = page.getByTestId('payment-history');
     await expect(paymentCard.getByText(`₱${parseFloat(bill.totalAmount).toFixed(2)}`)).toBeVisible({ timeout: 10000 });
     await expect(paymentCard.getByText('Paid', { exact: true })).toBeVisible();
+
+    // The receipt number opens the receipt. [1.80.0] It was printed as text, so the document an
+    // HMO or an employer asks a patient to produce had no way to it from the list of what they
+    // paid. Its own address, in a new tab; receipt-lookup.spec.js holds the ownership check.
+    const receipt = paymentCard.getByRole('link', { name: /^RCT-/ });
+    await expect(receipt).toHaveAttribute('href', /\?receipt=RCT-/);
+    await expect(receipt).toHaveAttribute('target', '_blank');
   });
 });

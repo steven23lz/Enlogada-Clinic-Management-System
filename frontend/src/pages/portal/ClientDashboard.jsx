@@ -146,7 +146,7 @@ const ClientDashboard = ({ onNavigate }) => {
 
           {/* Patient Profile Summary + HMO info — grouped under one Profile tab */}
           <TabsContent value="profile" className="m-0 space-y-4 max-w-2xl">
-            <ProfileTab profiles={profiles} />
+            <ProfileTab profiles={profiles} reference={reference} />
           </TabsContent>
 
         </Tabs>

@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
+import { openBooking } from './helpers/portal.js';
 
 /**
  * The pass is a receipt, not a booking confirmation.
@@ -55,9 +56,7 @@ test('a self-pay booking is confirmed without issuing the pass', async ({ page }
   page.on('pageerror', (e) => errors.push(e.message));
   await signIn(page, 'client@enlogada.com');
 
-  await page.getByRole('button', { name: 'Book Schedule' }).first().click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
+  const dialog = await openBooking(page);
 
   // Step 1 — what, and when.
   await dialog.locator('#slotpicker-label').fill(date);
@@ -141,9 +140,7 @@ test('the patient can pay on the confirmation itself, without going to Appointme
   page.on('pageerror', (e) => errors.push(e.message));
   await signIn(page, 'client@enlogada.com');
 
-  await page.getByRole('button', { name: 'Book Schedule' }).first().click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
+  const dialog = await openBooking(page);
 
   await dialog.locator('#slotpicker-label').fill(date);
   const slotButton = dialog.locator(`[data-testid="slot-${slot}"]`);

@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
+import { openBooking as openBookingDialog } from './helpers/portal.js';
 
 /**
  * Choosing what to book, from the patient's side. [1.54.0]
@@ -31,9 +32,7 @@ const disclosureHeights = (page) =>
 
 async function openBooking(page) {
   await signIn(page, 'client@enlogada.com');
-  await page.getByRole('button', { name: 'Book Schedule' }).first().click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
+  const dialog = await openBookingDialog(page);
   await expect(dialog.getByPlaceholder(/filter tests/i)).toBeVisible({ timeout: 15000 });
   return dialog;
 }

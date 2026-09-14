@@ -1,6 +1,6 @@
 import React from 'react';
 import { printElement } from '../../lib/printArea';
-import { Activity, Calendar, CheckCircle, ChevronRight, Clock, Download, Eye, FileText, FlaskConical, Info, Printer, Scan, Stethoscope } from 'lucide-react';
+import { Activity, Calendar, CheckCircle, Clock, Download, Eye, FileText, FlaskConical, Info, Printer, Scan, Stethoscope } from 'lucide-react';
 
 // The mark a patient recognises their own report by. Elements rather than components because
 // they are looked up by name and rendered as-is; the sizing is the same everywhere it appears.
@@ -18,7 +18,6 @@ import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
 import { SearchInput } from '../ui/search-input';
 import { Dialog, DialogContent, DialogTrigger } from '../ui/dialog';
 import { StatusBadge } from '../ui/status-badge';
-import { TabsContent } from '../ui/tabs';
 import ResultReport from '../ResultReport';
 import { isSafeResultUrl, downloadResultFile } from '../../lib/resultFile';
 
@@ -27,10 +26,13 @@ import { isSafeResultUrl, downloadResultFile } from '../../lib/resultFile';
  *
  * Lifted out of ClientDashboard, which rendered the profile switcher, two profile dialogs,
  * a hero and four tab panels from one 1,044-line file. The props are the hooks it reads.
+ *
+ * Plain content, not a `TabsContent`: ClientDashboard already wraps each tab in one, and a
+ * second one inside it made two tab panels answering to one tab. [1.80.0]
  */
 export default function ResultsTab({ profiles, results, onPreviewDocument }) {
   return (
-        <TabsContent value="results" className="m-0 space-y-4">
+        <div className="space-y-4">
 
           {/* Filter & Search Header */}
           <Toolbar>
@@ -203,14 +205,13 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
 
                         </DialogContent>
                       </Dialog>
-                    ) : (
-                      <Button 
-                        variant="ghost" 
-                        className="text-gray-500 hover:bg-gray-100 text-xs font-bold px-3 rounded-xl flex items-center space-x-1"
-                      >
-                        <span>Details</span>
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
+                    ) : item.test_status !== 'Cancelled' && (
+                      // Not released, so there is nothing to open yet. This was a "Details" button
+                      // with no handler: pressed, it did nothing, which reads as broken. [1.80.0]
+                      <p className="m-0 flex max-w-xs items-start gap-1.5 text-fine text-slate-500 sm:text-right">
+                        <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                        <span>Not released yet. It will appear here once the clinic releases it.</span>
+                      </p>
                     )}
                   </CardContent>
                 </Card>
@@ -222,6 +223,6 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
               </Card>
             )}
           </div>
-        </TabsContent>
+        </div>
   );
 }

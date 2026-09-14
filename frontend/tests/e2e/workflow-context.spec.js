@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { signIn, signInTo } from './helpers/auth.js';
+import { openPortalTab } from './helpers/portal.js';
 import { selfPayProfile } from './helpers/patients.js';
 import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
 
@@ -170,7 +171,7 @@ test('an upcoming booking tells the patient what to do beforehand', async ({ pag
 
   await signIn(page, 'client@enlogada.com');
 
-  await page.getByRole('tab', { name: 'Appointments' }).click();
+  await openPortalTab(page, 'appointments');
   await expect(page.locator('[data-testid="appointment-card"]').first()).toBeVisible({ timeout: 15000 });
 
   // Page to the booking just made rather than assuming it is on page one — open bookings sort

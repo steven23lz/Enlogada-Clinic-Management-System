@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
+import { openPortalTab } from './helpers/portal.js';
 import { selfPayProfile } from './helpers/patients.js';
 import { formatTime12 } from '../../src/lib/date.js';
 
@@ -55,7 +56,7 @@ test('a patient reschedules from their own booking list', async ({ page }) => {
   await signIn(page, 'client@enlogada.com');
 
   // The bookings live on their own tab; the dashboard opens on Diagnostic Results.
-  await page.getByRole('tab', { name: 'Appointments' }).click();
+  await openPortalTab(page, 'appointments');
 
   // Addressed by data-testid, not by markup shape: `locator('div').filter(...)` matches every
   // ancestor div containing the text and is one layout change away from selecting the wrong one.

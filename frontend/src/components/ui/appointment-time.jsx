@@ -57,7 +57,7 @@ const AppointmentTime = ({
   if (variant === 'inline') {
     return (
       <span className={cn('flex flex-wrap items-baseline gap-x-2 gap-y-0.5', className)}>
-        <span className="text-fine font-semibold text-ink">{times.window}</span>
+        <span data-testid="appointment-scheduled-time" className="text-fine font-semibold text-ink">{times.window}</span>
         {showArrival && (
           // `basis-full` so it takes its own row rather than trailing the appointment as a clause.
           // The parent is already flex-wrap, so no call site changes.
@@ -90,7 +90,7 @@ const AppointmentTime = ({
           <span className="block text-micro font-semibold uppercase tracking-wide text-ink-muted">
             Scheduled service {slotMinutes ? 'window' : 'time'}
           </span>
-          <span className="block text-note font-bold text-ink">{times.window}</span>
+          <span data-testid="appointment-scheduled-time" className="block text-note font-bold text-ink">{times.window}</span>
         </span>
       </span>
 

@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
+import { openBooking } from './helpers/portal.js';
 import { selfPayProfile } from './helpers/patients.js';
 
 // The two screens the HMO card feature added, driven through the browser rather than the API.
@@ -29,7 +30,7 @@ test.describe('HMO card evidence (UI)', () => {
 
     await signIn(page, 'client@enlogada.com');
 
-    await page.getByRole('button', { name: 'Book Schedule' }).first().click();
+    await openBooking(page);
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
 
@@ -57,7 +58,7 @@ test.describe('HMO card evidence (UI)', () => {
     page.on('pageerror', (e) => errors.push(e.message));
 
     await signIn(page, 'client@enlogada.com');
-    await page.getByRole('button', { name: 'Book Schedule' }).first().click();
+    await openBooking(page);
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();

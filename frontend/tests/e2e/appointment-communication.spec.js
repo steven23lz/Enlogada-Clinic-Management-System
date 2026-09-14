@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
+import { openPortalTab } from './helpers/portal.js';
 
 // The two times a booking has, and the values a clinician must not miss. [1.63.0]
 //
@@ -66,7 +67,7 @@ test.describe('Appointment arrival policy', () => {
    */
   test('the booking card asks for the arrival time in words a patient cannot miss', async ({ page }) => {
     await signIn(page, 'client@enlogada.com');
-    await page.getByRole('tab', { name: 'Appointments' }).click();
+    await openPortalTab(page, 'appointments');
 
     const card = page.locator('[data-testid="appointment-card"]').first();
     const anyCard = await card.isVisible({ timeout: 15000 }).catch(() => false);
@@ -122,7 +123,7 @@ test.describe('Appointment list priority', () => {
    */
   test('open bookings get the width; finished ones sit under their own heading', async ({ page }) => {
     await signIn(page, 'client@enlogada.com');
-    await page.getByRole('tab', { name: 'Appointments' }).click();
+    await openPortalTab(page, 'appointments');
 
     const cards = page.locator('[data-testid="appointment-card"]');
     const anyCard = await cards.first().isVisible({ timeout: 15000 }).catch(() => false);
