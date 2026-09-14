@@ -159,16 +159,29 @@ class UserRepository {
    * read the same count and both write count+1, so the counter under-counts exactly when it is
    * being attacked. The CASE decides the lock inside the same UPDATE that increments.
    *
+   * A lock that has run out starts the count again. [1.85.0] It used to carry on from where the
+   * lock left it, so the count still stood at the threshold when the fifteen minutes ended, and
+   * the first slip after waiting them out locked the account for another fifteen. The person most
+   * likely to make that slip is the one who has just waited. `locked_until <= CURRENT_TIMESTAMP`
+   * is NULL rather than true for an account that was never locked, so it counts as before.
+   *
+   * Every SET expression reads the row as it stood before this UPDATE, which is why the lock test
+   * repeats the "has it run out" check instead of reading the new count back.
+   *
    * Returns the resulting state so the caller can log a lockout without a second query.
    */
   async registerFailedLogin(userId, { threshold, lockMinutes }) {
     const queryText = `
       UPDATE users
-      SET failed_login_count = failed_login_count + 1,
+      SET failed_login_count = CASE
+            WHEN locked_until <= CURRENT_TIMESTAMP THEN 1
+            ELSE failed_login_count + 1
+          END,
           last_failed_login_at = CURRENT_TIMESTAMP,
           locked_until = CASE
-            WHEN failed_login_count + 1 >= $2
+            WHEN (CASE WHEN locked_until <= CURRENT_TIMESTAMP THEN 1 ELSE failed_login_count + 1 END) >= $2
               THEN CURRENT_TIMESTAMP + ($3 || ' minutes')::interval
+            WHEN locked_until <= CURRENT_TIMESTAMP THEN NULL
             ELSE locked_until
           END
       WHERE id = $1

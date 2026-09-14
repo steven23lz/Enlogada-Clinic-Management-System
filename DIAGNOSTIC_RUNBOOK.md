@@ -59,7 +59,7 @@ cd frontend && npm run build                        # expect: clean build
 python scripts/prose_scan.py frontend/src           # expect: 0 prose damage
 
 # ── 5. Behaviour. ~8 minutes. NEEDS BOTH SERVERS RUNNING. ──────────────────────
-cd frontend && npx playwright test                  # expect: 427 pass, 0 skipped
+cd frontend && npx playwright test                  # expect: 428 pass, 0 skipped
 ```
 
 ### Known-good baseline
@@ -68,7 +68,7 @@ cd frontend && npx playwright test                  # expect: 427 pass, 0 skippe
 |---|---|
 | Backend unit | **76 passed** |
 | Frontend unit | **103 passed** |
-| Playwright E2E | **427 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
+| Playwright E2E | **428 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
 | `verifyRbacWiring` | `All good`, **78 routes checked**, **0 warnings** |
 | `verifyDiscountParity` | `Exact parity` — 3,264 combinations |
 | `checkFillRoles` | 222 files, **0 violations** |
@@ -148,7 +148,7 @@ Three gates in one command:
 **Blind spot:** its `HOOKS` list is its eyesight. A hook missing from that list is damage it cannot
 see.
 
-### `npx playwright test` — 427 E2E
+### `npx playwright test` — 428 E2E
 **Proves:** RBAC boundaries, the money path, ticket-release gating, result versioning, printing,
 revalidation, failure states, the copy on several screens, and that every public page fits a phone.
 **Cannot see:** anything about performance. A `column::date` filter forcing a sequential scan

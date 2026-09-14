@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { registerClient } from './helpers/accounts.js';
+import { runScript } from './helpers/backendScript.js';
 
 // Account lockout, and PHI read auditing.
 //
@@ -66,6 +67,21 @@ test.describe('Account lockout after repeated failures', () => {
     expect(locked.body.message).toMatch(/locked/i);
     // Tells the user how long, rather than leaving them retrying and extending it.
     expect(locked.body.message).toMatch(/\d+ minute/);
+  });
+
+  test('a lock that has run out starts the count again, so one slip does not lock it for another fifteen minutes', async () => {
+    // [1.85.0] The count used to carry on from where the lock left it. It still stood at the
+    // threshold when the lock ran out, so the first wrong password afterwards locked the account
+    // again, and the person most likely to type it is the one who has just waited.
+    //
+    // Locks the account itself rather than relying on the test above, so it also runs alone.
+    for (let i = 0; i < THRESHOLD; i += 1) await attempt('wrong-password');
+    expect((await attempt(PASSWORD)).status, 'locked before the lock is run out').toBe(423);
+
+    runScript('e2eExpireLock.js', [`--email=${email}`], 'expire-lock');
+
+    expect((await attempt('wrong-password')).status).toBe(401);
+    expect((await attempt(PASSWORD)).status, 'one slip after a lock runs out must not lock it again').toBe(200);
   });
 });
 

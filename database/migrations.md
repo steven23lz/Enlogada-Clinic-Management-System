@@ -1,5 +1,31 @@
 # Database Migration & Schema History
 
+## [1.85.0] - 2026-09-15 (A sign-in lock that has run out starts the count again)
+
+No migration. Backend only.
+
+### What was wrong
+
+Ten wrong passwords lock an account for fifteen minutes. When the lock ran out, the failure count
+was not reset: it still stood at ten, so the first wrong password afterwards made it eleven and
+locked the account for another fifteen minutes. The person most likely to make that slip is the one
+who has just waited out the lock, and at the front desk the morning queue waits with them.
+
+### What changed
+
+- `userRepository.registerFailedLogin`: a failure after a lock has run out counts as the first of a
+  new run, and the old lock is cleared. It is still one UPDATE, so two attempts arriving together
+  cannot both read the same count.
+- The rest is unchanged: ten wrong passwords lock the account, a correct one clears the count, and
+  an administrator's password reset clears a lock.
+
+### Tests
+
+- login-protection.spec: a lock that has run out starts the count again. The test locks the
+  account, runs the lock out with the new `e2eExpireLock.js` (test addresses only, refused in
+  production), then checks that one wrong password answers 401 and the right one 200. Run against
+  the old code, it failed: the right password got 423.
+
 ## [1.84.0] - 2026-09-15 (The clinic's own photographs on the public site)
 
 No migration. Frontend only. The last step of the public-site plan (S7): the clinic sent photos.
