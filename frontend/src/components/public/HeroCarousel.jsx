@@ -5,14 +5,15 @@ import { cn } from '../../lib/utils';
 /**
  * The hero's background: slides that cross-fade, as on the reference site. [1.72.0]
  *
- * Until the clinic supplies photographs, the slides are the Aurora itself — the same three lights in
- * different positions — so the hero still drifts between compositions without a stock photo
- * standing in for a real clinic (the decision Home.jsx's Phase 4 note records). Every slide is an
- * `.aurora`, so every one is measured by checkContrast.js: moving a light changes where it lands,
- * never how bright it is.
+ * Home passes the clinic's own photographs [1.84.0]: the sign, the ultrasound room and the X-ray
+ * room. A photo slide renders dimmed and desaturated, as the reference does, under the clinic's navy
+ * deepening toward the bottom where the text sits, and `position` keeps a portrait photo's subject
+ * in view when it is cropped to a wide screen. checkContrast.js cannot read a photograph, so the
+ * scrim was measured on the rendered page instead; the figures are in migrations.md [1.84.0].
  *
- * Adding photos later is one change: give a slide `src`. It renders dimmed and desaturated the way
- * the reference does, under a dark gradient so the headline keeps its contrast.
+ * With no `slides` the hero falls back to the Aurora itself: the same three lights in different
+ * positions, each an `.aurora` that checkContrast.js does measure. Never a stock photo standing in
+ * for a real clinic.
  *
  * Timing is the reference site's — an 1800 ms cross-fade every 10 s. It never advances for anyone
  * who asked for reduced motion or while the tab is hidden, and the button in the corner stops it for
@@ -62,8 +63,13 @@ export default function HeroCarousel({ slides = AURORA_SLIDES, className }) {
                   loading={i === 0 ? 'eager' : 'lazy'}
                   fetchPriority={i === 0 ? 'high' : 'auto'}
                   className="h-full w-full object-cover brightness-[0.82] saturate-[0.85]"
+                  style={{ objectPosition: slide.position || '50% 50%' }}
                 />
-                <div className="absolute inset-0 bg-linear-to-b from-black/40 via-black/20 to-black/80" />
+                {/* The clinic's navy over the whole photo, deepening toward the bottom where the
+                    headline sits. [1.84.0] The black gradient this replaced was 20% at its lightest,
+                    and a white-walled room shows straight through 20%. */}
+                <div className="absolute inset-0 bg-aurora-base/60" />
+                <div className="absolute inset-0 bg-linear-to-b from-aurora-base/20 via-transparent to-aurora-base/80" />
               </>
             ) : (
               <div

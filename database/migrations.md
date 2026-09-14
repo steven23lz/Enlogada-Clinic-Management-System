@@ -1,5 +1,50 @@
 # Database Migration & Schema History
 
+## [1.84.0] - 2026-09-15 (The clinic's own photographs on the public site)
+
+No migration. Frontend only. The last step of the public-site plan (S7): the clinic sent photos.
+
+### What changed
+
+- **The Home header shows the clinic.** Its three slides are the ultrasound room, the X-ray room and
+  the lit sign, in place of the colour wash that stood in for them. The sign comes last because its
+  own lettering sits right behind the headline, and the first slide is the only one a visitor who
+  asked for reduced motion ever sees. The rooms are portrait photos cropped to a wide screen, so
+  each slide names the point to keep in view (`position`).
+- **The logo card is a photo card.** `ClinicShowcase` replaces `LogoShowcase`: the fetal monitor
+  beside the ultrasound machine on Home, and the lobby with the sign and the front desk on About.
+  Each photo is described for screen readers, and the card still shows the logo when given none.
+- **The photos are prepared for the web:** resized, saved as WebP (38–93 KB each) and bundled from
+  `src/assets/clinic/`, so a changed photo gets a new file name and is never served stale.
+  Re-encoding drops any metadata; none of the five carried a location.
+- **The lobby TV is switched off** in its photo. It was showing a film, faces and subtitles included.
+- **Left out on purpose:**
+  - the reception photo with the MI Healthcare standee: the clinic no longer takes MI Healthcare,
+    only 1CoopHealth
+  - a photo on the Services page, which has no laboratory photo to match the other two departments.
+
+### The scrim, measured
+
+`checkContrast.js` reads colours from CSS and cannot see a photograph. The black gradient the hero
+kept for photos was 20% at its lightest, and the X-ray room is white walls. It is now the clinic's
+navy at 60%, deepening to 80% at the bottom where the text sits. Each piece of text was measured
+against the brightest 5% of the pixels behind it, on every slide, at 1440 and 390 px and in dark
+mode:
+
+| Text | Needs | Lowest measured |
+|---|---|---|
+| Eyebrow | 4.5:1 | 5.41:1 |
+| Headline | 3:1 | 7.25:1 |
+| Gradient word | 3:1 | 4.11:1 |
+| Subtitle | 4.5:1 | 5.97:1 |
+
+### Tests
+
+- public-site.spec: the header's photos and both photo cards load, and each card describes its
+  photo.
+
+The full suite: 427 passed, 0 skipped.
+
 ## [1.83.0] - 2026-09-15 (No sidebar counts on Today)
 
 No migration. Frontend only. Steven's answer to the question left open since [1.77.0].

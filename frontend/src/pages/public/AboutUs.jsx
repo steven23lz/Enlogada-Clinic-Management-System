@@ -6,7 +6,8 @@ import { Button } from '../../components/ui/button';
 import PageHero from '../../components/public/PageHero';
 import SectionHeading from '../../components/public/SectionHeading';
 import FeatureCard from '../../components/public/FeatureCard';
-import LogoShowcase from '../../components/public/LogoShowcase';
+import ClinicShowcase from '../../components/public/ClinicShowcase';
+import frontDesk from '../../assets/clinic/front-desk.webp';
 import ClinicHours from '../../components/public/ClinicHours';
 import CtaBand from '../../components/public/CtaBand';
 import DecorBlobs from '../../components/public/DecorBlobs';
@@ -100,7 +101,13 @@ const AboutUs = ({ onNavigate }) => {
         {/* ── Our story ─────────────────────────────────────────────────────────────────────── */}
         <section aria-labelledby="story-heading" className="py-20 sm:py-24">
           <PageShell className="grid items-center gap-12 md:grid-cols-2 md:gap-16">
-            <LogoShowcase />
+            <ClinicShowcase
+              photo={{
+                src: frontDesk,
+                alt: "Enlogada Clinic's lobby, with the lit clinic sign and the front desk",
+                position: '50% 58%',
+              }}
+            />
             <div>
               <SectionHeading
                 id="story-heading"

@@ -72,6 +72,30 @@ test('the moving hero can be paused', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Play background animation' })).toHaveAttribute('aria-pressed', 'true');
 });
 
+test("the clinic's own photographs load, and each card says what it shows", async ({ page }) => {
+  // [1.84.0] The hero's slides and the About cards stood in for photos until the clinic sent
+  // some. A photo that fails to load leaves a dark hero with no picture and a blank card, and no
+  // other check in the suite would notice.
+  await page.goto('/');
+  await expect(page.getByRole('heading', { level: 1, name: HEADINGS.Home })).toBeVisible();
+  const loaded = (imgs) => imgs.filter((img) => img.complete && img.naturalWidth > 0).length;
+
+  const heroPhotos = page.locator('section[aria-labelledby="hero-heading"] img');
+  await expect(heroPhotos).toHaveCount(3);
+  await expect.poll(() => heroPhotos.evaluateAll(loaded), { timeout: 15000 }).toBe(3);
+
+  const homeCard = page.locator('section[aria-labelledby="about-heading"] figure img');
+  await homeCard.scrollIntoViewIfNeeded();
+  await expect(homeCard).toHaveAttribute('alt', /fetal monitor/i);
+  await expect.poll(() => homeCard.evaluateAll(loaded), { timeout: 15000 }).toBe(1);
+
+  await open(page, 'About Us');
+  const aboutCard = page.locator('section[aria-labelledby="story-heading"] figure img');
+  await aboutCard.scrollIntoViewIfNeeded();
+  await expect(aboutCard).toHaveAttribute('alt', /lobby/i);
+  await expect.poll(() => aboutCard.evaluateAll(loaded), { timeout: 15000 }).toBe(1);
+});
+
 test.describe('with reduced motion', () => {
   test.use({ contextOptions: { reducedMotion: 'reduce' } });
 

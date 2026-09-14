@@ -10,7 +10,11 @@ import FeatureCard from '../../components/public/FeatureCard';
 import DecorBlobs from '../../components/public/DecorBlobs';
 import Reveal from '../../components/public/Reveal';
 import ClinicFaq from '../../components/public/ClinicFaq';
-import LogoShowcase from '../../components/public/LogoShowcase';
+import ClinicShowcase from '../../components/public/ClinicShowcase';
+import clinicSign from '../../assets/clinic/clinic-sign.webp';
+import ultrasoundRoom from '../../assets/clinic/ultrasound-room.webp';
+import xrayRoom from '../../assets/clinic/xray-room.webp';
+import fetalMonitor from '../../assets/clinic/fetal-monitor.webp';
 import CtaBand from '../../components/public/CtaBand';
 import { scrollToSection } from '../../lib/scroll';
 import {
@@ -98,7 +102,18 @@ const Home = ({ onNavigate, section = null }) => {
         aria-labelledby="hero-heading"
         className="relative isolate flex min-h-[100svh] flex-col overflow-hidden bg-aurora-base"
       >
-        <HeroCarousel />
+        {/* The clinic's own photographs, which the Aurora slides stood in for until it sent them.
+            [1.84.0] The rooms are portrait photos cropped to a wide hero, so each names the point
+            to keep in view. The rooms come first: the sign's own lettering sits right behind the
+            headline, so it is the last slide rather than the one every visitor lands on (and the
+            only one a visitor who asked for reduced motion ever sees). */}
+        <HeroCarousel
+          slides={[
+            { id: 'ultrasound', src: ultrasoundRoom, position: '45% 55%' },
+            { id: 'xray', src: xrayRoom, position: '55% 58%' },
+            { id: 'sign', src: clinicSign, position: '50% 45%' },
+          ]}
+        />
         <div className="relative z-[1] flex flex-1 items-end pb-32 pt-36 sm:pb-40">
           <PageShell className="flex flex-col items-center text-center">
             {/* Each department wraps as a whole — on a phone the plain string broke inside "X-Ray". */}
@@ -198,8 +213,13 @@ const Home = ({ onNavigate, section = null }) => {
       {/* ── About teaser ────────────────────────────────────────────────────────────────────── */}
       <section aria-labelledby="about-heading" className="wash-aurora relative overflow-hidden py-20 sm:py-24">
         <PageShell className="grid items-center gap-12 md:grid-cols-2 md:gap-16">
-          {/* The logo on the reference site's offset panel, until the clinic sends a photograph. */}
-          <LogoShowcase />
+          <ClinicShowcase
+            photo={{
+              src: fetalMonitor,
+              alt: "The fetal monitor beside the ultrasound machine in Enlogada's ultrasound room",
+              position: '50% 55%',
+            }}
+          />
           <div>
             <SectionHeading
               id="about-heading"
