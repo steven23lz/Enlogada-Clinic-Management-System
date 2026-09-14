@@ -774,6 +774,8 @@ with a link to the printable document.
       `paidVisitIds`, shared with Today since `[1.77.0]`).
     - It is `aria-hidden`, so every nav button's accessible name stays exactly its label.
     - When it fails to load, it is left out rather than shown as 0.
+    - None while Today is open `[1.83.0]`. Its "Needs you now" already states each number beside
+      the button that deals with it, and the rail would say it twice. Every other screen keeps them.
   - **Patient Records** sits in the person's own group unless they manage the clinic.
     `data-nav-group` marks each group.
   - **Log out stays in the top bar**, and the name card opens My Account.

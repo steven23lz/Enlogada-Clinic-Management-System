@@ -224,6 +224,6 @@ something on a database with data you want.
 
 ---
 
-*Baseline recorded 2026-09-15, at the `[1.82.0]` commit. Re-measure and update the numbers in §1 whenever the suite
+*Baseline recorded 2026-09-15, at the `[1.83.0]` commit. Re-measure and update the numbers in §1 whenever the suite
 legitimately changes size — a stale baseline is worse than none, because it makes a real regression
 look like a documentation error.*

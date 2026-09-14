@@ -39,7 +39,7 @@ test.describe('The sidebar', () => {
       .toHaveCount(1, { timeout: 15000 });
   });
 
-  test("the Desk's count is the number the Desk shows, and its button keeps its name", async ({ page }) => {
+  test("Today carries no counts; the Desk's count is the number the Desk shows, and its button keeps its name", async ({ page }) => {
     // Something to count: a walk-in of our own in today's queue.
     const ctx = await request.newContext();
     const token = (await (await ctx.post(`${API}/auth/login`, {
@@ -62,7 +62,16 @@ test.describe('The sidebar', () => {
     expect(visit.status()).toBe(201);
     await ctx.dispose();
 
-    await signInTo(page, 'receptionist@enlogada.com', 'Desk');
+    // Sign-in lands on Today, which states these numbers itself, beside the button that deals with
+    // each. The rail carries none of its own there: it would be the same fact twice. [1.83.0] The
+    // walk-in above means the Desk has something to count, so a badge here would show.
+    await signIn(page, 'receptionist@enlogada.com');
+    await expect(page.getByTestId('today-needs')).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(1500);
+    await expect(page.locator('[data-nav-count]'), 'no counts beside Today').toHaveCount(0);
+
+    // The Desk's own screen shows it, and it is the number the Desk shows.
+    await page.getByRole('button', { name: 'Desk', exact: true }).first().click();
     const badge = page.locator('[data-nav-id="reception-queue"] [data-nav-count]');
     await expect(badge).toHaveText(/^\d+$/, { timeout: 15000 });
 

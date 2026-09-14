@@ -125,7 +125,14 @@ const SidebarLayout = ({ title = 'Today', activeNav = 'today', onSelectNav, rail
     : opsNavGroups;
 
   // The figure beside each screen — see useNavCounts for why each is that screen's own number.
-  const navCounts = useNavCounts(navGroups.flatMap((group) => group.items.map((item) => item.id)));
+  //
+  // None on Today. [1.83.0] Today's "Needs you now" states each of these numbers beside the button
+  // that deals with it, so the rail beside it said the same fact a second time: "Billing Queue 4"
+  // next to "4 patients waiting to pay". Steven's call. On every other screen the rail is the only
+  // thing saying people are waiting elsewhere, so it keeps them. Asking for no ids also means Today
+  // sends none of the rail's requests.
+  const onToday = activeNav === TODAY_ITEM.id;
+  const navCounts = useNavCounts(onToday ? [] : navGroups.flatMap((group) => group.items.map((item) => item.id)));
 
   // Whether the clinic is open, from the schedule patients book against. Re-read every minute so
   // "Open now" turns into "Closed now" at closing time on a screen nobody reloads.

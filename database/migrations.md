@@ -1,5 +1,24 @@
 # Database Migration & Schema History
 
+## [1.83.0] - 2026-09-15 (No sidebar counts on Today)
+
+No migration. Frontend only. Steven's answer to the question left open since [1.77.0].
+
+### What changed
+
+- **The sidebar shows no counts while Today is open.** Today's "Needs you now" already states each
+  number beside the button that deals with it, so "Billing Queue 4" in the rail next to "4 patients
+  waiting to pay" was the same fact twice. Every other screen keeps its counts: there, the rail is
+  the only thing saying people are waiting elsewhere.
+- On Today the rail asks for none of its counts, so it sends none of their requests.
+
+### Tests
+
+- sidebar.spec: sign-in lands on Today with no count in the rail, and the Desk's count appears on
+  the Desk, still the number the Desk shows.
+
+The full suite: 426 passed, 0 skipped.
+
 ## [1.82.0] - 2026-09-15 (The patient portal, part 3: the tabs, restyled)
 
 No migration. Frontend only. The last of the three portal commits.
