@@ -2,10 +2,11 @@ import React from 'react';
 import { AlertCircle, History, RefreshCw } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Panel, PanelBody } from '../ui/panel';
-import Toolbar, { ToolbarSpacer, SegmentedFilter } from '../ui/toolbar';
+import Toolbar, { SegmentedFilter } from '../ui/toolbar';
 import EmptyState from '../ui/empty-state';
 import { SkeletonRows } from '../ui/skeleton';
 import { Badge } from '../ui/badge';
+import DataBadge from '../ui/data-badge';
 import { SearchInput } from '../ui/search-input';
 import { StatusBadge } from '../ui/status-badge';
 import Pagination from '../ui/pagination';
@@ -46,10 +47,6 @@ export default function VisitHistoryPanel({ history, operations }) {
               <RefreshCw className="h-3.5 w-3.5" />
               Apply
             </Button>
-            <ToolbarSpacer />
-            <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
-              {history.total} visit{history.total === 1 ? '' : 's'}
-            </span>
           </Toolbar>
 
           {/* The table has named the visit type and the status in their own columns since [1.0.0]
@@ -110,9 +107,8 @@ export default function VisitHistoryPanel({ history, operations }) {
                     history.visits.map(v => (
                       <TableRow key={v.id}>
                         <TableCell label="Queue Ticket">
-                          <span className="rounded-md bg-slate-100 px-2 py-1 text-fine font-bold tabular-nums text-slate-700">
-                            {v.queue_number || `V-${v.id}`}
-                          </span>
+                          {/* The shared ticket badge, drawn as the Desk and the worklists draw it. [1.79.0] */}
+                          <DataBadge variant="queue" label="Queue ticket">{v.queue_number || `V-${v.id}`}</DataBadge>
                         </TableCell>
                         <TableCell label="Patient" className="font-semibold text-slate-900">
                           {v.first_name} {v.last_name}

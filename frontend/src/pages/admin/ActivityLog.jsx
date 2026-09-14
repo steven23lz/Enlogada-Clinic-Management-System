@@ -74,11 +74,9 @@ const ActivityLog = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Oversight"
         icon={ScrollText}
         title="Activity Log"
         description="Who did what — payment refunds and cancellations, staff account changes, HMO provider changes, and result corrections."
-        meta={<span><strong className="font-semibold text-slate-700">{total}</strong> recorded action{total === 1 ? '' : 's'}</span>}
         actions={
           <RefreshButton onRefresh={() => fetchActivity(page)} loading={loading} updatedAt={updatedAt} />
         }

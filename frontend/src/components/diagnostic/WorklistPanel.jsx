@@ -1,14 +1,12 @@
 import React from 'react';
 import { categoryLabel as categoryLabelFor, categoryIcon } from '../../lib/categories';
-
-const PAGE_SIZE = 10;
-const WORKLIST_STATUS_FILTERS = ['All', 'Processing', 'Waiting for Release'];
-import { AlertTriangle, Clock, FileText, Send, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Clock, FileText, Send, ShieldCheck, WifiOff } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Panel, PanelBody } from '../ui/panel';
 import Toolbar, { SegmentedFilter, ToolbarSpacer } from '../ui/toolbar';
 import EmptyState from '../ui/empty-state';
 import MetricCard from '../ui/metric-card';
+import DataBadge from '../ui/data-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { SearchInput } from '../ui/search-input';
 import { StatusBadge } from '../ui/status-badge';
@@ -18,11 +16,18 @@ import WaitBadge from '../ui/wait-badge';
 import { SkeletonRows } from '../ui/skeleton';
 import { useAuth } from '../../contexts/AuthContext';
 
+const PAGE_SIZE = 10;
+const WORKLIST_STATUS_FILTERS = ['All', 'Processing', 'Waiting for Release'];
+
 /**
  * What this department has to do today, and the state each ticket is in.
  *
  * Lifted out of DiagnosticDashboard, which rendered both worklist modes and four dialogs
  * from one 847-line file. The props are the hooks this piece reads.
+ *
+ * [1.79.0] Tidied to the rest of the staff side: the ticket is the shared queue badge (the Desk
+ * draws it the same way), a failed load is the standard error state with one Try again, and the
+ * secondary lines use the muted ink that clears AA rather than a grey that did not.
  */
 export default function WorklistPanel({ worklist, entry, criticals }) {
   const categoryLabel = categoryLabelFor(worklist.category);
@@ -64,7 +69,7 @@ export default function WorklistPanel({ worklist, entry, criticals }) {
       <>
       {/* Department Modality Worklist Header Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        {/* "—" on a failure, and the table below says why with its Retry — not a caption here too. */}
+        {/* "—" on a failure, and the table below says why with its Try again — not a caption here too. */}
         <MetricCard label="Awaiting Exam" value={worklistFailed ? '—' : processingCount} caption="Paid and released to you" captionTone="slate" icon={Clock} tone="indigo" />
         <MetricCard label="Awaiting Release" value={worklistFailed ? '—' : awaitingReleaseCount} caption="Findings recorded, not authorised" captionTone="slate" icon={FileText} tone="amber" />
         {/* The tile this replaced said "Active Modality: Laboratory — Your department", which
@@ -131,16 +136,18 @@ export default function WorklistPanel({ worklist, entry, criticals }) {
             </TableHeader>
             <TableBody>
               {worklist.worklistError ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-xs text-rose-600 font-semibold">
-                    {worklist.worklistError}{' '}
-                    <button
-                      type="button"
-                      onClick={worklist.refresh}
-                      className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
-                    >
-                      Retry
-                    </button>
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="p-0">
+                    {/* The standard error state, the same as every other list's. [1.79.0] It was a
+                        line of red text with an underlined "Retry" inside a table cell. */}
+                    <EmptyState
+                      compact
+                      tone="error"
+                      icon={WifiOff}
+                      title="Couldn't load the worklist"
+                      description="The tickets are still in the system; this screen could not read them."
+                      action={<Button variant="outline" size="sm" onClick={worklist.refresh}>Try again</Button>}
+                    />
                   </TableCell>
                 </TableRow>
               ) : worklist.loading ? (
@@ -149,12 +156,10 @@ export default function WorklistPanel({ worklist, entry, criticals }) {
                 paged.map(test => (
                   <TableRow key={test.visit_test_id} className="hover:bg-slate-50/70 transition-colors">
                     <TableCell label="Queue Ticket" className="py-3.5">
-                      <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
-                        {test.queue_number || `VT-${test.visit_test_id}`}
-                      </span>
+                      <DataBadge variant="queue" label="Queue ticket">{test.queue_number || `VT-${test.visit_test_id}`}</DataBadge>
                     </TableCell>
 
-                    <TableCell label="Patient" className="py-3.5 font-bold text-xs text-slate-900">
+                    <TableCell label="Patient" className="py-3.5 text-fine font-bold text-slate-900">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span>{test.first_name} {test.last_name}</span>
                         {/* The oldest ticket is usually the one to pick up next, and until now
@@ -166,7 +171,7 @@ export default function WorklistPanel({ worklist, entry, criticals }) {
                           normal for a 40-year-old man is anaemia in a child — and the tech had
                           to open a second screen to find out which band applied. The query has
                           returned birthdate and sex all along; nothing rendered them. */}
-                      <span className="block text-meta text-gray-400 font-normal">
+                      <span className="block text-meta font-normal text-slate-500">
                         PT-{test.patient_id}
                         {ageFromBirthdate(test.birthdate) !== null && (
                           <> &middot; {ageFromBirthdate(test.birthdate)}y</>
@@ -175,9 +180,9 @@ export default function WorklistPanel({ worklist, entry, criticals }) {
                       </span>
                     </TableCell>
 
-                    <TableCell label="Examination" className="py-3.5 text-xs font-bold text-gray-800">
+                    <TableCell label="Examination" className="py-3.5 text-fine font-bold text-slate-800">
                       {test.test_name}
-                      <span className="block text-meta text-gray-400 font-normal">{test.category_name}</span>
+                      <span className="block text-meta font-normal text-slate-500">{test.category_name}</span>
                       {/* Who asked for it [1.23.0]. The report goes back to this doctor, and a
                           tech querying an odd result needs to know who to call. */}
                       {test.referring_physician && (
@@ -194,7 +199,7 @@ export default function WorklistPanel({ worklist, entry, criticals }) {
                             the worklist — a tech had no on-screen signal that an expensive
                             test's authorization was rejected before running it. */}
                         {test.hmo_approval_status && (
-                          <span className="flex items-center gap-1 text-meta font-bold text-gray-400">
+                          <span className="flex items-center gap-1 text-meta font-bold text-slate-500">
                             <ShieldCheck className="w-3 h-3" />
                             HMO:&nbsp;<StatusBadge status={test.hmo_approval_status} className="px-1.5 py-0" />
                           </span>
@@ -203,7 +208,7 @@ export default function WorklistPanel({ worklist, entry, criticals }) {
                     </TableCell>
 
                     <TableCell className="py-3.5 text-right">
-                      <div className="flex items-center justify-end space-x-2">
+                      <div className="flex items-center justify-end gap-2">
                         {canRecord && (
                           <Button
                             onClick={() => entry.openFor(test)}

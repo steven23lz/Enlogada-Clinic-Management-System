@@ -90,7 +90,7 @@ test('the diagnostic worklist shows age and sex, which decide the reference rang
     const person = await paidLabTicket(apiContext, { sex: 'Male', birthdate: '1994-03-08' });
 
     await signInTo(page, 'lab@enlogada.com', 'Laboratory Worklist');
-    await expect(page.getByRole('heading', { name: /laboratory operations worklist/i }))
+    await expect(page.getByRole('heading', { name: 'Laboratory Worklist', exact: true, level: 1 }))
       .toBeVisible({ timeout: 15000 });
 
     // "PT-12 · 31y · Male" under the patient's name. Asserted on THIS run's own row, so the sex
@@ -112,7 +112,7 @@ test('the diagnostic worklist names the referring physician when there is one', 
     const person = await paidLabTicket(apiContext, { referringPhysician: 'Dr. Amelia Santos' });
 
     await signInTo(page, 'lab@enlogada.com', 'Laboratory Worklist');
-    await expect(page.getByRole('heading', { name: /laboratory operations worklist/i }))
+    await expect(page.getByRole('heading', { name: 'Laboratory Worklist', exact: true, level: 1 }))
       .toBeVisible({ timeout: 15000 });
 
     const row = await findRow(page, person);

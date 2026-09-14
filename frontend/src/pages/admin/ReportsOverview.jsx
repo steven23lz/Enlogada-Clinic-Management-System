@@ -56,9 +56,8 @@ const ReportsOverview = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Oversight"
         icon={BarChart3}
-        title="Clinic Reports"
+        title="Reports"
         description="Live activity, historical trends, and every department's operating figures in one place."
       />
 

@@ -4,6 +4,7 @@ import { Panel } from '../ui/panel';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
+import DataBadge from '../ui/data-badge';
 import { StatusBadge } from '../ui/status-badge';
 import QrScanner from '../QrScanner';
 import { ageFromBirthdate, formatAppointmentDate, formatTime12 } from '../../lib/date';
@@ -319,7 +320,7 @@ function BookingCard({ booking, checkIn, disposition, can }) {
         </div>
         <span className="flex flex-shrink-0 items-center gap-1.5">
           {booking.queue_number && (
-            <Badge className="bg-primary font-extrabold text-primary-foreground">{booking.queue_number}</Badge>
+            <DataBadge variant="queue" label="Queue ticket">{booking.queue_number}</DataBadge>
           )}
           <StatusBadge status={booking.is_paid ? 'Paid' : 'Pending'} />
         </span>

@@ -237,7 +237,6 @@ export default function ClinicSchedule() {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Operations"
         title="Clinic Schedule"
         description="When the clinic opens, how long a slot is, and how many patients it can take at once. Patients see this on the booking calendar."
         actions={

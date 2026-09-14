@@ -2,7 +2,7 @@ import React from 'react';
 import { ExternalLink, History, Printer, Receipt, RefreshCw, Undo2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Panel, PanelHeader, PanelBody } from '../ui/panel';
-import Toolbar, { ToolbarSpacer, SegmentedFilter } from '../ui/toolbar';
+import Toolbar, { SegmentedFilter } from '../ui/toolbar';
 import { SearchInput } from '../ui/search-input';
 import EmptyState from '../ui/empty-state';
 import { Badge } from '../ui/badge';
@@ -49,10 +49,6 @@ export default function TransactionHistoryPanel({ history, receipt, refund, oper
             containerClassName="w-full sm:w-60"
             aria-label="Search receipts"
           />
-          <ToolbarSpacer />
-          <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
-            {history.total} receipt{history.total === 1 ? '' : 's'}
-          </span>
         </Toolbar>
 
         {/* The Payment Method column has been on this table since [1.0.0] with no way to ask for

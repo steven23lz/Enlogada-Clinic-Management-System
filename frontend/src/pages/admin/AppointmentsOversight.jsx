@@ -73,16 +73,9 @@ const AppointmentsOversight = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Oversight"
         icon={CalendarClock}
         title="Appointments"
         description="Clinic-wide view of every booked appointment. Read-only — rescheduling and cancellation belong to Reception or the patient."
-        meta={(loadError || loading) ? undefined : (
-          <span>
-            <strong className="font-semibold text-slate-700">{total}</strong>{' '}
-            {statusFilter === 'All' ? 'total' : statusFilter.toLowerCase()}
-          </span>
-        )}
         actions={
           <RefreshButton onRefresh={() => fetchAppointments(page)} loading={loading} updatedAt={updatedAt} />
         }

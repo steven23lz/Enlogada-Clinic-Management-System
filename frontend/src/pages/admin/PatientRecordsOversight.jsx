@@ -193,7 +193,6 @@ const PatientRecordsOversight = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Oversight"
         icon={FolderSearch}
         title="Patient Records"
         description="Search the clinic-wide roster, across client-owned and walk-in profiles. Opening a record is audited."

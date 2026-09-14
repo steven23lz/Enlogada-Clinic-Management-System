@@ -210,13 +210,9 @@ const ServiceRequests = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Oversight"
         icon={ShieldCheck}
-        title="Service & HMO Requests"
+        title="Service Requests"
         description="Review and approve HMO pre-authorisation logged by Reception. Approval is Admin-only — Reception can log a request but not clear it."
-        meta={(loadError || loading)
-          ? undefined
-          : <span><strong className="font-semibold text-slate-700">{total}</strong> request{total === 1 ? '' : 's'}</span>}
         actions={
           <RefreshButton
             onRefresh={() => fetchRequests(page)}

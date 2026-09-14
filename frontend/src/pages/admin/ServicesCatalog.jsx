@@ -40,13 +40,12 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
   };
 
   return (
-    <SidebarLayout title="Services Catalog Management" activeNav={activeNav} onSelectNav={onSelectNav}>
+    <SidebarLayout title="Services Catalog" activeNav={activeNav} onSelectNav={onSelectNav}>
       <div className="space-y-6">
 
         <PageHeader
-          eyebrow="Administration"
           icon={Layers}
-          title="Clinic Services & Price Catalog"
+          title="Services Catalog"
           description="The diagnostic services the clinic offers and what they cost. Edits appear immediately on the public website and in the patient booking form."
           actions={
             <>

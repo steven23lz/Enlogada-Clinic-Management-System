@@ -168,7 +168,7 @@ test.describe('Today', () => {
         && url.searchParams.get('delivery') === 'unsent' && !url.searchParams.has('days');
     });
     await need.getByRole('button', { name: 'Open Laboratory History' }).click();
-    await expect(page.getByRole('heading', { name: 'Laboratory Result History', level: 1 })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: 'Laboratory History', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
     await historyAsks;
   });
 
@@ -217,7 +217,7 @@ test.describe('Today', () => {
     // The real list from here on: Service Requests is not what is under test.
     await page.unroute(pendingClaims);
     await need.getByRole('button', { name: 'Review' }).click();
-    await expect(page.getByRole('heading', { name: 'Service & HMO Requests' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: 'Service Requests', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
   });
 
   test('a Receptionist who is also a Cashier gets one "Needs you now" and both days', async ({ page }) => {

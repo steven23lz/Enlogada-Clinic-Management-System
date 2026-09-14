@@ -10,18 +10,7 @@ import ReportsOverview from './ReportsOverview';
 import SuperAdminManagement from './SuperAdminManagement';
 import ActivityLog from './ActivityLog';
 import ClinicSchedule from './ClinicSchedule';
-
-const NAV_TITLES = {
-  staff: 'Staff Accounts',
-  'service-requests': 'Service Requests',
-  'cashier-monitoring': 'Cashier Monitoring',
-  'appointments-list': 'Appointments Oversight',
-  'patient-records': 'Patient Records Oversight',
-  'clinic-schedule': 'Clinic Schedule',
-  reports: 'Clinic Reports',
-  activity: 'Activity Log',
-  superadmin: 'Super Admin Management',
-};
+import { findNavItem } from '../../config/navigation';
 
 /**
  * The management screens.
@@ -64,8 +53,11 @@ const AdminDashboard = ({ activeNav = 'staff', onSelectNav }) => {
     }
   };
 
+  // The breadcrumb reads the sidebar's own label, so the two cannot name one screen differently.
+  // [1.79.0] A list of titles kept here had drifted: "Appointments Oversight" and "Clinic Reports"
+  // in the bar, "Appointments" and "Reports" in the sidebar.
   return (
-    <SidebarLayout title={NAV_TITLES[activeNav] || 'Management'} activeNav={activeNav} onSelectNav={onSelectNav}>
+    <SidebarLayout title={findNavItem(activeNav)?.label || 'Management'} activeNav={activeNav} onSelectNav={onSelectNav}>
       {renderContent()}
     </SidebarLayout>
   );

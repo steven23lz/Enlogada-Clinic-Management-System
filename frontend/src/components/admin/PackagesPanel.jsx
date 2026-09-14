@@ -6,8 +6,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import EmptyState from '../ui/empty-state';
-import RefreshButton from '../ui/refresh-button';
-import { useFreshness } from '../../hooks/useFreshness';
 import { formatCurrency } from '../../lib/currency';
 
 /**
@@ -17,9 +15,11 @@ import { formatCurrency } from '../../lib/currency';
  * cost of buying its components one at a time, and that is not visible until something totals it —
  * four of the five real bundles read as *surcharges* when HIV Screening was loaded without a price,
  * and nobody would have noticed from the price alone.
+ *
+ * No Refresh of its own: the Services Catalog's one Refresh reloads this list with the other two,
+ * and a second here made three on one screen. [1.79.0]
  */
 export default function PackagesPanel({ packageAdmin }) {
-  const updatedAt = useFreshness(packageAdmin.loading, packageAdmin.error);
   return (
     <Panel className="overflow-hidden">
       <PanelHeader
@@ -27,13 +27,10 @@ export default function PackagesPanel({ packageAdmin }) {
         description="Fixed-price bundles. A patient pays the package price, not the sum of the tests inside it."
         icon={Package}
         actions={
-          <>
-            <RefreshButton compact onRefresh={packageAdmin.reload} loading={packageAdmin.loading} updatedAt={updatedAt} />
-            <Button size="sm" onClick={packageAdmin.openAdd}>
-              <Plus className="h-3.5 w-3.5" />
-              Add Package
-            </Button>
-          </>
+          <Button size="sm" onClick={packageAdmin.openAdd}>
+            <Plus className="h-3.5 w-3.5" />
+            Add Package
+          </Button>
         }
       />
       <PanelBody flush>

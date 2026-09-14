@@ -10,6 +10,11 @@ import RefreshButton from '../ui/refresh-button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useFreshness } from '../../hooks/useFreshness';
 import WhoSeesWhat from './WhoSeesWhat';
+import { UNUSED } from '../../lib/whoSeesWhat';
+
+// A permission nothing checks is not offered as an exception either: granting it would save and
+// change nothing. [1.79.0] The grid already leaves it off (lib/whoSeesWhat.js).
+const usable = (name) => !UNUSED[name];
 
 // A person-level exception is a coloured chip, so the eye separates "this is what the role
 // gives" from "someone made a decision about this individual".
@@ -138,8 +143,8 @@ function PersonAccess({ access }) {
               <div className="rounded-lg border border-line p-3">
                 <span className="field-label">Effective permissions</span>
                 <span className="text-lead font-bold tabular-nums text-slate-900">
-                  {access.selectedUser.effectivePermissions.length}
-                  <span className="ml-1 text-fine font-normal text-slate-500">of {access.permissions.length}</span>
+                  {access.selectedUser.effectivePermissions.filter(usable).length}
+                  <span className="ml-1 text-fine font-normal text-slate-500">of {access.permissions.filter((p) => usable(p.name)).length}</span>
                 </span>
               </div>
               <div className={`rounded-lg border p-3 ${access.overrideCount ? 'border-amber-200 bg-amber-50/60' : 'border-line'}`}>
@@ -198,7 +203,7 @@ function PersonAccess({ access }) {
             </div>
 
             {Object.entries(access.permissionsByModule).map(([module, modulePermissions]) => {
-              const visible = modulePermissions.filter(access.matchesSearch);
+              const visible = modulePermissions.filter((p) => usable(p.name) && access.matchesSearch(p));
               if (visible.length === 0) return null;
               return (
                 <div key={module}>

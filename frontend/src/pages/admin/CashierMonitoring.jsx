@@ -97,7 +97,6 @@ const CashierMonitoring = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Oversight"
         icon={Receipt}
         title="Cashier Monitoring"
         description="Every payment taken across all cashiers, for reconciliation and the daily cash-up. Read-only — Admin cannot transact."

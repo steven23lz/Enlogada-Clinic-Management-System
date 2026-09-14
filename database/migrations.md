@@ -1,5 +1,49 @@
 # Database Migration & Schema History
 
+## [1.79.0] - 2026-09-14 (The staff side, tidied)
+
+No migration. Frontend only.
+
+### What changed
+
+- **One name per screen.** Every heading now matches the sidebar and the breadcrumb:
+  - "Laboratory Operations Worklist" became "Laboratory Worklist" (the same for X-Ray and
+    Ultrasound), and "Laboratory Result History" became "Laboratory History".
+  - "Service & HMO Requests" became "Service Requests", "Clinic Services & Price Catalog" became
+    "Services Catalog", "Clinic Reports" became "Reports", and "Super Admin Management" became
+    "Super Admin".
+  - Admin's breadcrumb reads the sidebar's own label from `config/navigation.js`, so "Appointments
+    Oversight" and "Patient Records Oversight" are gone from the top bar. So does the diagnostic
+    console's heading.
+- **No eyebrow gives a group a second name.** Nine admin pages opened with "Administration",
+  "Oversight" or "Operations" over their heading, while the sidebar calls the same group
+  "Management". They are gone, as the Today eyebrow went in [1.77.0].
+- **A count is said once, in the pager.** Service Requests read "1 request" above the list and
+  "1 total" below it; Appointments, Activity Log, Laboratory History, Visit History, Transaction
+  History and the Services Catalog did the same. The header and toolbar copies are gone. The
+  catalogue's pager, which read only the word "services", now reads "Showing 1–15 of 66".
+- **One Refresh on the Services Catalog.** Package Deals and HMO Providers each carried their own
+  beneath the page's, which already reloads all three lists.
+- **My Account has a heading.** It was the one staff screen with no `<h1>`.
+- **The queue ticket is one badge everywhere.** The diagnostic worklist and history, Visit History
+  and the Desk's booking card now use the same dark ticket as the Desk's queue
+  (`<DataBadge variant="queue">`).
+- **The worklist and the result history fail like every other list:** the standard error state
+  with one Try again, instead of a line of red text with an underlined Retry.
+- On those two screens the secondary lines use the muted ink that clears AA, and View Report is
+  sized like the buttons beside it.
+- **One person** no longer lists `tests:results_write`, the permission nothing checks, and its count
+  leaves it out too.
+
+### Tests
+
+- `screen-names.spec.js` (new, 6 tests): each role's screens carry their sidebar name as both
+  heading and breadcrumb, and My Account has a heading.
+- The specs that asserted old headings follow the new ones: workflow-context, hmo-card-review and
+  today.
+
+The full suite: 420 passed, 0 skipped, across 63 spec files.
+
 ## [1.78.0] - 2026-09-14 (Access Control becomes "Who sees what")
 
 No migration. Frontend only: the grid reads and writes the role templates through the same

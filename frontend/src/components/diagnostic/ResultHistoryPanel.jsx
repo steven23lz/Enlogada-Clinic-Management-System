@@ -1,12 +1,11 @@
 import React from 'react';
 import { categoryLabel as categoryLabelFor } from '../../lib/categories';
-
-const PAGE_SIZE = 10;
-import { Eye, History, Pencil, Mail, MailCheck, MailX } from 'lucide-react';
+import { Eye, History, Pencil, Mail, MailCheck, MailX, WifiOff } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Panel, PanelBody } from '../ui/panel';
 import Toolbar, { ToolbarSpacer, SegmentedFilter } from '../ui/toolbar';
 import EmptyState from '../ui/empty-state';
+import DataBadge from '../ui/data-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { SearchInput } from '../ui/search-input';
 import Pagination from '../ui/pagination';
@@ -16,11 +15,16 @@ import { ConfirmDialog } from '../ui/confirm-dialog';
 import { TurnaroundPanel } from '../reports/OperationsPanels';
 import { useAuth } from '../../contexts/AuthContext';
 
+const PAGE_SIZE = 10;
+
 /**
  * Reports this department has already released, and its throughput beside them.
  *
  * Lifted out of DiagnosticDashboard, which rendered both worklist modes and four dialogs
  * from one 847-line file. The props are the hooks this piece reads.
+ *
+ * [1.79.0] Tidied like the worklist: the shared queue badge, the standard error state, muted ink
+ * that clears AA, and a View Report button sized like the buttons beside it.
  */
 export default function ResultHistoryPanel({ worklist, entry, operations, onViewResult, delivery }) {
   const categoryLabel = categoryLabelFor(worklist.category);
@@ -67,9 +71,6 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
             value={worklist.deliveryFilter}
             onChange={worklist.setDeliveryFilter}
           />
-          <span className="text-fine font-medium tabular-nums text-slate-500">
-            {filtered.length} result{filtered.length === 1 ? '' : 's'}
-          </span>
           <ToolbarSpacer />
           <SearchInput
             placeholder="Search patient, test, queue..."
@@ -98,16 +99,16 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
             </TableHeader>
             <TableBody>
               {worklist.historyError ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-xs text-rose-600 font-semibold">
-                    {worklist.historyError}{' '}
-                    <button
-                      type="button"
-                      onClick={worklist.refresh}
-                      className="underline font-bold border-0 bg-transparent cursor-pointer text-rose-700"
-                    >
-                      Retry
-                    </button>
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={6} className="p-0">
+                    <EmptyState
+                      compact
+                      tone="error"
+                      icon={WifiOff}
+                      title="Couldn't load the released results"
+                      description="The reports are still in the system; this screen could not read them."
+                      action={<Button variant="outline" size="sm" onClick={worklist.refresh}>Try again</Button>}
+                    />
                   </TableCell>
                 </TableRow>
               ) : worklist.loading ? (
@@ -116,16 +117,14 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                 paged.map(test => (
                   <TableRow key={test.visit_test_id} className="hover:bg-slate-50/70 transition-colors">
                     <TableCell label="Queue Ticket" className="py-3.5">
-                      <span className="font-extrabold text-xs text-slate-900 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200">
-                        {test.queue_number || `VT-${test.visit_test_id}`}
-                      </span>
+                      <DataBadge variant="queue" label="Queue ticket">{test.queue_number || `VT-${test.visit_test_id}`}</DataBadge>
                     </TableCell>
 
-                    <TableCell label="Patient" className="py-3.5 font-bold text-xs text-slate-900">
+                    <TableCell label="Patient" className="py-3.5 text-fine font-bold text-slate-900">
                       {test.first_name} {test.last_name}
                     </TableCell>
 
-                    <TableCell label="Examination" className="py-3.5 text-xs font-bold text-gray-800">
+                    <TableCell label="Examination" className="py-3.5 text-fine font-bold text-slate-800">
                       {test.test_name}
                       {/* A corrected report is not the same document as a first one, and this
                           screen's own description promises "including amended versions" while
@@ -139,23 +138,23 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                           Amended &middot; v{test.version}
                         </span>
                       )}
-                      <span className="block text-meta text-gray-400 font-normal">{test.category_name}</span>
+                      <span className="block text-meta font-normal text-slate-500">{test.category_name}</span>
                     </TableCell>
 
-                    <TableCell label="Released" className="py-3.5 text-xs text-gray-500">
+                    <TableCell label="Released" className="py-3.5 text-fine text-slate-600">
                       {test.released_at ? formatDateTime(test.released_at) : '—'}
                       {test.released_by_first_name && (
-                        <span className="block text-meta text-gray-400">by {test.released_by_first_name} {test.released_by_last_name}</span>
+                        <span className="block text-meta text-slate-500">by {test.released_by_first_name} {test.released_by_last_name}</span>
                       )}
                     </TableCell>
 
-                    <TableCell label="Sent to patient" className="py-3.5 text-xs">
+                    <TableCell label="Sent to patient" className="py-3.5 text-fine">
                       {test.emailed_at ? (
                         <span className="inline-flex items-center gap-1.5 font-semibold text-brand-700">
                           <MailCheck className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
                           <span>
                             {formatDateTime(test.emailed_at)}
-                            <span className="block font-normal text-meta text-gray-400">
+                            <span className="block font-normal text-meta text-slate-500">
                               {test.emailed_to}
                               {test.email_count > 1 && ` · sent ${test.email_count}×`}
                             </span>
@@ -165,7 +164,7 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                         // Released, has an address, and no record of a send. Either it predates
                         // [1.59.0] (nothing was written down, so this honestly says "unknown")
                         // or the send failed at release. Both are cases for the button beside it.
-                        <span className="inline-flex items-center gap-1.5 text-gray-500">
+                        <span className="inline-flex items-center gap-1.5 text-slate-600">
                           <Mail className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
                           Not recorded
                         </span>
@@ -173,7 +172,7 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                         // Most walk-ins. Not a fault — a patient registered at the counter has no
                         // account, so there is nowhere to send. Saying so here stops a technician
                         // pressing a button that can only ever refuse.
-                        <span className="inline-flex items-center gap-1.5 text-gray-400">
+                        <span className="inline-flex items-center gap-1.5 text-slate-500">
                           <MailX className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
                           No email on file
                         </span>
@@ -181,13 +180,9 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                     </TableCell>
 
                     <TableCell className="py-3.5 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        <Button
-                          onClick={() => onViewResult(test)}
-                          variant="outline"
-                          className="text-fine font-bold border-gray-200 hover:bg-primary hover:text-primary-foreground rounded-lg py-1 px-2.5 flex items-center space-x-1.5"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
+                      <div className="flex items-center justify-end gap-2">
+                        <Button onClick={() => onViewResult(test)} variant="outline" size="xs">
+                          <Eye className="h-3 w-3" />
                           <span>View Report</span>
                         </Button>
                         {canSend && (

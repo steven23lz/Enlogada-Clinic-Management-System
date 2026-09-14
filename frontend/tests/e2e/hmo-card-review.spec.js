@@ -133,7 +133,8 @@ test.describe('HMO card evidence (UI)', () => {
     await signIn(page, 'admin@enlogada.com');
 
     await page.getByText('Service Requests', { exact: true }).first().click();
-    await expect(page.getByRole('heading', { name: 'Service & HMO Requests' })).toBeVisible();
+    // The sidebar's name since [1.79.0]; it read "Service & HMO Requests" under a "Service Requests" item.
+    await expect(page.getByRole('heading', { name: 'Service Requests', exact: true, level: 1 })).toBeVisible();
 
     // The claim just filed is the newest, and the list is ORDER BY request_date DESC — so the
     // first Review button opens it. The row itself carries no id to match on.

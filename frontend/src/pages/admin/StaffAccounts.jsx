@@ -202,7 +202,6 @@ const StaffAccounts = () => {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Administration"
         icon={Users}
         title="Staff Accounts"
         description="Receptionist, Cashier and diagnostic staff logins. Admin and SuperAdmin accounts are managed separately under RBAC administration."

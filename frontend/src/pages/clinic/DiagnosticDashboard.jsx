@@ -15,6 +15,7 @@ import { useResultEntry } from '../../hooks/useResultEntry';
 import { usePatientResultHistory } from '../../hooks/usePatientResultHistory';
 import { useResultDelivery } from '../../hooks/useResultDelivery';
 import { categoryLabel as categoryLabelFor, categoryIcon } from '../../lib/categories';
+import { findNavItem } from '../../config/navigation';
 
 // A ticket only reaches this console once the receptionist/cashier has released it, at which
 // point it is already 'Processing'. 'Pending' is therefore not a state this screen can ever
@@ -84,7 +85,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav, intent }) => 
   // the wrong end of the problem.
   const categoryLabel = categoryLabelFor(worklist.category);
   const modalityIcon = categoryIcon(worklist.category);
-  const pageTitle = mode === 'history' ? `${categoryLabel} Result History` : `${categoryLabel} Operations Worklist`;
+  // What the sidebar calls it, so the sidebar, the breadcrumb and the heading agree. [1.79.0] It was
+  // "Laboratory Operations Worklist" under a sidebar item reading "Laboratory Worklist": one screen,
+  // two names, and someone told to "open the Laboratory Worklist" looked for a heading they never saw.
+  const pageTitle = findNavItem(activeNav)?.label
+    || (mode === 'history' ? `${categoryLabel} History` : `${categoryLabel} Worklist`);
 
   return (
     <SidebarLayout title={pageTitle} activeNav={activeNav} onSelectNav={onSelectNav}>

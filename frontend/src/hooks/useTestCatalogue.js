@@ -209,7 +209,7 @@ export function useTestCatalogue() {
 
   return {
     tests, categories, filtered, loading, error,
-    paged, page: safePage, totalPages, setPage,
+    paged, page: safePage, totalPages, setPage, pageSize: CATALOGUE_PAGE_SIZE,
     filterCategory, setFilterCategory,
     showModal, editingTest, form, setForm, modalError, modalSuccess, submitting,
     openAdd, openEdit, closeModal, save,

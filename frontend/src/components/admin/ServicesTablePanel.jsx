@@ -2,7 +2,7 @@ import React from 'react';
 import LoadingState from '../ui/loading-state';
 import { Edit2, Info, Layers, Plus } from 'lucide-react';
 import { Panel, PanelBody } from '../ui/panel';
-import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
+import Toolbar from '../ui/toolbar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -58,10 +58,6 @@ export default function ServicesTablePanel({ catalogue }) {
           </button>
         ))}
           </div>
-          <ToolbarSpacer />
-          <span className="whitespace-nowrap text-fine font-medium tabular-nums text-slate-500">
-            {catalogue.filtered.length} shown
-          </span>
         </Toolbar>
 
       {/* Services Table */}
@@ -163,7 +159,7 @@ export default function ServicesTablePanel({ catalogue }) {
             totalPages={catalogue.totalPages}
             onPageChange={catalogue.setPage}
             total={catalogue.filtered.length}
-            totalLabel="services"
+            pageSize={catalogue.pageSize}
             className="border-t border-line px-4 py-2.5"
           />
         )}

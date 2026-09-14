@@ -32,7 +32,7 @@ const SuperAdminManagement = () => {
       <PageHeader
         eyebrow="SuperAdmin only"
         icon={ShieldCheck}
-        title="Super Admin Management"
+        title="Super Admin"
         description="Who sees what, elevated accounts, and the clinic's own payment accounts — the capabilities an Admin account deliberately does not have."
       />
 
