@@ -1,24 +1,30 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { Suspense, startTransition, useState, useEffect, useCallback } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { GOOGLE_CLIENT_ID, isGoogleAuthConfigured } from './config/googleAuth';
 import { CONSOLE, consoleForNav, landingNavForRoles } from './config/navigation';
+import { lazyScreen } from './lib/lazyScreen';
 import Home from './pages/public/Home';
 import AboutUs from './pages/public/AboutUs';
 import ServicesPage from './pages/public/ServicesPage';
 import PrivacyPolicy from './pages/public/PrivacyPolicy';
 import TermsOfService from './pages/public/TermsOfService';
-import AuthPage from './pages/auth/AuthPage';
-import ClientDashboard from './pages/portal/ClientDashboard';
-import ClientProfile from './pages/portal/ClientProfile';
-import ReceptionistDashboard from './pages/clinic/ReceptionistDashboard';
-import CashierDashboard from './pages/clinic/CashierDashboard';
-import DiagnosticDashboard from './pages/clinic/DiagnosticDashboard';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import ServicesCatalog from './pages/admin/ServicesCatalog';
-import StaffAccountSettings from './pages/StaffAccountSettings';
-import Today from './pages/Today';
-import ReceiptView from './pages/ReceiptView';
+
+// The public pages above come with the app. Every other screen is fetched the first time someone
+// opens it. [1.87.0] It was all one file of about 1.5 MB, so a patient opening Home on a phone
+// downloaded every console, chart and admin screen before the page could draw: 407 KB even
+// compressed. Sign-in is split off as well, because most visitors to Home never sign in.
+const AuthPage = lazyScreen(() => import('./pages/auth/AuthPage'));
+const ClientDashboard = lazyScreen(() => import('./pages/portal/ClientDashboard'));
+const ClientProfile = lazyScreen(() => import('./pages/portal/ClientProfile'));
+const ReceptionistDashboard = lazyScreen(() => import('./pages/clinic/ReceptionistDashboard'));
+const CashierDashboard = lazyScreen(() => import('./pages/clinic/CashierDashboard'));
+const DiagnosticDashboard = lazyScreen(() => import('./pages/clinic/DiagnosticDashboard'));
+const AdminDashboard = lazyScreen(() => import('./pages/admin/AdminDashboard'));
+const ServicesCatalog = lazyScreen(() => import('./pages/admin/ServicesCatalog'));
+const StaffAccountSettings = lazyScreen(() => import('./pages/StaffAccountSettings'));
+const Today = lazyScreen(() => import('./pages/Today'));
+const ReceiptView = lazyScreen(() => import('./pages/ReceiptView'));
 
 // An emailed password-reset LINK, from before [1.73.0] replaced links with a 6-digit code. Some are
 // still sitting in inboxes. One opens the forgot-password card with a word of explanation, and its
@@ -48,6 +54,15 @@ const getInitialReceipt = () => {
   return new URLSearchParams(window.location.search).get('receipt');
 };
 
+// The one loading screen: while the session is checked, and while a screen's code arrives the
+// first time it is opened. [1.87.0]
+const AppLoading = () => (
+  <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center space-y-3">
+    <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+    <span className="text-sm font-semibold text-gray-500">Loading Enlogada Clinic...</span>
+  </div>
+);
+
 const MainApp = () => {
   const { user, loading } = useAuth();
   const [legacyResetLink] = useState(hadLegacyResetLink);
@@ -61,9 +76,13 @@ const MainApp = () => {
   // this visit's tests, the reports not yet sent. [1.77.0] Set only by that navigation and cleared by
   // any other (the sidebar passes an id alone), so an intent is acted on once and never re-fires.
   const [navIntent, setNavIntent] = useState(null);
+  // Both navigations are transitions [1.87.0], so the screen being left stays on show while the
+  // next one's code arrives, instead of the whole app blinking to the loading screen.
   const selectNav = useCallback((navId, intent = null) => {
-    setActiveNav(navId);
-    setNavIntent(intent);
+    startTransition(() => {
+      setActiveNav(navId);
+      setNavIntent(intent);
+    });
   }, []);
 
   // The patient portal's tab. [1.81.0] Held here, above ClientDashboard, so going to My Account
@@ -105,17 +124,14 @@ const MainApp = () => {
   }, [user, roleKey]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center space-y-3">
-        <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-        <span className="text-sm font-semibold text-gray-500">Loading Enlogada Clinic...</span>
-      </div>
-    );
+    return <AppLoading />;
   }
 
   const handleNavigate = (tab, { section = null } = {}) => {
-    setCurrentTab(tab);
-    setPendingSection(section);
+    startTransition(() => {
+      setCurrentTab(tab);
+      setPendingSection(section);
+    });
   };
 
   /**
@@ -259,9 +275,13 @@ const MainApp = () => {
 };
 
 function App() {
+  // The boundary for every screen fetched on first use [1.87.0]. Its fallback is the same loading
+  // screen as the session check, so a first visit and a sign-in look alike.
   const app = (
     <AuthProvider>
-      <MainApp />
+      <Suspense fallback={<AppLoading />}>
+        <MainApp />
+      </Suspense>
     </AuthProvider>
   );
 

@@ -1,5 +1,51 @@
 # Database Migration & Schema History
 
+## [1.87.0] - 2026-09-15 (A phone downloads the public site, not the whole app)
+
+No migration. Frontend only.
+
+### What was wrong
+
+The app was built as one JavaScript file of about 1.5 MB. A visitor opening Home on a phone
+downloaded every console, chart and admin screen, and the patient portal, before the page could
+draw: 1,464 KB, and 407 KB even compressed, over a mobile connection.
+
+### What changed
+
+- `App.jsx` keeps the five public pages in the first file and fetches every other screen the first
+  time someone opens it: sign-in, the patient portal, Today, the consoles, the admin screens, My
+  Account and the receipt page. The build puts each in its own file.
+- Moving between screens is a React transition (`startTransition`), so the screen being left stays
+  on show while the next one's code arrives, rather than the app blinking to the loading screen.
+  The loading screen appears only when there is nothing to keep on show, such as straight after
+  signing in.
+- `lib/lazyScreen.js`: a tab left open across a new deploy asks for a file the deploy replaced. The
+  first such failure reloads the page once, which fetches the new build. If the file is still
+  missing straight after, the error boundary says so, with its Reload button, instead of the page
+  reloading forever.
+
+### Measured
+
+The production build, served locally, Home at 390 px:
+
+| | Before | After |
+|---|---|---|
+| JavaScript files | 1 | 3 |
+| Size | 1,464 KB | 398 KB |
+| Compressed (gzip) | 407 KB | 124 KB |
+
+Going on to Sign In adds 7 KB compressed. A signed-in user downloads what their own screens need,
+the first time they open them.
+
+### Tests
+
+- Frontend unit: `lazyScreen.test.js`, 5 tests (108 in all). It reloads once, never twice, never
+  when it has nowhere to remember that it did, and forgets once a screen loads.
+- The production build, served locally, signed in as a patient on a phone and as the front desk,
+  the cashier, the laboratory, an Admin and the Super Admin, each opening their screens: no page
+  errors and no failed file requests.
+- The full suite, with [1.85.0] and [1.86.0]: 428 passed, 0 skipped.
+
 ## [1.86.0] - 2026-09-15 (The tests stop emailing the demo accounts and stop leaving images behind)
 
 No migration. Backend only.

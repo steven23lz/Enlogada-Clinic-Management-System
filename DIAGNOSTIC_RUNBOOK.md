@@ -67,7 +67,7 @@ cd frontend && npx playwright test                  # expect: 428 pass, 0 skippe
 | Check | Expected |
 |---|---|
 | Backend unit | **81 passed** |
-| Frontend unit | **103 passed** |
+| Frontend unit | **108 passed** |
 | Playwright E2E | **428 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
 | `verifyRbacWiring` | `All good`, **78 routes checked**, **0 warnings** |
 | `verifyDiscountParity` | `Exact parity` — 3,264 combinations |
@@ -224,6 +224,6 @@ something on a database with data you want.
 
 ---
 
-*Baseline recorded 2026-09-15, at the `[1.84.0]` commit. Re-measure and update the numbers in §1 whenever the suite
+*Baseline recorded 2026-09-15, at the `[1.87.0]` commit. Re-measure and update the numbers in §1 whenever the suite
 legitimately changes size — a stale baseline is worse than none, because it makes a real regression
 look like a documentation error.*

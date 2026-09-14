@@ -151,7 +151,7 @@ The worst of it is `notification_reads`, which is a **fan-out** table: `notifyRo
 
 ```bash
 cd backend  && npm test        # 81 unit tests, node:test, ZERO dependencies, ~0.4s
-cd frontend && npm run test:unit # 103 unit tests, vitest, ~1.5s
+cd frontend && npm run test:unit # 108 unit tests, vitest, ~1.5s
 cd frontend && npm test        # 428 Playwright E2E, ~11m, needs both dev servers
 ```
 
@@ -336,6 +336,14 @@ by which folder the file sits in.
 ### Frontend routing model
 
 There is no router library — `frontend/src/App.jsx` does manual, role-based conditional rendering based on `user.roles` from `AuthContext` plus local `currentTab`/`activeNav` state. When adding a new page/dashboard, wire it into the role-branching logic in `App.jsx` rather than introducing a routing library.
+
+**Every screen but the public pages is fetched on first use.** `[1.87.0]` `App.jsx` imports Home,
+About, Services, Privacy and Terms, and loads every other screen through `lazyScreen`
+(`lib/lazyScreen.js`), so a phone opening Home downloads 124 KB of compressed JavaScript instead of
+407 KB. Add a new screen the same way, never as a plain import, or it lands back in the first file.
+Navigation (`selectNav`, `handleNavigate`) runs inside `startTransition`, so the screen being left
+stays up while the next one arrives; keep new navigation inside it. A screen's file missing after a
+deploy reloads the page once, then goes to the ErrorBoundary.
 
 Every member of staff lands on **Today** (`pages/Today.jsx`) `[1.77.0]`; see "Every member of
 staff lands on Today" under UI conventions. The consoles their sidebar opens from there:
