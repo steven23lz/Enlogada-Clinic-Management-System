@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 const env = require('./environment');
 const logger = require('./logger');
+const { isFixtureRecipient } = require('../utils/fixtureRecipient');
 
 const transporter = nodemailer.createTransport({
   host: env.SMTP_HOST,
@@ -44,6 +45,10 @@ const transporter = nodemailer.createTransport({
  * Scoped by RECIPIENT rather than by NODE_ENV on purpose: the suite runs against the development
  * server in development mode, so an environment check would not catch it, and a production
  * environment must keep behaving exactly as it does today.
+ *
+ * [1.86.0] The seeded demo accounts had the same problem. Several specs book with
+ * client@enlogada.com, and enlogada.com does not exist either: 28 real sends in one day of runs,
+ * every one a bounce. Both domains live in utils/fixtureRecipient.js now, with a unit test.
  */
 const E2E_EMAIL_DOMAIN = '@enlogada-e2e.test';
 
@@ -57,7 +62,7 @@ const missingMailConfig = () => {
 const sendEmail = async ({ to, subject, html, attachments }) => {
   try {
     // Before the configuration check, because this is true whatever the clinic has configured.
-    if (typeof to === 'string' && to.toLowerCase().endsWith(E2E_EMAIL_DOMAIN)) {
+    if (isFixtureRecipient(to)) {
       logger.info(`Email suppressed — ${to} is a test address. Subject: ${subject}`);
       return { skipped: true, testRecipient: true };
     }

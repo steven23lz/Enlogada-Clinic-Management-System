@@ -44,7 +44,7 @@ you less.
 
 ```bash
 # ── 1. Pure logic. ~0.4s, no server, no database. ──────────────────────────────
-cd backend && npm test                              # expect: 76 pass
+cd backend && npm test                              # expect: 81 pass
 
 # ── 2. Wiring checks. Seconds. Need the database only. ─────────────────────────
 cd backend && node src/scripts/verifyRbacWiring.js  # expect: "All good", 0 warnings
@@ -66,7 +66,7 @@ cd frontend && npx playwright test                  # expect: 428 pass, 0 skippe
 
 | Check | Expected |
 |---|---|
-| Backend unit | **76 passed** |
+| Backend unit | **81 passed** |
 | Frontend unit | **103 passed** |
 | Playwright E2E | **428 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
 | `verifyRbacWiring` | `All good`, **78 routes checked**, **0 warnings** |
@@ -100,7 +100,7 @@ faster than the message does.
 
 Knowing a gate's blind spot is as useful as knowing its coverage.
 
-### `backend/npm test` — 76 unit tests
+### `backend/npm test` — 81 unit tests
 **Proves:** discount arithmetic against RA 9994 and the clinic's own non-VAT invoice; CSV
 serialisation (RFC 4180, the UTF-8 BOM, empty-cell-not-zero, filename header injection); the error
 hierarchy's compatibility with the ~166 legacy `error.statusCode =` sites; arrival-time arithmetic;

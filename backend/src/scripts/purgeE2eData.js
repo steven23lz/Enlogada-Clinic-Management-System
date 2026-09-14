@@ -35,8 +35,9 @@ function arg(name) {
 /**
  * Deletes upload files the run left behind, once their rows are gone.
  *
- * Every DELETE above removes rows that point at files on disk — `test_results.file_path` and
- * `hmo_requests.card_file_path` — and nothing was removing the files themselves. That went
+ * Every DELETE above removes rows that point at files on disk — `test_results.file_path`,
+ * `hmo_requests.card_file_path`, and since [1.86.0] `payment_submissions.proof_file_path` and
+ * `users.avatar_path` — and nothing was removing the files themselves. That went
  * unnoticed while the only spec touching uploads was asserting a *rejection*, and became a real
  * leak the moment a spec started attaching an HMO card on every run: the claim row is purged, the
  * image is not, and the directory grows by a few files per run forever. Same shape as the
@@ -55,6 +56,18 @@ async function purgeOrphanedUploads(since, dryRun) {
   const targets = [
     { dir: 'hmo-cards', sql: 'SELECT card_file_path AS p FROM hmo_requests WHERE card_file_path IS NOT NULL' },
     { dir: 'results', sql: 'SELECT file_path AS p FROM test_results WHERE file_path IS NOT NULL' },
+    // Proofs of payment, which share their folder with the clinic's own QR images. [1.86.0] The
+    // QRs have to be in the referenced set: one published during a run is still in use afterwards,
+    // and leaving it out would delete a payment channel's picture. This folder was never swept,
+    // and 406 proofs had built up in it, every one the suite's 70-byte test image.
+    {
+      dir: 'payments',
+      sql: `SELECT proof_file_path AS p FROM payment_submissions WHERE proof_file_path IS NOT NULL
+            UNION ALL
+            SELECT qr_file_path FROM payment_methods WHERE qr_file_path IS NOT NULL`,
+    },
+    // The purge deletes the throwaway accounts, and with them any photo one uploaded. [1.86.0]
+    { dir: 'avatars', sql: 'SELECT avatar_path AS p FROM users WHERE avatar_path IS NOT NULL' },
   ];
   const cutoff = Date.parse(since);
   let removed = 0;

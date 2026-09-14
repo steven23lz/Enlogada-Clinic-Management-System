@@ -1,5 +1,40 @@
 # Database Migration & Schema History
 
+## [1.86.0] - 2026-09-15 (The tests stop emailing the demo accounts and stop leaving images behind)
+
+No migration. Backend only.
+
+### Email
+
+- The suite already never mailed its throwaway `@enlogada-e2e.test` accounts. It did mail the
+  seeded demo accounts: several specs book with `client@enlogada.com`, and in one day of runs the
+  clinic's Gmail made 28 real sends to it. `enlogada.com` has no DNS record at all, so every one
+  bounced. That spends the account's daily sending limit (it ran out once, on 2026-08-26) and
+  counts against it with spam filters, which a patient pays for when their result lands in junk.
+- `utils/fixtureRecipient.js` names both fixture domains, and `config/email.js` skips a send to
+  either, before the configuration check. By domain, so a seeded account added later is covered.
+  A list of addresses is never treated as a fixture, so a real recipient in one is never dropped.
+- A skipped send is treated exactly as a send to a throwaway address always was.
+- Production is unaffected unless the clinic registers enlogada.com. The seeded accounts would then
+  be real addresses with a published password, so the two must change together.
+
+### Upload files
+
+- The E2E purge removed the orphaned files for results and HMO cards, but never looked in
+  `uploads/payments`. 406 files had built up there, 405 of them copies of the suite's 70-byte proof
+  image that nothing pointed at. It now sweeps `payments` and `avatars` too, under the same two
+  rules: nothing references the file, and it was written during the run. The clinic's QR images
+  share the payments folder and are in the referenced set, so a published QR is never touched.
+- The 405 leftovers were removed once by hand, after a dry run showed each was unreferenced and
+  byte-identical to the test image. The one file still in use was kept.
+
+### Tests
+
+- Backend unit: `fixtureRecipient.test.js`, 5 tests (81 in all). Both halves: a fixture is caught
+  however it is written, and a real address, a look-alike or a list never is.
+- The lockout, booking-email, result-delivery and payment-proof specs (45 tests) sent 0 real
+  emails, skipped 5, and left the payments folder as they found it.
+
 ## [1.85.0] - 2026-09-15 (A sign-in lock that has run out starts the count again)
 
 No migration. Backend only.

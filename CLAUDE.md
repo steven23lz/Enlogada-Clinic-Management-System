@@ -150,7 +150,7 @@ The worst of it is `notification_reads`, which is a **fan-out** table: `notifyRo
 **There are now two test tiers, and they answer different questions.** `[1.63.0]`
 
 ```bash
-cd backend  && npm test        # 76 unit tests, node:test, ZERO dependencies, ~0.4s
+cd backend  && npm test        # 81 unit tests, node:test, ZERO dependencies, ~0.4s
 cd frontend && npm run test:unit # 103 unit tests, vitest, ~1.5s
 cd frontend && npm test        # 428 Playwright E2E, ~11m, needs both dev servers
 ```
@@ -229,7 +229,10 @@ account online (sign-up answers 503 and says why). `SMTP_USER`/`SMTP_PASS`/`SMTP
 names them. The App Password lives **only** in that file — never in source, git, logs or docs.
 `sendEmail` now requires BOTH halves and names the missing one: checking the username alone let a
 half-configured clinic past the guard and fail inside nodemailer once per released result, which
-reads as a mail outage rather than an unfinished setting.
+reads as a mail outage rather than an unfinished setting. Nothing is ever sent to the fixture
+domains `[1.86.0]` (`utils/fixtureRecipient.js`): the suite's `@enlogada-e2e.test` accounts, and
+the seeded `@enlogada.com` ones, a domain that does not exist. A booking made as
+`client@enlogada.com` therefore sends no email; test real delivery with an address you can read.
 
 `TURNAROUND_TARGETS` (optional, e.g. `Laboratory:90,Xray:30`) sets the per-department turnaround
 benchmarks the analytics chart draws its reference line against. `[1.62.0]` They are a clinic
