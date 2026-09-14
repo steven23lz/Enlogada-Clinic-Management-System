@@ -9,7 +9,7 @@ import { toastSuccess } from '../lib/toast';
 import { User, Mail, Phone, KeyRound, AlertCircle } from 'lucide-react';
 
 // Shared account-settings form (contact info + change password), layout-agnostic so it can be
-// embedded inside either DashboardLayout (Client) or SidebarLayout (staff/admin) without
+// embedded inside either PortalLayout (Client) or SidebarLayout (staff/admin) without
 // assuming a particular page shell. Extracted from ClientProfile.jsx, which was Client-only —
 // every role should eventually get the same self-service account page, since the backend
 // endpoints (PUT /auth/me, PUT /auth/change-password) already work for any authenticated role

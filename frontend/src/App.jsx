@@ -66,6 +66,15 @@ const MainApp = () => {
     setNavIntent(intent);
   }, []);
 
+  // The patient portal's tab. [1.81.0] Held here, above ClientDashboard, so going to My Account
+  // and back lands on the tab the patient left; the dashboard used to forget it on every page
+  // change. A different account signing in on the same browser starts on Home.
+  const [portalTab, setPortalTab] = useState('home');
+  const accountKey = user?.id ?? user?.email ?? null;
+  useEffect(() => {
+    setPortalTab('home');
+  }, [accountKey]);
+
   // Take a legacy reset token out of the address bar once it has been noticed. [1.73.0]
   useEffect(() => {
     if (!legacyResetLink) return;
@@ -179,12 +188,20 @@ const MainApp = () => {
   const permissions = user.permissions || [];
   const departments = user.departments ?? null;
 
-  // Client has no sidebar console; it keeps its own public-style shell and tab model.
+  // Client has no sidebar console; it has the portal's own shell (PortalLayout) and tabs. The tab
+  // lives here rather than in the dashboard, so My Account and back returns to it. [1.81.0]
   if (roles.includes('Client')) {
     if (currentTab === 'services') return <ServicesPage onNavigate={handleNavigate} />;
     if (currentTab === 'about') return <AboutUs onNavigate={handleNavigate} />;
-    if (currentTab === 'account') return <ClientProfile onNavigate={handleNavigate} />;
-    return <ClientDashboard onNavigate={handleNavigate} />;
+    if (currentTab === 'account') {
+      return (
+        <ClientProfile
+          onNavigate={handleNavigate}
+          onOpenTab={(tab) => { setPortalTab(tab); handleNavigate('dashboard'); }}
+        />
+      );
+    }
+    return <ClientDashboard onNavigate={handleNavigate} tab={portalTab} onTabChange={setPortalTab} />;
   }
 
   // Every SidebarLayout-based role can reach a shared, self-service account page via the

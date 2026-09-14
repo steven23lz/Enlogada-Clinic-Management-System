@@ -284,7 +284,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                     <DialogTrigger asChild>
                       <Button size="lg" disabled={!selectedProfileId}>
                         <PlusCircle className="h-4 w-4" />
-                        Book Schedule
+                        Book a visit
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-xl">

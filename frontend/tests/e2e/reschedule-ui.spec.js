@@ -55,7 +55,7 @@ test('a patient reschedules from their own booking list', async ({ page }) => {
   page.on('pageerror', (e) => errors.push(e.message));
   await signIn(page, 'client@enlogada.com');
 
-  // The bookings live on their own tab; the dashboard opens on Diagnostic Results.
+  // The bookings live on their own tab; the portal opens on Home.
   await openPortalTab(page, 'appointments');
 
   // Addressed by data-testid, not by markup shape: `locator('div').filter(...)` matches every

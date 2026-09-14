@@ -16,7 +16,7 @@ import { useTheme } from "../../contexts/ThemeContext"
  *   the toggle was pinned to the far edge with a hole opening beside the CTA.
  *
  *   Its ground was `bg-slate-100 p-0.5`, which in this codebase is the SEGMENTED-CONTROL surface
- *   (SegmentedFilter, tabs.jsx, Navbar's Dashboard/Account switch all share it). Among a row of
+ *   (SegmentedFilter and tabs.jsx share it). Among a row of
  *   text links and one green button, that ground is what made it read as a slab.
  *
  * A single 36px bordered icon button is the header's existing idiom — both burgers and the

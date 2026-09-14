@@ -1,5 +1,49 @@
 # Database Migration & Schema History
 
+## [1.81.0] - 2026-09-15 (The patient portal, part 2: layout A2 and Home)
+
+No migration. Frontend only. The second of the three portal commits: the layout Steven picked from
+the gallery (A2), in the Flat colouring.
+
+### What changed
+
+- **A Home tab, first.** A band reading "Good morning, <name>", with Book a visit. Four tiles sit
+  across its lower edge (Next visit, Results, Payments, Family), each opening its tab. Below them,
+  "Needs your attention" lists what to pay, what to do before the next visit, or what could not be
+  checked, and the latest results are marked New for 14 days after release. Every figure comes from
+  the hooks the tabs already use (`lib/portalSummary.js`, unit-tested), and one whose read failed
+  shows "—".
+- **One list of tabs**: Home, Appointments, Results, Payments, Profile. It sits in the header on a
+  screen 1280 px and wider, and in a bar fixed to the bottom of the screen below that. Only one is
+  rendered, so each tab name is on the page once, and the page keeps room so the bar covers
+  nothing.
+- **The tab is remembered.** App holds it (`portalTab`), so My Account and back returns to it. It
+  was an uncontrolled Tabs that reset on every page change.
+- **A header pill** (`PortalHeader`) holds the logo, "Patient portal", the tabs on a wide screen, a
+  "Viewing" chip that switches the patient (`PatientSwitcher`, still named "Active patient
+  profile"), and an account button (`AccountMenu`: My Account, theme, text size, Sign out).
+- **Each tab opens with a solid band** (`PortalBand`), then the one Refresh, then the tab. Flat: no
+  gradient, glow or grid, and only rail ink on the band.
+- **Renames:** "Diagnostic Results" is "Results", and "Book Schedule" is "Book a visit".
+- **Profile** lists the family on the account and holds Add a profile, which was in a bar above
+  every tab. The Viewing chip is the one switcher.
+- **My Account** uses the portal's layout, with Back to the portal. The dark "Account Security" card
+  is a plain note.
+- **Removed:** `DashboardLayout`, `Navbar`, `WelcomeHero`, `ProfileBar`, and `MetricCard`'s dark
+  variant, whose only user was the old hero.
+
+### Tests
+
+- `portal-home.spec.js` (new, 4 tests):
+  - a new client's Home says what they owe, and its Pay button goes to the booking
+  - at 390 px the tab bar sits on the bottom edge and covers nothing
+  - the tab survives a trip to My Account and back
+  - a failed bookings read shows "Couldn't check", never "None booked".
+- `tests/unit/portalSummary.test.js` (new, 13 tests).
+- `helpers/portal.js` carries the renames, so no spec changed for them.
+
+The full suite: 425 passed, 0 skipped.
+
 ## [1.80.0] - 2026-09-15 (The patient portal, part 1: what was broken)
 
 No migration. Frontend only. The first of the three commits that rebuild the patient portal as A2

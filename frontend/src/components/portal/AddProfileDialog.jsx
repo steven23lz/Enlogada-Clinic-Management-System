@@ -22,7 +22,7 @@ export default function AddProfileDialog({ profiles, reference }) {
           <DialogTrigger asChild>
             <Button className="flex items-center space-x-2 rounded-xl font-bold text-xs cursor-pointer transition-all">
               <UserPlus className="w-4 h-4" />
-              <span>Add Dependent Profile</span>
+              <span>Add a profile</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">

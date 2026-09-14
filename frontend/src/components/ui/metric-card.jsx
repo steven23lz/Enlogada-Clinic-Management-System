@@ -2,8 +2,8 @@ import React from 'react';
 import { TrendingUp, TrendingDown, ArrowUpRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-// Shared metric/KPI card, used across every dashboard (Admin, Reports, Receptionist, Cashier,
-// Diagnostic Staff, Client).
+// Shared metric/KPI card, used across the staff dashboards (Admin, Reports, Receptionist, Cashier,
+// Diagnostic Staff).
 //
 // ── Why the shape changed ────────────────────────────────────────────────────────────────────
 // The previous version put the number on the left and a large pale tinted square on the right,
@@ -26,6 +26,9 @@ import { cn } from '../../lib/utils';
 // The peripheral-grouping job the old left-rule was doing is now done by the icon tile keeping
 // the same hue for the same meaning as the status badges below it, which was always the part
 // that actually mattered.
+//
+// There was a `dark` variant for the patient portal's old hero. It went with that hero [1.81.0];
+// the portal's figures are its own tiles now (components/portal/HomeTab.jsx).
 
 const ICON_TONE = {
   green: 'bg-brand-100 text-brand-700',
@@ -35,16 +38,6 @@ const ICON_TONE = {
   rose: 'bg-rose-100 text-rose-700',
   purple: 'bg-purple-100 text-purple-700',
   slate: 'bg-slate-200/70 text-slate-600',
-};
-
-const DARK_ICON_TONE = {
-  green: 'bg-brand-500/20 text-brand-300',
-  emerald: 'bg-emerald-500/20 text-emerald-300',
-  amber: 'bg-amber-500/20 text-amber-300',
-  indigo: 'bg-indigo-500/20 text-indigo-300',
-  rose: 'bg-rose-500/20 text-rose-300',
-  purple: 'bg-purple-500/20 text-purple-300',
-  slate: 'bg-white/10 text-slate-300',
 };
 
 // A caption is supporting prose ("Lab, X-Ray, Ultrasound & more"), so it is set as text. Only a
@@ -73,12 +66,10 @@ const MetricCard = ({
   captionTone,
   caption,
   trend,
-  variant = 'light',
   onClick,
   className = '',
 }) => {
   const resolvedCaptionTone = captionTone || tone;
-  const isDark = variant === 'dark';
   const clickable = typeof onClick === 'function';
   const Wrapper = clickable ? 'button' : 'div';
 
@@ -90,14 +81,8 @@ const MetricCard = ({
         // flex column so the figure can be pushed to the bottom: see the label note below. A row
         // of cards is a grid, and grid children stretch, so the cards are already equal height —
         // this makes their numbers share a baseline even when one label wraps and another does not.
-        'group relative flex w-full flex-col overflow-hidden rounded-xl border p-3.5 text-left transition-all duration-200 sm:p-4',
-        isDark
-          ? 'border-white/10 bg-white/[0.06]'
-          : 'border-line bg-surface',
-        clickable &&
-          (isDark
-            ? 'cursor-pointer hover:border-white/20 hover:bg-white/[0.1]'
-            : 'cursor-pointer hover:-translate-y-px hover:border-brand-300 hover:shadow-raised'),
+        'group relative flex w-full flex-col overflow-hidden rounded-xl border border-line bg-surface p-3.5 text-left transition-all duration-200 sm:p-4',
+        clickable && 'cursor-pointer hover:-translate-y-px hover:border-brand-300 hover:shadow-raised',
         className
       )}
     >
@@ -111,7 +96,7 @@ const MetricCard = ({
           <span
             className={cn(
               'hidden h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg sm:flex',
-              isDark ? DARK_ICON_TONE[tone] || DARK_ICON_TONE.slate : ICON_TONE[tone] || ICON_TONE.slate
+              ICON_TONE[tone] || ICON_TONE.slate
             )}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -133,7 +118,7 @@ const MetricCard = ({
             // break-words as the backstop: a single word longer than the card would otherwise be
             // clipped mid-letter with no ellipsis, which is the worst of both behaviours.
             'min-w-0 break-words text-micro font-semibold uppercase leading-tight tracking-[0.04em] sm:tracking-[0.1em] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden',
-            isDark ? 'text-slate-400' : 'text-slate-500'
+            'text-slate-500'
           )}
         >
           {label}
@@ -141,10 +126,7 @@ const MetricCard = ({
         {clickable && (
           <ArrowUpRight
             aria-hidden="true"
-            className={cn(
-              'ml-auto h-3.5 w-3.5 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100',
-              isDark ? 'text-slate-300' : 'text-brand-600'
-            )}
+            className="ml-auto h-3.5 w-3.5 flex-shrink-0 text-brand-600 opacity-0 transition-opacity group-hover:opacity-100"
           />
         )}
       </div>
@@ -158,7 +140,7 @@ const MetricCard = ({
           // still not aligning it with a neighbour that had a caption. It is the CAPTION that
           // takes mt-auto below, so the cards agree along their bottom edge.
           'mt-2.5 text-stat font-extrabold leading-none tracking-tight tabular-nums break-words',
-          isDark ? 'text-white' : 'text-slate-900'
+          'text-slate-900'
         )}
       >
         {value}
@@ -168,7 +150,7 @@ const MetricCard = ({
         <span
           className={cn(
             'mt-auto inline-flex items-center gap-1 self-start rounded-md px-1.5 py-0.5 pt-0 text-fine font-semibold',
-            isDark ? 'bg-white/10 text-slate-200' : TREND_TONE[trend.direction]
+            TREND_TONE[trend.direction]
           )}
         >
           {trend.direction === 'up' ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -183,7 +165,7 @@ const MetricCard = ({
             // & more" is a sentence, and an ellipsis two words in tells the reader nothing.
             // mt-auto so a row of cards lines up along the bottom.
             'mt-auto pt-1.5 block text-fine font-medium leading-snug [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden',
-            isDark ? 'text-slate-400' : CAPTION_TONE[resolvedCaptionTone] || CAPTION_TONE.slate
+            CAPTION_TONE[resolvedCaptionTone] || CAPTION_TONE.slate
           )}
         >
           {caption}

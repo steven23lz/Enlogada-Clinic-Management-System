@@ -1,68 +1,58 @@
 import React from 'react';
-import DashboardLayout from '../../components/DashboardLayout';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import PortalLayout from '../../components/portal/PortalLayout';
+import PortalBand from '../../components/portal/PortalBand';
 import AccountSettingsForm from '../../components/AccountSettingsForm';
 import { Button } from '../../components/ui/button';
-import { Card } from '../../components/ui/card';
-import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import { Panel } from '../../components/ui/panel';
 
-// Module 5: Profile — a client's own account settings (contact info, password,
-// read-only view of account type). Distinct from Module 4 (Patient Management),
-// which covers the `patients` records a client manages, not the `users` account itself.
-// The form itself (Account Information + Change Password) now lives in the shared,
-// layout-agnostic AccountSettingsForm component — this page supplies the Client-specific
-// shell (back button, header).
+// Module 5: Profile — a client's own account settings (contact info, password). Distinct from
+// Module 4 (Patient Management), which covers the `patients` records a client manages — the
+// Profile tab — not the `users` account itself. The form is the shared, layout-agnostic
+// AccountSettingsForm; this page supplies the portal's shell.
 //
-// UI/UX Phase 3 dropped the raw resource:action permission strings that sat here; the "Account
-// Type" card holding the role badge is now gone too, and for the same reason taken one step
-// further. Every account that can reach this screen is a Client — the staff consoles have their
-// own settings page — so the card spent a third of the layout telling each patient the one thing
-// about their account that could never be anything else. "Client" is not information to a
-// patient; it is the system describing its own data model.
-const ClientProfile = ({ onNavigate }) => {
-  return (
-    <DashboardLayout onNavigate={onNavigate} activeTab="account">
-      <div className="flex flex-col space-y-6">
-
-        <div className="flex items-center space-x-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onNavigate?.('dashboard')}
-            className="h-9 w-9 p-0 rounded-xl border-gray-200 text-gray-500 hover:text-brand-600 hover:border-brand-500"
-            aria-label="Back to dashboard"
-          >
-            <ArrowLeft className="w-4 h-4" />
+// UI/UX Phase 3 dropped the raw resource:action permission strings that sat here, and the
+// "Account Type" card went with them: every account that can reach this screen is a Client, so the
+// card spent a third of the layout telling each patient the one thing about their account that
+// could never be anything else.
+//
+// [1.81.0] In the portal's own layout, with the header's tabs still one press away. None of them is
+// shown as current here (`tab="account"`), and choosing one goes back to it; "Back to the portal"
+// returns to the tab the patient came from.
+const ClientProfile = ({ onNavigate, onOpenTab }) => (
+  <PortalLayout tab="account" onTabChange={onOpenTab} onNavigate={onNavigate} screen="account">
+    <div className="space-y-5">
+      <PortalBand
+        title="My Account"
+        subtitle="Your name, contact details, photo and password."
+        actions={
+          <Button variant="outline" onClick={() => onNavigate?.('dashboard')}>
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Back to the portal
           </Button>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 m-0">My Account</h1>
-            <p className="text-xs text-gray-500 m-0">Manage your contact details, photo, and password.</p>
-          </div>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <AccountSettingsForm />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* Left column: editable settings */}
-          <div className="lg:col-span-2">
-            <AccountSettingsForm />
+        {/* A plain note, not a card on the dark rail colour: the band above is the one dark thing
+            on this page. */}
+        <Panel className="h-fit space-y-2 p-5">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 flex-shrink-0 text-brand-600" aria-hidden="true" />
+            <h2 className="m-0 text-note font-semibold text-ink">Keeping your account safe</h2>
           </div>
-
-          {/* Right column: read-only role/permissions */}
-          <div className="space-y-6">
-            <Card className="border-line bg-rail text-white rounded-2xl overflow-hidden p-5 space-y-2">
-              <div className="flex items-center space-x-2 text-brand-600">
-                <ShieldCheck className="w-5 h-5" />
-                <h3 className="font-bold text-sm text-white m-0">Account Security</h3>
-              </div>
-              <p className="text-rail-ink-soft text-xs leading-relaxed m-0">
-                Never share your password. If you suspect unauthorized access to your account, change your password immediately.
-              </p>
-            </Card>
-          </div>
-
-        </div>
+          <p className="m-0 text-fine leading-relaxed text-ink-muted">
+            Never share your password. If you think someone else has used your account, change your
+            password: that signs you out everywhere else.
+          </p>
+        </Panel>
       </div>
-    </DashboardLayout>
-  );
-};
+    </div>
+  </PortalLayout>
+);
 
 export default ClientProfile;

@@ -21,11 +21,11 @@ import { cn } from '../../lib/utils';
  * there was one theme, invisible the moment those ramps moved for dark mode, because both resolve
  * dark there and this banner is dark in both. Same reason SidebarLayout's rail has its own ink.
  *
- * `variant="hero"` is the dark treatment, kept for the Client's home, where the page opens on a
- * welcome rather than on work. (Admin's console opened on one too, until its overview became Admin's
- * Today in [1.77.0]; Today uses the light header like every staff screen.) Every other screen
- * uses the light variant — a dark banner on top of a worklist is a decoration the person using
- * it has to scroll past forty times a shift.
+ * `variant="hero"` is the dark treatment, and nothing uses it now. The Client's home opened on one
+ * until the portal got a band of its own (`components/portal/PortalBand`, [1.81.0]), and Admin's
+ * console did until its overview became Admin's Today in [1.77.0]. Every screen uses the light
+ * variant — a dark banner on top of a worklist is a decoration the person using it has to scroll
+ * past forty times a shift.
  *
  * ── The title is an <h1>, and there must be exactly one per screen ────────────────────────────
  * It rendered an <h2> for a long time, which meant no console screen had an <h1> at all: the

@@ -1,13 +1,15 @@
 import React from 'react';
-import { Pencil, ShieldCheck, User } from 'lucide-react';
+import { Pencil, ShieldCheck, User, Users } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
+import AddProfileDialog from './AddProfileDialog';
+import EditProfileDialog from './EditProfileDialog';
 
 const listFormat = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
 
 /**
- * The account details behind the patient.
+ * The patient being viewed, and the family on this account.
  *
  * Lifted out of ClientDashboard, which rendered the profile switcher, two profile dialogs,
  * a hero and four tab panels from one 1,044-line file. The props are the hooks it reads.
@@ -62,6 +64,43 @@ export default function ProfileTab({ profiles, reference }) {
               </CardContent>
             </Card>
           )}
+
+          {/* Family on this account. [1.81.0] Adding a profile sat in a bar above every tab, beside
+              the switcher. The switcher is the header's "Viewing" chip now, and adding someone
+              belongs here, next to the list it adds to. The list marks who is being viewed but
+              does not switch: a second switcher beside the chip would be the same control twice. */}
+          <Card data-testid="portal-family" className="border-line rounded-xl bg-surface overflow-hidden">
+            <CardHeader className="bg-slate-50/80 border-b border-line py-3.5 flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+              <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+                <Users className="w-4 h-4 text-brand-600" />
+                <span>Family on this account</span>
+              </CardTitle>
+              <AddProfileDialog profiles={profiles} reference={reference} />
+            </CardHeader>
+            <CardContent className="p-0">
+              {profiles.profiles.length === 0 ? (
+                <p className="m-0 p-4 text-fine text-slate-500">
+                  No patient profiles yet. Add yourself first, then anyone you book for.
+                </p>
+              ) : (
+                <ul className="m-0 list-none divide-y divide-line p-0">
+                  {profiles.profiles.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                      <span className="min-w-0">
+                        <span className="block truncate text-note font-semibold text-ink">{p.first_name} {p.last_name}</span>
+                        <span className="block text-fine text-ink-muted">{p.patient_type_name || 'Patient'}</span>
+                      </span>
+                      {String(p.id) === String(profiles.selectedId) && (
+                        <span className="flex-shrink-0 text-fine font-semibold text-brand-700">Viewing</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <EditProfileDialog profiles={profiles} reference={reference} />
 
           {/* HMO Coverage Info Card */}
           <Card className="border-line bg-rail text-white rounded-2xl overflow-hidden p-5 space-y-3">
