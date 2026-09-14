@@ -109,6 +109,38 @@ test('a failed read of the bookings says so on Home, never "nothing booked"', as
   expect(home, 'Home said nothing needs them over a failed read').not.toMatch(/nothing needs you/i);
 });
 
+test('a new account adds its first patient from Profile, and the chip then shows them', async ({ page }) => {
+  test.setTimeout(120000);
+  // An account with no patient profile yet: the state every online sign-up starts in.
+  const ctx = await request.newContext();
+  const person = fixturePerson();
+  const email = `portal-profile-${Date.now()}-${Math.floor(Math.random() * 1e4)}@enlogada-e2e.test`;
+  await registerClient(ctx, { ...person, email, password: PASSWORD });
+  await ctx.dispose();
+  await signIn(page, email, PASSWORD);
+
+  // Home asks for a profile before anything else, and its button opens Profile.
+  const need = page.locator('[data-testid="portal-need"][data-need="no-profile"]');
+  await expect(need).toBeVisible({ timeout: 20000 });
+  await need.getByRole('button', { name: 'Add a profile' }).click();
+  await expect(page.getByRole('tab', { name: PORTAL_TABS.profile, exact: true })).toHaveAttribute('aria-selected', 'true');
+
+  // One form for adding and for correcting a profile (ProfileFormDialog). [1.82.0]
+  await page.getByTestId('portal-family').getByRole('button', { name: 'Add a profile' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('First name').fill(person.firstName);
+  await dialog.getByLabel('Last name').fill(person.lastName);
+  await dialog.locator('#add-profile-birthdate').fill('1992-03-14');
+  await dialog.getByLabel('Billing category').click();
+  await page.getByRole('option', { name: 'Self Pay', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save profile' }).click();
+
+  await expect(dialog).toBeHidden({ timeout: 15000 });
+  await expect(page.getByTestId('portal-family')).toContainText(`${person.firstName} ${person.lastName}`);
+  await expect(page.getByRole('combobox', { name: 'Active patient profile' })).toContainText(person.firstName);
+});
+
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 

@@ -2,7 +2,7 @@ import React from 'react';
 
 const LIST_PAGE_SIZE = 8;
 import { ExternalLink, Receipt } from 'lucide-react';
-import { Panel } from '../ui/panel';
+import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import EmptyState from '../ui/empty-state';
 import { Button } from '../ui/button';
 import { SkeletonList } from '../ui/skeleton';
@@ -15,6 +15,8 @@ import { formatCurrency } from '../../lib/currency';
  *
  * Lifted out of ClientDashboard, which rendered the profile switcher, two profile dialogs,
  * a hero and four tab panels from one 1,044-line file. The props are the hooks it reads.
+ *
+ * The standard panel header since [1.82.0], so this reads like every other panel in the portal.
  */
 export default function PaymentsTab({ payments }) {
   const totalPages = Math.max(1, Math.ceil(payments.payments.length / LIST_PAGE_SIZE));
@@ -27,11 +29,8 @@ export default function PaymentsTab({ payments }) {
           // That coupled a passing test to a corner radius: changing the radius broke the
           // spec, and the spec's failure said nothing about payments.
           <Panel data-testid="payment-history" className="max-w-2xl overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-line bg-slate-50/70 px-5 py-3.5">
-              <Receipt className="h-4 w-4 text-brand-600" />
-              <h3 className="m-0 text-note font-semibold text-slate-900">Payment History</h3>
-            </div>
-            <div className="space-y-2 p-4">
+            <PanelHeader title="Payment History" icon={Receipt} />
+            <PanelBody className="space-y-2 p-4">
               {payments.error ? (
                 <EmptyState
                   tone="error"
@@ -82,7 +81,7 @@ export default function PaymentsTab({ payments }) {
                   </div>
                 ))
               )}
-            </div>
+            </PanelBody>
             {payments.payments.length > 0 && (
               <Pagination
                 page={safePage}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { printElement } from '../../lib/printArea';
-import { Activity, Calendar, CheckCircle, Clock, Download, Eye, FileText, FlaskConical, Info, Printer, Scan, Stethoscope } from 'lucide-react';
+import { Activity, Calendar, CheckCircle, Clock, Download, Eye, FileText, FlaskConical, Printer, Scan, Search, Stethoscope } from 'lucide-react';
 
 // The mark a patient recognises their own report by. Elements rather than components because
 // they are looked up by name and rendered as-is; the sizing is the same everywhere it appears.
@@ -11,7 +11,7 @@ const CATEGORY_ICONS = {
   ECG: <Activity className="w-5 h-5" />,
 };
 import { Button } from '../ui/button';
-import { Card, CardContent } from '../ui/card';
+import { Panel, PanelBody } from '../ui/panel';
 import EmptyState from '../ui/empty-state';
 import { SkeletonList } from '../ui/skeleton';
 import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
@@ -29,200 +29,207 @@ import { isSafeResultUrl, downloadResultFile } from '../../lib/resultFile';
  *
  * Plain content, not a `TabsContent`: ClientDashboard already wraps each tab in one, and a
  * second one inside it made two tab panels answering to one tab. [1.80.0]
+ *
+ * One panel with a row per test, under the search and the department filters. [1.82.0] It was a
+ * card per test, each with its own border and hover lift, under a toolbar that repeated the tab's
+ * name ("Diagnostic History" beneath "Results").
  */
 export default function ResultsTab({ profiles, results, onPreviewDocument }) {
-  return (
-        <div className="space-y-4">
+  const patientName = `${profiles.selected?.first_name || ''} ${profiles.selected?.last_name || ''}`.trim();
 
-          {/* Filter & Search Header */}
-          <Toolbar>
-            <span className="flex items-center gap-2 text-note font-semibold text-slate-900">
-              <Activity className="h-4 w-4 text-brand-600" />
-              Diagnostic History
-            </span>
-            <ToolbarSpacer />
+  return (
+        <div>
+          <Toolbar attached>
             <SearchInput
               placeholder="Search test..."
               value={results.search}
               onChange={e => results.setSearch(e.target.value)}
-              containerClassName="w-full sm:w-48"
+              containerClassName="w-full sm:w-56"
             />
-
-              <div className="inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
-                {/* Only the categories this patient actually has. The hardcoded list this
-                    replaces mirrored all five test_categories rows, so every patient was offered
-                    filters for services the clinic does not offer — chips that
-                    named a service nobody can book and returned nothing when clicked. */}
-                {results.categories.map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => results.setCategory(cat)}
-                    className={`cursor-pointer rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors ${
-                      results.category === cat
-                        ? 'bg-surface text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
-                        : 'bg-transparent text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
+            <ToolbarSpacer />
+            <div className="inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-slate-100 p-0.5">
+              {/* Only the categories this patient actually has. The hardcoded list this
+                  replaced mirrored all five test_categories rows, so every patient was offered
+                  filters for services the clinic does not offer — chips that
+                  named a service nobody can book and returned nothing when clicked. */}
+              {results.categories.map(cat => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => results.setCategory(cat)}
+                  className={`cursor-pointer rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors ${
+                    results.category === cat
+                      ? 'bg-surface text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
+                      : 'bg-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
           </Toolbar>
 
-          {/* Test Cards List */}
-          <div className="space-y-3">
-            {results.error ? (
-              // tone="error" looks deliberately unlike empty. A patient who has just been
-              // emailed "your result is ready" and then reads "no diagnostic requests found"
-              // concludes the clinic lost it.
-              <EmptyState
-                tone="error"
-                title="Your results could not be loaded"
-                description={results.error}
-                action={<Button variant="outline" size="sm" onClick={results.reload}>Try again</Button>}
-              />
-            ) : results.loading ? (
-              <SkeletonList rows={3} />
-            ) : results.filtered.length > 0 ? (
-              results.filtered.map(item => (
-                <Card key={item.visit_test_id} className="border-line rounded-xl hover:shadow-raised transition-all">
-                  <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-start space-x-3.5">
-                      <div className="w-10 h-10 bg-gray-50 border border-gray-200/80 rounded-xl flex items-center justify-center flex-shrink-0 text-brand-600">
-                        {CATEGORY_ICONS[item.category_name] || <FlaskConical className="w-5 h-5" />}
+          <Panel className="overflow-hidden rounded-t-none">
+            <PanelBody flush>
+              {results.error ? (
+                // tone="error" looks deliberately unlike empty. A patient who has just been
+                // emailed "your result is ready" and then reads "no diagnostic requests found"
+                // concludes the clinic lost it.
+                <EmptyState
+                  tone="error"
+                  title="Your results could not be loaded"
+                  description={results.error}
+                  action={<Button variant="outline" size="sm" onClick={results.reload}>Try again</Button>}
+                />
+              ) : results.loading ? (
+                <div className="p-4"><SkeletonList rows={3} /></div>
+              ) : results.history.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon={FileText}
+                  title="No tests yet"
+                  description="Each test you book is listed here with its status, and its report once the clinic releases it."
+                />
+              ) : results.filtered.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon={Search}
+                  title="Nothing matches"
+                  description="Try another department, or clear the search."
+                />
+              ) : (
+                <ul className="m-0 list-none divide-y divide-line p-0">
+                  {results.filtered.map(item => (
+                    <li
+                      key={item.visit_test_id}
+                      className="flex flex-col items-start justify-between gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-5"
+                    >
+                      <div className="flex min-w-0 items-start gap-3.5">
+                        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-line bg-slate-50 text-brand-600">
+                          {CATEGORY_ICONS[item.category_name] || <FlaskConical className="w-5 h-5" />}
+                        </span>
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-meta font-bold uppercase tracking-wider text-ink-muted">REQ-{item.visit_test_id}</span>
+                            <StatusBadge status={item.test_status} className="text-meta px-2 py-0.5" />
+                          </div>
+                          <p className="m-0 text-sm font-bold text-ink">
+                            {item.category_name} - {item.test_name}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-fine text-ink-muted">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                              {new Date(item.visit_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                              {new Date(item.visit_date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </span>
+                          </div>
+                        </div>
                       </div>
 
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-meta text-gray-400 font-bold uppercase tracking-wider">REQ-{item.visit_test_id}</span>
-                          <StatusBadge status={item.test_status} className="text-meta px-2 py-0.5" />
-                        </div>
-                        <h3 className="font-bold text-slate-900 text-sm m-0">
-                          {item.category_name} - {item.test_name}
-                        </h3>
-                        <div className="flex items-center space-x-3 text-xs text-gray-500">
-                          <span className="flex items-center space-x-1">
-                            <Calendar className="w-3.5 h-3.5" />
-                            <span>{new Date(item.visit_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                          </span>
-                          <span className="flex items-center space-x-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            <span>{new Date(item.visit_date).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                      {item.test_status === 'Completed' ? (
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" className="flex-shrink-0">
+                              <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                              View report
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl">
 
-                    {/* Action Modal Trigger */}
-                    {item.test_status === 'Completed' ? (
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            className="border-brand-500 text-brand-600 hover:bg-brand-50 text-xs font-bold px-4 rounded-xl flex items-center space-x-1.5 cursor-pointer"
+                          {/* The patient's copy — the SAME component the clinic's copy uses. The
+                              requirement is that staff record findings once and the saved result is
+                              what gets printed; two renderings could only ever agree by coincidence,
+                              and these two already did not. */}
+                          <ResultReport
+                            result={item}
+                            patientName={patientName}
+                            measurements={item.measurements || []}
+                            signatories={item.signatories || []}
+                            variant="patient"
                           >
-                            <CheckCircle className="w-4 h-4" />
-                            <span>View Certificate Report</span>
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-
-                        {/* The patient's copy — the SAME component the clinic's copy uses. The
-                            requirement is that staff record findings once and the saved result is
-                            what gets printed; two renderings could only ever agree by coincidence,
-                            and these two already did not. */}
-                        <ResultReport
-                          result={item}
-                          patientName={`${profiles.selected?.first_name || ''} ${profiles.selected?.last_name || ''}`.trim()}
-                          measurements={item.measurements || []}
-                          signatories={item.signatories || []}
-                          variant="patient"
-                        >
-                            {(item.file_path || item.file_url) && (
-                              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
-                                <span className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-brand-600" />
-                                  <span className="text-fine font-semibold text-slate-800">
-                                    {item.file_original_name || 'Attached report'}
+                              {(item.file_path || item.file_url) && (
+                                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#e6ebf1] bg-slate-50/80 p-3">
+                                  <span className="flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-brand-600" />
+                                    <span className="text-fine font-semibold text-slate-800">
+                                      {item.file_original_name || 'Attached report'}
+                                    </span>
                                   </span>
-                                </span>
-                                {item.file_path ? (
-                                  // View, not download. The patient is already looking at the
-                                  // summary; making them save a file to read the report itself
-                                  // is a step that exists only because nothing rendered it.
-                                  <span className="flex items-center gap-1.5">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="xs"
-                                      onClick={() => onPreviewDocument({
-                                        visitTestId: item.visit_test_id,
-                                        testName: item.test_name,
-                                        patientName: `${profiles.selected?.first_name || ''} ${profiles.selected?.last_name || ''}`.trim(),
-                                        fileName: item.file_original_name,
-                                      })}
-                                    >
-                                      <Eye className="h-3 w-3" />
-                                      View Report
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="xs"
-                                      onClick={() => downloadResultFile(item.visit_test_id, item.file_original_name)}
+                                  {item.file_path ? (
+                                    // View, not download. The patient is already looking at the
+                                    // summary; making them save a file to read the report itself
+                                    // is a step that exists only because nothing rendered it.
+                                    <span className="flex items-center gap-1.5">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="xs"
+                                        onClick={() => onPreviewDocument({
+                                          visitTestId: item.visit_test_id,
+                                          testName: item.test_name,
+                                          patientName,
+                                          fileName: item.file_original_name,
+                                        })}
+                                      >
+                                        <Eye className="h-3 w-3" />
+                                        View Report
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="xs"
+                                        onClick={() => downloadResultFile(item.visit_test_id, item.file_original_name)}
+                                      >
+                                        <Download className="h-3 w-3" />
+                                        Download
+                                      </Button>
+                                    </span>
+                                  ) : isSafeResultUrl(item.file_url) ? (
+                                    <a
+                                      href={item.file_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1 text-fine font-semibold text-brand-700 hover:underline"
                                     >
                                       <Download className="h-3 w-3" />
-                                      Download
-                                    </Button>
-                                  </span>
-                                ) : isSafeResultUrl(item.file_url) ? (
-                                  <a
-                                    href={item.file_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-fine font-semibold text-brand-700 hover:underline"
-                                  >
-                                    <Download className="h-3 w-3" />
-                                    Open attachment
-                                  </a>
-                                ) : (
-                                  <span className="text-fine font-semibold text-amber-700">Attachment link unavailable</span>
-                                )}
-                              </div>
-                            )}
-                        </ResultReport>
+                                      Open attachment
+                                    </a>
+                                  ) : (
+                                    <span className="text-fine font-semibold text-amber-700">Attachment link unavailable</span>
+                                  )}
+                                </div>
+                              )}
+                          </ResultReport>
 
-                        <div className="flex justify-end pt-2">
-                          <Button
-                            onClick={() => printElement(null, 'printing-report')}
-                            variant="outline"
-                            className="text-xs font-bold flex items-center space-x-1.5"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                            <span>Print Official Copy</span>
-                          </Button>
-                        </div>
+                          <div className="flex justify-end pt-2">
+                            <Button
+                              onClick={() => printElement(null, 'printing-report')}
+                              variant="outline"
+                            >
+                              <Printer className="h-3.5 w-3.5" aria-hidden="true" />
+                              Print official copy
+                            </Button>
+                          </div>
 
-                        </DialogContent>
-                      </Dialog>
-                    ) : item.test_status !== 'Cancelled' && (
-                      // Not released, so there is nothing to open yet. This was a "Details" button
-                      // with no handler: pressed, it did nothing, which reads as broken. [1.80.0]
-                      <p className="m-0 flex max-w-xs items-start gap-1.5 text-fine text-slate-500 sm:text-right">
-                        <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-                        <span>Not released yet. It will appear here once the clinic releases it.</span>
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <Card className="border-dashed border-gray-200 bg-transparent text-center p-8 rounded-2xl">
-                <Info className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-xs font-semibold text-gray-500">No diagnostic requests found matching the current filters.</p>
-              </Card>
-            )}
-          </div>
+                          </DialogContent>
+                        </Dialog>
+                      ) : item.test_status !== 'Cancelled' && (
+                        // Not released, so there is nothing to open yet. This was a "Details" button
+                        // with no handler: pressed, it did nothing, which reads as broken. [1.80.0]
+                        <p className="m-0 flex max-w-xs items-start gap-1.5 text-fine text-slate-500">
+                          <Clock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                          <span>Not released yet. It will appear here once the clinic releases it.</span>
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </PanelBody>
+          </Panel>
         </div>
   );
 }

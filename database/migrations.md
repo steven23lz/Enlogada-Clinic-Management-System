@@ -1,5 +1,32 @@
 # Database Migration & Schema History
 
+## [1.82.0] - 2026-09-15 (The patient portal, part 3: the tabs, restyled)
+
+No migration. Frontend only. The last of the three portal commits.
+
+### What changed
+
+- **The tabs are plain panels**, the Flat colouring's one container, like the rest of the app:
+  - Appointments is one panel with no heading of its own. The band already says Appointments, and
+    "My Appointments" under it was the same name twice.
+  - Results is one panel with a row per test, under an attached toolbar that no longer repeats the
+    tab's name ("Diagnostic History" under "Results"). "View Certificate Report" is "View report".
+  - Payments uses the standard panel header.
+  - Profile is three panels: the patient's details (with Edit), the family on the account (with
+    Add a profile) and HMO coverage. The HMO card was on the rail colour, a second dark block under
+    the band.
+- **One profile form.** `AddProfileDialog` and `EditProfileDialog` were the same eight fields in two
+  copies that shared DOM ids. `ProfileFormDialog` (`mode="add"` or `"edit"`) replaces both, with ids
+  of its own per mode. Its button keeps its label while it saves (`<Button loading>`) instead of
+  turning into "Saving…".
+
+### Tests
+
+- portal-home: a new account adds its first patient from Profile through the one form, and the
+  header chip then shows them.
+
+The full suite: 426 passed, 0 skipped.
+
 ## [1.81.0] - 2026-09-15 (The patient portal, part 2: layout A2 and Home)
 
 No migration. Frontend only. The second of the three portal commits: the layout Steven picked from

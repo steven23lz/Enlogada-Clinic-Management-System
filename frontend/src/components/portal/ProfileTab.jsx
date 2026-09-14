@@ -1,10 +1,9 @@
 import React from 'react';
-import { Pencil, ShieldCheck, User, Users } from 'lucide-react';
+import { Pencil, ShieldCheck, UserPlus, UserRound, Users } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { Badge } from '../ui/badge';
-import AddProfileDialog from './AddProfileDialog';
-import EditProfileDialog from './EditProfileDialog';
+import { Panel, PanelHeader, PanelBody } from '../ui/panel';
+import ProfileFormDialog from './ProfileFormDialog';
 
 const listFormat = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
 
@@ -13,6 +12,9 @@ const listFormat = new Intl.ListFormat('en', { style: 'long', type: 'conjunction
  *
  * Lifted out of ClientDashboard, which rendered the profile switcher, two profile dialogs,
  * a hero and four tab panels from one 1,044-line file. The props are the hooks it reads.
+ *
+ * Plain panels, the Flat colouring's one container. [1.82.0] It was three cards, one of them on
+ * the rail colour: a second dark block under the band, which is meant to be the only one.
  */
 export default function ProfileTab({ profiles, reference }) {
   // The providers the clinic is accredited with, from the list the booking dialog offers. This
@@ -21,71 +23,75 @@ export default function ProfileTab({ profiles, reference }) {
   const providers = (reference?.hmoProviders || []).map((p) => p.name).filter(Boolean);
   const accredited = providers.length ? listFormat.format(providers) : '';
 
+  const patient = profiles.selected;
+  const facts = patient
+    ? [
+        ['Patient ID', `PT-${patient.id}`],
+        ['Birthdate', new Date(patient.birthdate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })],
+        ['Contact number', patient.contact_number || 'None on file'],
+      ]
+    : [];
+
   return (
         <div className="space-y-4">
-          {profiles.selected && (
-            <Card className="border-line rounded-xl bg-surface overflow-hidden">
-              <CardHeader className="bg-slate-50/80 border-b border-line py-3.5 flex-row items-center justify-between space-y-0">
-                <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                  <User className="w-4 h-4 text-brand-600" />
-                  <span>Patient Profile Summary</span>
-                </CardTitle>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={profiles.openEdit}
-                  aria-label="Edit patient profile"
-                  className="h-7 w-7 p-0 border-gray-200 text-gray-500 hover:text-brand-600 hover:border-brand-500 rounded-lg"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </Button>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex justify-between items-center text-xs border-b border-gray-50 pb-2">
-                  <span className="text-gray-500 font-medium">Patient ID:</span>
-                  <span className="font-extrabold text-slate-900">PT-{profiles.selected.id}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs border-b border-gray-50 pb-2">
-                  <span className="text-gray-500 font-medium">Birthdate:</span>
-                  <span className="font-bold text-slate-900">
-                    {new Date(profiles.selected.birthdate).toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-xs border-b border-gray-50 pb-2">
-                  <span className="text-gray-500 font-medium">Contact:</span>
-                  <span className="font-bold text-slate-900">{profiles.selected.contact_number || 'N/A'}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs pb-1">
-                  <span className="text-gray-500 font-medium">Category:</span>
-                  <Badge variant="secondary" className="font-bold text-meta bg-brand-50 text-brand-600">
-                    {profiles.selected.patient_type_name}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
+          {patient && (
+            <Panel className="overflow-hidden">
+              <PanelHeader
+                title={`${patient.first_name} ${patient.last_name}`}
+                description="The patient whose bookings and results you are viewing."
+                icon={UserRound}
+                actions={
+                  <Button type="button" variant="outline" size="sm" onClick={profiles.openEdit} aria-label="Edit patient profile">
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    Edit
+                  </Button>
+                }
+              />
+              <PanelBody flush>
+                <dl className="m-0 divide-y divide-line">
+                  {facts.map(([label, value]) => (
+                    <div key={label} className="flex items-center justify-between gap-3 px-5 py-3">
+                      <dt className="text-fine text-ink-muted">{label}</dt>
+                      <dd className="m-0 text-note font-semibold text-ink">{value}</dd>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between gap-3 px-5 py-3">
+                    <dt className="text-fine text-ink-muted">Billing category</dt>
+                    <dd className="m-0">
+                      <Badge variant="secondary" className="bg-brand-50 text-meta font-bold text-brand-700">
+                        {patient.patient_type_name}
+                      </Badge>
+                    </dd>
+                  </div>
+                </dl>
+              </PanelBody>
+            </Panel>
           )}
 
           {/* Family on this account. [1.81.0] Adding a profile sat in a bar above every tab, beside
               the switcher. The switcher is the header's "Viewing" chip now, and adding someone
               belongs here, next to the list it adds to. The list marks who is being viewed but
               does not switch: a second switcher beside the chip would be the same control twice. */}
-          <Card data-testid="portal-family" className="border-line rounded-xl bg-surface overflow-hidden">
-            <CardHeader className="bg-slate-50/80 border-b border-line py-3.5 flex-row flex-wrap items-center justify-between gap-3 space-y-0">
-              <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                <Users className="w-4 h-4 text-brand-600" />
-                <span>Family on this account</span>
-              </CardTitle>
-              <AddProfileDialog profiles={profiles} reference={reference} />
-            </CardHeader>
-            <CardContent className="p-0">
+          <Panel data-testid="portal-family" className="overflow-hidden">
+            <PanelHeader
+              title="Family on this account"
+              icon={Users}
+              actions={
+                <Button type="button" size="sm" onClick={() => profiles.openAdd(true)}>
+                  <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                  Add a profile
+                </Button>
+              }
+            />
+            <PanelBody flush>
               {profiles.profiles.length === 0 ? (
-                <p className="m-0 p-4 text-fine text-slate-500">
+                <p className="m-0 px-5 py-4 text-fine text-ink-muted">
                   No patient profiles yet. Add yourself first, then anyone you book for.
                 </p>
               ) : (
                 <ul className="m-0 list-none divide-y divide-line p-0">
                   {profiles.profiles.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <li key={p.id} className="flex items-center justify-between gap-3 px-5 py-3">
                       <span className="min-w-0">
                         <span className="block truncate text-note font-semibold text-ink">{p.first_name} {p.last_name}</span>
                         <span className="block text-fine text-ink-muted">{p.patient_type_name || 'Patient'}</span>
@@ -97,25 +103,25 @@ export default function ProfileTab({ profiles, reference }) {
                   ))}
                 </ul>
               )}
-            </CardContent>
-          </Card>
+            </PanelBody>
+          </Panel>
 
-          <EditProfileDialog profiles={profiles} reference={reference} />
-
-          {/* HMO Coverage Info Card */}
-          <Card className="border-line bg-rail text-white rounded-2xl overflow-hidden p-5 space-y-3">
-            <div className="flex items-center space-x-2 text-brand-600">
-              <ShieldCheck className="w-5 h-5" />
-              <h3 className="font-bold text-sm text-white m-0">HMO Accreditation</h3>
+          <Panel tone="brand" className="p-5">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 flex-shrink-0 text-brand-700" aria-hidden="true" />
+              <h2 className="m-0 text-note font-semibold text-ink">HMO coverage</h2>
             </div>
-            <p className="text-rail-ink-soft text-xs leading-relaxed">
+            <p className="m-0 mt-2 text-fine leading-relaxed text-ink-muted">
               {accredited ? (
-                <>Enlogada Clinic is accredited with <strong>{accredited}</strong>. Choose your provider when you book, and add a photo of your HMO card.</>
+                <>Enlogada Clinic is accredited with <strong className="text-ink">{accredited}</strong>. Choose your provider when you book, and add a photo of your HMO card.</>
               ) : (
                 <>Choose your HMO provider when you book, and add a photo of your HMO card. The clinic confirms your coverage before your visit.</>
               )}
             </p>
-          </Card>
+          </Panel>
+
+          <ProfileFormDialog profiles={profiles} reference={reference} mode="add" />
+          <ProfileFormDialog profiles={profiles} reference={reference} mode="edit" />
         </div>
   );
 }

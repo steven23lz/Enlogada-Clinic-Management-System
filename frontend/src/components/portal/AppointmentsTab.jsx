@@ -3,7 +3,8 @@ import React from 'react';
 const LIST_PAGE_SIZE = 8;
 import { AlertTriangle, CalendarClock, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
+import { Panel, PanelBody } from '../ui/panel';
+import { SkeletonList } from '../ui/skeleton';
 import { StatusBadge } from '../ui/status-badge';
 import EmptyState from '../ui/empty-state';
 import Pagination from '../ui/pagination';
@@ -228,15 +229,11 @@ export default function AppointmentsTab({ bookings }) {
     );
   };
 
+  // One plain panel with no heading of its own. [1.82.0] The band above already says Appointments,
+  // and a "My Appointments" card title under it was the same name twice.
   return (
-          <Card className="border-line rounded-xl bg-surface overflow-hidden">
-            <CardHeader className="bg-slate-50/80 border-b border-line py-3.5">
-              <CardTitle className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
-                <CalendarClock className="w-4 h-4 text-brand-600" />
-                <span>My Appointments</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
+          <Panel className="overflow-hidden">
+            <PanelBody className="p-4">
               {bookings.payError && (
                 <div role="alert" className="alert alert-error mb-3">
                   <XCircle className="w-4 h-4 flex-shrink-0" />
@@ -254,19 +251,24 @@ export default function AppointmentsTab({ bookings }) {
                   action={<Button variant="outline" size="sm" onClick={bookings.reload}>Try again</Button>}
                 />
               ) : bookings.loading ? (
-                <p className="text-xs text-gray-400 text-center py-4">Loading appointments…</p>
+                <SkeletonList rows={2} />
               ) : bookings.appointments.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-4 italic">No appointments booked yet.</p>
+                <EmptyState
+                  compact
+                  icon={CalendarClock}
+                  title="No appointments booked yet"
+                  description="Book a visit above. It appears here, and your booking pass with it once it is paid."
+                />
               ) : (
                 <>
                   {active.length > 0 && (
                     <div data-testid="active-bookings" className="space-y-3">{active.map(renderCard)}</div>
                   )}
 
-                  {/* Still inside My Appointments, as asked — a cancellation is part of a
-                      patient's booking history and hiding it would mean answering "did that
-                      get cancelled?" somewhere else. The heading is the boundary: above it is
-                      what needs attending to, below it is what already happened. */}
+                  {/* Still on this tab, as asked — a cancellation is part of a patient's booking
+                      history and hiding it would mean answering "did that get cancelled?"
+                      somewhere else. The heading is the boundary: above it is what needs attending
+                      to, below it is what already happened. */}
                   {earlier.length > 0 && (
                     <div data-testid="earlier-bookings" className={active.length > 0 ? 'mt-5' : ''}>
                       <p className="m-0 mb-2.5 flex items-center gap-2 text-micro font-bold uppercase tracking-wider text-ink-muted">
@@ -280,7 +282,7 @@ export default function AppointmentsTab({ bookings }) {
                   )}
                 </>
               )}
-            </CardContent>
+            </PanelBody>
             {!bookings.error && bookings.appointments.length > 0 && (
               <Pagination
                 page={safePage}
@@ -290,6 +292,6 @@ export default function AppointmentsTab({ bookings }) {
                 pageSize={LIST_PAGE_SIZE}
               />
             )}
-          </Card>
+          </Panel>
   );
 }
