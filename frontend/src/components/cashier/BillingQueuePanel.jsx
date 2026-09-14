@@ -22,7 +22,7 @@ export default function BillingQueuePanel({ queue, checkout }) {
         <div className="lg:col-span-5">
           <Panel className="overflow-hidden">
             <PanelHeader
-              title="Pending Billing Queue"
+              title="Waiting to pay"
               icon={Receipt}
               actions={
                 !(queue.queueError || queue.collectionsError) && (

@@ -27,10 +27,13 @@ test('reception registers a walk-in and attaches tests in one pass', async ({ pa
   await page.fill('input[type="email"]', 'receptionist@enlogada.com');
   await page.fill('input[type="password"]', PASSWORD);
   await page.locator('button[type="submit"]').click();
-  await expect(page.getByRole('heading', { name: /active patient queue/i })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('heading', { name: 'Desk', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
 
-  await page.locator('[data-nav-id="reception-walkin"]').first().click();
-  await expect(page.getByRole('heading', { name: /walk-in registration/i })).toBeVisible();
+  // Registration opens in a panel beside the queue since [1.75.0], rather than on a screen of its
+  // own. The panel carries the old screen's name.
+  await page.getByRole('button', { name: 'Register Walk-In', exact: true }).click();
+  const panel = page.getByRole('dialog');
+  await expect(panel.getByRole('heading', { name: /walk-in registration/i })).toBeVisible();
 
   const surname = `Walkin${Date.now()}`;
   // Addressed by placeholder, which is what this form actually exposes — it has no <label for>,
@@ -65,8 +68,10 @@ test('reception registers a walk-in and attaches tests in one pass', async ({ pa
   await page.getByRole('button', { name: 'Register Walk-In & Issue Queue Ticket' }).click();
 
   // The confirmation says both halves happened.
-  await expect(page.getByText(/Queue Ticket/i).first()).toBeVisible({ timeout: 20000 });
-  await expect(page.getByText(/test.*attached/i).first()).toBeVisible({ timeout: 10000 });
+  // Scoped to the panel: the queue behind it has a "Queue Ticket" column header, which would
+  // satisfy an unscoped check before anything had been registered.
+  await expect(panel.getByText(/Physical Queue Ticket/i)).toBeVisible({ timeout: 20000 });
+  await expect(panel.getByText(/test.*attached/i)).toBeVisible({ timeout: 10000 });
 
   // And the visit really carries them — the bill is what the cashier will see.
   const ctx = await request.newContext();

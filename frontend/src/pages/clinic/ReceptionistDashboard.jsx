@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import SidebarLayout from '../../components/SidebarLayout';
 import { Button } from '../../components/ui/button';
 import PageHeader from '../../components/ui/page-header';
 import { Input } from '../../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '../../components/ui/sheet';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { toastSuccess, toastInfo } from '../../lib/toast';
 import RescheduleDialog from '../../components/booking/RescheduleDialog';
@@ -12,42 +13,51 @@ import TestPicker from '../../components/booking/TestPicker';
 import useOperationsReport from '../../hooks/useOperationsReport';
 import ActiveQueuePanel from '../../components/reception/ActiveQueuePanel';
 import VisitHistoryPanel from '../../components/reception/VisitHistoryPanel';
-import WalkInPanel from '../../components/reception/WalkInPanel';
-import CheckInPanel from '../../components/reception/CheckInPanel';
+import WalkInRegistration from '../../components/reception/WalkInRegistration';
+import WhoIsHereBox from '../../components/reception/WhoIsHereBox';
+import DeskCounts from '../../components/reception/DeskCounts';
 import { useVisitHistory } from '../../hooks/useVisitHistory';
 import { usePatientLookup } from '../../hooks/usePatientLookup';
 import { useReceptionQueue } from '../../hooks/useReceptionQueue';
 import { useClinicReferenceData } from '../../hooks/useClinicReferenceData';
 import { useAppointmentCheckIn } from '../../hooks/useAppointmentCheckIn';
+import { useTodaysBookings } from '../../hooks/useTodaysBookings';
 import { useVisitDisposition } from '../../hooks/useVisitDisposition';
 import { useTestAssignment } from '../../hooks/useTestAssignment';
 import { useHmoLogging } from '../../hooks/useHmoLogging';
-import { UserCheck, UserPlus, QrCode, AlertCircle, History, X } from 'lucide-react';
+import { UserCheck, UserPlus, AlertCircle, History, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import LoadingState from '../../components/ui/loading-state';
 import { formatCurrency } from '../../lib/currency';
 
+/**
+ * The front desk: the Desk to work from, and Visit History to look back. [1.75.0]
+ *
+ * It was four screens — Active Queue, Walk-In Registration, Appointment Check-In and Visit
+ * History — and one arriving patient needed three of them: looked up on one, checked in on
+ * another, watched on the third. Steven picked option F1 from the gallery: one Desk where a Who's
+ * here box finds the person (a booking, a record, or nobody yet) above the queue it feeds, and
+ * registration opens in a side panel so the queue stays where it was.
+ *
+ * Nothing underneath changed. Every hook, endpoint and confirmation dialog is the one the four
+ * screens used. The two retired screen ids no longer exist, and App sends a stale one here.
+ */
+// The sidebar's own names, so the sidebar, the breadcrumb and the heading agree. Not "Front Desk"
+// for the Desk: that is the GROUP, which a phone's top bar shows on its own, and the heading under
+// it would have said the same two words again.
 const PAGE_TITLES = {
-  'reception-queue': 'Active Patient Queue',
-  'reception-walkin': 'Walk-In Registration',
-  'reception-checkin': 'Appointment Check-In',
+  'reception-queue': 'Desk',
   'reception-history': 'Visit History',
 };
 
-// One sentence per screen, written for someone in their first week on the desk. The four views
-// previously opened straight onto a KPI strip or a bare form with nothing saying what the screen
-// was for or how it related to the other three.
 const PAGE_ICONS = {
   'reception-queue': UserCheck,
-  'reception-walkin': UserPlus,
-  'reception-checkin': QrCode,
   'reception-history': History,
 };
 
+// One sentence per screen, written for someone in their first week on the desk.
 const PAGE_BLURBS = {
-  'reception-queue': "Everyone who has checked in today, in arrival order. Attach tests, print a ticket, or send a patient through to billing.",
-  'reception-walkin': 'Register a patient who arrived without an appointment. Creates the patient record if they are new, then opens a visit.',
-  'reception-checkin': 'Scan a booking pass or key in the reference code to turn a confirmed appointment into a live visit.',
+  'reception-queue': 'Check in a booking, start a visit for someone on file, or register someone new, without leaving the queue.',
   // Says what the screen does. It described itself as "Completed and cancelled visits" while
   // showing Pending and Processing ones too — findVisitsByDateRange is deliberately any-status,
   // so the copy was the half that was wrong. A receptionist looking a patient up does not know
@@ -59,23 +69,44 @@ const VALID_VIEWS = Object.keys(PAGE_TITLES);
 const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) => {
   const { hasPermission } = useAuth();
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
-  // back to the primary queue view, mirroring DiagnosticDashboard's existing fallback pattern.
+  // back to the Desk, mirroring DiagnosticDashboard's existing fallback pattern.
   const view = VALID_VIEWS.includes(activeNav) ? activeNav : 'reception-queue';
-  // Desk performance, on Visit History where someone is reviewing rather than checking people
-  // in. The queue KPIs count who is waiting; nothing measured how long they wait.
-  const operations = useOperationsReport({ days: 7, enabled: view === 'reception-history' });
-  const queue = useReceptionQueue({ enabled: view === 'reception-queue' });
-  const reference = useClinicReferenceData();
+  const onDesk = view === 'reception-queue';
 
+  // What this person may do at the desk, each from the permission its own endpoint demands.
+  // [1.53.0] A Cashier reads this queue legitimately (`visits:read`) and holds none of the rest, so
+  // it gets the queue with its own search and no Who's here box, exactly as before.
+  const can = {
+    checkIn: hasPermission('appointments:read') && hasPermission('appointments:update'),
+    reschedule: hasPermission('appointments:reschedule'),
+    startVisit: hasPermission('visits:create'),
+    searchRecords: hasPermission('patients:read'),
+    seeBookings: hasPermission('appointments:read'),
+  };
+  const showWho = can.checkIn || can.startVisit;
+
+  // Registration opens beside the queue rather than replacing it.
+  const [registering, setRegistering] = useState(false);
+
+  // Desk performance, on Visit History where someone is reviewing rather than checking people
+  // in. The queue counts who is waiting; nothing measured how long they wait.
+  const operations = useOperationsReport({ days: 7, enabled: view === 'reception-history' });
+  const queue = useReceptionQueue({ enabled: onDesk });
+  const reference = useClinicReferenceData();
   const history = useVisitHistory({ enabled: view === 'reception-history' });
+  const arrivals = useTodaysBookings({ enabled: onDesk && can.seeBookings });
+  // Existing Patient Lookup State (Module 7: patient record lookup)
+  const lookup = usePatientLookup();
 
   const checkIn = useAppointmentCheckIn({
     // What a successful admission means to the rest of the screen. The hook does not know the
-    // queue or the lookup panel exist; it reports what happened and this decides.
+    // queue or the box exist; it reports what happened and this decides.
     onCheckedIn: ({ type, patient, visit }) => {
       if (type === 'walkin') {
+        // The name stays in the box, so the queue below goes on showing the visit just opened.
         lookup.noteCheckedIn(`${patient.first_name} ${patient.last_name} checked in! Physical Queue Ticket: ${visit.queue_number}`);
-        lookup.setQuery('');
+      } else {
+        arrivals.reload();
       }
       queue.refresh();
     },
@@ -86,30 +117,19 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
     // clears the verified booking: leaving it on screen invites checking in someone who is not
     // coming.
     onChanged: ({ type }) => {
-      if (type === 'noShow') checkIn.clearResult();
+      if (type === 'noShow') {
+        checkIn.clearResult();
+        arrivals.reload();
+      }
       queue.refresh();
     },
   });
 
   const testAssignment = useTestAssignment({ onAssigned: () => queue.refresh() });
 
-  // Existing Patient Lookup State (Module 7: patient record lookup)
-  const lookup = usePatientLookup();
-
-  // Walk-in Registration State
-
-  // The form holds the patient type as an id; the referral rule is expressed in names. Resolved
-  // here rather than comparing against a hardcoded id, which a reseed could renumber.
   // Manual HMO logging State
   const hmo = useHmoLogging({ onLogged: () => queue.refresh() });
 
-  // UI/UX Modernization Phase 10: read-only visibility into pending HMO requests, shown on the
-  // Active Queue landing view.
-
-  // UI/UX Modernization Phase 10: GET /hmo/requests has always been authorized for
-  // Receptionist, but nothing on this dashboard ever called it — pending requests were
-  // effectively invisible unless someone already knew to look at Admin's Service Requests page.
-  // Read-only here: approving stays wherever it already lives, this just surfaces the list.
   /**
    * Calls the patient by voice. [1.54.0] The queue row's other control — a per-row reprint of the
    * physical slip — is gone: the ticket is printed once at registration, the number is on screen
@@ -134,13 +154,12 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           title={PAGE_TITLES[view]}
           description={PAGE_BLURBS[view]}
           actions={
-            /* Only for someone who can actually register one. [1.53.0] A Cashier holds
-               `visits:read` and so reaches this queue legitimately — knowing who is waiting is
-               half of running a till — but not `visits:create`. This button sent them to a screen
-               their own sidebar does not list, to submit a request the API answers with 403.
-               Gated on the permission the endpoint itself demands, so the two agree. */
-            view === 'reception-queue' && hasPermission('visits:create') ? (
-              <Button variant="outline" onClick={() => onSelectNav?.('reception-walkin')}>
+            /* Only for someone who can actually register one. [1.53.0] Gated on the permission the
+               endpoint itself demands, so the button and the API agree. The one Register button on
+               the screen: the queue's empty state and the box's "nobody found" line point here
+               rather than carrying a second copy of it. */
+            onDesk && can.startVisit ? (
+              <Button variant="outline" onClick={() => setRegistering(true)}>
                 <UserPlus className="h-4 w-4" />
                 Register Walk-In
               </Button>
@@ -156,66 +175,54 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           </div>
         )}
 
-        {/* Queue and registration together, on a screen wide enough to hold both. [1.63.0]
-            ── Why 2xl and not lg ──────────────────────────────────────────────────────────────
-            A reception monitor is 1920 wide; a laptop at the desk is 1280-1440. Splitting at `lg`
-            would squeeze the queue table — which has seven columns and is the primary content —
-            on exactly the machines that can least afford it. At 2xl there is genuinely room for
-            both, and below it the layout is unchanged, which is also why no existing test moves.
-
-            Registration is the SECOND column, not the first. The queue is what a receptionist
-            watches continuously; registering a walk-in is what they do intermittently. Putting
-            the form on the left would put the interruption where the attention lives.
-
-            The two views stay mutually exclusive elsewhere, so the form is never mounted twice —
-            `reception-walkin` still renders it alone, full width, for the narrower screens where
-            that is the only way to give it room. */}
-        {view === 'reception-queue' && (
-          <div className="grid grid-cols-1 items-start gap-5 2xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
-            {/* The wrapper is load-bearing, not tidiness. ActiveQueuePanel returns a FRAGMENT, so
-                without it the panel's three children — the metric row, the HMO band and the queue
-                table — each became a separate grid item and got dealt alternately into the two
-                columns. Found by screenshotting it: the metrics sat left, the HMO band top-right,
-                the table left again.
-
-                `items-start` for the same class of reason: grid items stretch to the tallest row
-                by default, which inflated the metric cards into tall empty boxes to match the
-                band beside them.
-
-                3fr/1fr rather than 2fr/1fr because the queue table has seven columns. At 2fr it
-                fitted the viewport but clipped Actions — the primary controls — off its own right
-                edge. The table scrolls inside its panel as a backstop, but a horizontal scrollbar
-                to reach "Edit Tests" is a worse answer than giving the table the room. */}
-            <div className="min-w-0 space-y-5">
-              <ActiveQueuePanel
-                queue={queue}
+        {onDesk && (
+          <>
+            {showWho && (
+              <WhoIsHereBox
+                lookup={lookup}
+                checkIn={checkIn}
                 disposition={disposition}
-                hmo={hmo}
-                testAssignment={testAssignment}
-                onCallPatient={speakQueueNumber}
-                onSelectNav={onSelectNav}
+                arrivals={arrivals}
+                queue={queue}
+                can={can}
               />
-            </div>
-            {/* Only for someone who may actually register one — the same permission the button in
-                the header answers to, and the same 403 it exists to avoid. */}
-            {hasPermission('visits:create') && (
-              <div className="hidden 2xl:block">
-                <WalkInPanel queue={queue} lookup={lookup} checkIn={checkIn} reference={reference} compact />
-              </div>
             )}
-          </div>
+            <DeskCounts queue={queue} />
+            <ActiveQueuePanel
+              queue={queue}
+              disposition={disposition}
+              hmo={hmo}
+              testAssignment={testAssignment}
+              onCallPatient={speakQueueNumber}
+              showSearch={!showWho}
+            />
+          </>
         )}
 
         {view === 'reception-history' && (
           <VisitHistoryPanel history={history} operations={operations} />
         )}
 
-        {view === 'reception-walkin' && (
-          <WalkInPanel queue={queue} lookup={lookup} checkIn={checkIn} reference={reference} />
-        )}
-
-        {view === 'reception-checkin' && (
-          <CheckInPanel checkIn={checkIn} disposition={disposition} />
+        {/* Mounted only while open (Radix unmounts a closed dialog), so the form's ids exist once. */}
+        {can.startVisit && (
+          <Sheet open={registering} onOpenChange={setRegistering}>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Walk-In Registration</SheetTitle>
+                <SheetDescription>
+                  For someone new to the clinic: their details, then what they came for. Someone
+                  already on file is started from the Who's here box instead, not registered twice.
+                </SheetDescription>
+              </SheetHeader>
+              <WalkInRegistration
+                bare
+                patientTypes={reference.patientTypes}
+                testCatalog={reference.testCatalog}
+                packages={reference.packages}
+                onRegistered={() => queue.refresh()}
+              />
+            </SheetContent>
+          </Sheet>
         )}
 
         {/* Attach Diagnostic Tests Modal */}
@@ -288,8 +295,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
             <form onSubmit={testAssignment.submit} className="space-y-4 pt-2">
               <span className="field-label">Add more</span>
-              {/* Same control as the registration form below, so the two cannot drift on
-                  grouping, the running total, or the preparation warning. */}
+              {/* Same control as the registration form, so the two cannot drift on grouping, the
+                  running total, or the preparation warning. */}
               <TestPicker
                 tests={reference.testCatalog}
                 selectedIds={testAssignment.selectedTestIds}
@@ -396,8 +403,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           </DialogContent>
         </Dialog>
 
-        {/* Check-in confirmation — one dialog for both check-in paths (QR/reference verify and
-            existing-patient lookup), see .agents Phase 12 and UI/UX Phase 3 */}
+        {/* Check-in confirmation — one dialog for both check-in paths (a booking from the box, and
+            a record started as a walk-in), see .agents Phase 12 and UI/UX Phase 3 */}
         <ConfirmDialog
           open={!!checkIn.target}
           onOpenChange={(open) => { if (!open) checkIn.cancel(); }}
@@ -444,9 +451,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
           onOpenChange={(open) => { if (!open) disposition.reschedule.close(); }}
           appointment={disposition.reschedule.appointment}
           onRescheduled={(moved) => {
-            // Keep the verified booking on screen showing its new time, rather than clearing the
-            // panel and making the receptionist re-scan to confirm the move landed.
+            // Keep the booking on screen showing its new time, rather than clearing the card and
+            // making the receptionist look it up again to confirm the move landed. A booking moved
+            // to another day also leaves today's "still to arrive".
             checkIn.applyToResult(moved);
+            arrivals.reload();
             toastSuccess('Appointment rescheduled.');
           }}
         />

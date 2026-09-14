@@ -69,7 +69,7 @@ test('a change made elsewhere still reaches a polling screen', async ({ page }) 
   const auth = { Authorization: `Bearer ${recToken}` };
 
   await signIn(page, 'receptionist@enlogada.com');
-  await expect(page.getByRole('heading', { name: /active patient queue/i })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('heading', { name: 'Desk', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
 
   const surname = `Revalidate${Date.now()}`;
 
@@ -78,7 +78,8 @@ test('a change made elsewhere still reaches a polling screen', async ({ page }) 
   // pagination: the queue shows 25 a page and a full suite run leaves more visits than that, so
   // a new walk-in lands on page two and proves nothing. Here the poll URL carries the search
   // term, the cached answer is "no such patient", and the change has to overturn it.
-  await page.getByPlaceholder('Search patient name or Queue #...').fill(surname);
+  // The Desk's Who's here box is the queue's search since [1.75.0]; it narrows the same polled list.
+  await page.getByRole('searchbox', { name: "Who's here?" }).fill(surname);
   await expect(page.getByText(/no .*(patients|visits|results)|nothing/i).first())
     .toBeVisible({ timeout: 15000 });
 

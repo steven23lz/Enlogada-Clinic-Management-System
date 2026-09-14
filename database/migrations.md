@@ -1,5 +1,85 @@
 # Database Migration & Schema History
 
+## [1.75.0] - 2026-09-14 (The front desk works from one Desk; the till is tidied)
+
+No migration. Frontend only: no endpoint, permission or hook behaviour changed.
+
+### What Steven asked for
+
+From the clickable gallery he picked F1 for the front desk (one Desk screen) and C3 for the cashier
+(the same screens, tidied). He asked that nothing already working break, the backend included.
+
+### The Desk (F1)
+
+One arrival used to need three screens: a returning patient was looked up on Walk-In Registration,
+a booking was checked in on Appointment Check-In, and both were watched on the Active Queue. They
+are one screen now, called **Desk**. The heading says "Desk" as the sidebar does, not "Front Desk":
+that is the group, which a phone's top bar shows by itself, directly above the heading.
+
+- **Who's here?** One box takes a name, a queue number or a booking reference, or a scanned pass.
+  - A name shows today's bookings under it (Check in) and records on file (Start visit), and
+    narrows the queue below to the same name.
+  - A reference looks the booking up on Enter.
+  - With nothing typed, the box lists today's bookings still to arrive.
+- **A booking opens the old check-in card**: confirm, reschedule, or mark a no-show.
+- **Someone already in today's queue is not offered a second visit.** Record rows wait until the
+  queue has answered for the same name, so the button never appears before that check.
+- **Registration opens in a side panel**, and the queue stays where it was. It is the same form (the
+  `#wi-*` fields), and the panel is titled "Walk-In Registration".
+- **The four counter cards became one line**: in the queue, not yet paid, in a department,
+  walk-ins. The line hides while the queue is filtered, because the server counts the matches, not
+  the day. The toolbar's "Showing N of M" appears only then; unfiltered it was the counts line and
+  the pager saying the same number a second and third time.
+- **A short name lists at most six records**, then "and N more", so two letters cannot push the
+  queue off the screen.
+- **The front desk has a list of today's bookings for the first time.** The API always served it
+  (`GET /appointments`, behind `appointments:read`, which the desk holds); nothing on screen asked.
+
+Nothing underneath changed: the same hooks, endpoints and confirmation dialogs. A Cashier, who reads
+this queue but can neither check in nor start a visit, gets the queue with its own search and no
+box, as before. `CheckInPanel.jsx` and `WalkInPanel.jsx` are gone. A stale `reception-walkin` or
+`reception-checkin` falls back to the Desk.
+
+Doubles found on screenshots and removed:
+- the queue's empty state carried a second Register Walk-In button
+- a booking's check-in showed two green boxes, both saying the patient was checked in
+- today's bookings were listed in the box and counted again in the counts line
+- the queue's total appeared three times
+
+The one-line counts and totals also got their gap back: a `<p class="m-0">` had cancelled the
+page's `space-y` margin, so both lines sat flush against the panel below.
+
+### The till (C3)
+
+- The heading says **Billing Queue**, as the sidebar does. "Cashier POS & Billing Terminal" was a
+  third name for the same screen.
+- The five collection cards became **one line**: Collected Today, receipts, cash, GCash and bank.
+  Reversed and net-in-drawer appear only on a day with a reversal. Every rule from the cards is kept.
+- The queue panel is headed "Waiting to pay".
+
+### Email while developing
+
+The run for [1.74.0] showed the suite mailing the seeded test accounts through the clinic's Gmail.
+Steven chose to send from a different address while developing, so the clinic's own is untouched.
+That is configuration only (`SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` in `backend/.env`); no code
+changed.
+
+### Tests
+
+- `front-desk.spec.js` (new):
+  - a record is found and started from the box
+  - someone already in the queue is not offered a second visit
+  - today's bookings open their check-in card; the spec serves the list, so it does not depend on
+    the time of day
+  - registration opens and closes beside the queue
+  - the Cashier gets no box
+- Updated for the new names and places: `walkin-registration`, `result-delivery`,
+  `api-authorization`, `borrowed-screen-actions`, `failure-states`, `mobile-patient` and
+  `revalidation`. `text-scale` now measures a laboratory tile, because the till has no cards left.
+- `ui/sheet.jsx` is a new primitive: the side panel.
+
+The full suite: 384 passed, 0 skipped, in 7.3 minutes, across 59 spec files.
+
 ## [1.74.0] - 2026-09-14 (Recording a critical call, and failures that no longer read as zero)
 
 No migration. Frontend only.

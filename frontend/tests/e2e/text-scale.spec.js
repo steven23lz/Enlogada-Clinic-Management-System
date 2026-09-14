@@ -122,11 +122,13 @@ test.describe('Text size preference', () => {
   test('a type token survives cn() and reaches the DOM at its real size', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: /sign in/i }).first().click();
-    await page.fill('input[type="email"]', 'cashier@enlogada.com');
+    // Measured on the laboratory worklist's tiles since [1.75.0], when the till's cards became one
+    // line of text. Any MetricCard label carries the same token through the same cn() call.
+    await page.fill('input[type="email"]', 'lab@enlogada.com');
     await page.fill('input[type="password"]', PASSWORD);
     await page.locator('button[type="submit"]').click();
 
-    const label = page.getByText('Collected Today', { exact: true }).first();
+    const label = page.getByText('Awaiting Exam', { exact: true }).first();
     await expect(label).toBeVisible({ timeout: 15000 });
 
     const sizes = await label.evaluate((el) => {

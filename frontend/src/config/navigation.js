@@ -13,7 +13,7 @@
 // without something being able to open it, and adding a screen is a single edit here.
 import {
   LayoutDashboard, Users, ClipboardList, FileText, CreditCard, Calendar,
-  FolderKanban, BarChart3, Activity, ShieldCheck, UserPlus, QrCode, History,
+  FolderKanban, BarChart3, Activity, ShieldCheck, History,
   Receipt, FlaskConical, Stethoscope, Scan, Wallet, CalendarCog } from 'lucide-react';
 
 // Which top-level screen component handles a destination. App.jsx maps these to real
@@ -100,9 +100,10 @@ export const OPS_NAV_GROUPS = [
   {
     label: 'Front Desk',
     items: [
-      { id: 'reception-queue', label: 'Active Queue', icon: Calendar, staffOnly: true, permission: 'visits:read', console: CONSOLE.RECEPTION },
-      { id: 'reception-walkin', label: 'Walk-In Registration', icon: UserPlus, staffOnly: true, permission: 'visits:create', console: CONSOLE.RECEPTION },
-      { id: 'reception-checkin', label: 'Appointment Check-In', icon: QrCode, staffOnly: true, permission: 'appointments:update', console: CONSOLE.RECEPTION },
+      // One Desk instead of three screens (option F1). [1.75.0] Walk-In Registration and Appointment
+      // Check-In were each half of one arrival; both happen on the Desk now — the Who's here box and
+      // the Register Walk-In panel — each gated there on its own endpoint's permission.
+      { id: 'reception-queue', label: 'Desk', icon: Users, staffOnly: true, permission: 'visits:read', console: CONSOLE.RECEPTION },
       { id: 'reception-history', label: 'Visit History', icon: History, staffOnly: true, permission: 'visits:read', console: CONSOLE.RECEPTION },
     ],
   },

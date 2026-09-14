@@ -400,7 +400,8 @@ test.describe('Where the report is sent', () => {
 
   test('reception is asked for it at the counter', async ({ page }) => {
     await signIn(page, 'receptionist@enlogada.com');
-    await page.getByRole('button', { name: 'Walk-In Registration' }).first().click();
+    // The Desk's registration panel, since [1.75.0].
+    await page.getByRole('button', { name: 'Register Walk-In', exact: true }).click();
 
     // Asked HERE because this is the only moment the patient is standing in front of somebody
     // who can ask. Optional — it must never become a barrier to registering a patient.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import api from '../config/api';
 
 /**
@@ -44,13 +44,45 @@ export function usePatientLookup() {
     }
   };
 
+  /**
+   * Search for a term given directly, as the desk's Who's here box does while someone types.
+   * [1.75.0] `search` reads `query` from state, which a caller that has just set it cannot see yet.
+   * Below two characters it clears rather than scolding: a person typing a name is not making an
+   * error at the first letter. Only the newest search may write, so a slow answer for "Ma" cannot
+   * land on top of the one for "Marquez".
+   */
+  const latest = useRef(0);
+  const searchFor = async (term) => {
+    const q = (term ?? '').trim();
+    setError('');
+    setNotice('');
+    const id = ++latest.current;
+    if (q.length < 2) {
+      setResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    try {
+      const response = await api.get('/patients/search', { params: { q } });
+      if (id === latest.current) setResults(response.data.data.patients);
+    } catch (err) {
+      if (id === latest.current) {
+        setError(err.response?.data?.message || 'Failed to search patient records.');
+        setResults(null);
+      }
+    } finally {
+      if (id === latest.current) setSearching(false);
+    }
+  };
+
   /** A patient found here has just been checked in: announce the ticket, drop the stale list. */
   const noteCheckedIn = (message) => {
     setNotice(message);
     setResults(null);
   };
 
-  return { query, setQuery, results, searching, error, notice, search, noteCheckedIn };
+  return { query, setQuery, results, searching, error, notice, search, searchFor, noteCheckedIn };
 }
 
 export default usePatientLookup;

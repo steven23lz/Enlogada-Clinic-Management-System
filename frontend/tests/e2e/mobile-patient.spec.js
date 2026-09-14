@@ -91,7 +91,7 @@ test('no screen in the patient journey scrolls sideways on a phone', async ({ pa
 // — rather than the mechanism, and checks the desk view is untouched, because the failure mode of
 // a responsive rule is breaking the width it was not written for.
 const STAFF_TABLES = [
-  { email: 'receptionist@enlogada.com', nav: 'Active Queue' },
+  { email: 'receptionist@enlogada.com', nav: 'Desk' },
   { email: 'receptionist@enlogada.com', nav: 'Visit History' },
   { email: 'cashier@enlogada.com', nav: 'Transaction History' },
   { email: 'lab@enlogada.com', nav: 'Laboratory Worklist' },

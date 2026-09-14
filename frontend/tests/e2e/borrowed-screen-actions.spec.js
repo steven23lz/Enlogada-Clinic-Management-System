@@ -88,10 +88,10 @@ test.describe('Borrowed screens offer only what the borrower can do', () => {
     }
 
     await signIn(page, 'cashier@enlogada.com');
-    await page.getByRole('button', { name: 'Active Queue' }).first().click();
+    await page.getByRole('button', { name: 'Desk', exact: true }).first().click();
 
     // The queue itself renders — the screen is legitimately theirs.
-    await expect(page.getByText(/Active Patient Queue/i).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('heading', { name: 'Desk', exact: true, level: 1 })).toBeVisible({ timeout: 20000 });
 
     for (const { label, permission } of QUEUE_ACTIONS) {
       await expect(
@@ -118,8 +118,8 @@ test.describe('Borrowed screens offer only what the borrower can do', () => {
     }
 
     await signIn(page, 'receptionist@enlogada.com');
-    await page.getByRole('button', { name: 'Active Queue' }).first().click();
-    await expect(page.getByText(/Active Patient Queue/i).first()).toBeVisible({ timeout: 20000 });
+    await page.getByRole('button', { name: 'Desk', exact: true }).first().click();
+    await expect(page.getByRole('heading', { name: 'Desk', exact: true, level: 1 })).toBeVisible({ timeout: 20000 });
 
     for (const { label, permission } of QUEUE_ACTIONS) {
       await expect(

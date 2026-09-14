@@ -28,7 +28,12 @@ import { todayStr } from '../../lib/date';
  * referring doctor, and whether a submit is in flight. `onRegistered` is the only thing that
  * crosses back, so the queue behind this screen refreshes once the visit exists.
  */
-const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegistered }) => {
+/**
+ * @param {boolean} [props.bare]  Rendered inside the Desk's side panel, which brings its own title
+ *   and frame. [1.75.0] A second heading and a second border inside it would be the same frame
+ *   drawn twice.
+ */
+const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegistered, bare = false }) => {
   // The requesting doctor, captured alongside the visit rather than the patient: a referral
   // belongs to one episode of care, not to the person forever.
   const [referringPhysician, setReferringPhysician] = useState('');
@@ -54,6 +59,9 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
   // further apart than a viewport once tests are ticked. Without this the form refuses and,
   // from where the receptionist is looking, nothing happens at all.
   const registrationErrorRef = useScrollIntoViewOnSet(registrationError);
+  // The same distance applies to the ticket number once it is issued: the button that issues it is
+  // at the bottom of a long form, and the number the receptionist reads out is at the top.
+  const registrationSuccessRef = useScrollIntoViewOnSet(registrationSuccess);
   const [isRegistering, setIsRegistering] = useState(false);
   const selectedPatientTypeName = patientTypes.find(
     (t) => String(t.id) === String(newPatient.patientTypeId)
@@ -113,7 +121,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
           ].filter(Boolean);
           attachedNote = ` ${parts.join(' and ')} attached.`;
         } catch {
-          attachedNote = ' Tests could not be attached — add them from the Active Queue.';
+          attachedNote = ' Tests could not be attached — add them from the queue.';
         }
       }
 
@@ -148,17 +156,20 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
     }
   };
 
+  const Frame = bare ? 'div' : Panel;
   return (
-              <Panel className="max-w-6xl p-6">
+              <Frame className={bare ? undefined : 'max-w-6xl p-6'}>
+                {!bare && (
                 <div className="border-b border-line pb-3 mb-4">
                   <h2 className="m-0 flex items-center gap-2 text-lead font-bold tracking-tight text-slate-900">
                     <UserPlus className="h-4 w-4 text-brand-600" />
                     <span>Register Walk-In Patient & Generate Physical Ticket</span>
                   </h2>
                 </div>
+                )}
 
                 {registrationSuccess && (
-                  <div className="mb-4 alert alert-success">
+                  <div ref={registrationSuccessRef} role="status" className="mb-4 alert alert-success">
                     <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                     <span>{registrationSuccess}</span>
                   </div>
@@ -390,7 +401,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                     </Button>
                   </div>
                 </form>
-              </Panel>
+              </Frame>
   );
 };
 

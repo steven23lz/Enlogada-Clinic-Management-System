@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, ClipboardList, Clock, ShieldAlert, UserCheck, UserPlus, Volume2, XCircle } from 'lucide-react';
+import { AlertCircle, ShieldAlert, UserCheck, Volume2, XCircle } from 'lucide-react';
 import DataBadge from '../ui/data-badge';
 import EtaBadge from '../ui/eta-badge';
 import WaitBadge from '../ui/wait-badge';
@@ -9,7 +9,6 @@ import { Panel, PanelBody } from '../ui/panel';
 import Toolbar, { ToolbarSpacer } from '../ui/toolbar';
 import EmptyState from '../ui/empty-state';
 import { SkeletonRows } from '../ui/skeleton';
-import MetricCard from '../ui/metric-card';
 import { Badge } from '../ui/badge';
 import { SearchInput } from '../ui/search-input';
 import { StatusBadge } from '../ui/status-badge';
@@ -25,7 +24,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
  * reached for, so what each view depends on is visible at its top instead of inferred by
  * scrolling.
  */
-export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignment, onCallPatient, onSelectNav }) {
+/**
+ * @param {boolean} [props.showSearch]  The queue's own search box. Off on the Desk, where the Who's
+ *   here box above IS the search and narrows this list to the same name — two boxes would ask the
+ *   same question twice. On for anyone who gets no box: the Cashier's read-only view. [1.75.0]
+ */
+export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignment, onCallPatient, showSearch = true }) {
   /**
    * The queue is a BORROWED screen for anyone who is not the front desk. [1.53.0]
    *
@@ -49,14 +53,7 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
 
   return (
         <>
-          {/* KPI Metrics Header. On a failed load these read "—", not the 0 the counters start
-              at: "0 waiting" over a broken request is a false statement about the clinic. [1.74.0] */}
-          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-            <MetricCard label="Active Queue Visits" value={queue.error ? '—' : queue.total} icon={UserCheck} tone="green" />
-            <MetricCard label="Pending Intake" value={queue.error ? '—' : queue.pendingCount} icon={Clock} tone="amber" />
-            <MetricCard label="In Diagnostic" value={queue.error ? '—' : queue.processingCount} icon={ClipboardList} tone="indigo" />
-            <MetricCard label="Walk-Ins Today" value={queue.error ? '—' : queue.walkinCount} icon={UserPlus} tone="emerald" />
-          </div>
+          {/* The day's counts are one line above this panel now (DeskCounts), not four cards. [1.75.0] */}
 
           {/* UI/UX Modernization Phase 10: read-only visibility into pending HMO requests —
               approving one still happens from wherever it already does, this card only
@@ -100,12 +97,15 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
           <div>
             {/* Search + Status Filter Toolbar */}
             <Toolbar attached>
-              <SearchInput
-                placeholder="Search patient name or Queue #..."
-                value={queue.search}
-                onChange={e => queue.onSearchChange(e.target.value)}
-                containerClassName="w-full sm:w-64"
-              />
+              <h2 className="m-0 text-note font-semibold text-slate-900">Today's queue</h2>
+              {showSearch && (
+                <SearchInput
+                  placeholder="Search patient name or Queue #..."
+                  value={queue.search}
+                  onChange={e => queue.onSearchChange(e.target.value)}
+                  containerClassName="w-full sm:w-64"
+                />
+              )}
 
               <Select value={queue.status} onValueChange={queue.onStatusChange}>
                 <SelectTrigger className="w-36">
@@ -119,7 +119,9 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                 </SelectContent>
               </Select>
               <ToolbarSpacer />
-              {!queue.error && (
+              {/* Only while filtered. Unfiltered, the counts line above already says how many are in
+                  the queue and the pager below says it again; a third copy here was one too many. */}
+              {!queue.error && (queue.search || queue.status !== 'All') && (
                 <span className="whitespace-nowrap text-fine font-medium text-slate-500 tabular-nums">
                   Showing {queue.visits.length} of {queue.total} visit{queue.total === 1 ? '' : 's'}
                 </span>
@@ -308,20 +310,16 @@ export default function ActiveQueuePanel({ queue, disposition, hmo, testAssignme
                         <EmptyState
                           icon={UserCheck}
                           title={queue.search || queue.status !== 'All' ? 'No visits match this filter' : 'Nobody is waiting'}
+                          // No button here. [1.75.0] Register Walk-In is in the page header, and a
+                          // second copy in this empty state was the same action twice on one screen.
                           description={
                             queue.search || queue.status !== 'All'
-                              ? 'Clear the search or switch the status filter back to All.'
+                              ? (showSearch
+                                ? 'Clear the search or switch the status filter back to All.'
+                                : "Clear the Who's here box above, or switch the status filter back to All.")
                               : canRegisterWalkIn
-                                ? 'The queue is clear. Register a walk-in or check in an appointment to start one.'
+                                ? 'The queue is clear. Register a walk-in or check in a booking above to start one.'
                                 : 'The queue is clear. Nobody is waiting to be seen or billed.'
-                          }
-                          action={
-                            !queue.search && queue.status === 'All' && canRegisterWalkIn ? (
-                              <Button size="sm" onClick={() => onSelectNav?.('reception-walkin')}>
-                                <UserPlus className="h-3.5 w-3.5" />
-                                Register Walk-In
-                              </Button>
-                            ) : undefined
                           }
                         />
                       </TableCell>

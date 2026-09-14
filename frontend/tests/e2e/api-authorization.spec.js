@@ -315,13 +315,13 @@ test.describe('Combined-role access', () => {
     await page.locator('button[type="submit"]').click();
 
     // Both departments offered in the sidebar...
-    await expect(page.getByText('Walk-In Registration', { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: 'Desk', exact: true })).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Billing Queue', { exact: true })).toBeVisible();
 
     // ...and the advertised one actually opens, rather than leaving them on the first console
     // their role list happened to match.
     await page.getByText('Billing Queue', { exact: true }).first().click();
-    await expect(page.getByText(/Cashier POS|Billing Terminal/i).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Billing Queue', level: 1 })).toBeVisible({ timeout: 10000 });
   });
 });
 

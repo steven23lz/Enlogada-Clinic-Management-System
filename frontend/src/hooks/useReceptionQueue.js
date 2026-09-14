@@ -38,6 +38,10 @@ export function useReceptionQueue({ enabled = true } = {}) {
   const [pendingCount, setPendingCount] = useState(0);
   const [processingCount, setProcessingCount] = useState(0);
   const [walkinCount, setWalkinCount] = useState(0);
+  // The search the rows on screen were actually fetched for. `search` moves on every keystroke and
+  // the fetch waits for a pause, so the two differ for a moment — and the desk's Who's here box
+  // must not decide "not in the queue" from rows that answer a different name. [1.75.0]
+  const [appliedSearch, setAppliedSearch] = useState('');
 
   const debounceRef = useRef(null);
 
@@ -66,6 +70,7 @@ export function useReceptionQueue({ enabled = true } = {}) {
       setProcessingCount(data.processingCount || 0);
       setWalkinCount(data.walkinCount || 0);
       setPage(data.page || nextPage);
+      setAppliedSearch(term || '');
     } catch (err) {
       console.error('Failed to fetch active visits:', err);
       setError('Could not load the active queue. Please try again.');
@@ -122,7 +127,7 @@ export function useReceptionQueue({ enabled = true } = {}) {
 
   return {
     visits, loading, error,
-    search, status,
+    search, appliedSearch, status,
     page, total, totalPages,
     pendingCount, processingCount, walkinCount,
     refresh, onSearchChange, onStatusChange, goToPage,

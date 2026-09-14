@@ -1,98 +1,63 @@
 import React from 'react';
-import { Banknote, DollarSign, Receipt, Wallet } from 'lucide-react';
-import MetricCard from '../ui/metric-card';
 import { formatCurrency } from '../../lib/currency';
 
 /**
- * The day's money, across the top of the billing screen.
+ * The day's money, as one line across the top of the till. [1.75.0]
  *
- * Lifted out of CashierDashboard, which rendered the whole till, the queue beside it and
- * the transaction log from one 971-line file. The props are the hooks this piece reads —
- * listed rather than reached for, so its dependencies are visible at the top.
- * 
- * Every figure comes from the endpoint's SQL summary, never from reducing the
- * transaction list. Under the cash book [1.30.0] that list matches the range on
- * EITHER date, so it also holds receipts taken on an earlier day and only reversed
- * inside this one — money that was never part of today's takings. Summing the rows
- * would count it as though it were.
+ * It was five metric cards: the biggest thing on the busiest screen, with the cashier's actual work
+ * — the queue and the bill — pushed below them. Option C3 ("the same screens, tidied") keeps every
+ * figure and gives the room back.
+ *
+ * Every figure comes from the endpoint's SQL summary, never from reducing the transaction list.
+ * Under the cash book [1.30.0] that list matches the range on EITHER date, so it also holds receipts
+ * taken on an earlier day and only reversed inside this one — money that was never part of today's
+ * takings. Summing the rows would count it as though it were.
+ *
+ * Three rules carried over from the cards:
+ *   - Bank is always listed. With only Cash and GCash shown, a day carrying a transfer did not add
+ *     up to its own total, and the difference was nowhere on screen.
+ *   - "Receipts" counts receipts ISSUED, reversed ones included, because they were money when they
+ *     were taken. A reversal is named beside it ("incl. above"), never quietly subtracted.
+ *   - Net in drawer appears only when something was reversed. On a normal day it equals Collected,
+ *     and two identical figures side by side teach a cashier to stop reading both.
+ *
+ * No summary means no figures: "—", never ₱0.00. [1.74.0] The queue panel below says why, once.
  */
 export default function CollectionsStrip({ queue }) {
-  // No summary means no figure. [1.74.0] `Number(undefined || 0)` is ₱0.00, so a failed fetch —
-  // or the second before the first one answers — stated that the clinic had taken nothing today.
-  // failure-states.spec.js caught the same falsehood on Reports in [1.28.0]; this strip had it too.
-  if (queue.collectionsError || !queue.summary) {
-    // "—" and nothing more: the queue panel below says why, once, with the one Try again. A
-    // "Couldn't load" on each of four tiles is the same sentence four times.
-    return (
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <MetricCard label="Collected Today" value="—" icon={DollarSign} tone="green" />
-        <MetricCard label="Cash Collected" value="—" icon={Banknote} tone="emerald" />
-        <MetricCard label="E-Wallet" value="—" icon={Wallet} tone="indigo" />
-        <MetricCard label="Receipts Issued" value="—" icon={Receipt} tone="slate" />
-      </div>
-    );
-  }
+  const s = queue.summary;
+  const missing = Boolean(queue.collectionsError) || !s;
+  const money = (value) => (missing ? '—' : formatCurrency(Number(value || 0)));
+  const reversals = missing ? 0 : Number(s.reversals || 0);
+  const collected = missing ? 0 : Number(s.collected || 0);
+  const reversed = missing ? 0 : Number(s.reversed || 0);
 
-  // Straight off the endpoint's SQL summary. Reducing `queue.transactions` instead would count
-  // reversed receipts as revenue — that list is a log of what was ISSUED, not what was kept.
-  const totalCollectionsToday = Number(queue.summary?.collected || 0);
-  const cashTotal = Number(queue.summary?.cash || 0);
-  const eWalletTotal = Number(queue.summary?.ewallet || 0);
-  const bankTotal = Number(queue.summary?.bank || 0);
-  const receiptsSettled = Number(queue.summary?.receipts || 0);
-  const reversalCount = Number(queue.summary?.reversals || 0);
-  const reversedAmount = Number(queue.summary?.reversed || 0);
-
+  // A <div>, not a <p m-0>: `m-0` cancels the bottom margin the page's `space-y` gives every
+  // section, and the line sat flush against the panels below it.
   return (
-      // Five columns on a shift with a reversal, four otherwise — the Net in Drawer tile only
-      // appears when it says something Collected Today does not.
-      <div className={`grid grid-cols-2 gap-4 ${reversalCount > 0 ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
-        {/* The caption closes a reconciliation gap rather than decorating the tile. Only Cash
-            and E-Wallet have tiles, but chk_payment_method also allows Bank — so on any day
-            carrying a transfer, the two tiles below simply did not add up to this one and the
-            difference was nowhere on screen. Today that difference was ₱200.00. */}
-        <MetricCard
-          label="Collected Today"
-          value={formatCurrency(totalCollectionsToday)}
-          caption={bankTotal > 0 ? `incl. ${formatCurrency(bankTotal)} bank transfer` : undefined}
-          captionTone={bankTotal > 0 ? 'slate' : undefined}
-          icon={DollarSign}
-          tone="green"
-        />
-        <MetricCard label="Cash Collected" value={formatCurrency(cashTotal)} icon={Banknote} tone="emerald" />
-        <MetricCard label="E-Wallet" value={formatCurrency(eWalletTotal)} caption="GCash" captionTone="slate" icon={Wallet} tone="indigo" />
-        {/* "Receipts Issued" is what this counts, and saying so is a correction. [1.30.0]
-
-            It read "Receipts Settled", arguing that a receipt issued and then reversed is not one
-            the drawer should hold. That was true of the old query and the cash book made it
-            false: `receipts` FILTERs on `issued`, which does not test payment_status, so a
-            reversed receipt IS counted here — deliberately, because it was money when it was
-            taken. The caption said "N more issued, then reversed", and "more" was the sharper
-            error: on a same-day reversal those N are not additional, they are already inside the
-            number above them. */}
-        <MetricCard
-          label="Receipts Issued"
-          value={receiptsSettled}
-          caption={reversalCount > 0 ? `${reversalCount} reversed, incl. above` : undefined}
-          captionTone={reversalCount > 0 ? 'rose' : undefined}
-          icon={Receipt}
-          tone="slate"
-        />
-        {/* Only when something was reversed, matching the shift panel's own rule: on a normal
-            day this equals Collected exactly, and two identical tiles side by side teach a
-            cashier to stop reading both. On the day it differs, it is the number they count the
-            drawer against — and the one figure the cash book does not state anywhere else,
-            because `reversed` is reported beside `collected` and never subtracted from it. */}
-        {reversalCount > 0 && (
-          <MetricCard
-            label="Net in Drawer"
-            value={formatCurrency(totalCollectionsToday - reversedAmount)}
-            caption={`${formatCurrency(totalCollectionsToday)} less ${formatCurrency(reversedAmount)} reversed`}
-            captionTone="slate"
-            icon={Wallet}
-            tone="green"
-          />
-        )}
-      </div>
+    <div
+      aria-label="Today's collections"
+      className="flex flex-wrap items-baseline gap-x-6 gap-y-1 rounded-xl border border-line bg-surface px-4 py-2.5 text-note text-slate-500"
+    >
+      <Figure label="Collected Today" value={money(s?.collected)} lead />
+      <Figure label="Receipts" value={missing ? '—' : Number(s.receipts || 0)} />
+      <Figure label="Cash" value={money(s?.cash)} />
+      <Figure label="GCash" value={money(s?.ewallet)} />
+      <Figure label="Bank" value={money(s?.bank)} />
+      {reversals > 0 && (
+        <>
+          <Figure label={`Reversed (${reversals}, incl. above)`} value={formatCurrency(reversed)} tone="rose" />
+          <Figure label="Net in drawer" value={formatCurrency(collected - reversed)} lead />
+        </>
+      )}
+    </div>
   );
 }
+
+const Figure = ({ label, value, lead = false, tone }) => (
+  <span className="whitespace-nowrap">
+    {label}{' '}
+    <b className={`${lead ? 'text-lead' : 'text-note'} font-extrabold tabular-nums ${tone === 'rose' ? 'text-rose-700' : 'text-slate-900'}`}>
+      {value}
+    </b>
+  </span>
+);

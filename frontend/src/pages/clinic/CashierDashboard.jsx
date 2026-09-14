@@ -23,8 +23,11 @@ import TransactionHistoryPanel from '../../components/cashier/TransactionHistory
 import OnlinePaymentsPanel from '../../components/cashier/OnlinePaymentsPanel';
 import { Receipt, Printer, AlertCircle, History, Wallet } from 'lucide-react';
 
+// The sidebar's names, so the heading, the breadcrumb and the sidebar all call a screen the same
+// thing (option C3, "the same screens, tidied"). [1.75.0] "Cashier POS & Billing Terminal" was a
+// third name for the Billing Queue.
 const PAGE_TITLES = {
-  'cashier-queue': 'Cashier POS & Billing Terminal',
+  'cashier-queue': 'Billing Queue',
   'cashier-payments': 'Online Payments',
   'cashier-history': 'Transaction History',
 };
@@ -36,7 +39,7 @@ const PAGE_ICONS = {
 };
 
 const PAGE_BLURBS = {
-  'cashier-queue': 'Select a patient from the billing queue to price their visit, apply a statutory discount, take payment and issue a receipt.',
+  'cashier-queue': 'Pick a patient, apply a statutory discount, take payment and print the receipt.',
   'cashier-payments': "Patients who paid into the clinic's GCash or bank account and are waiting for you to check the screenshot. Verifying issues a receipt and releases their booking pass.",
   'cashier-history': 'Receipts you and other cashiers have issued, for the daily cash-up. Refunds and cancellations are recorded against the original receipt.',
 };
@@ -130,7 +133,7 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
             Try again — the banner above it repeated the same message with a second Retry. That is
             how the front desk's queue has always reported it. */}
 
-        {/* Collections Overview Metrics Bar */}
+        {/* The day's money, as one line. [1.75.0] */}
         <CollectionsStrip queue={queue} />
 
         {/* POS Split Workstation (Left: Billing Queue, Right: Invoice Checkout Terminal) */}

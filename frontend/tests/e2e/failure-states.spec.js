@@ -98,9 +98,10 @@ const LANDING_SCREENS = [
     mustNotSay: [/₱0\.00/, /nothing awaiting payment/i, /\b0 waiting\b/i],
   },
   {
-    email: 'receptionist@enlogada.com', screen: 'Active Queue',
-    mustSay: [/active queue visits\s+—/i],
-    mustNotSay: [/active queue visits\s+0\b/i, /showing 0 of 0/i, /nobody is waiting/i],
+    // The Desk since [1.75.0]: one line of counts, and today's bookings in the Who's here box.
+    email: 'receptionist@enlogada.com', screen: 'Desk',
+    mustSay: [/—\s+in the queue/i, /couldn.t load today's bookings/i],
+    mustNotSay: [/(^|\s)0\s+in the queue/i, /showing 0 of 0/i, /nobody is waiting/i, /no bookings left to arrive/i],
   },
   {
     email: 'lab@enlogada.com', screen: 'Laboratory Worklist',
@@ -165,7 +166,8 @@ const NO_MATCH = 'zzzznomatchzzzz';
 const FILTERED_QUEUES = [
   { email: 'cashier@enlogada.com', nav: 'Billing Queue', placeholder: /search ticket # or name/i,
     says: /no tickets match/i, mustNotSay: /nothing awaiting payment/i },
-  { email: 'receptionist@enlogada.com', nav: 'Active Queue', placeholder: /search patient name or queue/i,
+  // On the Desk the Who's here box is the queue's search. [1.75.0]
+  { email: 'receptionist@enlogada.com', nav: 'Desk', placeholder: /name, queue # or reference/i,
     says: /no visits match/i, mustNotSay: /nobody is waiting/i },
   { email: 'lab@enlogada.com', nav: 'Laboratory Worklist', placeholder: /search patient, test, queue/i,
     says: /nothing matches/i, mustNotSay: /nothing waiting in/i },
