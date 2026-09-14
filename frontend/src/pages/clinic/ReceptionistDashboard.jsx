@@ -147,7 +147,19 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
   };
 
   return (
-    <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
+    <SidebarLayout
+      title={PAGE_TITLES[view]}
+      activeNav={view}
+      onSelectNav={onSelectNav}
+      // In the rail on a desk screen, from either front-desk screen; the header keeps a copy for
+      // phones only, where the rail is behind the menu. [1.76.0]
+      railActions={can.startVisit ? (
+        <Button className="w-full justify-center" onClick={() => setRegistering(true)}>
+          <UserPlus className="h-4 w-4" />
+          Register Walk-In
+        </Button>
+      ) : undefined}
+    >
       <div className="space-y-5">
         <PageHeader
           icon={PAGE_ICONS[view]}
@@ -159,7 +171,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
                the screen: the queue's empty state and the box's "nobody found" line point here
                rather than carrying a second copy of it. */
             onDesk && can.startVisit ? (
-              <Button variant="outline" onClick={() => setRegistering(true)}>
+              // Phones only: from `lg` up the same button is in the rail. [1.76.0]
+              <Button variant="outline" className="lg:hidden" onClick={() => setRegistering(true)}>
                 <UserPlus className="h-4 w-4" />
                 Register Walk-In
               </Button>

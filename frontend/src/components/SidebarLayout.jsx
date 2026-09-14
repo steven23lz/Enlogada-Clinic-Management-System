@@ -19,6 +19,9 @@ import {
   Eye,
 } from 'lucide-react';
 import { visibleMainNavItems, visibleOpsGroups, nativeRoleForNav, isBorrowedScreen } from '../config/navigation';
+import { useClinicHours } from '../hooks/useClinicHours';
+import { useNavCounts } from '../hooks/useNavCounts';
+import { clinicStatus } from '../lib/clinicStatus';
 import { ThemeToggle } from './ui/theme-toggle';
 import TextScaleControl from './ui/text-scale-control';
 
@@ -56,7 +59,14 @@ const readCollapsedGroups = () => {
   }
 };
 
-const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectNav, children }) => {
+/**
+ * @param {React.ReactNode} [props.railActions]  The screen's one or two most-used actions, shown in
+ *   the desktop rail under the clinic's status. [1.76.0] The screen supplies them, because only it
+ *   owns what they open (the Desk's registration panel, say). The rail is hidden below `lg`, so a
+ *   screen that passes an action here keeps its own copy for phones only (`lg:hidden`) — one visible
+ *   at every width, never two.
+ */
+const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectNav, railActions, children }) => {
   const { user, logout } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -94,6 +104,37 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // would have been the looser of the two checks winning.
   const opsNavGroups = visibleOpsGroups(userRoles, userPermissions, userDepartments);
 
+  // Patient Records under the person's own heading. [1.76.0] Every member of staff holds
+  // `patients:read`, and for everyone but Admin and SuperAdmin it was the ONLY item under a
+  // "Management" heading — which read as if the front desk had been given a management screen.
+  // Steven asked exactly that ("front desk has patient records even tho it doesnt have that
+  // permission"). It moves into the group of the person's own screens; anyone who manages the
+  // clinic keeps it under Management, beside the rest of what they manage.
+  const recordsItem = mainNavItems.find((item) => item.id === 'patient-records');
+  const managesClinic = mainNavItems.some((item) => item.id !== 'patient-records');
+  const homeGroup = opsNavGroups.find((group) => group.items.some((item) => !isBorrowedScreen(item.id, userRoles)));
+  const recordsMoved = Boolean(recordsItem && homeGroup && !managesClinic);
+  const managementItems = recordsMoved ? [] : mainNavItems;
+  const navGroups = recordsMoved
+    ? opsNavGroups.map((group) => (group === homeGroup ? { ...group, items: [...group.items, recordsItem] } : group))
+    : opsNavGroups;
+
+  // The figure beside each screen — see useNavCounts for why each is that screen's own number.
+  const navCounts = useNavCounts(navGroups.flatMap((group) => group.items.map((item) => item.id)));
+
+  // Whether the clinic is open, from the schedule patients book against. Re-read every minute so
+  // "Open now" turns into "Closed now" at closing time on a screen nobody reloads.
+  const hours = useClinicHours();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(tick);
+  }, []);
+  const status = useMemo(
+    () => clinicStatus(hours.week, hours.upcoming, now),
+    [hours.week, hours.upcoming, now]
+  );
+
   // Resolve the currently-open ops screen and whether this person is working one that is not
   // natively theirs.
   //
@@ -102,7 +143,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // any staff screen, so the check is now simply "do you hold the role this screen belongs to" —
   // which matters more, not less: whatever you do here is recorded under your name, and the
   // person most likely to forget that is the one who does not normally sit here.
-  const activeOpsItem = opsNavGroups
+  const activeOpsItem = navGroups
     .flatMap((group) => group.items.map((item) => ({ ...item, groupLabel: group.label })))
     .find((item) => item.id === activeNav);
   const activeOpsNativeRole = nativeRoleForNav(activeNav);
@@ -216,7 +257,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
 
   const initials = `${user?.firstName?.charAt(0) || ''}${user?.lastName?.charAt(0) || ''}`.toUpperCase() || 'U';
 
-  const NavButton = ({ item, isActive }) => {
+  const NavButton = ({ item, isActive, count }) => {
     const Icon = item.icon;
     return (
       <button
@@ -245,12 +286,26 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
             isActive ? 'text-brand-400' : 'text-rail-ink-faint group-hover:text-rail-ink-soft'
           )}
         />
-        <span className="truncate">{item.label}</span>
+        <span className="min-w-0 truncate">{item.label}</span>
+        {/* The screen's own figure, beside its name. aria-hidden, so the button's accessible name
+            stays exactly its label: every spec and every screen reader addresses it by that. */}
+        {count > 0 && (
+          <span
+            aria-hidden="true"
+            data-nav-count
+            className={cn(
+              'ml-auto flex-shrink-0 rounded-md px-1.5 py-px text-micro font-bold tabular-nums',
+              isActive ? 'bg-brand-400/25 text-white' : 'bg-white/[0.07] text-rail-ink-soft'
+            )}
+          >
+            {count > 99 ? '99+' : count}
+          </span>
+        )}
       </button>
     );
   };
 
-  const renderNavContent = () => (
+  const renderNavContent = ({ withActions = false } = {}) => (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Brand — flat on the rail rather than a white card floating inside it. A light panel in a
           dark sidebar is the heaviest element on the screen, which put the most emphasis on the
@@ -265,27 +320,51 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
         </div>
       </div>
 
+      {/* Whether the clinic is open, from the same schedule the booking calendar reads. [1.76.0]
+          No schedule shows nothing: "Closed" over a request that failed would be a claim about the
+          clinic, not the absence of one. */}
+      {status && (
+        <div className="mb-3 flex flex-shrink-0 items-center gap-2.5 rounded-lg border border-rail-line bg-white/[0.03] px-3 py-2">
+          <span
+            aria-hidden="true"
+            className={cn(
+              'h-2 w-2 flex-shrink-0 rounded-full',
+              status.open ? 'bg-brand-400 ring-4 ring-brand-400/20' : 'bg-rail-ink-faint'
+            )}
+          />
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="text-fine font-semibold text-rail-ink">{status.title}</span>
+            {status.detail && <span className="truncate text-micro text-rail-ink-faint">{status.detail}</span>}
+          </span>
+        </div>
+      )}
+
+      {/* The screen's own most-used actions — desktop rail only; see `railActions`. */}
+      {withActions && railActions && (
+        <div className="mb-3 flex flex-shrink-0 flex-col gap-2">{railActions}</div>
+      )}
+
       {/* The only scrolling region in the rail. */}
       <div className="scroll-dark min-h-0 flex-1 space-y-5 overflow-y-auto pb-2 pr-0.5">
-        {mainNavItems.length > 0 && (
-          <div>
+        {managementItems.length > 0 && (
+          <div data-nav-group="Management">
             <span className="mb-1.5 block px-3 text-micro font-semibold uppercase tracking-[0.14em] text-rail-ink-dim">
               Management
             </span>
             <nav className="space-y-0.5">
-              {mainNavItems.map((item) => (
-                <NavButton key={item.id} item={item} isActive={activeNav === item.id} />
+              {managementItems.map((item) => (
+                <NavButton key={item.id} item={item} isActive={activeNav === item.id} count={navCounts[item.id]} />
               ))}
             </nav>
           </div>
         )}
 
-        {opsNavGroups.map((group) => {
+        {navGroups.map((group) => {
           const holdsActive = group.items.some((item) => item.id === activeNav);
           // A remembered collapse never hides the screen you are on.
           const collapsed = collapsedGroups.includes(group.label) && !holdsActive;
           return (
-            <div key={group.label}>
+            <div key={group.label} data-nav-group={group.label}>
               <button
                 onClick={() => toggleGroup(group.label)}
                 aria-expanded={!collapsed}
@@ -304,7 +383,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
               {!collapsed && (
                 <nav className="space-y-0.5">
                   {group.items.map((item) => (
-                    <NavButton key={item.id} item={item} isActive={activeNav === item.id} />
+                    <NavButton key={item.id} item={item} isActive={activeNav === item.id} count={navCounts[item.id]} />
                   ))}
                 </nav>
               )}
@@ -352,7 +431,7 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
     <div className="flex h-screen overflow-hidden bg-canvas font-sans text-slate-800">
       {/* Desktop rail */}
       <aside className="z-20 hidden h-full w-[15.5rem] flex-shrink-0 flex-col border-r border-white/[0.06] bg-rail p-3 lg:flex">
-        {renderNavContent()}
+        {renderNavContent({ withActions: true })}
         {accountButton}
       </aside>
 

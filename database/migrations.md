@@ -1,5 +1,53 @@
 # Database Migration & Schema History
 
+## [1.76.0] - 2026-09-14 (The staff sidebar earns its space)
+
+No migration. Frontend only.
+
+### What Steven asked for
+
+He said the front desk's and the cashier's sidebar "looks lacking", and chose the "Useful" rail from
+the gallery. Log out stays in the top bar, where it always was.
+
+### What the rail shows now
+
+- **Whether the clinic is open**: "Open now · Until 5:00 PM today", or "Closed now · Opens 8:00 AM
+  tomorrow". It reads the schedule patients book against, including holiday closures and changed
+  hours. A failed read shows nothing rather than "Closed". The rules are unit-tested in
+  `clinicStatus.test.js`: 9 cases, including a Saturday half-day followed by a closed Sunday.
+- **The screen's most-used action.**
+  - Front desk: Register Walk-In. On a phone it stays in the page, because there the rail is behind
+    the menu; it is on screen once at every width.
+  - Cashier: Find a receipt, which opens a receipt by its number in a new tab.
+  - Scan pass stays in the Who's here box; a copy in the rail would have been the same button twice.
+- **A count beside each screen**: open visits on the Desk, patients waiting to pay, online payments
+  to check, and tickets on each worklist.
+  - Each is the number its screen shows, worked out the same way. The Billing Queue's count leaves
+    out bookings already paid online, as the till does.
+  - The counts are hidden from screen readers, so each button's name stays exactly its label.
+  - A count that fails to load is left out, not shown as 0.
+- **Patient Records moves under the person's own heading.** For everyone but Admin and SuperAdmin
+  it was the only item under "Management", which made the front desk look as if it had been given a
+  management screen.
+
+### Not in this step
+
+The "Today" item arrives with the Today screens, next. The gallery's Today summary in the rail is
+left out on purpose: once Today is a screen, a summary in the rail would say the same things twice.
+
+### Tests
+
+`sidebar.spec.js` (new) checks:
+- the status line
+- Patient Records under Front Desk for a receptionist, and under Management for an Admin
+- the Desk's count equals the Desk's own "in the queue", and the button keeps its name
+- Register Walk-In appears once at desk width and once on a phone
+- the cashier opens a receipt by its number
+
+The frontend unit tier grows to 62. The full suite: 389 passed, 0 skipped, in 9.0 minutes, across 60
+spec files. The run is longer than [1.75.0]'s 7.3 minutes because the sidebar now fetches its counts
+on every screen the suite opens.
+
 ## [1.75.0] - 2026-09-14 (The front desk works from one Desk; the till is tidied)
 
 No migration. Frontend only: no endpoint, permission or hook behaviour changed.

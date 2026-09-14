@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import SidebarLayout from '../../components/SidebarLayout';
 import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 import PageHeader from '../../components/ui/page-header';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../components/ui/dialog';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
@@ -21,7 +22,7 @@ import BillingQueuePanel from '../../components/cashier/BillingQueuePanel';
 import CheckoutTerminal from '../../components/cashier/CheckoutTerminal';
 import TransactionHistoryPanel from '../../components/cashier/TransactionHistoryPanel';
 import OnlinePaymentsPanel from '../../components/cashier/OnlinePaymentsPanel';
-import { Receipt, Printer, AlertCircle, History, Wallet } from 'lucide-react';
+import { Receipt, Printer, AlertCircle, History, Wallet, Search } from 'lucide-react';
 
 // The sidebar's names, so the heading, the breadcrumb and the sidebar all call a screen the same
 // thing (option C3, "the same screens, tidied"). [1.75.0] "Cashier POS & Billing Terminal" was a
@@ -93,6 +94,21 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   // and the checkout announces a completed sale outward — nothing reaches back in.
   const receipt = useReceipt();
 
+  // "Find a receipt", from the rail. [1.76.0] The question the till is asked about a receipt comes
+  // from someone standing at the counter holding its number — a reprint for an HMO, a dispute —
+  // and the only way to it was Transaction History, a date range, and a search. The receipt has an
+  // address of its own (`?receipt=`, [1.52.0]); this just asks for the number and opens it.
+  const [findingReceipt, setFindingReceipt] = useState(false);
+  const [receiptNumber, setReceiptNumber] = useState('');
+  const openReceipt = (event) => {
+    event.preventDefault();
+    const number = receiptNumber.trim().toUpperCase();
+    if (!number) return;
+    window.open(`?receipt=${encodeURIComponent(number)}`, '_blank', 'noopener');
+    setFindingReceipt(false);
+    setReceiptNumber('');
+  };
+
   const checkout = useCheckout({
     // A function, not `queue.paidVisitIds` — `queue` is declared below (it needs
     // `checkout.selectedVisit`), so reading a value here would hit the temporal dead zone.
@@ -119,7 +135,21 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
 
 
   return (
-    <SidebarLayout title={PAGE_TITLES[view]} activeNav={view} onSelectNav={onSelectNav}>
+    <SidebarLayout
+      title={PAGE_TITLES[view]}
+      activeNav={view}
+      onSelectNav={onSelectNav}
+      railActions={
+        <Button
+          variant="outline"
+          className="w-full justify-center border-rail-line bg-white/[0.04] text-rail-ink hover:bg-white/[0.08] hover:text-white"
+          onClick={() => setFindingReceipt(true)}
+        >
+          <Search className="h-4 w-4" />
+          Find a receipt
+        </Button>
+      }
+    >
       <div className="space-y-5">
         <PageHeader
           icon={PAGE_ICONS[view]}
@@ -242,6 +272,37 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
                 </div>
               </>
             )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={findingReceipt}
+          onOpenChange={(open) => { setFindingReceipt(open); if (!open) setReceiptNumber(''); }}
+        >
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Find a receipt</DialogTitle>
+              <DialogDescription>
+                Type the number printed on it. The receipt opens in a new tab, ready to reprint.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={openReceipt} className="space-y-3">
+              <div className="space-y-1">
+                <label htmlFor="find-receipt-number" className="field-label">Receipt number</label>
+                <Input
+                  id="find-receipt-number"
+                  value={receiptNumber}
+                  onChange={(e) => setReceiptNumber(e.target.value)}
+                  placeholder="RCT-20260914-0001"
+                  autoComplete="off"
+                  autoFocus
+                />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setFindingReceipt(false)}>Cancel</Button>
+                <Button type="submit" disabled={!receiptNumber.trim()}>Open receipt</Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
 
