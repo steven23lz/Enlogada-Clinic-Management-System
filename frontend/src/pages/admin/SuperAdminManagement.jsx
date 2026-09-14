@@ -8,6 +8,7 @@ import PaymentMethodsPanel from '../../components/admin/PaymentMethodsPanel';
 import PaymentMethodFormDialog from '../../components/admin/PaymentMethodFormDialog';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { useAccessControl } from '../../hooks/useAccessControl';
+import { useWhoSeesWhat } from '../../hooks/useWhoSeesWhat';
 import { useElevatedAccounts } from '../../hooks/useElevatedAccounts';
 import { usePaymentMethodAdmin } from '../../hooks/usePaymentMethodAdmin';
 
@@ -20,6 +21,9 @@ import { usePaymentMethodAdmin } from '../../hooks/usePaymentMethodAdmin';
  */
 const SuperAdminManagement = () => {
   const access = useAccessControl();
+  // Held here rather than inside the grid, so switching to another tab and back keeps unsaved
+  // changes instead of dropping them with the tab's content.
+  const grid = useWhoSeesWhat(access);
   const elevated = useElevatedAccounts();
   const paymentMethods = usePaymentMethodAdmin();
 
@@ -29,17 +33,23 @@ const SuperAdminManagement = () => {
         eyebrow="SuperAdmin only"
         icon={ShieldCheck}
         title="Super Admin Management"
-        description="RBAC administration, elevated accounts, and the clinic's own payment accounts — the capabilities an Admin account deliberately does not have."
+        description="Who sees what, elevated accounts, and the clinic's own payment accounts — the capabilities an Admin account deliberately does not have."
       />
 
       <Tabs defaultValue="matrix" className="w-full space-y-4">
-        <TabsList>
-          <TabsTrigger value="matrix">Role-Permission Matrix</TabsTrigger>
+        {/* Wraps on a phone: four tabs are wider than 390 px, and a fixed strip cut the last one to
+            "Payment M". */}
+        <TabsList className="max-w-full flex-wrap">
+          <TabsTrigger value="matrix">Who sees what</TabsTrigger>
+          <TabsTrigger value="person">One person</TabsTrigger>
           <TabsTrigger value="accounts">Elevated Accounts</TabsTrigger>
           <TabsTrigger value="payments">Payment Methods</TabsTrigger>
         </TabsList>
         <TabsContent value="matrix" className="m-0">
-          <RoleMatrix access={access} />
+          <RoleMatrix access={access} grid={grid} mode="role" />
+        </TabsContent>
+        <TabsContent value="person" className="m-0">
+          <RoleMatrix access={access} grid={grid} mode="person" />
         </TabsContent>
         <TabsContent value="accounts" className="m-0">
           <ElevatedAccountsPanel elevated={elevated} />

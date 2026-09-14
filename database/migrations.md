@@ -1,5 +1,65 @@
 # Database Migration & Schema History
 
+## [1.78.0] - 2026-09-14 (Access Control becomes "Who sees what")
+
+No migration. Frontend only: the grid reads and writes the role templates through the same
+endpoints the old screen used.
+
+### What Steven asked for
+
+Twice: "dont forget about the UI i want in assigning roles, the picture i attached". The picture was
+section 3 of the decisions page: a row for each kind of information, a column for each kind of
+staff, and in every cell a ✓, ◐ or – with a short sentence.
+
+### What SuperAdmin sees now
+
+- Super Admin opens on **Who sees what**. The rows are Patient records, Today's queue, Bookings,
+  Money, HMO claims, Results and reports, Critical-result calls, Clinic reports, Services and
+  prices, and Staff accounts. The columns are Front desk, Cashier, Lab / X-Ray / Ultrasound and
+  Admin; "Each department" splits the three into columns of their own.
+- Each cell has a mark (all, some or none of that row's permissions) and a sentence worked out from
+  the switches, for example "See takings, refund, discount and send in online proofs; can't take
+  payments".
+- Opening a row shows one switch per permission per column, in plain words ("Refund or void a
+  payment"). The departments' column moves all three together, and says "(differs by department)"
+  when they do not match.
+- Nothing is saved until Save. Until then the footer lists each change as a sentence ("Front desk
+  can now refund or void a payment.") and warns when a change would leave something that only
+  SuperAdmin could do. Discard puts every switch back.
+- Changing who sees what (`rbac:manage`) is shown but locked: it is SuperAdmin's alone.
+- **One person** keeps the per-account exceptions and extra departments, unchanged and still
+  audited.
+
+### How it is built
+
+- `lib/whoSeesWhat.js` (pure, unit-tested): the rows and columns, the sentences, the marks and the
+  list of changes. A permission no row names lands under "Other", so a new one is never unreachable.
+- `hooks/useWhoSeesWhat.js`: the working copy. Save sends only the roles that changed, one
+  `PUT /rbac/roles/:id/permissions` each; if one fails, the rest stay listed as unsaved.
+- `components/admin/WhoSeesWhat.jsx` draws the grid. **Who sees what** and **One person** are two
+  Super Admin tabs, and `RoleMatrix.jsx` draws whichever is open. `useAccessControl.js` now loads
+  the matrix and edits one person.
+- The screenshot pass found "Who sees what" said three times (the tab, a mode switch, the panel
+  title). It is said once now, on the tab. It also found the Super Admin tab strip cut off on a
+  phone ("Payment M"); the strip wraps now.
+- One leftover permission, `tests:results_write`, is left off the grid. It is in the permissions
+  table but no route, service or seed script refers to it and no role holds it; `results:write` is
+  the one that gates recording findings. A switch for it would save and change nothing.
+
+### Tests
+
+- `access-grid.spec.js` (new, 7 tests):
+  - the grid reads like the picture
+  - a switch says in words what it will change, and Save changes the role on the server
+  - Discard saves nothing, and the lone holder of a permission is warned about
+  - `rbac:manage` has no switch
+  - the departments move together and can be split
+  - One person is still there
+  - "Who sees what" is said once on the screen
+- `tests/unit/whoSeesWhat.test.js` (10 tests).
+
+The frontend unit tier grows to 90. The full suite: 414 passed, 0 skipped, across 62 spec files.
+
 ## [1.77.0] - 2026-09-14 (Every member of staff lands on Today)
 
 No migration. Frontend only: no endpoint, permission or backend file changed.

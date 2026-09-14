@@ -59,7 +59,7 @@ cd frontend && npm run build                        # expect: clean build
 python scripts/prose_scan.py frontend/src           # expect: 0 prose damage
 
 # ── 5. Behaviour. ~8 minutes. NEEDS BOTH SERVERS RUNNING. ──────────────────────
-cd frontend && npx playwright test                  # expect: 407 pass, 0 skipped
+cd frontend && npx playwright test                  # expect: 414 pass, 0 skipped
 ```
 
 ### Known-good baseline
@@ -67,8 +67,8 @@ cd frontend && npx playwright test                  # expect: 407 pass, 0 skippe
 | Check | Expected |
 |---|---|
 | Backend unit | **76 passed** |
-| Frontend unit | **80 passed** |
-| Playwright E2E | **407 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
+| Frontend unit | **90 passed** |
+| Playwright E2E | **414 passed**, **0 skipped** (run with `--timeout=90000`, see §0) |
 | `verifyRbacWiring` | `All good`, **78 routes checked**, **0 warnings** |
 | `verifyDiscountParity` | `Exact parity` — 3,264 combinations |
 | `checkFillRoles` | 222 files, **0 violations** |
@@ -148,7 +148,7 @@ Three gates in one command:
 **Blind spot:** its `HOOKS` list is its eyesight. A hook missing from that list is damage it cannot
 see.
 
-### `npx playwright test` — 407 E2E
+### `npx playwright test` — 414 E2E
 **Proves:** RBAC boundaries, the money path, ticket-release gating, result versioning, printing,
 revalidation, failure states, the copy on several screens, and that every public page fits a phone.
 **Cannot see:** anything about performance. A `column::date` filter forcing a sequential scan
@@ -182,7 +182,7 @@ Two documents, and they answer different questions.
 
 | Question | Where |
 |---|---|
-| *Which requirement does this implement? Was it tested?* | `.agents/TRACEABILITY.md` — 65 feature rows, MODULE → … → TEST → APPROVAL |
+| *Which requirement does this implement? Was it tested?* | `.agents/TRACEABILITY.md` — 66 feature rows, MODULE → … → TEST → APPROVAL |
 | *Why is it built this way? What went wrong before?* | `CLAUDE.md` — the decisions, and the bugs that produced them |
 | *What is the whole system?* | `CODEBASE_SYSTEM_OVERVIEW.md` |
 | *What changed in this version?* | `database/migrations.md` |
@@ -224,6 +224,6 @@ something on a database with data you want.
 
 ---
 
-*Baseline recorded 2026-09-14, at the `[1.77.0]` commit. Re-measure and update the numbers in §1 whenever the suite
+*Baseline recorded 2026-09-14, at the `[1.78.0]` commit. Re-measure and update the numbers in §1 whenever the suite
 legitimately changes size — a stale baseline is worse than none, because it makes a real regression
 look like a documentation error.*
