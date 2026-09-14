@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { GOOGLE_CLIENT_ID, isGoogleAuthConfigured } from './config/googleAuth';
-import { CONSOLE, consoleForNav, defaultNavForRoles } from './config/navigation';
+import { CONSOLE, consoleForNav, landingNavForRoles } from './config/navigation';
 import Home from './pages/public/Home';
 import AboutUs from './pages/public/AboutUs';
 import ServicesPage from './pages/public/ServicesPage';
@@ -17,6 +17,7 @@ import DiagnosticDashboard from './pages/clinic/DiagnosticDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ServicesCatalog from './pages/admin/ServicesCatalog';
 import StaffAccountSettings from './pages/StaffAccountSettings';
+import Today from './pages/Today';
 import ReceiptView from './pages/ReceiptView';
 
 // An emailed password-reset LINK, from before [1.73.0] replaced links with a 6-digit code. Some are
@@ -56,6 +57,14 @@ const MainApp = () => {
   // A section of the destination page to scroll to on arrival — the header's FAQ link sends a
   // visitor to Home's #faq from any other page. [1.72.0] Cleared by any plain navigation.
   const [pendingSection, setPendingSection] = useState(null);
+  // What a Today button asked the screen it opens to do on arrival — open this booking's check-in,
+  // this visit's tests, the reports not yet sent. [1.77.0] Set only by that navigation and cleared by
+  // any other (the sidebar passes an id alone), so an intent is acted on once and never re-fires.
+  const [navIntent, setNavIntent] = useState(null);
+  const selectNav = useCallback((navId, intent = null) => {
+    setActiveNav(navId);
+    setNavIntent(intent);
+  }, []);
 
   // Take a legacy reset token out of the address bar once it has been noticed. [1.73.0]
   useEffect(() => {
@@ -77,8 +86,9 @@ const MainApp = () => {
     // null = unrestricted (Admin/SuperAdmin); an array = only these modalities. Distinct on purpose.
     const departments = user.departments ?? null;
     if (activeNav === 'account') return;
+    // Today, for every member of staff, since [1.77.0].
     if (!activeNav || !consoleForNav(activeNav, roles, permissions, departments)) {
-      setActiveNav(defaultNavForRoles(roles, permissions, departments));
+      setActiveNav(landingNavForRoles(roles, permissions, departments));
     }
     // activeNav is deliberately not a dependency: this corrects the destination on sign-in and
     // on a role change, not on every navigation the user makes.
@@ -181,7 +191,7 @@ const MainApp = () => {
   // sidebar's user-info block — see StaffAccountSettings.jsx. Checked before the nav routing
   // below since it applies uniformly and is not a role-gated destination.
   if (activeNav === 'account') {
-    return <StaffAccountSettings onSelectNav={setActiveNav} />;
+    return <StaffAccountSettings onSelectNav={selectNav} />;
   }
 
   if (roles.includes('SuperAdmin') || roles.includes('Admin')) {
@@ -200,20 +210,22 @@ const MainApp = () => {
   // else's console, so a stale activeNav cannot leak a screen either.
   // Permissions as well as roles: the router must refuse exactly what the sidebar hides, or a
   // revoked permission would leave a screen reachable by a stale nav id.
-  const resolvedNav = consoleForNav(activeNav, roles, permissions, departments) ? activeNav : defaultNavForRoles(roles, permissions, departments);
+  const resolvedNav = consoleForNav(activeNav, roles, permissions, departments) ? activeNav : landingNavForRoles(roles, permissions, departments);
   const targetConsole = consoleForNav(resolvedNav, roles, permissions, departments);
 
   switch (targetConsole) {
+    case CONSOLE.TODAY:
+      return <Today onSelectNav={selectNav} />;
     case CONSOLE.RECEPTION:
-      return <ReceptionistDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+      return <ReceptionistDashboard activeNav={resolvedNav} onSelectNav={selectNav} intent={navIntent} />;
     case CONSOLE.CASHIER:
-      return <CashierDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+      return <CashierDashboard activeNav={resolvedNav} onSelectNav={selectNav} />;
     case CONSOLE.DIAGNOSTIC:
-      return <DiagnosticDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+      return <DiagnosticDashboard activeNav={resolvedNav} onSelectNav={selectNav} intent={navIntent} />;
     case CONSOLE.SERVICES_CATALOG:
-      return <ServicesCatalog activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+      return <ServicesCatalog activeNav={resolvedNav} onSelectNav={selectNav} />;
     case CONSOLE.ADMIN:
-      return <AdminDashboard activeNav={resolvedNav} onSelectNav={setActiveNav} />;
+      return <AdminDashboard activeNav={resolvedNav} onSelectNav={selectNav} />;
     default:
       break;
   }

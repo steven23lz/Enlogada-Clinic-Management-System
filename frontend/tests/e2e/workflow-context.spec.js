@@ -1,6 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
-import { signIn } from './helpers/auth.js';
+import { signIn, signInTo } from './helpers/auth.js';
 import { selfPayProfile } from './helpers/patients.js';
 import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
 
@@ -89,7 +89,7 @@ test('the diagnostic worklist shows age and sex, which decide the reference rang
   try {
     const person = await paidLabTicket(apiContext, { sex: 'Male', birthdate: '1994-03-08' });
 
-    await signIn(page, 'lab@enlogada.com');
+    await signInTo(page, 'lab@enlogada.com', 'Laboratory Worklist');
     await expect(page.getByRole('heading', { name: /laboratory operations worklist/i }))
       .toBeVisible({ timeout: 15000 });
 
@@ -111,7 +111,7 @@ test('the diagnostic worklist names the referring physician when there is one', 
   try {
     const person = await paidLabTicket(apiContext, { referringPhysician: 'Dr. Amelia Santos' });
 
-    await signIn(page, 'lab@enlogada.com');
+    await signInTo(page, 'lab@enlogada.com', 'Laboratory Worklist');
     await expect(page.getByRole('heading', { name: /laboratory operations worklist/i }))
       .toBeVisible({ timeout: 15000 });
 

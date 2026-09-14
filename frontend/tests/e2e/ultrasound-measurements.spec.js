@@ -432,6 +432,8 @@ test.describe('Ultrasound structured measurements', () => {
     await page.fill('input[type="email"]', 'lab@enlogada.com');
     await page.fill('input[type="password"]', PASSWORD);
     await page.locator('button[type="submit"]').click();
+    // Staff land on Today since [1.77.0].
+    await page.getByRole('button', { name: 'Laboratory Worklist', exact: true }).first().click({ timeout: 20000 });
 
     await page.getByPlaceholder('Search patient, test, queue...').fill(person.lastName);
     const row = page.getByText(`${person.firstName} ${person.lastName}`).locator('xpath=ancestor::tr[1]');
@@ -585,6 +587,8 @@ test.describe('Ultrasound structured measurements', () => {
     await page.fill('input[type="email"]', 'lab@enlogada.com');
     await page.fill('input[type="password"]', PASSWORD);
     await page.locator('button[type="submit"]').click();
+    // Staff land on Today since [1.77.0].
+    await page.getByRole('button', { name: 'Laboratory Worklist', exact: true }).first().click({ timeout: 20000 });
     await expect(page.getByPlaceholder('Search patient, test, queue...')).toBeVisible({ timeout: 15000 });
   });
 
@@ -623,6 +627,8 @@ test.describe('Ultrasound structured measurements', () => {
     await page.fill('input[type="email"]', 'lab@enlogada.com');
     await page.fill('input[type="password"]', PASSWORD);
     await page.locator('button[type="submit"]').click();
+    // Staff land on Today since [1.77.0].
+    await page.getByRole('button', { name: 'Laboratory Worklist', exact: true }).first().click({ timeout: 20000 });
 
     await page.getByPlaceholder('Search patient, test, queue...').fill(patient.last_name);
     await expect(page.getByText(`${patient.first_name} ${patient.last_name}`)).toBeVisible({ timeout: 15000 });
@@ -753,6 +759,8 @@ test.describe('Ultrasound structured measurements', () => {
     await page.fill('input[type="email"]', 'ultrasound@enlogada.com');
     await page.fill('input[type="password"]', PASSWORD);
     await page.locator('button[type="submit"]').click();
+    // Staff land on Today since [1.77.0].
+    await page.getByRole('button', { name: 'Ultrasound Worklist', exact: true }).first().click({ timeout: 20000 });
     await expect(page.getByPlaceholder('Search patient, test, queue...')).toBeVisible({ timeout: 15000 });
 
     await page.getByPlaceholder('Search patient, test, queue...').fill(person.lastName);

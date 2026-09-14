@@ -400,6 +400,8 @@ test.describe('Where the report is sent', () => {
 
   test('reception is asked for it at the counter', async ({ page }) => {
     await signIn(page, 'receptionist@enlogada.com');
+    // Staff land on Today since [1.77.0].
+    await page.getByRole('button', { name: 'Desk', exact: true }).first().click({ timeout: 20000 });
     // The Desk's registration panel, since [1.75.0].
     await page.getByRole('button', { name: 'Register Walk-In', exact: true }).click();
 

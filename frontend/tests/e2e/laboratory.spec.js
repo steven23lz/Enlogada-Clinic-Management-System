@@ -147,6 +147,8 @@ test.describe('Laboratory — browser flow', () => {
     await page.fill('input[type="email"]', LAB_STAFF.email);
     await page.fill('input[type="password"]', LAB_STAFF.password);
     await page.locator('button[type="submit"]').click();
+    // Staff land on Today since [1.77.0]; the worklist is one click away, as it is for a person.
+    await page.getByRole('button', { name: 'Laboratory Worklist', exact: true }).first().click({ timeout: 20000 });
     // UI/UX Phase 2: the worklist is now paginated (10/page) against a queue that has
     // accumulated hundreds of entries over this test suite's lifetime, so a freshly created
     // entry isn't guaranteed to land on page 1 — search narrows it down first, same as a real
@@ -182,6 +184,8 @@ test.describe('Laboratory — browser flow', () => {
     await page.fill('input[type="email"]', LAB_STAFF.email);
     await page.fill('input[type="password"]', LAB_STAFF.password);
     await page.locator('button[type="submit"]').click();
+    // Staff land on Today since [1.77.0]; the worklist is one click away, as it is for a person.
+    await page.getByRole('button', { name: 'Laboratory Worklist', exact: true }).first().click({ timeout: 20000 });
     // UI/UX Phase 2: search narrows the paginated worklist down to this specific patient.
     await page.getByPlaceholder('Search patient, test, queue...').fill(patient.last_name);
     await expect(page.getByText(`${patient.first_name} ${patient.last_name}`)).toBeVisible({ timeout: 10000 });

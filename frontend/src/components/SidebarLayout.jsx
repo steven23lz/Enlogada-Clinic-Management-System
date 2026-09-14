@@ -18,7 +18,7 @@ import {
   BellOff,
   Eye,
 } from 'lucide-react';
-import { visibleMainNavItems, visibleOpsGroups, nativeRoleForNav, isBorrowedScreen } from '../config/navigation';
+import { TODAY_ITEM, canSee, visibleMainNavItems, visibleOpsGroups, nativeRoleForNav, isBorrowedScreen } from '../config/navigation';
 import { useClinicHours } from '../hooks/useClinicHours';
 import { useNavCounts } from '../hooks/useNavCounts';
 import { clinicStatus } from '../lib/clinicStatus';
@@ -66,7 +66,7 @@ const readCollapsedGroups = () => {
  *   screen that passes an action here keeps its own copy for phones only (`lg:hidden`) — one visible
  *   at every width, never two.
  */
-const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectNav, railActions, children }) => {
+const SidebarLayout = ({ title = 'Today', activeNav = 'today', onSelectNav, railActions, children }) => {
   const { user, logout } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -93,6 +93,11 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
   // one record per destination carrying both its role gating and the console it opens, so the
   // sidebar can no longer advertise a screen the router will not open.
   const mainNavItems = visibleMainNavItems(userRoles, userPermissions, userDepartments);
+
+  // First, above every group, for every member of staff. [1.77.0] Outside the groups on purpose: it
+  // belongs to no department, and inside "Management" it would put the front desk back under the
+  // heading [1.76.0] took Patient Records out from under.
+  const todayItem = canSee(TODAY_ITEM, userRoles, userPermissions, userDepartments) ? TODAY_ITEM : null;
 
   // Module 18 UI/UX Phase 1: every operational role previously had exactly one nav destination
   // (some even shared a "Dashboard" item that silently routed to the same page). Split into real,
@@ -346,6 +351,12 @@ const SidebarLayout = ({ title = 'Dashboard', activeNav = 'dashboard', onSelectN
 
       {/* The only scrolling region in the rail. */}
       <div className="scroll-dark min-h-0 flex-1 space-y-5 overflow-y-auto pb-2 pr-0.5">
+        {todayItem && (
+          <nav className="space-y-0.5">
+            <NavButton item={todayItem} isActive={activeNav === todayItem.id} />
+          </nav>
+        )}
+
         {managementItems.length > 0 && (
           <div data-nav-group="Management">
             <span className="mb-1.5 block px-3 text-micro font-semibold uppercase tracking-[0.14em] text-rail-ink-dim">

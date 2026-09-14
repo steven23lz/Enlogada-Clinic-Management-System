@@ -51,6 +51,22 @@ export async function signIn(page, email, password = E2E_PASSWORD) {
 }
 
 /**
+ * Open a screen from the staff sidebar by its exact name. [1.77.0]
+ *
+ * Every member of staff lands on Today, so a spec about any other screen goes there first — by
+ * clicking, the way a person does, rather than assuming where sign-in left it.
+ */
+export async function openScreen(page, name) {
+  await page.getByRole('button', { name, exact: true }).first().click({ timeout: 20000 });
+}
+
+/** Sign in at desktop width, then open one screen. */
+export async function signInTo(page, email, screen, password = E2E_PASSWORD) {
+  await signIn(page, email, password);
+  await openScreen(page, screen);
+}
+
+/**
  * Sign in at phone width.
  *
  * The desktop nav is `display:none` at this width, so its "Sign In" is present in the DOM but

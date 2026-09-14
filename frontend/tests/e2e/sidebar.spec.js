@@ -1,6 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
-import { signIn } from './helpers/auth.js';
+import { signIn, signInTo } from './helpers/auth.js';
 import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
 
 /**
@@ -62,7 +62,7 @@ test.describe('The sidebar', () => {
     expect(visit.status()).toBe(201);
     await ctx.dispose();
 
-    await signIn(page, 'receptionist@enlogada.com');
+    await signInTo(page, 'receptionist@enlogada.com', 'Desk');
     const badge = page.locator('[data-nav-id="reception-queue"] [data-nav-count]');
     await expect(badge).toHaveText(/^\d+$/, { timeout: 15000 });
 
@@ -75,7 +75,7 @@ test.describe('The sidebar', () => {
   });
 
   test('Register Walk-In is in the rail on a desk screen and in the page on a phone — once each', async ({ page }) => {
-    await signIn(page, 'receptionist@enlogada.com');
+    await signInTo(page, 'receptionist@enlogada.com', 'Desk');
     const register = page.getByRole('button', { name: 'Register Walk-In', exact: true });
 
     await expect(page.getByRole('complementary').getByRole('button', { name: 'Register Walk-In', exact: true }))
@@ -88,7 +88,7 @@ test.describe('The sidebar', () => {
   });
 
   test('the cashier opens a receipt by its number from the rail', async ({ page }) => {
-    await signIn(page, 'cashier@enlogada.com');
+    await signInTo(page, 'cashier@enlogada.com', 'Billing Queue');
     await page.getByRole('complementary').getByRole('button', { name: 'Find a receipt' }).click({ timeout: 15000 });
 
     // The URL is the contract: the receipt page itself is covered by receipt-lookup.spec.js.

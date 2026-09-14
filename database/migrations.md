@@ -1,5 +1,91 @@
 # Database Migration & Schema History
 
+## [1.77.0] - 2026-09-14 (Every member of staff lands on Today)
+
+No migration. Frontend only: no endpoint, permission or backend file changed.
+
+### What Steven asked for
+
+On the decisions page he chose "A and B": "Today" first in every staff sidebar, and the screen
+sign-in lands on. Admin's Dashboard becomes Admin's Today, so an Admin has one home rather than two.
+Permissions stay as they are.
+
+### What Today shows
+
+It answers two questions, in this order: what needs me now, and how is today going.
+
+- **Needs you now.** One list for the whole screen, each row with the one button that deals with it:
+  - a critical result to phone (front desk, departments, Admin): Record the call, on Today itself
+  - a visit in the queue with no tests (front desk): Add tests, which opens the Desk with that
+    visit's tests already open and the queue narrowed to the person
+  - patients waiting to pay, and online payments to check (cashier): Open the till, Check them
+  - a department's worklist, with the oldest ticket named: Open worklist
+  - released reports whose email never went, where an address is on file: Open History, already
+    filtered to "Not sent"
+  - HMO requests waiting for a decision (Admin): Review
+
+  When nothing waits, it says so and offers the person's own first screen instead.
+- **How today is going**, by section:
+  - Front desk: with the cashier (and the longest wait), in a department, visits today. Today's
+    bookings as Arrived, Due, Late or No-show, with a Check in that opens that booking's card on the
+    Desk. HMO requests waiting for Admin, for people in the building. Opening hours for the next 7
+    days.
+  - Cashier: today's takings laid out as a cash-up (Cash, GCash, Bank, Collected, Reversed,
+    Discounts), with yesterday's whole-day total beside it, and the top services today.
+  - A department, one component for all three: released today, median turnaround (with the target
+    only if the clinic has set one), amended today.
+  - Clinic (Admin and SuperAdmin): revenue today, the queue, online payments and reversals; each
+    department's backlog, releases, median and target; arrivals by hour so far.
+
+### The rules it keeps
+
+- **Only what the person already holds.** Sections follow the person's own screens (`homeNavIds`,
+  the departmental screens that are not borrowed), and the clinic's follows `reports:view`. Every
+  read is an endpoint their own screens already call, on the same permission.
+- **A fact appears once.** A count that is a need is never also a figure. A booking is on the
+  bookings list, not also in "Needs you now". There is one "Needs you now" however many sections.
+- **One Refresh.** A failed read says so where its figure or list would be, and "Needs you now"
+  names what it could not check. There is no Try again beside each: they would all do what Refresh
+  does.
+- **Money comes from the summary.** Every peso is the transactions endpoint's SQL `summary`.
+  "Yesterday" is the whole of yesterday, because "yesterday by now" would have to be added up from
+  the receipt list, which a money figure must never be.
+
+### How it is built
+
+- `config/navigation.js`: `TODAY_ITEM` (`staffOnly`), `homeNavIds` and `landingNavForRoles`. The
+  `dashboard` item is gone. `defaultNavForRoles` still means "my work".
+- `App.jsx` lands on `landingNavForRoles`. `selectNav(id, intent)` carries what a Today button asked
+  the next screen to do on arrival, acted on once: the Desk takes `verify`, `find` and `editTests`,
+  a department's History takes `delivery`.
+- `pages/Today.jsx`, `components/today/*`, `hooks/useTodayReads.js` (each read settles on its own)
+  and `lib/today.js` (the rules, pure and unit-tested).
+- The till's "paid today" rule moved into `lib/collections.js` as `paidVisitIds`, shared by the till,
+  the sidebar's count and Today.
+- `AdminDashboard.jsx` keeps only the management screens.
+
+### Tests
+
+- `today.spec.js` (new, 12 tests):
+  - every role lands on Today, first in the rail, and an Admin has no Dashboard
+  - Add tests opens the visit's tests on the Desk
+  - a due booking checks in on the Desk's own card
+  - Record the call opens on Today
+  - Open History arrives filtered to Not sent
+  - the cashier has one way to the till
+  - an Admin sees the clinic, and Review opens Service Requests
+  - the multirole account gets one "Needs you now" and both sections
+- `failure-states.spec.js`: each role's Today over a 500 says what it could not check (4 tests).
+- `mobile-patient.spec.js`: Today at 390 px for the front desk and the clinic (2 tests).
+- `tests/unit/today.test.js` (18 tests).
+- Specs that work on a screen other than Today now open it first, through `helpers/auth.js`
+  `openScreen` and `signInTo`: laboratory, ultrasound-measurements, workflow-context, revalidation,
+  walkin-registration, text-scale, front-desk, sidebar, result-delivery, and the critical-callback
+  failure case.
+
+The frontend unit tier grows to 80. The full suite: 407 passed, 0 skipped, in 10.3 minutes, across
+61 spec files.
+
 ## [1.76.0] - 2026-09-14 (The staff sidebar earns its space)
 
 No migration. Frontend only.

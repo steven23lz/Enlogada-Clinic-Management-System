@@ -1,6 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
-import { signIn } from './helpers/auth.js';
+import { signIn, signInTo } from './helpers/auth.js';
 import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
 import { todayStr } from './helpers/dates.js';
 
@@ -50,7 +50,7 @@ test.describe("The Desk's Who's here box", () => {
   });
 
   test('someone on file is found by name and started on a visit from the same box', async ({ page }) => {
-    await signIn(page, 'receptionist@enlogada.com');
+    await signInTo(page, 'receptionist@enlogada.com', 'Desk');
     await expect(page.getByRole('heading', { name: 'Desk', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
     await page.getByRole('searchbox', { name: WHO }).fill(person.lastName);
 
@@ -68,7 +68,7 @@ test.describe("The Desk's Who's here box", () => {
   });
 
   test('someone already in the queue is not offered a second visit', async ({ page }) => {
-    await signIn(page, 'receptionist@enlogada.com');
+    await signInTo(page, 'receptionist@enlogada.com', 'Desk');
     await page.getByRole('searchbox', { name: WHO }).fill(person.lastName);
 
     await expect(page.locator('tbody tr', { hasText: person.fullName })).toBeVisible({ timeout: 15000 });
@@ -94,7 +94,7 @@ test.describe("The Desk's Who's here box", () => {
       json: { status: 'success', data: { appointment: booking } },
     }));
 
-    await signIn(page, 'receptionist@enlogada.com');
+    await signInTo(page, 'receptionist@enlogada.com', 'Desk');
     await page.getByRole('button', { name: /Rosario Magbanua/ }).click({ timeout: 15000 });
 
     const card = page.getByTestId('booking-card');
@@ -107,7 +107,7 @@ test.describe("The Desk's Who's here box", () => {
   });
 
   test('registration opens beside the queue and closes back onto it', async ({ page }) => {
-    await signIn(page, 'receptionist@enlogada.com');
+    await signInTo(page, 'receptionist@enlogada.com', 'Desk');
     await page.getByRole('button', { name: 'Register Walk-In', exact: true }).click();
 
     const panel = page.getByRole('dialog');

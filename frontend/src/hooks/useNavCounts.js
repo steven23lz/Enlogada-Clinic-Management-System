@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../config/api';
 import { usePolling } from './usePolling';
+import { paidVisitIds } from '../lib/collections';
 
 const WORKLIST_CATEGORY = { 'lab-ops': 'Laboratory', 'ultrasound-ops': 'Ultrasound', 'xray-ops': 'Xray' };
 
@@ -43,11 +44,7 @@ export function useNavCounts(ids = []) {
     }
     if (wanted.has('cashier-queue')) {
       jobs.push(Promise.all([api.get('/visits/active'), api.get('/payments/transactions')]).then(([visits, log]) => {
-        const paid = new Set(
-          (log.data.data.transactions || [])
-            .filter((t) => t.payment_status === 'Paid')
-            .map((t) => t.patient_visit_id)
-        );
+        const paid = paidVisitIds(log.data.data.transactions);
         next['cashier-queue'] = (visits.data.data.visits || []).filter((v) => !paid.has(v.id)).length;
       }));
     }

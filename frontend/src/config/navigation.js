@@ -12,7 +12,7 @@
 // Keeping the destination and its console in one record means a nav item cannot be offered
 // without something being able to open it, and adding a screen is a single edit here.
 import {
-  LayoutDashboard, Users, ClipboardList, FileText, CreditCard, Calendar,
+  House, Users, ClipboardList, FileText, CreditCard, Calendar,
   FolderKanban, BarChart3, Activity, ShieldCheck, History,
   Receipt, FlaskConical, Stethoscope, Scan, Wallet, CalendarCog } from 'lucide-react';
 
@@ -20,6 +20,7 @@ import {
 // components; this module stays free of component imports so it can be used from anywhere
 // without a cycle.
 export const CONSOLE = {
+  TODAY: 'today',
   ADMIN: 'admin',
   RECEPTION: 'reception',
   CASHIER: 'cashier',
@@ -54,8 +55,20 @@ const isStaff = (roles = []) => roles.some((r) => r !== CLIENT_ROLE);
 
 // Oversight/management destinations. Admin and SuperAdmin both reach these; the SuperAdmin-only
 // console is separated out below rather than mixed in here.
+/**
+ * Every member of staff's first screen. [1.77.0]
+ *
+ * What needs this person now, with a button on each item, and how the day is going. Steven chose
+ * it on the decisions page: Today first in every sidebar, and the screen sign-in lands on. It
+ * replaced Admin's 'dashboard', so an Admin has one home rather than two — the overview they used
+ * to land on is Admin's Today, and the id is gone rather than kept pointing at a second home.
+ *
+ * `staffOnly` and nothing else: what each person SEES on it is decided by what they already hold,
+ * section by section (see pages/Today.jsx), so the item itself needs no permission.
+ */
+export const TODAY_ITEM = { id: 'today', label: 'Today', icon: House, staffOnly: true, console: CONSOLE.TODAY };
+
 export const MAIN_NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roleRequired: ADMINS, console: CONSOLE.ADMIN },
   { id: 'staff', label: 'Staff Accounts', icon: Users, roleRequired: ADMINS, permission: 'staff:manage', console: CONSOLE.ADMIN },
   { id: 'service-requests', label: 'Service Requests', icon: ClipboardList, roleRequired: ADMINS, permission: 'hmo:read', console: CONSOLE.ADMIN },
   { id: 'services-cat', label: 'Services Catalog', icon: FileText, roleRequired: ADMINS, permission: 'tests:manage', console: CONSOLE.SERVICES_CATALOG },
@@ -174,6 +187,7 @@ export const visibleOpsGroups = (roles, permissions, departments) =>
     .filter((group) => group.items.length > 0);
 
 const allItems = () => [
+  TODAY_ITEM,
   ...MAIN_NAV_ITEMS,
   ...OPS_NAV_GROUPS.flatMap((g) => g.items.map((i) => ({ ...i, groupLabel: g.label }))),
 ];
@@ -200,18 +214,40 @@ export const consoleForNav = (navId, roles, permissions, departments) => {
  * near the top of MAIN_NAV_ITEMS, so a lab tech signing in was dropped on the records search
  * instead of their worklist. Reachable is not the same as home.
  *
- * So: land on the first destination that *belongs* to a role you hold — the Laboratory Worklist
- * for a lab tech, the Billing Queue for a cashier — and only fall back to first-reachable for
- * someone whose roles own no departmental screen, which is Admin and SuperAdmin.
+ * So: the first destination that *belongs* to a role you hold — the Laboratory Worklist for a lab
+ * tech, the Billing Queue for a cashier — and only fall back to first-reachable for someone whose
+ * roles own no departmental screen, which is Admin and SuperAdmin.
+ *
+ * Sign-in lands on Today since [1.77.0] (landingNavForRoles, below). This is still what "my work"
+ * means, and what App falls back to for someone who somehow cannot see Today.
  */
 export const defaultNavForRoles = (roles, permissions, departments) => {
-  const ops = visibleOpsGroups(roles, permissions, departments).flatMap((g) => g.items);
-  const home = ops.find((item) => !isBorrowedScreen(item.id, roles));
-  if (home) return home.id;
+  const [home] = homeNavIds(roles, permissions, departments);
+  if (home) return home;
 
+  const ops = visibleOpsGroups(roles, permissions, departments).flatMap((g) => g.items);
   const [first] = [...visibleMainNavItems(roles, permissions, departments), ...ops];
   return first ? first.id : null;
 };
+
+/**
+ * The departmental screens that are this person's own, not borrowed, in sidebar order. [1.77.0]
+ * Today builds its sections from these: the desk's for whoever the Desk belongs to, the till's for
+ * whoever the Billing Queue belongs to, a department's for whoever works it. A screen reached only
+ * through a delegated permission is still reachable from the sidebar; it just is not their day.
+ */
+export const homeNavIds = (roles, permissions, departments) =>
+  visibleOpsGroups(roles, permissions, departments)
+    .flatMap((g) => g.items)
+    .filter((item) => !isBorrowedScreen(item.id, roles))
+    .map((item) => item.id);
+
+/** Where sign-in lands: Today for every member of staff. [1.77.0] Reversible in this one place. */
+export const landingNavForRoles = (roles, permissions, departments) => (
+  canSee(TODAY_ITEM, roles, permissions, departments)
+    ? TODAY_ITEM.id
+    : defaultNavForRoles(roles, permissions, departments)
+);
 
 // The role a departmental screen belongs to — who would normally be sitting at it.
 //

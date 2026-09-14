@@ -97,6 +97,9 @@ const STAFF_TABLES = [
   { email: 'lab@enlogada.com', nav: 'Laboratory Worklist' },
   { email: 'admin@enlogada.com', nav: 'Staff Accounts' },
   { email: 'admin@enlogada.com', nav: 'Cashier Monitoring' },
+  // Where every member of staff lands since [1.77.0]; the clinic's has a table of departments.
+  { email: 'receptionist@enlogada.com', nav: 'Today', label: "The front desk's Today" },
+  { email: 'admin@enlogada.com', nav: 'Today', label: "The clinic's Today" },
 ];
 
 const signIn = async (page, email) => {
@@ -117,8 +120,8 @@ const openNav = async (page, nav) => {
   await page.waitForTimeout(2200);
 };
 
-for (const { email, nav } of STAFF_TABLES) {
-  test(`${nav} needs no sideways dragging on a phone`, async ({ page }) => {
+for (const { email, nav, label } of STAFF_TABLES) {
+  test(`${label || nav} needs no sideways dragging on a phone`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await signIn(page, email);
     await openNav(page, nav);

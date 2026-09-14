@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import SidebarLayout from '../../components/SidebarLayout';
 import { Button } from '../../components/ui/button';
 import PageHeader from '../../components/ui/page-header';
@@ -66,7 +66,7 @@ const PAGE_BLURBS = {
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 
-const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) => {
+const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, intent }) => {
   const { hasPermission } = useAuth();
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
   // back to the Desk, mirroring DiagnosticDashboard's existing fallback pattern.
@@ -129,6 +129,25 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav }) =
 
   // Manual HMO logging State
   const hmo = useHmoLogging({ onLogged: () => queue.refresh() });
+
+  // What a Today button asked for on arrival. [1.77.0] "Check in" opens that booking's card, "Add
+  // tests" opens that visit's tests with the queue narrowed to the person, each through the same flow
+  // the Desk's own buttons use and on the same permission. Acted on once: App clears the intent on
+  // the next navigation, and the ref stops a re-render acting on this one twice.
+  const handledIntent = useRef(null);
+  useEffect(() => {
+    if (!intent || !onDesk || handledIntent.current === intent) return;
+    handledIntent.current = intent;
+    if (intent.find) {
+      lookup.setQuery(intent.find);
+      queue.onSearchChange(intent.find);
+      if (can.searchRecords) lookup.searchFor(intent.find);
+    }
+    if (intent.verify && can.checkIn) checkIn.verify(null, intent.verify);
+    if (intent.editTests && hasPermission('tests:assign')) testAssignment.openFor(intent.editTests);
+    // The hooks' functions are new each render; the intent is what decides.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, onDesk]);
 
   /**
    * Calls the patient by voice. [1.54.0] The queue row's other control — a per-row reprint of the

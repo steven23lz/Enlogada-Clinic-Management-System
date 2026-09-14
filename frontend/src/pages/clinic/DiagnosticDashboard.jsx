@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import SidebarLayout from '../../components/SidebarLayout';
 import PageHeader from '../../components/ui/page-header';
 import { useAuth } from '../../contexts/AuthContext';
@@ -24,7 +24,7 @@ import { categoryLabel as categoryLabelFor, categoryIcon } from '../../lib/categ
 // Phase B: mirrors backend/src/config/upload.js's own allowlist/size cap, so a mismatched file
 // is rejected instantly instead of round-tripping to the server first.
 
-const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
+const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav, intent }) => {
   const { user } = useAuth();
   // UI/UX Phase 1: 'worklist' (pending/processing, actionable) vs 'history' (already-released,
   // read-only) — each diagnostic role now has a real second nav destination for the latter,
@@ -59,6 +59,16 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav }) => {
   });
 
   const criticals = useCriticalCallbacks({ enabled: mode === 'worklist', paused: entry.open });
+
+  // Today's "Open History" for reports never sent arrives with History already showing only those.
+  // [1.77.0] Once per navigation, like every intent (see App.jsx).
+  const handledIntent = useRef(null);
+  useEffect(() => {
+    if (!intent || mode !== 'history' || handledIntent.current === intent) return;
+    handledIntent.current = intent;
+    if (intent.delivery) worklist.setDeliveryFilter(intent.delivery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, mode]);
 
   // Re-reads the released list after a send, so the "Sent to patient" column shows the delivery
   // that just happened rather than the state it was fetched with.

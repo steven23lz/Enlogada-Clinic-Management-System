@@ -69,6 +69,8 @@ test('a change made elsewhere still reaches a polling screen', async ({ page }) 
   const auth = { Authorization: `Bearer ${recToken}` };
 
   await signIn(page, 'receptionist@enlogada.com');
+  // Staff land on Today since [1.77.0]; the Desk's queue is the polled list under test.
+  await page.getByRole('button', { name: 'Desk', exact: true }).first().click({ timeout: 20000 });
   await expect(page.getByRole('heading', { name: 'Desk', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
 
   const surname = `Revalidate${Date.now()}`;

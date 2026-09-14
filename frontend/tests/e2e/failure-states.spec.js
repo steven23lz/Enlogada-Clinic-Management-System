@@ -124,9 +124,50 @@ for (const { email, screen, mustSay, mustNotSay } of LANDING_SCREENS) {
   });
 }
 
+// Today, where every member of staff lands since [1.77.0]. Its figures start empty and each of its
+// lists could say "nothing"; over a 500 each has to say what it could not load instead, and "Needs
+// you now" has to say what it could not check rather than that nothing needs anyone.
+const TODAY_FAILURES = [
+  {
+    who: 'The front desk', email: 'receptionist@enlogada.com',
+    mustSay: [/couldn.t check[^.]*the queue/i, /couldn.t load today's bookings/i, /with the cashier\s+—/i],
+    mustNotSay: [/nothing needs you/i, /no bookings today/i],
+  },
+  {
+    who: 'The cashier', email: 'cashier@enlogada.com',
+    mustSay: [/couldn.t check who is waiting to pay/i, /couldn.t load today's takings/i],
+    mustNotSay: [/nothing needs you/i, /₱0\.00/],
+  },
+  {
+    who: 'The laboratory', email: 'lab@enlogada.com',
+    mustSay: [/couldn.t check critical results/i, /released today\s+—/i],
+    mustNotSay: [/nothing needs you/i, /released today\s+0\b/i],
+  },
+  {
+    who: 'The clinic', email: 'admin@enlogada.com',
+    mustSay: [/revenue today\s+—/i, /couldn.t load the departments/i],
+    mustNotSay: [/nothing needs you/i, /₱0\.00/],
+  },
+];
+
+for (const { who, email, mustSay, mustNotSay } of TODAY_FAILURES) {
+  test(`${who}'s Today says what it could not check, not that nothing needs them`, async ({ page }) => {
+    await signInThenBreakApi(page, email);
+    await page.reload();
+    await expect(page.getByTestId('today-needs')).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(2200);
+
+    const body = await page.evaluate(() => document.body.innerText);
+    for (const pattern of mustSay) expect(body, `${who}'s Today should say ${pattern}`).toMatch(pattern);
+    for (const pattern of mustNotSay) expect(body, `${who}'s Today stated ${pattern} over a 500`).not.toMatch(pattern);
+  });
+}
+
 test('the critical-callback list says it could not check, not that every call was made', async ({ page }) => {
   await signInThenBreakApi(page, 'lab@enlogada.com');
   await page.reload();
+  // Staff land on Today since [1.77.0]; the tile is on the worklist.
+  await page.getByRole('button', { name: 'Laboratory Worklist', exact: true }).first().click({ timeout: 20000 });
 
   // A button only while there is something to open — which a failed check now is.
   await page.getByRole('button', { name: /Critical Callbacks/ }).click({ timeout: 20000 });

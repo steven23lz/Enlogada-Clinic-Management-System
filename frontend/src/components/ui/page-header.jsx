@@ -21,8 +21,9 @@ import { cn } from '../../lib/utils';
  * there was one theme, invisible the moment those ramps moved for dark mode, because both resolve
  * dark there and this banner is dark in both. Same reason SidebarLayout's rail has its own ink.
  *
- * `variant="hero"` is the dark treatment, kept for the two landing screens (Admin's console and
- * the Client's home) where the page opens on a welcome rather than on work. Every other screen
+ * `variant="hero"` is the dark treatment, kept for the Client's home, where the page opens on a
+ * welcome rather than on work. (Admin's console opened on one too, until its overview became Admin's
+ * Today in [1.77.0]; Today uses the light header like every staff screen.) Every other screen
  * uses the light variant — a dark banner on top of a worklist is a decoration the person using
  * it has to scroll past forty times a shift.
  *

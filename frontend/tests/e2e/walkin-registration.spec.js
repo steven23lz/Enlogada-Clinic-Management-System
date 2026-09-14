@@ -27,6 +27,8 @@ test('reception registers a walk-in and attaches tests in one pass', async ({ pa
   await page.fill('input[type="email"]', 'receptionist@enlogada.com');
   await page.fill('input[type="password"]', PASSWORD);
   await page.locator('button[type="submit"]').click();
+  // Staff land on Today since [1.77.0].
+  await page.getByRole('button', { name: 'Desk', exact: true }).first().click({ timeout: 20000 });
   await expect(page.getByRole('heading', { name: 'Desk', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
 
   // Registration opens in a panel beside the queue since [1.75.0], rather than on a screen of its

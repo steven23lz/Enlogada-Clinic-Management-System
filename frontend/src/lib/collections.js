@@ -40,6 +40,19 @@ export const isSettled = (transaction) => (
 export const settled = (transactions) => (transactions || []).filter(isSettled);
 
 /**
+ * The visits already settled, from a day's receipt log: the till's rule for who no longer waits to
+ * pay. [1.77.0] One copy, because three screens ask it — the till itself, the sidebar's count
+ * beside it, and Today — and a badge that disagrees with its list is worse than no badge.
+ *
+ * 'Paid', not `isSettled`: this is about the visit's state NOW, not about which money a range
+ * counts. A refunded visit genuinely owes again, so it belongs back in the queue, which is also
+ * what uq_payments_one_paid_per_visit allows by being partial on 'Paid'.
+ */
+export const paidVisitIds = (transactions) => new Set(
+  (transactions || []).filter((t) => t.payment_status === 'Paid').map((t) => t.patient_visit_id)
+);
+
+/**
  * Was this receipt reversed on a different day than it was taken? [1.30.0]
  *
  * The case the cash-up could not represent at all before `refunded_at` existed, and the only one

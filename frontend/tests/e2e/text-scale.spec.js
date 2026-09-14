@@ -127,6 +127,8 @@ test.describe('Text size preference', () => {
     await page.fill('input[type="email"]', 'lab@enlogada.com');
     await page.fill('input[type="password"]', PASSWORD);
     await page.locator('button[type="submit"]').click();
+    // Staff land on Today since [1.77.0], so the worklist is opened first.
+    await page.getByRole('button', { name: 'Laboratory Worklist', exact: true }).first().click({ timeout: 20000 });
 
     const label = page.getByText('Awaiting Exam', { exact: true }).first();
     await expect(label).toBeVisible({ timeout: 15000 });

@@ -229,10 +229,9 @@ test.describe('Admin vs SuperAdmin — separation of duties', () => {
     expect(asSuper.status()).toBe(200);
   });
 
-  // The Admin dashboard reads this in the same Promise.all that loads revenue and the catalogue,
-  // so it is not incidental: were it to start refusing, an Admin's four metric cards would all
-  // blank together and the cause would look like a network fault.
-  test('Admin keeps the staff list its own dashboard is built on', async () => {
+  // Staff Accounts is built on this list. (Admin's old overview read it too, in one Promise.all with
+  // the day's revenue; that overview became Admin's Today in [1.77.0], which does not.)
+  test('Admin keeps the staff list its own screens are built on', async () => {
     const res = await apiContext.get(`${API}/admin/staff`, {
       headers: { Authorization: `Bearer ${adminToken}` },
     });

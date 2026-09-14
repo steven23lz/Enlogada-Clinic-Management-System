@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import api from '../config/api';
 import { usePolling } from './usePolling';
+import { paidVisitIds as paidVisitIdsFrom } from '../lib/collections';
 
 /**
  * Who is waiting to be billed — the cashier's queue, and today's takings beside it.
@@ -96,10 +97,7 @@ export function useBillingQueue({ enabled = true, paused = false } = {}) {
    * and a refunded visit genuinely owes money again — so it should reappear here to be charged,
    * which is also what uq_payments_one_paid_per_visit allows by being partial on 'Paid'.
    */
-  const paidVisitIds = useMemo(
-    () => new Set(transactions.filter((t) => t.payment_status === 'Paid').map((t) => t.patient_visit_id)),
-    [transactions]
-  );
+  const paidVisitIds = useMemo(() => paidVisitIdsFrom(transactions), [transactions]);
 
   /** What the screen actually renders: unpaid, matching the search and the type, in arrival order. */
   const visits = useMemo(() => activeVisits
