@@ -158,6 +158,10 @@ class ResultRepository {
              pv.created_at as visit_date,
              pv.referring_physician, pv.referring_physician_prc,
              p.id as patient_id, p.first_name, p.last_name, p.birthdate, p.sex,
+             -- The report's "Patient Type" line, and the key its measurements hang from. [1.90.0]
+             -- Without them the report opened from History printed a blank patient type and none
+             -- of the values a laboratory or ultrasound form carries.
+             pt.name as patient_type_name, tr.id as result_id,
              tr.findings, tr.remarks as result_remarks, tr.file_path, tr.file_original_name,
              tr.released_at,
              tr.version, tr.is_critical, tr.critical_acknowledged_at,
@@ -177,6 +181,7 @@ class ResultRepository {
       JOIN test_categories tc ON t.category_id = tc.id
       JOIN patient_visits pv ON vt.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
+      LEFT JOIN patient_types pt ON pt.id = p.patient_type_id
       -- A walk-in has no account, so this is a LEFT join; p.email then supplies the address.
       LEFT JOIN users pu ON p.user_id = pu.id
       -- is_current: a test can now carry several versions, and joining them all would repeat

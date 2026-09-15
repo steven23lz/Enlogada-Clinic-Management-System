@@ -305,7 +305,8 @@ class ResultService {
     // only match nothing — and an empty worklist reads as "no work", which is a claim.
     const delivery = ['sent', 'unsent'].includes(options.delivery) ? options.delivery : null;
 
-    return await resultRepository.findReleasedByCategory(categoryName, { days, delivery, limit, offset });
+    const rows = await resultRepository.findReleasedByCategory(categoryName, { days, delivery, limit, offset });
+    return this.withReportParts(rows);
   }
 
   // A modality may move its own ticket to 'Waiting for Release' (exam done, findings pending
@@ -955,6 +956,18 @@ class ResultService {
       patientId,
       visibleCategoriesFor(requestingUser)
     );
+    return this.withReportParts(rows);
+  }
+
+  /**
+   * Adds what a printed report needs beyond its own row: the measurements and the signatories.
+   *
+   * Shared by the patient's history and a department's History [1.90.0]. History rendered the
+   * same report from rows carrying neither, so a CBC opened there printed its heading, its comment
+   * and not one value, and no signature block under it. Nothing in the suite had a released
+   * result with measurements to show it until the demo data filled the forms in.
+   */
+  async withReportParts(rows) {
     if (!rows.length) return rows;
 
     // One extra query for the whole list, never a join. Joining measurements in would repeat each

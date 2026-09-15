@@ -1,5 +1,57 @@
 # Database Migration & Schema History
 
+## [1.90.0] - 2026-09-15 (A report opened from History shows its values; the demo's numbers read true)
+
+No migration.
+
+### A report opened from History printed no values
+
+- A department's History (Laboratory, X-Ray and Ultrasound History) opens each report from its list
+  row, and the list query (`findReleasedByCategory`) carried no measurements, no signatories and no
+  patient type. So a CBC opened there printed its heading and its comment and not one value, no
+  signature block, and a blank "Patient Type". The patient's own history already attached all
+  three. Nothing in the suite had a released result with measurements to open from History until
+  the demo data filled the forms in, which is how it surfaced.
+- `resultService.withReportParts` now attaches the measurements (one extra query for the whole
+  list, never a join) and each category's signatories to both lists, and the list query selects
+  the patient type and the result id the measurements hang from.
+- ultrasound-measurements.spec's Urinalysis print test now also reads the department History and
+  requires the form's values, both signatories and the patient type there.
+
+### The demo's numbers and dates
+
+- The seed paid for two weeks of history today and then backdated it, so a visit on the 3rd
+  carried today's queue ticket (#0030) and a receipt dated today, and today's next receipt jumped
+  to #0047. `renumberSeeded` gives the visits and receipts this run created the numbers their own
+  days would have issued, without gaps and in the order things happened, and sets each day's
+  counters to what is in use. It touches only the rows the run created, and never sets a counter
+  below a number a surviving row holds.
+- The history keeps to opening hours: nothing on a Sunday, mornings only on a Saturday, and each of
+  a day's visits at its own hour.
+- A booking for a later day is dated one to three open days back, during opening hours, the way
+  people book ahead. Next week's bookings no longer sit in today's queue, or in the billing queue as
+  "waiting" (the Desk read 20 in the queue, 8 of them for next week). A booking for later today
+  keeps today's date, so it still checks in during a demo.
+
+### Found, not changed
+
+A booking made on an earlier day never joins the Desk queue or the till on its own day:
+`visitRepository.findActiveVisits` counts visits created today, and check-in does not move the visit
+to that day. An advance booking that arrives unpaid therefore cannot be found at the till. The same
+root has the other side described above: a booking made today for next week counts as today. It is
+a workflow decision (count a visit by its appointment date, or re-stamp it at check-in), left for
+Steven.
+
+### Checked
+
+- A read of every day in the demo data: receipts and queue tickets run without gaps, each receipt
+  carries its own day's date, and today's counters equal what is in use; every booking for a later
+  day was made on an earlier day; today's queue holds only today's visits.
+- The booking date query, run as if today were Monday the 14th, Tuesday the 15th, Saturday the
+  19th and Monday the 21st: every date it picks is an open day inside opening hours, and a
+  Saturday is always 09:00–11:00.
+- The full suite: 428 passed, 0 skipped.
+
 ## [1.89.0] - 2026-09-15 (Demo data that reads like a real clinic)
 
 No migration. Backend scripts and data only. Steven asked for the test records to go, and for

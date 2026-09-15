@@ -582,6 +582,19 @@ test.describe('Ultrasound structured measurements', () => {
 
     // And it renders. Released first, because the patient copy only exists once it is out.
     await apiContext.post(`${API}/results/${attached.id}/release`, { headers: auth(lab) });
+
+    // The department's History carries the same report, values and signatories included. [1.90.0]
+    // It was the one list that did not: a released form opened from History printed its heading,
+    // its comment and not one value, and nothing here could see it, because no test had opened a
+    // released result WITH measurements from that list.
+    const released = (await (await apiContext.get(`${API}/results/released/Laboratory`, { headers: auth(lab) })).json())
+      .data.released;
+    const listed = released.find((r) => r.visit_test_id === attached.id);
+    expect(listed, 'the released result must be in the department History').toBeTruthy();
+    const listedByCode = Object.fromEntries((listed.measurements || []).map((m) => [m.field_code, m]));
+    expect(listedByCode.color?.value_text, 'History must carry the form values').toBe('YELLOW');
+    expect(listed.signatories, 'History must carry the signatories').toHaveLength(2);
+    expect(listed.patient_type_name, 'History must carry the patient type').toBeTruthy();
     await page.goto('/');
     await page.getByText('Sign In', { exact: true }).first().click();
     await page.fill('input[type="email"]', 'lab@enlogada.com');

@@ -1003,7 +1003,11 @@ Services Catalogue.
   the patient's copy are the same document by requirement, so a second rendering can only agree
   with the first by coincidence. Print through `lib/printReport.js`, never a bare `window.print()`:
   two mounted `.print-area` elements print stacked on top of each other, and the diagnostic
-  dashboard can hold three at once.
+  dashboard can hold three at once. Every list a report opens from must carry what it prints
+  beyond its row: `resultService.withReportParts` attaches the measurements and signatories to the
+  patient's history and a department's History `[1.90.0]`, and the query selects
+  `patient_type_name`. History used to open a CBC with no values at all; a new list that opens a
+  report goes through the same method.
 - **Never add a second `<textarea>` to the result entry dialog.** `laboratory.spec.js` drives the
   findings box with a bare `page.locator('textarea')`, so a second one breaks two of its tests with
   a strict-mode violation from a file that never mentions the component that added it.

@@ -745,6 +745,12 @@ async function main() {
   };
   let k = 0;
   for (let daysAgo = 14; daysAgo >= 1; daysAgo--) {
+    // The clinic is closed on Sundays and shuts at noon on Saturdays, so the history keeps to the
+    // days and hours it is open. [1.90.0]
+    const day = new Date();
+    day.setDate(day.getDate() - daysAgo);
+    const weekday = day.getDay();
+    if (weekday === 0) continue;
     // Two or three visits a day, varying so the trend line is not a flat bar.
     const perDay = 2 + (daysAgo % 2);
     for (let i = 0; i < perDay; i++, k++) {
@@ -757,7 +763,7 @@ async function main() {
       await payFor(v, pick([CASH_METHOD, ...COUNTER_METHODS], daysAgo + i));
       await recordFindings(v, ABNORMAL[k] || {});
       await release(v);
-      historical.push({ ...v, daysAgo });
+      historical.push({ ...v, daysAgo, slot: i, saturday: weekday === 6 });
     }
   }
 
@@ -777,7 +783,8 @@ async function main() {
       // The numbers are per-modality and roughly what each actually takes: bloods come back
       // inside the hour, a scan needs the room and a radiographer.
       const TURNAROUND_MINUTES = { Laboratory: 45, ECG: 25, Xray: 70, Ultrasound: 95 };
-      const arrival = 8 + (h.daysAgo % 8);                       // 08:00-15:00 arrival
+      // 08:00-15:00 on a weekday, 08:00-10:00 on a Saturday; each of a day's visits at its own hour.
+      const arrival = h.saturday ? 8 + ((h.daysAgo + h.slot) % 3) : 8 + ((h.daysAgo + h.slot * 3) % 8);
       const waitToPay = 4 + (h.daysAgo % 17);                    // a few minutes at the desk
       const turnaround = TURNAROUND_MINUTES[h.category] ?? 60;
       // ±25% jitter, deterministic per visit so a reseed is reproducible.
@@ -901,6 +908,58 @@ async function main() {
     }
   }
 
+  // A booking for a later day was made on an earlier one. [1.90.0] The API stamps a booking with
+  // today, and today's queue and till count every visit made today, so next week's bookings sat
+  // in today's queue, and in the billing queue as "waiting". Moved one to three days back, the
+  // way people book ahead. A booking for later TODAY keeps today's stamp, so it still checks in.
+  // (Not changed here: a booking made on an earlier day never joins the queue on its own day,
+  // because check-in does not move it to that day. See migrations.md [1.90.0].)
+  const seededPatients = [...records.values()].map((r) => r.patient.id);
+  if (profiles.length > 0) seededPatients.push(profiles[0].id);
+  const { rows: bookings } = await db.query(
+    `SELECT a.id, a.patient_visit_id, (a.scheduled_date > CURRENT_DATE) AS ahead
+       FROM appointments a JOIN patient_visits pv ON pv.id = a.patient_visit_id
+      WHERE pv.patient_id = ANY($1) AND pv.created_at >= NOW() - interval '30 minutes'
+      ORDER BY a.id`,
+    [seededPatients]
+  );
+  const stampAppointment = (await db.query(
+    `SELECT 1 FROM information_schema.columns WHERE table_name = 'appointments' AND column_name = 'created_at'`
+  )).rowCount > 0;
+  await db.withTransaction(async () => {
+    for (const [i, b] of bookings.filter((row) => row.ahead).entries()) {
+      // Made one to three OPEN days back (the clinic is closed on Sunday), inside that day's
+      // opening hours, which end at noon on a Saturday. Picked in SQL, on the server's calendar.
+      const { rows: [{ at }] } = await db.query(
+        `SELECT to_char(day + make_interval(hours => CASE WHEN EXTRACT(DOW FROM day) = 6
+                                                          THEN 9 + ($2::int % 3) ELSE 9 + $2::int END),
+                        'YYYY-MM-DD HH24:MI:SS') AS at
+           FROM (SELECT d::date AS day
+                   FROM generate_series(CURRENT_DATE - 7, CURRENT_DATE - 1, interval '1 day') AS d
+                  WHERE EXTRACT(DOW FROM d) <> 0
+                  ORDER BY d DESC OFFSET $1 LIMIT 1) AS made`,
+        [i % 3, i % 7]
+      );
+      await db.query(
+        `UPDATE patient_visits SET created_at = $2::timestamp, updated_at = $2::timestamp WHERE id = $1`,
+        [b.patient_visit_id, at]
+      );
+      if (stampAppointment) {
+        await db.query(`UPDATE appointments SET created_at = $2::timestamp WHERE patient_visit_id = $1`, [
+          b.patient_visit_id,
+          at,
+        ]);
+      }
+    }
+  });
+
+  // Every ticket and receipt this run issued, renumbered to the day it now belongs to.
+  await renumberSeeded([
+    ...today.map((v) => v.visit.id),
+    ...historical.map((h) => h.visit.id),
+    ...bookings.map((b) => b.patient_visit_id),
+  ]);
+
   // ── Summary ──────────────────────────────────────────────────────────────────────────────
   const counts = await db.query(`
     SELECT
@@ -969,6 +1028,79 @@ async function retimeToday(visits) {
           [v.visitTestId, reported]
         );
       }
+    }
+  });
+}
+
+/** Rows grouped by `key`, in the order they came. */
+const groupBy = (rows, key) => {
+  const groups = new Map();
+  for (const r of rows) groups.set(r[key], [...(groups.get(r[key]) || []), r]);
+  return groups;
+};
+
+/**
+ * Gives the visits this run created the queue tickets and receipt numbers their own days would
+ * have issued. [1.90.0]
+ *
+ * The API numbers everything on the day it runs, so a visit backdated to the 3rd still carried
+ * today's ticket #0030 and a receipt dated today, and today's next receipt jumped to #0047 past
+ * numbers no longer in use. Each day is renumbered in the order things happened, after anything
+ * already on that day that this run did not create, and the day's counters are set to what is now
+ * in use, so the next ticket and receipt follow on.
+ *
+ * Only the rows this run created. A number handed to a real patient must never change, and a
+ * counter is never set below a number a surviving row still holds.
+ */
+async function renumberSeeded(visitIds) {
+  if (!visitIds.length) return;
+  await db.withTransaction(async () => {
+    const setCounter = (day, name, maxSql, params) => db.query(
+      `INSERT INTO daily_counters (counter_date, counter_name, last_number)
+       SELECT $1::date, '${name}', COALESCE((${maxSql}), 0)
+       ON CONFLICT (counter_date, counter_name) DO UPDATE SET last_number = EXCLUDED.last_number`,
+      [day, ...params]
+    );
+
+    // Queue tickets, by the day of the visit. Parked on a placeholder first, so no two rows ever
+    // hold the same ticket on the same day while they move.
+    const visits = (await db.query(
+      `SELECT id, to_char(created_at, 'YYYY-MM-DD') AS day FROM patient_visits
+        WHERE id = ANY($1) AND queue_number IS NOT NULL ORDER BY created_at, id`,
+      [visitIds]
+    )).rows;
+    await db.query(
+      `UPDATE patient_visits SET queue_number = 'S' || id WHERE id = ANY($1) AND queue_number IS NOT NULL`,
+      [visitIds]
+    );
+    const maxTicket = `SELECT MAX(queue_number::int) FROM patient_visits
+      WHERE created_at >= $1::date AND created_at < $1::date + 1 AND queue_number ~ '^[0-9]+$'`;
+    for (const [day, list] of groupBy(visits, 'day')) {
+      const base = Number((await db.query(`${maxTicket}`, [day])).rows[0].max) || 0;
+      for (const [i, v] of list.entries()) {
+        await db.query('UPDATE patient_visits SET queue_number = $2 WHERE id = $1', [v.id, String(base + i + 1).padStart(4, '0')]);
+      }
+      await setCounter(day, 'queue', maxTicket, []);
+    }
+
+    // Receipts, by the day they were paid, in the clinic's RCT-YYYYMMDD-NNNN form.
+    const receipts = (await db.query(
+      `SELECT id, to_char(paid_at, 'YYYY-MM-DD') AS day, to_char(paid_at, 'YYYYMMDD') AS stamp FROM payments
+        WHERE patient_visit_id = ANY($1) AND receipt_number IS NOT NULL ORDER BY paid_at, id`,
+      [visitIds]
+    )).rows;
+    await db.query(
+      `UPDATE payments SET receipt_number = 'SEED-' || id WHERE patient_visit_id = ANY($1) AND receipt_number IS NOT NULL`,
+      [visitIds]
+    );
+    const maxReceipt = `SELECT MAX(substring(receipt_number from '-([0-9]+)$')::int) FROM payments WHERE receipt_number LIKE $2`;
+    for (const [day, list] of groupBy(receipts, 'day')) {
+      const prefix = `RCT-${list[0].stamp}-`;
+      const base = Number((await db.query(maxReceipt.replace('$2', '$1'), [`${prefix}%`])).rows[0].max) || 0;
+      for (const [i, p] of list.entries()) {
+        await db.query('UPDATE payments SET receipt_number = $2 WHERE id = $1', [p.id, `${prefix}${String(base + i + 1).padStart(4, '0')}`]);
+      }
+      await setCounter(day, 'receipt', maxReceipt, [`${prefix}%`]);
     }
   });
 }
