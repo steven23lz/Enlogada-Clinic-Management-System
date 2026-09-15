@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { OCCUPIES_SLOT, HOLD_EXPIRY_SQL } = require('../constants/slotHold');
+const { inTodaysQueue } = require('../constants/queueMembership');
 const db = require('../config/database');
 
 class AppointmentRepository {
@@ -132,7 +133,7 @@ class AppointmentRepository {
 
   async findById(id) {
     const queryText = `
-      SELECT a.*, pv.patient_id, pv.visit_type, pv.status as visit_status,
+      SELECT a.*, pv.patient_id, pv.visit_type, pv.status as visit_status, pv.queue_number,
              p.first_name, p.last_name
       FROM appointments a
       JOIN patient_visits pv ON a.patient_visit_id = pv.id
@@ -211,17 +212,16 @@ class AppointmentRepository {
              -- NULL unless this booking is itself in today's queue and still Pending. A booking
              -- for next Tuesday has no position, and a patient already billed is past the desk;
              -- in both cases there is no wait to state, and stating zero would be a claim rather
-             -- than an absence.
+             -- than an absence. A booking is in the queue once it is checked in [1.92.0], by the
+             -- same rule the staff queue counts with (constants/queueMembership.js).
              CASE
                WHEN pv.status = 'Pending'
-                    AND pv.created_at >= CURRENT_DATE
-                    AND pv.created_at < (CURRENT_DATE + 1)
+                    AND ${inTodaysQueue('pv')}
                THEN (
                  SELECT COUNT(*)::int
                    FROM patient_visits ahead
                   WHERE ahead.status = 'Pending'
-                    AND ahead.created_at >= CURRENT_DATE
-                    AND ahead.created_at < (CURRENT_DATE + 1)
+                    AND ${inTodaysQueue('ahead')}
                     -- Strictly earlier, with id breaking a tie the same way the staff queue's
                     -- window function does, so the two screens agree on who is in front of whom.
                     AND (ahead.created_at, ahead.id) < (pv.created_at, pv.id)

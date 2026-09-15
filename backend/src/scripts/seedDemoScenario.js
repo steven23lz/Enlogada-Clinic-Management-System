@@ -909,11 +909,9 @@ async function main() {
   }
 
   // A booking for a later day was made on an earlier one. [1.90.0] The API stamps a booking with
-  // today, and today's queue and till count every visit made today, so next week's bookings sat
-  // in today's queue, and in the billing queue as "waiting". Moved one to three days back, the
-  // way people book ahead. A booking for later TODAY keeps today's stamp, so it still checks in.
-  // (Not changed here: a booking made on an earlier day never joins the queue on its own day,
-  // because check-in does not move it to that day. See migrations.md [1.90.0].)
+  // today; moved one to three open days back, the way people book ahead. Since [1.92.0] a booking
+  // joins the queue only when it is checked in, so this is about the dates the history and the
+  // reports show, not about the queue. A booking for later TODAY keeps today's stamp.
   const seededPatients = [...records.values()].map((r) => r.patient.id);
   if (profiles.length > 0) seededPatients.push(profiles[0].id);
   const { rows: bookings } = await db.query(

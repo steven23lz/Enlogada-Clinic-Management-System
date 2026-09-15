@@ -318,12 +318,15 @@ class AppointmentService {
         // The referring physician goes on at creation rather than being written back afterwards
         // by hmoService: this path is minting the visit, so it can simply record it, and
         // assertVisitNamesReferrer then finds the visit already named one and has nothing to do.
-        const queueNumber = await visitRepository.getNextQueueNumber();
+        //
+        // No queue ticket. [1.92.0] A booking gets its ticket, and its place in the queue, when the
+        // desk checks the patient in (updateStatus). A ticket issued now would come from the day the
+        // booking was MADE, which for any booking made ahead is another day's line.
         const visit = await visitRepository.createVisit({
           patientId,
           visitType: 'Appointment',
           notes,
-          queueNumber,
+          queueNumber: null,
           createdBy,
           ...normaliseReferral(referral || {})
         });
@@ -409,7 +412,7 @@ class AppointmentService {
     // booking — and notifyRoles swallows its own errors, so it cannot fail the request either.
     await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
       title: 'New Appointment Booked',
-      message: `Queue #${outcome.queueNumber} — ${scheduledDate} at ${formatTime12(scheduledTime)}`,
+      message: `${outcome.appointment.appointment_reference} — ${scheduledDate} at ${formatTime12(scheduledTime)}`,
       type: 'info'
     });
 
@@ -718,9 +721,23 @@ class AppointmentService {
     // in the same instant — without it, a move that commits while this call waits on the row lock
     // would be confirmed on top of, leaving Confirmed against a date the patient was never told.
     // Other transitions stay unguarded: they are legitimate from more than one starting state.
-    const updated = status === 'Confirmed'
-      ? await appointmentRepository.updateAppointmentStatus(id, status, { expectedStatus: appointment.status })
-      : await appointmentRepository.updateAppointmentStatus(id, status);
+    //
+    // Checking in is also when a booking joins today's queue. [1.92.0] The visit is stamped with
+    // the moment the patient arrived and given today's next ticket, in the same transaction as the
+    // status, so a check-in never lands without its place in line or the reverse. Only the FIRST
+    // check-in moves it: confirming a booking that is already Confirmed must not send the patient
+    // to the back of the line with a new number. When the booking was made stays on the
+    // appointment row.
+    let joined = null;
+    const updated = await db.withTransaction(async () => {
+      const row = status === 'Confirmed'
+        ? await appointmentRepository.updateAppointmentStatus(id, status, { expectedStatus: appointment.status })
+        : await appointmentRepository.updateAppointmentStatus(id, status);
+      if (row && status === 'Confirmed' && appointment.status !== 'Confirmed') {
+        joined = await visitRepository.joinTodaysQueue(appointment.patient_visit_id);
+      }
+      return row;
+    });
 
     if (!updated) {
       const error = new Error(
@@ -739,7 +756,8 @@ class AppointmentService {
       await visitService.releaseVisitIfReady(appointment.patient_visit_id);
     }
 
-    return updated;
+    // The ticket goes back with the reply, so the desk can tell the patient their number.
+    return { ...updated, queue_number: joined?.queue_number ?? appointment.queue_number ?? null };
   }
 }
 

@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { inTodaysQueue } = require('../constants/queueMembership');
 
 class VisitRepository {
   async createVisit(
@@ -49,9 +50,11 @@ class VisitRepository {
   // (Receptionist's queue table) get total/pendingCount/processingCount/walkinCount back too,
   // computed server-side, so pagination doesn't break their KPI header cards.
   async findActiveVisits({ search, status, limit, offset } = {}) {
-    // Half-open range, not a ::date cast — the cast prevented idx_patient_visits_created from
-    // ever being used, so the active queue sequentially scanned every visit ever recorded.
-    const filters = [`pv.created_at >= CURRENT_DATE`, `pv.created_at < (CURRENT_DATE + 1)`, `pv.status IN ('Pending', 'Processing')`];
+    // Who is in today's queue is one shared rule (constants/queueMembership.js): opened today,
+    // Pending or Processing, and checked in if it came from a booking. [1.92.0] Its date test is a
+    // half-open range, not a ::date cast; the cast kept idx_patient_visits_created from ever being
+    // used, so the active queue sequentially scanned every visit ever recorded.
+    const filters = [inTodaysQueue('pv')];
     const params = [];
 
     if (status && status !== 'All') {
@@ -101,9 +104,7 @@ class VisitRepository {
                         OVER (ORDER BY pv.created_at, pv.id
                               ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0)::int AS patients_ahead
           FROM patient_visits pv
-         WHERE pv.created_at >= CURRENT_DATE
-           AND pv.created_at < (CURRENT_DATE + 1)
-           AND pv.status IN ('Pending', 'Processing')
+         WHERE ${inTodaysQueue('pv')}
       )
       SELECT pv.*, p.first_name, p.last_name, p.contact_number,
              pt.name as patient_type_name,
@@ -482,6 +483,31 @@ class VisitRepository {
   }
 
   /**
+   * Puts a checked-in booking into today's queue. [1.92.0]
+   *
+   * Stamps the visit with the moment the patient arrived and gives it today's next ticket. A
+   * booking holds no ticket until then (constants/queueMembership.js), and the time it was MADE
+   * stays on the appointment row. Called inside the check-in's transaction: the row lock keeps two
+   * check-ins from issuing two tickets, and only a Pending visit moves, so one already released,
+   * finished or cancelled keeps what it has and no number is spent on it.
+   *
+   * @returns {Promise<object|null>} The visit with its new ticket, or null if it did not move.
+   */
+  async joinTodaysQueue(visitId) {
+    const { rows } = await db.query('SELECT status FROM patient_visits WHERE id = $1 FOR UPDATE', [visitId]);
+    if (rows[0]?.status !== 'Pending') return null;
+    const queueNumber = await this.getNextQueueNumber();
+    const result = await db.query(
+      `UPDATE patient_visits
+          SET created_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, queue_number = $2
+        WHERE id = $1
+        RETURNING *`,
+      [visitId, queueNumber]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
    * How busy the clinic is right now, as COUNTS ONLY. [1.63.0]
    *
    * Backs a public endpoint, so the shape of this query is the privacy control: it selects no
@@ -489,7 +515,7 @@ class VisitRepository {
    * timestamp. Adding a column here is a decision about what the open internet can see, and the
    * comment is placed at the SELECT because that is where somebody would add one.
    *
-   * `status IN ('Pending','Processing')` matches findActiveVisits, so the public number and the
+   * `inTodaysQueue` is findActiveVisits' own rule [1.92.0], so the public number and the
    * receptionist's KPI card cannot disagree about what "in the clinic" means.
    *
    * Half-open range on the raw column, never `created_at::date` — a B-tree cannot serve a
@@ -500,12 +526,10 @@ class VisitRepository {
    */
   async countActiveForPublicStatus() {
     const queryText = `
-      SELECT COUNT(*) FILTER (WHERE status = 'Pending')::int    AS waiting,
-             COUNT(*) FILTER (WHERE status = 'Processing')::int AS in_progress
-        FROM patient_visits
-       WHERE created_at >= CURRENT_DATE
-         AND created_at < (CURRENT_DATE + 1)
-         AND status IN ('Pending', 'Processing')
+      SELECT COUNT(*) FILTER (WHERE pv.status = 'Pending')::int    AS waiting,
+             COUNT(*) FILTER (WHERE pv.status = 'Processing')::int AS in_progress
+        FROM patient_visits pv
+       WHERE ${inTodaysQueue('pv')}
     `;
     const result = await db.query(queryText);
     return result.rows[0] || { waiting: 0, in_progress: 0 };

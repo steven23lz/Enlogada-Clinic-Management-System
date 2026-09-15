@@ -141,13 +141,19 @@ const BookingPass = ({
 
       {/* ── The state ──────────────────────────────────────────────────────────────────────── */}
       <div className="flex flex-col items-center justify-center gap-2 sm:items-start">
-        {queueNumber && (
+        {/* A booking gets its ticket when the patient checks in at the desk. [1.92.0] Until then
+            the pass says so, rather than showing a number from the day it was booked. */}
+        {queueNumber ? (
           <span className="flex flex-col items-center gap-1 sm:items-start">
             <span className="text-meta font-bold uppercase tracking-wider text-ink-muted">
               Queue ticket
             </span>
             <DataBadge variant="queue" label="Queue ticket">{queueNumber}</DataBadge>
           </span>
+        ) : (
+          <p className="m-0 max-w-[16rem] text-center text-fine text-ink-soft sm:text-left">
+            Your queue number is given at the desk when you check in.
+          </p>
         )}
 
         {/* The answer to the question the ticket number does not answer. [1.62.0]

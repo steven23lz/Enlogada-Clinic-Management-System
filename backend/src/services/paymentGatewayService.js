@@ -160,11 +160,14 @@ class PaymentGatewayService {
     // the two disagree the authoritative bill wins — charging the sum of line items would
     // overcharge a partially-covered patient.
     const lineItemTotal = lineItems.reduce((sum, li) => sum + li.amount, 0);
+    // A booking paid from home has no queue ticket yet; it gets one at check-in. [1.92.0] Named by
+    // the visit instead, rather than printing "Queue #null" on the patient's receipt.
+    const visitLabel = visit.queue_number ? `Queue #${visit.queue_number}` : `Visit ${patientVisitId}`;
     const payableLineItems =
       lineItemTotal === toCentavos(totalAmount)
         ? lineItems
         : [{
-            name: `Diagnostic services — Queue #${visit.queue_number}`,
+            name: `Diagnostic services — ${visitLabel}`,
             amount: toCentavos(totalAmount),
             currency: 'PHP',
             quantity: 1
@@ -175,7 +178,7 @@ class PaymentGatewayService {
         attributes: {
           line_items: payableLineItems,
           payment_method_types: [gatewayMethod],
-          description: `Enlogada Clinic — Queue #${visit.queue_number}`,
+          description: `Enlogada Clinic — ${visitLabel}`,
           reference_number: `VISIT-${patientVisitId}`,
           success_url: `${env.FRONTEND_URL}/?payment=success&visit=${patientVisitId}`,
           cancel_url: `${env.FRONTEND_URL}/?payment=cancelled&visit=${patientVisitId}`,

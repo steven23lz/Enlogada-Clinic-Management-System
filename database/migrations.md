@@ -1,5 +1,49 @@
 # Database Migration & Schema History
 
+## [1.92.0] - 2026-09-15 (A booking joins the queue when the patient checks in)
+
+No migration: `queue_number` was already nullable, and the unique ticket index skips NULL.
+
+Steven's pick of the two fixes [1.90.0] left open. The other, counting a visit by its appointment
+date, would have changed every "today" list and still needed a new ticket on the day.
+
+- **What was wrong.** A booking joined the queue on the day it was MADE, with a ticket from that
+  day's counter. Next week's bookings sat in today's Desk queue and at the till as "waiting". A
+  booking made last week never joined the queue on its own day, so a patient who booked ahead and
+  came in unpaid could not be found at the till, a department's worklist showed them waiting since
+  the day they booked (and first in line), and the reports counted a wait of days.
+- **Now.** Check-in (`appointmentService.updateStatus` to Confirmed) stamps the visit with the
+  moment the patient arrived and gives it today's next ticket, in the same transaction as the
+  status. Only the first check-in does it; confirming again keeps the place and the number. The
+  reply carries the ticket, and the Desk says it ("Checked in with queue ticket 0021").
+- A booking has no ticket until then. The booking confirmation, the pass and the emails say the
+  number is given at the desk when you check in. The Desk's check-in and no-show dialogs and the
+  staff notification for a new booking name it by its reference, and an online payment for one is
+  described by its visit rather than as "Queue #null".
+- **One rule for who is in the queue**, `constants/queueMembership.js`: opened today, Pending or
+  Processing, and checked in if it came from a booking. The Desk and the till, the public "how busy"
+  count and the patient's own "people ahead of you" all read it.
+- The reception wait (check-in to payment) leaves out a visit paid before it joined the queue. A
+  booking paid from home would otherwise count as a negative wait.
+- The time a booking was made stays on the appointment row.
+
+### Tests
+
+- booking-queue.spec (new): a booking has no ticket and is in neither the queue nor the public
+  count; check-in hands back today's ticket; the visit is then in the queue with it, starting now;
+  and a second check-in keeps the same ticket.
+- receipt-scan-queue.spec's "the patient and the receptionist are shown the same number" books and
+  checks in its own booking. It relied on a booking already sitting in today's queue, which no
+  longer happens by itself, so it would have been skipped.
+
+### Checked
+
+- The booking, check-in and queue specs (74) passed, then the full suite: 430 passed, 0 skipped.
+  81 backend and 108 frontend unit tests, lint (with the fill-role and contrast checks), the build
+  and prose_scan: clean.
+- Each changed query run directly against the database: the Desk queue, the public count, the
+  patient's own "people ahead" and the reception wait.
+
 ## [1.91.0] - 2026-09-15 (The patient portal's header spreads once the page scrolls, like the public site's)
 
 No migration. Frontend only.

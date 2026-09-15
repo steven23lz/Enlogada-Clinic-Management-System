@@ -146,7 +146,12 @@ const BookingConfirmation = ({
           </div>
           <div className="space-y-0.5">
             <span className="field-label">Queue Ticket</span>
-            <span className="text-lg font-extrabold text-brand-600">{queueNumber}</span>
+            {/* A booking gets its ticket when the patient checks in at the desk. [1.92.0] */}
+            {queueNumber ? (
+              <span className="text-lg font-extrabold text-brand-600">{queueNumber}</span>
+            ) : (
+              <span className="block text-fine text-ink-soft">Given at the desk when you check in</span>
+            )}
           </div>
         </div>
 

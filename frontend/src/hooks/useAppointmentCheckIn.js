@@ -91,11 +91,14 @@ export function useAppointmentCheckIn({ onCheckedIn } = {}) {
         // releases the ticket to the modalities only once payment has also landed — this screen
         // no longer PATCHes the visit status itself, which used to push unpaid visits straight
         // onto the diagnostic worklists.
-        await api.patch(`/appointments/${appointmentId}/status`, { status: 'Confirmed' });
+        // Checking in is when a booking gets its queue ticket [1.92.0]; the reply carries it.
+        const res = await api.patch(`/appointments/${appointmentId}/status`, { status: 'Confirmed' });
+        const ticket = res.data?.data?.appointment?.queue_number;
+        const checkedIn = ticket ? `Checked in with queue ticket ${ticket}` : 'Checked in';
         setNotice(
           isPaid
-            ? 'Checked in and released — the ticket is now on the department worklist.'
-            : 'Checked in. Payment is still outstanding, so please send the patient to the cashier — the ticket reaches the department once payment is confirmed.'
+            ? `${checkedIn}, and released — the ticket is now on the department worklist.`
+            : `${checkedIn}. Payment is still outstanding, so please send the patient to the cashier — the ticket reaches the department once payment is confirmed.`
         );
         setReference('');
         setResult(null);

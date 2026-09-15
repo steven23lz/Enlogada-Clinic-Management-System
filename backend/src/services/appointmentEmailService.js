@@ -66,10 +66,14 @@ const detailTable = ({ reference, date, time, queueNumber }) => `
     ${arrivalTimeFor(time) ? `<tr><td style="padding:4px 16px 4px 0;color:#64748b;">Recommended arrival</td>
         <td style="padding:4px 0;"><strong>${esc(readableTime(arrivalTimeFor(time)))}</strong>
         <span style="color:#64748b;">for front-desk check-in</span></td></tr>` : ''}
-    ${queueNumber ? `<tr><td style="padding:4px 16px 4px 0;color:#64748b;">Queue</td>
-        <td style="padding:4px 0;"><strong>${esc(queueNumber)}</strong></td></tr>` : ''}
+    <tr><td style="padding:4px 16px 4px 0;color:#64748b;">Queue</td>
+        <td style="padding:4px 0;">${queueNumber
+          ? `<strong>${esc(queueNumber)}</strong>`
+          : '<span style="color:#64748b;">Given at the desk when you check in</span>'}</td></tr>
   </table>
 `;
+// A booking has no queue ticket until the patient checks in [1.92.0], so the row says where the
+// number comes from rather than disappearing, which read as the email having left it out.
 
 /**
  * Preparation instructions, one per test that has any.

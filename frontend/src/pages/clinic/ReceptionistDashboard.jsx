@@ -443,7 +443,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
           title="Confirm Check-In"
           description={
             checkIn.target?.type === 'appointment'
-              ? `Check in ${checkIn.target.data.first_name} ${checkIn.target.data.last_name} (Queue ${checkIn.target.data.queue_number})? This confirms their appointment and moves them into processing.`
+              ? `Check in ${checkIn.target.data.first_name} ${checkIn.target.data.last_name} (${checkIn.target.data.appointment_reference})? This confirms their appointment and gives them today's queue ticket.`
               : checkIn.target?.type === 'walkin'
               ? `Check in ${checkIn.target.data.first_name} ${checkIn.target.data.last_name} as a walk-in? This creates a new visit and queue ticket.`
               : ''
@@ -469,7 +469,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
           open={!!disposition.noShow.target}
           onOpenChange={(open) => { if (!open) disposition.noShow.dismiss(); }}
           title="Mark as No-Show"
-          description={disposition.noShow.target && `Mark ${disposition.noShow.target.first_name} ${disposition.noShow.target.last_name}'s appointment (Queue ${disposition.noShow.target.queue_number}) as a no-show? This does not check them in.`}
+          description={disposition.noShow.target && `Mark ${disposition.noShow.target.first_name} ${disposition.noShow.target.last_name}'s appointment (${disposition.noShow.target.appointment_reference}) as a no-show? This does not check them in.`}
           confirmLabel="Mark No-Show"
           onConfirm={disposition.noShow.confirm}
           loading={disposition.noShow.submitting}

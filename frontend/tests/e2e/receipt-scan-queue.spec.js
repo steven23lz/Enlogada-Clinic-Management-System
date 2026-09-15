@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
+import { nthWorkingDay } from './helpers/dates.js';
 
 // Two features that both offer a number to a person, and must never be mistaken for deciding one.
 // [1.62.0]
@@ -199,11 +200,28 @@ test.describe('Queue wait estimates', () => {
     const staff = await login('receptionist@enlogada.com');
     const client = await login('client@enlogada.com');
 
-    const queue = (await (await ctx.get(`${API}/visits/active?limit=200`, { headers: auth(staff) })).json()).data.visits;
+    // A booking is in today's queue once the desk checks it in [1.92.0], so this makes one rather
+    // than relying on an earlier spec having left one there. Unpaid, so it stays Pending and waits.
+    const profile = (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth(client) })).json()).data.patients[0];
+    const date = nthWorkingDay(150 + (Date.now() % 60));
+    const slot = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth(client) })).json())
+      .data.slots.find((s) => s.available);
+    expect(slot, `a free slot on ${date}`).toBeTruthy();
+    const booked = (await (await ctx.post(`${API}/appointments`, {
+      headers: auth(client),
+      data: { patientId: profile.id, scheduledDate: date, scheduledTime: slot.time },
+    })).json()).data.appointment;
+    expect((await ctx.patch(`${API}/appointments/${booked.id}/status`, {
+      headers: auth(staff), data: { status: 'Confirmed' },
+    })).status(), 'the desk checks the booking in').toBe(200);
+
+    const queue = (await (await ctx.get(
+      `${API}/visits/active?limit=200&search=${encodeURIComponent(profile.last_name)}`, { headers: auth(staff) }
+    )).json()).data.visits;
     const bookings = (await (await ctx.get(`${API}/appointments/my-bookings`, { headers: auth(client) })).json()).data.bookings;
 
     const estimated = bookings.filter((b) => b.estimated_wait_minutes != null);
-    test.skip(estimated.length === 0, 'Need a client booking in today\'s queue.');
+    expect(estimated.length, 'the booking just checked in carries an estimate').toBeGreaterThan(0);
 
     const byVisit = new Map(queue.map((v) => [v.id, v]));
     let compared = 0;

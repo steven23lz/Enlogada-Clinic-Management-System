@@ -240,11 +240,14 @@ class ReportRepository {
         COUNT(*) FILTER (WHERE pv.visit_type <> 'Walk in')::int          AS appointments,
         COUNT(*) FILTER (WHERE pv.status = 'Cancelled')::int             AS cancelled,
         COUNT(*) FILTER (WHERE pv.status = 'Completed')::int             AS completed,
+        -- Only a visit paid AFTER it joined the queue waited for the till. A booking paid from
+        -- home joins the queue at check-in, after its payment [1.92.0], and would otherwise
+        -- count as a negative wait.
         COALESCE(AVG(EXTRACT(EPOCH FROM (pay.paid_at - pv.created_at)) / 60)
-                 FILTER (WHERE pay.paid_at IS NOT NULL), 0)::int         AS avg_wait_minutes,
+                 FILTER (WHERE pay.paid_at >= pv.created_at), 0)::int    AS avg_wait_minutes,
         COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (
                    ORDER BY EXTRACT(EPOCH FROM (pay.paid_at - pv.created_at)) / 60
-                 ), 0)::int                                              AS median_wait_minutes
+                 ) FILTER (WHERE pay.paid_at >= pv.created_at), 0)::int  AS median_wait_minutes
       FROM patient_visits pv
       LEFT JOIN LATERAL (
         SELECT MIN(p2.paid_at) AS paid_at
