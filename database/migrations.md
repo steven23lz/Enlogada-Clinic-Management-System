@@ -1,5 +1,36 @@
 # Database Migration & Schema History
 
+## [1.88.0] - 2026-09-15 (The public header spreads into a full-width bar when the page scrolls)
+
+No migration. Frontend only.
+
+### What was wrong
+
+The public site's header is a glass pill floating 12 px below the top edge and in from the sides.
+Once the page scrolled, content slid up past its sides and top and ran into it: on a phone, "Why
+patients choose Enlogada" sat against the pill's lower edge with its icon half under it. Steven
+asked for it to spread out like an ordinary header once the page scrolls.
+
+### What changed
+
+- `PublicHeader`: at the top of a page it is the same floating pill. Once the page scrolls (12 px,
+  `useScrolled`) it spreads over 300 ms into a full-width bar that meets the top and side edges,
+  on the plain surface colour with a hairline under it.
+- The logo and links do not move while it spreads: the header's side and top padding moves into
+  the bar over the same 300 ms. Its height does not change either (the 12 px above the pill
+  becomes 6 px above and below the bar), so a sticky header cannot nudge the page and flicker at
+  the threshold.
+- The phone menu keeps its side gutter once the bar has spread. Reduced motion turns the
+  transition off.
+
+### Checked
+
+- Screenshots of Home at 1440 and 390 px, at the top and at three points down the page: the bar
+  meets the edges, and nothing shows above or beside it.
+- `npm run lint`, including the contrast check, is clean. The spread bar is the surface token, so
+  its inks are the app's ordinary ones.
+- public-site.spec and the full suite: 428 passed, 0 skipped.
+
 ## [1.87.0] - 2026-09-15 (A phone downloads the public site, not the whole app)
 
 No migration. Frontend only.

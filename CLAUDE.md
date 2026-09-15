@@ -916,7 +916,8 @@ Services Catalogue.
   found four separate times; it is the single most repeated dark-mode mistake in this codebase.
 - **The public site has a colouring layer of its own: Aurora (option A1).** `[1.72.0]` Steven kept
   today's palette and chose to have it applied with more depth — a mesh-gradient hero (`.aurora`),
-  gradient headline text (`.text-gradient-aurora`), a frosted header (`.glass-pill`), gradient card
+  gradient headline text (`.text-gradient-aurora`), a frosted header (`.glass-pill`; a pill only at
+  the top of a page, spreading into a plain full-width bar once it scrolls `[1.88.0]`), gradient card
   edges (`.edge-gradient`), a tinted page ground (`.wash-aurora`) and a gradient call to action
   (`<Button variant="brand">`: `bg-gradient-brand` + `shadow-glow`). None of it adds a hue.
   **Every piece is measured, not trusted:** `checkContrast.js` reads the `.aurora` and `.glass-pill`

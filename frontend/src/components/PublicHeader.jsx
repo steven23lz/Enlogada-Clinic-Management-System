@@ -18,17 +18,17 @@ const NAV_LINKS = [
 ];
 
 /**
- * The public site's header: a floating glass pill. [1.72.0]
+ * The public site's header: a floating glass pill that spreads into a full-width bar. [1.72.0]
  *
  * The reference design's navbar — rounded, frosted, floating a little below the top edge — over
  * the Aurora colouring. `overlay` fixes it over a full-height hero (Home); everywhere else it is
- * sticky and takes its own space. Once the page scrolls it tightens and lifts, so it reads as
- * floating over content rather than sitting in the hero.
+ * sticky and takes its own space. Once the page scrolls it spreads into an ordinary full-width
+ * header [1.88.0]; see the bar below for why and how.
  *
  * The glass is `.glass-pill`, whose opacity is held by scripts/checkContrast.js: every ink used on
  * it here (ink, ink-soft, brand-700) is measured on the glass composited over the hero's brightest
  * glow. That is why the subtitle is ink-soft and not the lighter ink-muted, which measures 4.46:1
- * there.
+ * there. The spread bar is the plain surface token, where the same inks are the app's own.
  *
  * ── Where the row changes shape, and why there ───────────────────────────────────────────────────
  * Measured at 390–1440px at the default text size AND at "Larger", because a patient's choice in
@@ -109,109 +109,128 @@ const PublicHeader = ({ currentTab = '', onNavigate, overlay = false }) => {
   return (
     <header
       ref={headerRef}
-      className={cn('z-50 w-full px-3 pt-3 sm:px-4', overlay ? 'fixed inset-x-0 top-0' : 'sticky top-0')}
+      className={cn(
+        'z-50 w-full transition-[padding] duration-300 ease-out motion-reduce:transition-none',
+        overlay ? 'fixed inset-x-0 top-0' : 'sticky top-0',
+        scrolled ? 'px-0 pt-0' : 'px-3 pt-3 sm:px-4'
+      )}
     >
+      {/* The bar. At the top of the page it is the floating glass pill; once the page scrolls it
+          spreads into an ordinary full-width header with a hairline under it. [1.88.0] Steven saw
+          the page sliding past the pill's sides and top and running into it; a bar that meets the
+          edges leaves nothing to slide past.
+
+          Two things are held constant while it spreads. The header's side and top padding moves
+          INTO the bar over the same 300ms, so the logo and links stay exactly where they were.
+          And the height never changes (12px of padding above the pill becomes 6px above and below
+          the bar, and the border is 1px in both), so a sticky header cannot nudge the page and
+          flicker at the threshold. */}
       <div
         className={cn(
-          'glass-pill mx-auto flex w-full max-w-6xl items-center justify-between gap-2 rounded-full pl-2.5 pr-2 transition-[box-shadow,padding] duration-300 sm:pl-3',
-          scrolled ? 'py-1.5 shadow-float' : 'py-2 shadow-raised'
+          'mx-auto w-full border transition-[max-width,border-radius,padding,background-color,border-color] duration-300 ease-out motion-reduce:transition-none',
+          scrolled
+            ? 'max-w-full rounded-none border-x-transparent border-t-transparent border-b-line bg-surface px-3 py-1.5 sm:px-4'
+            : 'glass-pill max-w-6xl rounded-[1.75rem] shadow-raised'
         )}
       >
-        {/* Brand. The mark sits on a white chip in both themes: the logo's green and azure measure
-            only 2.8–4.3:1 on a dark ground, so it always gets a light one. */}
-        <button
-          type="button"
-          onClick={() => go('home')}
-          className="flex flex-shrink-0 cursor-pointer items-center gap-2.5 border-0 bg-transparent p-0 text-left"
-        >
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-white">
-            <Logo className="h-7 w-7" />
-          </span>
-          <span className="flex flex-col leading-tight">
-            <span className="text-lead font-bold tracking-tight text-ink">ENLOGADA</span>
-            {/* Beside the burger there is room for it; on the compact desktop row there is not. */}
-            <span className="hidden text-micro font-semibold uppercase tracking-[0.12em] text-ink-soft sm:block lg:hidden xl:block">
-              Ultrasound &amp; Diagnostic Clinic
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 py-2 pl-2.5 pr-2 sm:pl-3">
+          {/* Brand. The mark sits on a white chip in both themes: the logo's green and azure measure
+              only 2.8–4.3:1 on a dark ground, so it always gets a light one. */}
+          <button
+            type="button"
+            onClick={() => go('home')}
+            className="flex flex-shrink-0 cursor-pointer items-center gap-2.5 border-0 bg-transparent p-0 text-left"
+          >
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-white">
+              <Logo className="h-7 w-7" />
             </span>
-          </span>
-        </button>
+            <span className="flex flex-col leading-tight">
+              <span className="text-lead font-bold tracking-tight text-ink">ENLOGADA</span>
+              {/* Beside the burger there is room for it; on the compact desktop row there is not. */}
+              <span className="hidden text-micro font-semibold uppercase tracking-[0.12em] text-ink-soft sm:block lg:hidden xl:block">
+                Ultrasound &amp; Diagnostic Clinic
+              </span>
+            </span>
+          </button>
 
-        {/* Desktop */}
-        <div className="hidden items-center gap-1 lg:flex xl:gap-1.5">
-          <nav aria-label="Main" className="flex items-center gap-0.5">
-            {NAV_LINKS.map((link) => (
-              <button
-                key={link.id}
-                type="button"
-                onClick={() => go(link.id)}
-                aria-current={currentTab === link.id ? 'page' : undefined}
-                className={navButton(currentTab === link.id)}
-              >
-                {link.label}
-              </button>
-            ))}
-            {!user && (
-              <button type="button" onClick={goFaq} className={cn(navButton(false), 'hidden xl:inline-flex')}>
-                FAQ
-              </button>
+          {/* Desktop */}
+          <div className="hidden items-center gap-1 lg:flex xl:gap-1.5">
+            <nav aria-label="Main" className="flex items-center gap-0.5">
+              {NAV_LINKS.map((link) => (
+                <button
+                  key={link.id}
+                  type="button"
+                  onClick={() => go(link.id)}
+                  aria-current={currentTab === link.id ? 'page' : undefined}
+                  className={navButton(currentTab === link.id)}
+                >
+                  {link.label}
+                </button>
+              ))}
+              {!user && (
+                <button type="button" onClick={goFaq} className={cn(navButton(false), 'hidden xl:inline-flex')}>
+                  FAQ
+                </button>
+              )}
+            </nav>
+
+            <ContactPopover />
+
+            <span aria-hidden="true" className="mx-1 h-5 w-px bg-line" />
+            <ThemeToggle className="rounded-full" />
+
+            {user ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => go('dashboard')}
+                  className="flex cursor-pointer items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-3 text-fine font-semibold text-ink transition-colors hover:bg-sunken"
+                >
+                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700">
+                    <User className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="whitespace-nowrap">{user.firstName}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={logOut}
+                  className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-3 py-1.5 text-fine font-semibold text-ink-soft transition-colors hover:bg-sunken hover:text-ink"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span>Log Out</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={() => go('login')} className={navButton(false)}>
+                  Sign In
+                </button>
+                <Button variant="brand" size="sm" onClick={() => go('register')} className="rounded-full px-3.5 xl:px-4">
+                  Create Account
+                </Button>
+              </>
             )}
-          </nav>
+          </div>
 
-          <ContactPopover />
-
-          <span aria-hidden="true" className="mx-1 h-5 w-px bg-line" />
-          <ThemeToggle className="rounded-full" />
-
-          {user ? (
-            <>
-              <button
-                type="button"
-                onClick={() => go('dashboard')}
-                className="flex cursor-pointer items-center gap-2 rounded-full border border-line bg-surface py-1 pl-1 pr-3 text-fine font-semibold text-ink transition-colors hover:bg-sunken"
-              >
-                <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700">
-                  <User className="h-3.5 w-3.5" />
-                </span>
-                <span className="whitespace-nowrap">{user.firstName}</span>
-              </button>
-              <button
-                type="button"
-                onClick={logOut}
-                className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-3 py-1.5 text-fine font-semibold text-ink-soft transition-colors hover:bg-sunken hover:text-ink"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                <span>Log Out</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" onClick={() => go('login')} className={navButton(false)}>
-                Sign In
-              </button>
-              <Button variant="brand" size="sm" onClick={() => go('register')} className="rounded-full px-3.5 xl:px-4">
-                Create Account
-              </Button>
-            </>
-          )}
+          {/* Phone and tablet toggle */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            aria-controls="public-menu"
+            className="flex h-9 w-9 flex-shrink-0 cursor-pointer items-center justify-center rounded-full border border-line bg-surface text-ink-soft transition-colors hover:text-ink lg:hidden"
+          >
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
-
-        {/* Phone and tablet toggle */}
-        <button
-          type="button"
-          onClick={() => setMenuOpen((o) => !o)}
-          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={menuOpen}
-          aria-controls="public-menu"
-          className="flex h-9 w-9 flex-shrink-0 cursor-pointer items-center justify-center rounded-full border border-line bg-surface text-ink-soft transition-colors hover:text-ink lg:hidden"
-        >
-          {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
       </div>
 
       {/* The panel. Full width on a phone; on a tablet a dropdown under the right end of the pill,
-          because a sheet the width of an iPad for four links reads as a page, not a menu. */}
+          because a sheet the width of an iPad for four links reads as a page, not a menu. Once the
+          bar has spread the header has no side padding of its own, so the panel keeps the gutter. */}
       {menuOpen && (
-        <div className="mx-auto mt-2 flex max-w-6xl justify-end lg:hidden">
+        <div className={cn('mx-auto mt-2 flex max-w-6xl justify-end lg:hidden', scrolled && 'px-3 sm:px-4')}>
           <div
             id="public-menu"
             data-testid="public-menu"
