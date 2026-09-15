@@ -158,7 +158,7 @@ The worst of it is `notification_reads`, which is a **fan-out** table: `notifyRo
 ```bash
 cd backend  && npm test        # 81 unit tests, node:test, ZERO dependencies, ~0.4s
 cd frontend && npm run test:unit # 108 unit tests, vitest, ~1.5s
-cd frontend && npm test        # 428 Playwright E2E, ~11m, needs both dev servers
+cd frontend && npm test        # 429 Playwright E2E, ~11m, needs both dev servers
 ```
 
 The unit tier covers the pure, deterministic rules where the *arithmetic* is the thing at risk:
@@ -177,7 +177,7 @@ each other's files.
 it is a function you could call from a REPL, it is a unit test — and it belongs there, because a
 7-minute suite is not where you want to discover that a rounding rule changed.
 
-There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 64 Playwright specs (428 tests, ~11m) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. See the tiers above.
+There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 64 Playwright specs (429 tests, ~11m) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. See the tiers above.
 
 The suite is a deliberately small demo-and-regression net, not exhaustive coverage: smoke, security boundaries (`api-authorization.spec.js` — Admin-vs-SuperAdmin separation of duties, combined-role access, and the cross-role PHI boundaries), ticket-release gating, payments, laboratory results, statutory discounts (`discounts.spec.js`), result amendment history and critical values (`result-versioning.spec.js`), password-change session revocation (`session-revocation.spec.js`), account lockout and PHI read auditing (`login-protection.spec.js`), permission-matrix enforcement (`rbac-enforcement.spec.js`), department-scoped patient records (`department-scoping.spec.js`), the per-department operations report (`operations-report.spec.js`), atomic online booking with its HMO card evidence rule (`booking-atomicity.spec.js`), the two dialogs that feature added (`hmo-card-review.spec.js` — because a card that uploads correctly and then renders as a broken image on the approval screen is a working feature failing at its job), moving a booking rather than cancelling it (`appointment-reschedule.spec.js`, plus `reschedule-ui.spec.js` for the dialog), when a visit must name the doctor who requested the test (`referring-physician.spec.js`), correcting a patient record (`patient-edit.spec.js` / `patient-edit-ui.spec.js`), what the patient is told about their own booking (`booking-communication.spec.js`), that the ETag revalidation cache never hides a change (`revalidation.spec.js`), that each role can see what it needs on the screen where it acts (`workflow-context.spec.js`), registering a walk-in in one pass (`walkin-registration.spec.js`), the patient journey at phone width (`mobile-patient.spec.js`), what an HMO decision has to record before it counts as one (`hmo-decision-trail.spec.js` — a refusal that names no reason leaves the cashier explaining a charge nobody wrote down), the three-step claim workflow itself (`hmo-claim-handoff.spec.js` — reception raises it, an Admin decides it, and the cashier has to be TOLD), and that a failed request never renders as an empty one (`failure-states.spec.js` — six screens shipped without an error branch, so a 500 fell through to the empty state and the app stated "Today's Revenue ₱0.00" over a day that took ₱8,344; `[1.74.0]` added the screens each role lands on, whose counters start at zero and stayed there on a failure), that a critical-result call can be recorded from the worklist that counts it (`critical-callback.spec.js` — the tile counted the calls owed and nothing on screen could record one), that Transaction History's takings answer for the dates its receipt list shows (`takings-range.spec.js`), that the front desk finds a booking, a record or nobody from one box and never offers a second visit to someone already in the queue (`front-desk.spec.js`), that each sidebar count is the number its screen shows and an action is on screen once (`sidebar.spec.js`), that every member of staff lands on Today, where each item has the button that deals with it and a button that opens another screen arrives already doing it (`today.spec.js`), that SuperAdmin assigns access on the "Who sees what" grid, where every switch says in words what it will change and nothing is saved until Save (`access-grid.spec.js`), that every screen's heading and breadcrumb are its sidebar name (`screen-names.spec.js`), that the patient portal's Home says what is owed and what it could not check, and its phone tab bar covers nothing (`portal-home.spec.js`), and that a reversed receipt is both still listed and not counted (`cashup-reversals.spec.js` — see the note under Architecture; the log and the money are two different questions, and this spec fails if either half is answered with the other), and that the reader's chosen text size scales the whole interface without inverting its own type ramp (`text-scale.spec.js` — a pixel-pinned font size looks perfect at the default and misbehaves only for the people who changed it), and that a patient can pay into the clinic's own account and only a cashier can turn that into money (`manual-payment.spec.js` — publishing an account number is SuperAdmin alone, and the amount a patient CLAIMS never becomes the amount they are charged), and that a package deal bills its own fixed price rather than the sum of its parts, with every component reaching its own department (`packages.spec.js` — a bundle that costs more than buying the parts separately is a surcharge wearing the word "package"), and that updating a service does not delete the fields the caller did not mention (`catalogue-partial-update.spec.js` — the status toggle used to wipe a test's patient preparation, which is the sentence the day-before reminder carries). It was cut down from ~200 tests once the module-by-module build-out finished; the rest asserted UI copy that legitimately keeps changing. Prefer adding a focused spec over reviving deleted ones from git history.
 
@@ -859,7 +859,8 @@ with a link to the printable document.
 - **The patient portal is layout A2, in the Flat colouring.** `[1.81.0]` Steven's pick from the
   gallery.
   - **The shell:** `components/portal/PortalLayout` holds a solid header pill (`PortalHeader`: the
-    logo, the tabs on a screen 1280 px and wider, the "Viewing" patient chip, the account menu) and
+    logo, the tabs on a screen 1280 px and wider, the "Viewing" patient chip, the account menu),
+    which spreads into a full-width bar once the page scrolls `[1.91.0]`, and
     ONE list of tabs. It sits in the header when the screen is wide and in a bar fixed to the bottom
     otherwise, never both, so each tab name is on the page once. 1280, not 1024, because a media
     query ignores the reader's text size, and at 1024 with Larger text the pill overflowed.
@@ -936,6 +937,14 @@ Services Catalogue.
   the header's ink on the glass composited over each of those. That is how the header opacity that
   looked best, 0.74, was caught at 4.24:1; it is 0.88. `shadow-glow` is the one exception to
   "shadow means this floats" — the public call to action only, never a console, never a panel.
+- **Every header floats at the top of a page and spreads into a full-width bar once it scrolls.**
+  `[1.91.0]` Steven's rule, after [1.88.0] did it on the public site and the portal kept its pill.
+  `PublicHeader` and `PortalHeader` each do it with `useScrolled(12)`, moving the header's padding
+  into the bar so nothing inside it moves; the staff consoles' top bar (`SidebarLayout`) is a
+  full-width bar already. The bar carries `data-testid="header-bar"`, and `helpers/header.js`
+  holds both headers to it. A new header does the same. Full width ends at the scrollbar: `html`
+  has `scrollbar-gutter: stable`, so the page is 1270 px on a 1280 px viewport, and a check that
+  compares with `clientWidth` fails a header that is right.
 - **Scroll-reveal is CSS, driven by `components/public/Reveal.jsx`.** `[1.72.0]` `variant` picks the
   motion (fade-up, slide-left, slide-right, rise — timings measured from the reference site) and
   `index` staggers a group by 180ms. Reduced motion makes it instant, including the DELAY, which the

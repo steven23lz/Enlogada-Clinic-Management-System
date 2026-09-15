@@ -1,5 +1,31 @@
 # Database Migration & Schema History
 
+## [1.91.0] - 2026-09-15 (The patient portal's header spreads once the page scrolls, like the public site's)
+
+No migration. Frontend only.
+
+- [1.88.0] made the public site's floating header spread into a full-width bar once the page
+  scrolls. The patient portal draws its own header (`PortalHeader`), and it kept floating as a pill
+  12px below the top, with the page sliding past its sides and top. Steven: every header must
+  spread. It now does, the same way: the header's side and top padding moves into the bar over
+  300ms, so the logo, the tabs and the patient chip stay where they are, and the height does not
+  change. The shadow goes with the float; the spread bar has a hairline under it. My Account uses
+  the same layout, so it spreads too. The staff consoles' top bar was already a full-width bar.
+- Both headers mark the bar `data-testid="header-bar"`, and `tests/e2e/helpers/header.js` checks
+  that it floats at the top, meets the top edge and both sides once scrolled, and floats again
+  back at the top. public-site.spec gains a test for it (Home at 1280), and portal-home.spec's
+  phone test runs it at 390. [1.88.0] had shipped with no test.
+- Found while writing that check: full width ends at the scrollbar. `html` has
+  `scrollbar-gutter: stable` and a 10px scrollbar, so the page is 1270px wide on a 1280px viewport
+  and the bar runs exactly to the scrollbar. The first version of the check compared with
+  `clientWidth` (1280) and failed a header that was right.
+
+### Checked
+
+- portal-home.spec and public-site.spec: 20 passed. Lint (with the fill-role and contrast checks),
+  108 frontend and 81 backend unit tests, the build and prose_scan: clean.
+- The full suite: 429 passed, 0 skipped.
+
 ## [1.90.0] - 2026-09-15 (A report opened from History shows its values; the demo's numbers read true)
 
 No migration.

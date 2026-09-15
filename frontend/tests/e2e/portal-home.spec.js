@@ -5,6 +5,7 @@ import { registerClient } from './helpers/accounts.js';
 import { fixturePerson } from './helpers/people.js';
 import { nthWorkingDay } from './helpers/dates.js';
 import { PORTAL_TABS, openPortalTab } from './helpers/portal.js';
+import { expectHeaderSpreadsOnScroll } from './helpers/header.js';
 
 /**
  * The patient portal's Home, and the shell around every tab. [1.81.0]
@@ -156,6 +157,9 @@ test.describe('on a phone', () => {
     const box = await bar.boundingBox();
     expect(box, 'the bar should have a box').toBeTruthy();
     expect(Math.abs((box?.y ?? 0) + (box?.height ?? 0) - 844), 'the bar should sit on the bottom edge').toBeLessThanOrEqual(1);
+
+    // The header at the top does what the public site's does: floats, then spreads once scrolled.
+    await expectHeaderSpreadsOnScroll(page, 400);
 
     const measured = await page.evaluate(() => {
       window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });

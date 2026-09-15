@@ -126,6 +126,7 @@ const PublicHeader = ({ currentTab = '', onNavigate, overlay = false }) => {
           the bar, and the border is 1px in both), so a sticky header cannot nudge the page and
           flicker at the threshold. */}
       <div
+        data-testid="header-bar"
         className={cn(
           'mx-auto w-full border transition-[max-width,border-radius,padding,background-color,border-color] duration-300 ease-out motion-reduce:transition-none',
           scrolled

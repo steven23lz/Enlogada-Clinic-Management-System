@@ -1,5 +1,6 @@
 // @ts-check
 import { test, expect } from 'playwright/test';
+import { expectHeaderSpreadsOnScroll } from './helpers/header.js';
 
 /**
  * The public site, held to what a visitor needs from it. [1.72.0]
@@ -64,6 +65,11 @@ test('About states the same address as the rest of the site, not a copy of its o
   const address = (await page.getByTestId('about-address').textContent())?.trim();
   expect(address, 'About shows an address').toBeTruthy();
   await expect(page.locator('footer')).toContainText(/** @type {string} */ (address));
+});
+
+test('the header floats at the top of a page and spreads into a full-width bar once it scrolls', async ({ page }) => {
+  await open(page, 'Home');
+  await expectHeaderSpreadsOnScroll(page);
 });
 
 test('the moving hero can be paused', async ({ page }) => {
