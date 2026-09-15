@@ -224,6 +224,16 @@ async function main() {
         AND NOT EXISTS (SELECT 1 FROM visit_tests vt WHERE vt.package_id = p.id)`
   );
 
+  // Payment channel fixtures, by the same rule. [1.89.0] manual-payment and proof-review publish an
+  // "E2E GCash channel" and an "E2E Bank channel" on every run, then hide them, because a channel
+  // is retired rather than deleted. 64 had built up on SuperAdmin's Payment Methods, the screen
+  // where the clinic's real account number is typed. A channel any surviving proof names stays.
+  await db.query(
+    `DELETE FROM payment_methods pm
+      WHERE pm.label LIKE 'E2E %'
+        AND NOT EXISTS (SELECT 1 FROM payment_submissions ps WHERE ps.payment_method_id = pm.id)`
+  );
+
   // Notifications the run itself generated. These are addressed to the seeded STAFF accounts —
   // a test payment notifies the real cashier and superadmin — so deleting the throwaway client
   // accounts above leaves them behind entirely. That was the last remaining leak: ~200 rows per

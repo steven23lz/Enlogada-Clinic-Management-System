@@ -16,10 +16,21 @@
  *   last Tuesday". Without history the revenue trend, the staff-workload report and the
  *   date-range screens are all empty, which makes them look broken rather than new.
  *
+ * What it creates reads like a real week at a clinic in Bugo, Cagayan de Oro. [1.89.0]
+ *   - The people are invented and ordinary. Each has ONE patient record, and a returning patient
+ *     comes back to it rather than being registered again, which Patient Records would show.
+ *   - Addresses are barangays around the clinic, and every patient has a number of their own.
+ *   - Every result form is filled in, inside the clinic's own printed reference ranges, and every
+ *     imaging study carries a written report ending in its impression. A handful are abnormal, as
+ *     a real week's are.
+ *   - Today's visits are spread across the clinic's day in the order they arrived, so the waits
+ *     and turnaround read as minutes rather than "0m".
+ *   No patient has an email address, so nothing this script does can send one.
+ *
  * Why this matters day to day: every "today" screen — the active queue, today's collections, the
  * modality worklists — filters on the current date. Seed on Monday and demo on Tuesday and they
- * are all legitimately empty. Re-run this before a demo; it is idempotent in the sense that it
- * only ever adds, so pair it with `resetDemoData.js --confirm` for a clean slate.
+ * are all legitimately empty. Re-run this before a demo; it only ever adds, so pair it with
+ * `resetDemoData.js --confirm` for a clean slate.
  *
  * Requires both dev servers running.
  *   node src/scripts/seedDemoScenario.js
@@ -42,20 +53,241 @@ const STAFF = {
   admin: 'admin@enlogada.com',
 };
 
-// Filipino names, because a demo full of "Test Patient 1" tells you nothing about how the screens
-// read with real data — column widths, truncation and sort order all behave differently.
-const PEOPLE = [
-  ['Maria', 'Delacruz', 'Female', '1958-03-12'], ['Jose', 'Ramirez', 'Male', '1972-07-04'],
-  ['Ana', 'Bautista', 'Female', '1990-11-23'],   ['Ramon', 'Villanueva', 'Male', '1965-01-30'],
-  ['Liwayway', 'Manalo', 'Female', '1948-09-17'],['Andres', 'Bonifacio', 'Male', '1983-05-08'],
-  ['Corazon', 'Aquino', 'Female', '1954-01-25'], ['Emilio', 'Aguinaldo', 'Male', '1995-03-22'],
-  ['Josefa', 'Llanes', 'Female', '1961-12-02'],  ['Apolinario', 'Mabini', 'Male', '1977-06-14'],
-  ['Gabriela', 'Silang', 'Female', '1988-08-19'],['Melchora', 'Aquino', 'Female', '1943-04-06'],
-  ['Diego', 'Silang', 'Male', '1969-10-11'],     ['Teresa', 'Magbanua', 'Female', '1992-02-28'],
-  ['Marcelo', 'Del Pilar', 'Male', '1956-11-05'],['Trinidad', 'Tecson', 'Female', '1975-07-21'],
-  ['Juan', 'Luna', 'Male', '1986-09-13'],        ['Gregoria', 'De Jesus', 'Female', '1951-05-09'],
-  ['Antonio', 'Luna', 'Male', '1980-01-18'],     ['Leona', 'Florentino', 'Female', '1997-04-27'],
+// ── Who comes in ─────────────────────────────────────────────────────────────────────────────
+// Invented people with ordinary names, because a demo full of "Test Patient 1" (or of national
+// heroes, which is what this list used to be) tells you nothing about how the screens read with
+// real data — column widths, truncation and sort order all behave differently.
+
+const CITY = 'Cagayan de Oro City';
+const PLACES = [
+  `Purok 2, Bugo, ${CITY}`, `Zone 4, Bugo, ${CITY}`, `Puerto, ${CITY}`, `Agusan, ${CITY}`,
+  `Tablon, ${CITY}`, `Cugman, ${CITY}`, `Gusa, ${CITY}`, `Lapasan, ${CITY}`, `Macasandig, ${CITY}`,
+  `Carmen, ${CITY}`, `Kauswagan, ${CITY}`, `Balulang, ${CITY}`, `Bulua, ${CITY}`,
+  'Poblacion, Tagoloan, Misamis Oriental', 'Katipunan, Villanueva, Misamis Oriental',
+  'Poblacion, Jasaan, Misamis Oriental',
 ];
+const PREFIXES = ['0917', '0918', '0927', '0935', '0945', '0956', '0966', '0977', '0998', '0908'];
+const phone = (i, salt = 0) =>
+  `${PREFIXES[(i * 3 + salt) % PREFIXES.length]}${String((3141593 + (i + 1) * 7919 + salt * 104729) % 10000000).padStart(7, '0')}`;
+
+// Seen today, in the order they arrive. Kept apart from the history pool so nobody is handed a
+// second visit while their first is still in the queue.
+const TODAY_POOL = {
+  actub: ['Josephine', 'Actub', 'Female', '1971-05-09'],
+  sabal: ['Arnel', 'Sabal', 'Male', '1984-08-15'],
+  borja: ['Leah', 'Borja', 'Female', '1985-01-22'],
+  llamas: ['Gemma', 'Llamas', 'Female', '1968-12-01'],
+  velez: ['Dominador', 'Velez', 'Male', '1953-02-12'],
+  pabillore: ['Jonathan', 'Pabillore', 'Male', '1979-12-03'],
+  villareal: ['Ernesto', 'Villareal', 'Male', '1961-09-02'],
+  ebarle: ['Maricel', 'Ebarle', 'Female', '1993-02-27'],
+  jamis: ['Mark Anthony', 'Jamis', 'Male', '1990-10-14'],
+  yap: ['Ramil', 'Yap', 'Male', '1982-03-17'],
+  lagbas: ['Cristina', 'Lagbas', 'Female', '1997-03-30'],
+  chaves: ['Analyn', 'Chaves', 'Female', '1999-09-19'],
+  ocampo: ['Susana', 'Ocampo', 'Female', '1964-06-06'],
+  dagondon: ['Marites', 'Dagondon', 'Female', '1988-06-11'],
+  bacarrisas: ['Reynaldo', 'Bacarrisas', 'Male', '1956-11-21'],
+  maglangit: ['Rodel', 'Maglangit', 'Male', '1976-07-07'],
+  tagailo: ['Kevin', 'Tagailo', 'Male', '2003-04-25'],
+};
+
+// Booked ahead by the front desk.
+const BOOKING_POOL = [
+  { person: ['Jocelyn', 'Abaday', 'Female', '1987-08-08'], tests: ['Complete Blood Count (CBC)', 'Fasting Blood Sugar (FBS)'], time: '09:00', notes: 'Pre-employment requirement' },
+  { person: ['Noel', 'Dumaguing', 'Male', '1974-10-10'], tests: ['Whole Abdomen'], time: '10:00', notes: 'Follow-up, gallbladder' },
+  { person: ['Precious', 'Ramos', 'Female', '2001-01-05'], tests: ['Pelvic Ultrasound'], time: '08:30', notes: 'Referred by OB-GYN' },
+  { person: ['Virgilio', 'Tan', 'Male', '1958-05-30'], tests: ['KUB / Prostate'], time: '09:30', notes: 'Frequent urination at night' },
+  { person: ['Hazel', 'Quimbo', 'Female', '1992-07-12'], tests: ['Trans-vaginal (TVS)'], time: '13:00', notes: 'Early pregnancy check' },
+  { person: ['Allan', 'Sumampong', 'Male', '1980-02-02'], tests: [/chest/i], time: '14:00', notes: 'Annual physical exam' },
+];
+
+// Two weeks of returning patients. Each comes back about once a week, to the same record.
+const HISTORY_POOL = [
+  ['Maria Luisa', 'Uy', 'Female', '1966-03-14'], ['Edgardo', 'Balili', 'Male', '1962-08-29'],
+  ['Rowena', 'Legaspi', 'Female', '1983-11-11'], ['Benjie', 'Alcantara', 'Male', '1991-04-04'],
+  ['Teresita', 'Macaraeg', 'Female', '1955-07-19'], ['Randy', 'Obsioma', 'Male', '1987-09-09'],
+  ['Charlene', 'Dizon', 'Female', '1995-12-24'], ['Alfredo', 'Magno', 'Male', '1950-01-15'],
+  ['Lorna', 'Gallardo', 'Female', '1972-10-02'], ['Jose', 'Manlangit', 'Male', '1969-06-23'],
+  ['Rhodora', 'Sanchez', 'Female', '1978-04-30'], ['Glenn', 'Lumacang', 'Male', '1989-05-05'],
+  ['Imelda', 'Caballero', 'Female', '1960-09-09'], ['Nestor', 'Galarrita', 'Male', '1965-11-30'],
+  ['Janine', 'Abellana', 'Female', '2000-08-18'], ['Wilfredo', 'Tiu', 'Male', '1957-02-28'],
+];
+
+// Invented physicians, so "Referred by" is filled on some visits and empty on others — the honest
+// picture, and the one that shows the rule working rather than a field always full or always blank.
+const REFERRERS = [
+  ['Dr. Amelia R. Santos', '0142887'],
+  ['Dr. Benigno L. Cruz', '0098431'],
+  ['Dr. Corazon M. Villanueva', '0176520'],
+  ['Dr. Rogelio P. Abellanosa', '0121904'],
+];
+
+// ── What a result form says ──────────────────────────────────────────────────────────────────
+// Normal adult values, inside the clinic's own printed ranges (result_fields.reference_note).
+// Anything not listed here is placed inside its printed range instead. Text results are written
+// the way the clinic's sheets print them.
+const NUMBERS = {
+  // Complete blood count. The differential adds up to 100.
+  wbc: 7.2, rbc: { Male: 5.02, Female: 4.46 }, hemoglobin: { Male: 14.8, Female: 12.9 },
+  hematocrit: { Male: 44.1, Female: 38.6 }, mcv: 88.4, mch: 29.6, mchc: 33.4, platelet_count: 268,
+  neutrophils: 58, lymphocytes: 32, monocytes: 6, eosinophils: 3, basophils: 1, rdw_cv: 12.8,
+  // Lipids, consistent with each other: LDL = cholesterol - HDL - triglycerides / 5.
+  cholesterol: 186, triglycerides: 132, hdl: 48, ldl: 111.6, vldl: 26.4, chol_hdl_ratio: 3.9,
+  fbs: 88, first_hour: 152, second_hour: 118,
+  // Ultrasound, in cm (the bladder in cc).
+  right_liver_lobe: 13.4, left_liver_lobe: 6.9, spleen: 8.8, right_kidney_ct: 1.5, left_kidney_ct: 1.6,
+  isthmus: 0.3, endometrial_thickness: 0.8, right_epididymal_head: 0.9, left_epididymal_head: 0.8,
+  ub_prevoid_volume: 285, ub_postvoid_volume: 18,
+  // A biophysical profile scores each component 0 or 2; the server totals them.
+  fetal_tone: 2, fetal_movement: 2, fetal_breathing: 2, amniotic_fluid: 2, non_stress_test: 2,
+};
+const DIMENSIONS = {
+  gallbladder: [6.8, 2.6, 2.4], right_kidney: [10.4, 4.6, 4.2], left_kidney: [10.8, 4.9, 4.4],
+  prostate_gland: [3.6, 3.1, 2.9], uterus: [7.6, 4.3, 3.8], cervix: [3.1, 2.6, 2.4],
+  right_ovary: [3.0, 2.1, 1.8], left_ovary: [2.8, 1.9, 1.7], right_thyroid_lobe: [4.6, 1.6, 1.5],
+  left_thyroid_lobe: [4.4, 1.5, 1.4], right_testis: [4.2, 2.7, 2.3], left_testis: [4.1, 2.6, 2.2],
+};
+const TEXT = {
+  specimen: 'RANDOM', color: 'YELLOW', appearance: 'CLEAR', glucose: 'NEGATIVE', protein: 'NEGATIVE',
+  ph: '6.0', specific_gravity: '1.020', wbc: '0-2', rbc: '0-1', epithelial_cells: 'FEW',
+  mucous_threads: 'FEW', amorphous_urates: 'RARE', bacteria: 'FEW', amorphous_phosphates: 'NONE',
+  clotting_time: '5 minutes', bleeding_time: '2 minutes', hbsag_screening: 'NON-REACTIVE',
+  syphilis_vdrl: 'NON-REACTIVE', hiv_screening: 'NON-REACTIVE',
+};
+const FECALYSIS = {
+  color: 'BROWN', consistency: 'FORMED', wbc: '0-1', rbc: 'NONE', fat_globules: 'NONE',
+  ova_of_parasites: 'NO OVA SEEN', amoeba: 'NONE SEEN', others: 'NONE',
+};
+const BLOOD_TYPES = ['O RH POSITIVE', 'A RH POSITIVE', 'B RH POSITIVE', 'O RH POSITIVE', 'AB RH POSITIVE'];
+// Held exact rather than varied, because they only mean anything together.
+const EXACT = new Set([
+  'neutrophils', 'lymphocytes', 'monocytes', 'eosinophils', 'basophils',
+  'cholesterol', 'triglycerides', 'hdl', 'ldl', 'vldl', 'chol_hdl_ratio',
+  'fetal_tone', 'fetal_movement', 'fetal_breathing', 'amniotic_fluid', 'non_stress_test',
+]);
+
+const decimalsOf = (n) => (String(n).split('.')[1] || '').length;
+
+/** A value inside a printed range: "70.0 - 100.0", "Male: 0.6-1.2 / Female: 0.5-1.0" or "<240.0". */
+function withinRange(note, sex, position) {
+  if (!note) return null;
+  let text = note;
+  const bySex = note.match(/Male:\s*([^/]+)\/\s*Female:\s*(.+)/i);
+  if (bySex) text = sex === 'Female' ? bySex[2] : bySex[1];
+  const range = text.match(/([\d.]+)\s*-\s*([\d.]+)/);
+  if (range) {
+    const [lo, hi] = [Number(range[1]), Number(range[2])];
+    return (lo + (hi - lo) * position).toFixed(Math.max(decimalsOf(range[1]), decimalsOf(range[2]), 1));
+  }
+  const upper = text.match(/<\s*([\d.]+)/);
+  if (upper) return (Number(upper[1]) * (0.55 + 0.2 * position)).toFixed(Math.max(decimalsOf(upper[1]), 1));
+  return null;
+}
+
+/**
+ * The measurements for one form, keyed by field code as POST /results expects.
+ * Skips a derived field (the server works it out) and a field for the other sex (it refuses one).
+ */
+function fillForm(form, sex, seed, overrides = {}) {
+  const nudge = 1 + (((seed * 37) % 7) - 3) / 100;   // within ±3%, so no two reports match exactly
+  const position = 0.35 + ((seed * 13) % 31) / 100;  // somewhere in the middle of a printed range
+  const out = {};
+  for (const f of form.fields) {
+    if (f.derivation) continue;
+    if (f.applies_to_sex && f.applies_to_sex !== sex) continue;
+    const code = f.code;
+    if (f.value_kind === 'linear3') {
+      const base = overrides[code] || DIMENSIONS[code];
+      if (!base) continue;
+      const [a, b, c] = base.map((n) => (n * nudge).toFixed(1));
+      out[code] = { value_1: a, value_2: b, value_3: c };
+    } else if (f.value_kind === 'text') {
+      const value = overrides[code]
+        ?? (form.name === 'Fecalysis' ? FECALYSIS[code] : undefined)
+        ?? TEXT[code]
+        ?? (code === 'blood_type' ? BLOOD_TYPES[seed % BLOOD_TYPES.length] : undefined);
+      if (value) out[code] = { value_text: value };
+    } else if (f.value_kind === 'number') {
+      let value = overrides[code];
+      if (value === undefined) {
+        const known = NUMBERS[code];
+        const base = known && typeof known === 'object' ? known[sex] : known;
+        value = base === undefined
+          ? withinRange(f.reference_note, sex, position)
+          : (EXACT.has(code) ? base : (base * nudge).toFixed(decimalsOf(base)));
+      }
+      if (value !== null && value !== undefined) out[code] = { value_1: String(value) };
+    }
+  }
+  return out;
+}
+
+// Written reports for imaging, ending in the impression the way the clinic's reports do.
+const para = (...parts) => parts.filter(Boolean).join('\n\n');
+const LIVER_NORMAL = 'The liver is normal in size with smooth borders and a homogeneous parenchymal echopattern. No focal lesion is seen. The intrahepatic ducts and the common bile duct are not dilated.';
+const LIVER_FATTY = 'The liver is normal in size with smooth borders. The parenchymal echopattern is diffusely increased, with fair visualisation of the portal vein walls and the diaphragm. No focal lesion is seen. The bile ducts are not dilated.';
+const GALLBLADDER = 'The gallbladder is adequately distended with a thin wall and no intraluminal echoes.';
+const KIDNEYS = 'Both kidneys are normal in size and echopattern, with good corticomedullary differentiation. No calculi or hydronephrosis.';
+const BLADDER = 'The urinary bladder is adequately filled with smooth walls and no intraluminal echoes.';
+
+function imagingReport(form, test, sex, variant) {
+  const name = form?.name || '';
+  const liver = variant === 'fatty' ? LIVER_FATTY : LIVER_NORMAL;
+  const abdomenImpression = variant === 'fatty' ? 'MILD FATTY INFILTRATION OF THE LIVER.' : null;
+  switch (name) {
+    case 'Whole Abdomen':
+      return para(liver, `${GALLBLADDER} The pancreas and spleen are unremarkable.`, KIDNEYS,
+        sex === 'Male'
+          ? `${BLADDER} The prostate gland is not enlarged and has a homogeneous echopattern.`
+          : `${BLADDER} The uterus is normal in size. No adnexal mass is seen.`,
+        `IMPRESSION:\n${abdomenImpression || 'NORMAL WHOLE ABDOMINAL ULTRASOUND.'}`);
+    case 'Upper Abdomen':
+      return para(liver, `${GALLBLADDER} The pancreas and spleen are unremarkable.`, KIDNEYS,
+        `IMPRESSION:\n${abdomenImpression || 'NORMAL UPPER ABDOMINAL ULTRASOUND.'}`);
+    case 'Hepatobiliary Tree':
+    case 'Liver':
+      return para(liver, `${GALLBLADDER} The spleen is not enlarged.`,
+        `IMPRESSION:\n${abdomenImpression || 'NORMAL HEPATOBILIARY ULTRASOUND.'}`);
+    case 'Lower Abdomen':
+      return para(KIDNEYS, BLADDER,
+        sex === 'Male' ? 'The prostate gland is not enlarged.' : 'The uterus and cervix are normal in size and echopattern.',
+        'IMPRESSION:\nNORMAL LOWER ABDOMINAL ULTRASOUND.');
+    case 'KUB and Prostate':
+      return para(KIDNEYS, `${BLADDER} Post-void residual urine is not significant.`,
+        sex === 'Male' ? 'The prostate gland is not enlarged and has a homogeneous echopattern. No calcifications.' : null,
+        `IMPRESSION:\n${sex === 'Male' ? 'NORMAL KUB-PROSTATE ULTRASOUND.' : 'NORMAL KUB ULTRASOUND.'}`);
+    case 'Thyroid and Neck':
+      return para('Both thyroid lobes are normal in size with a homogeneous echopattern. No nodule or cyst is seen. The isthmus is not thickened.',
+        'No enlarged cervical lymph nodes.', 'IMPRESSION:\nNORMAL THYROID ULTRASOUND.');
+    case 'Pelvic':
+    case 'Transvaginal':
+      return para('The uterus is anteverted, normal in size, with a homogeneous myometrial echopattern. The endometrium is thin and regular.',
+        'Both ovaries are normal in size and appearance. No adnexal mass. No free fluid in the cul-de-sac.',
+        `IMPRESSION:\nNORMAL ${name === 'Pelvic' ? 'PELVIC' : 'TRANSVAGINAL'} ULTRASOUND.`);
+    case 'Scrotum':
+      return para('Both testes are normal in size with a homogeneous echopattern. The epididymides are not enlarged. No hydrocele or varicocele.',
+        'IMPRESSION:\nNORMAL SCROTAL ULTRASOUND.');
+    case 'Biophysical Profile':
+    case 'Biophysical Profile with NST':
+      return para('Single live intrauterine pregnancy in cephalic presentation. The fetal heart rate is 144 beats per minute and regular.',
+        'The placenta is fundal-anterior, grade II, with no previa. The amniotic fluid is adequate.',
+        `IMPRESSION:\nSINGLE LIVE INTRAUTERINE PREGNANCY, CEPHALIC.\nBIOPHYSICAL SCORE ${name.endsWith('NST') ? '10/10' : '8/8'}, REASSURING.`);
+    default:
+      break;
+  }
+  if (/chest/i.test(test.name)) {
+    return variant === 'pneumonia'
+      ? para('Hazy densities are seen in the right lower lung field. The rest of the lung fields are clear.',
+        'The heart is not enlarged. The hemidiaphragms and the costophrenic sulci are intact.',
+        'IMPRESSION:\nPNEUMONIA, RIGHT LOWER LOBE. Suggest follow-up after treatment.')
+      : para('The lung fields are clear. The heart is not enlarged.',
+        'The hemidiaphragms and the costophrenic sulci are intact. The visualised bony thorax is unremarkable.',
+        'IMPRESSION:\nNORMAL CHEST.');
+  }
+  return para('No fracture or dislocation is seen. The joint spaces are preserved and the soft tissues are unremarkable.',
+    'IMPRESSION:\nNO RADIOGRAPHIC ABNORMALITY.');
+}
 
 const call = async (path, { method = 'GET', token, body } = {}) => {
   const res = await fetch(`${API}${path}`, {
@@ -74,6 +306,8 @@ const login = async (email) =>
   (await call('/auth/login', { method: 'POST', body: { email, password: PASSWORD } })).data.token;
 
 const pick = (arr, i) => arr[i % arr.length];
+const dateStr = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 async function main() {
   logger.info(`Seeding demo data against ${API}`);
@@ -104,6 +338,12 @@ async function main() {
   /** A category that definitely has services, preferring the one asked for. */
   const offered = (preferred) => (catalogue[preferred]?.length ? preferred : OFFERED[0]);
 
+  /** A service by its name on the price list (or a pattern), falling back to the first one. */
+  const findTest = (category, wanted) => {
+    const list = catalogue[offered(category)];
+    return list.find((t) => (wanted instanceof RegExp ? wanted.test(t.name) : t.name === wanted)) || list[0];
+  };
+
   // Preparation instructions on the tests that really need them [1.24.0], so a demo shows the
   // amber note in the booking wizard and the "Before your appointment" block in the confirmation
   // email. Matched by name fragment rather than by id — the catalogue is clinic-edited and ids
@@ -132,37 +372,53 @@ async function main() {
 
   const modalityToken = { Laboratory: tok.lab, Xray: tok.xray, Ultrasound: tok.ultrasound, ECG: tok.admin };
 
-  let personIndex = 0;
-  const nextPerson = () => pick(PEOPLE, personIndex++);
+  // The result form a service uses, read from the same tables the result entry screen reads.
+  const formCache = new Map();
+  const formFor = async (testId) => {
+    if (!formCache.has(testId)) {
+      const { rows } = await db.query(
+        `SELECT fs.name AS set_name, f.code, f.value_kind, f.applies_to_sex, f.reference_note, f.derivation
+           FROM result_field_set_tests fst
+           JOIN result_field_sets fs ON fs.id = fst.field_set_id AND fs.is_active
+           JOIN result_fields f ON f.field_set_id = fs.id AND f.is_active
+          WHERE fst.test_id = $1
+          ORDER BY f.display_order`,
+        [testId]
+      );
+      formCache.set(testId, rows.length ? { name: rows[0].set_name, fields: rows } : null);
+    }
+    return formCache.get(testId);
+  };
 
-  // A handful of real-looking referrers, so the "Referred by" line on a report is populated on
-  // some visits and empty on others — which is the honest picture, and the one that shows the
-  // rule working rather than a field that is either always full or always blank.
-  const REFERRERS = [
-    ['Dr. Amelia R. Santos', '0142887'],
-    ['Dr. Benigno L. Cruz', '0098431'],
-    ['Dr. Corazon M. Villanueva', '0176520'],
-  ];
+  // One record per person. A second visit reuses it, as the front desk would.
+  let personCount = 0;
+  const records = new Map();
+  const patientFor = async ([firstName, lastName, sex, birthdate], patientTypeName = 'Self Pay') => {
+    const key = `${firstName} ${lastName}`;
+    if (!records.has(key)) {
+      const i = personCount++;
+      const patient = (await call('/patients', {
+        method: 'POST', token: tok.receptionist,
+        body: {
+          patientTypeId: typeId(patientTypeName), firstName, lastName, birthdate, sex,
+          address: pick(PLACES, i * 5), contactNumber: phone(i), emergencyContact: phone(i, 7),
+        },
+      })).data.patient;
+      records.set(key, { patient, sex, seed: i + 1 });
+    }
+    return records.get(key);
+  };
 
   /**
-   * Registers a walk-in and attaches one test from `category`. Returns the ids and price.
+   * Registers a walk-in visit for `person` and attaches one service. Returns the ids and price.
    *
    * Defaults to Self Pay. It used to default to 'Private', which was a harmless label until
    * [1.23.0] made 'Private' mean "a physician referred them" — at which point every seeded visit
    * would have been refused for naming no doctor. Most of these are ordinary walk-ins, which is
    * what Self Pay describes; pass `referrerIndex` for the ones that should carry a referral.
    */
-  const makeVisit = async ({
-    category, patientTypeName = 'Self Pay', testIndex = 0, referrerIndex = null,
-  }) => {
-    const [firstName, lastName, sex, birthdate] = nextPerson();
-    const patient = (await call('/patients', {
-      method: 'POST', token: tok.receptionist,
-      body: {
-        patientTypeId: typeId(patientTypeName), firstName, lastName, birthdate, sex,
-        address: 'Sta. Rosa, Laguna', contactNumber: '09170000000', emergencyContact: '09171111111',
-      },
-    })).data.patient;
+  const makeVisit = async ({ person, category, test, patientTypeName = 'Self Pay', referrerIndex = null, notes = '' }) => {
+    const { patient, sex, seed } = await patientFor(person, patientTypeName);
 
     // 'Private' and HMO both require one, so those callers must supply an index.
     const referrer = referrerIndex === null ? null : pick(REFERRERS, referrerIndex);
@@ -170,18 +426,21 @@ async function main() {
     const visit = (await call('/visits', {
       method: 'POST', token: tok.receptionist,
       body: {
-        patientId: patient.id, visitType: 'Walk in', notes: `${category} — walk-in`,
+        patientId: patient.id, visitType: 'Walk in', notes,
         referringPhysician: referrer?.[0], referringPhysicianPrc: referrer?.[1],
       },
     })).data.visit;
 
-    const test = pick(catalogue[category], testIndex);
+    const chosen = test && typeof test === 'object' && test.id ? test : findTest(category, test);
     const attached = (await call('/tests/visit-tests', {
       method: 'POST', token: tok.receptionist,
-      body: { patientVisitId: visit.id, testIds: [test.id] },
+      body: { patientVisitId: visit.id, testIds: [chosen.id] },
     })).data.visitTests[0];
 
-    return { patient, visit, test, visitTestId: attached.id, category, price: parseFloat(test.price) };
+    return {
+      patient, sex, seed, visit, test: chosen, visitTestId: attached.id,
+      category: offered(category), price: parseFloat(chosen.price),
+    };
   };
 
   const payFor = async (v, method = 'Cash') => {
@@ -255,190 +514,248 @@ async function main() {
     return Buffer.from(pdf, LATIN1);
   };
 
-  const recordFindings = async (v, { findings, isCritical = false, attachFile = true }) => {
-    const token = modalityToken[v.category];
-    const form = new FormData();
-    form.append('findings', findings);
-    form.append('remarks', 'Clinical correlation recommended.');
-    form.append('isCritical', String(isCritical));
-    if (attachFile) {
-      const pdf = makeSamplePdf(`${v.category} Report — ${v.patient.first_name} ${v.patient.last_name}`, findings);
-      form.append(
+  const postResult = async (v, form) => {
+    const res = await fetch(`${API}/results/${v.visitTestId}`, {
+      method: 'POST', headers: { Authorization: `Bearer ${modalityToken[v.category]}` }, body: form,
+    });
+    if (!res.ok) throw new Error(`record findings -> ${res.status} ${(await res.text()).slice(0, 160)}`);
+    return (await res.json()).data.result;
+  };
+
+  /**
+   * Records a result the way the department would: the form filled in, and for imaging a written
+   * report with the document attached. `values` overrides individual fields, `variant` picks an
+   * abnormal imaging report, and `findings` replaces the written text entirely.
+   */
+  const recordFindings = async (v, { findings, values, variant, isCritical = false, remarks } = {}) => {
+    const form = await formFor(v.test.id);
+    const imaging = v.category === 'Ultrasound' || v.category === 'Xray';
+    const text = findings ?? (imaging ? imagingReport(form, v.test, v.sex, variant) : (form ? '' : 'Within normal limits.'));
+
+    const body = new FormData();
+    if (text) body.append('findings', text);
+    if (remarks) body.append('remarks', remarks);
+    body.append('isCritical', String(isCritical));
+    if (form) body.append('measurements', JSON.stringify(fillForm(form, v.sex, v.seed, values)));
+    if (imaging) {
+      const pdf = makeSamplePdf(`${v.test.name} - ${v.patient.first_name} ${v.patient.last_name}`, text);
+      body.append(
         'file',
         new Blob([pdf], { type: 'application/pdf' }),
-        `${v.category.toLowerCase()}-report-${v.patient.last_name.toLowerCase()}.pdf`
+        `${v.category.toLowerCase()}-report-${v.patient.last_name.toLowerCase().replace(/\s+/g, '-')}.pdf`
       );
     }
-    const res = await fetch(`${API}/results/${v.visitTestId}`, {
-      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
-    });
-    if (!res.ok) throw new Error(`record findings -> ${res.status} ${(await res.text()).slice(0, 140)}`);
-    return (await res.json()).data.result;
+    return postResult(v, body);
+  };
+
+  /** A corrected version of a released or recorded result, with the reason the clinic requires. */
+  const amend = async (v, { findings, values, reason, remarks }) => {
+    const body = new FormData();
+    if (findings) body.append('findings', findings);
+    if (remarks) body.append('remarks', remarks);
+    body.append('amendmentReason', reason);
+    body.append('isCritical', 'false');
+    if (values) body.append('measurements', JSON.stringify(values));
+    return postResult(v, body);
   };
 
   const release = async (v) =>
     (await call(`/results/${v.visitTestId}/release`, { method: 'POST', token: modalityToken[v.category] })).data.result;
 
-  // ── TODAY: one visit at each stage of the workflow, per department ───────────────────────
+  // ── TODAY: the clinic's day so far, created in the order people arrived ───────────────────
+  // Created earliest first, so queue and receipt numbers rise with the arrival times set below.
   const today = [];
   const stages = [];
+  const note = (v, text) => stages.push(`${v.patient.first_name} ${v.patient.last_name} — ${text}`);
 
-  // 1. Awaiting payment — sits in the cashier's billing queue.
-  for (const category of ['Laboratory', 'Xray', 'Ultrasound']) {
-    const v = await makeVisit({ category });
-    today.push(v);
-    stages.push(`${v.patient.first_name} ${v.patient.last_name} — awaiting payment (${category})`);
+  // 1. The first arrivals, already finished and released.
+  {
+    const v = await makeVisit({ person: TODAY_POOL.actub, category: 'Laboratory', test: 'Complete Blood Count (CBC)', notes: 'Annual physical exam' });
+    await payFor(v, 'Cash');
+    await recordFindings(v);
+    await release(v);
+    today.push({ ...v, stage: 'released' });
+    note(v, 'CBC completed and released');
+  }
+  {
+    const v = await makeVisit({ person: TODAY_POOL.sabal, category: 'Ultrasound', test: 'Whole Abdomen', notes: 'Upper abdominal pain on and off' });
+    await payFor(v, 'GCash');
+    await recordFindings(v, { variant: 'fatty' });
+    await release(v);
+    today.push({ ...v, stage: 'released' });
+    note(v, 'whole abdomen released, mild fatty liver');
   }
 
-  // 2. A senior citizen and a PWD awaiting payment, so the statutory discount and its
-  //    VAT-exempt arithmetic are visible on the cashier screen rather than hypothetical.
-  for (const [d, label] of [[senior, 'Senior Citizen'], [pwd, 'PWD']]) {
-    const v = await makeVisit({ category: offered('Ultrasound') });
-    await call(`/discounts/visit/${v.visit.id}`, {
-      method: 'POST', token: tok.cashier,
-      body: { discountTypeId: d.id, idNumber: label === 'PWD' ? 'PWD-2026-0042' : 'OSCA-2026-0117' },
+  // 2. An AMENDED X-ray report — two versions, so the amendment history has something in it.
+  {
+    // An amendment is re-issued to whoever received the first version, so it needs a referrer.
+    const v = await makeVisit({ person: TODAY_POOL.borja, category: 'Xray', test: /chest/i, referrerIndex: 2, notes: 'Cough for two weeks' });
+    await payFor(v, 'GCash');
+    await recordFindings(v);
+    await amend(v, {
+      findings: para('Minimal linear densities are seen in the left lung base. The rest of the lung fields are clear.',
+        'The heart is not enlarged. The hemidiaphragms and the costophrenic sulci are intact.',
+        'IMPRESSION:\nMINIMAL LEFT BASAL ATELECTASIS. NO CONSOLIDATION.'),
+      remarks: 'Corrected on review by the radiologist.',
+      reason: 'The first report missed a left basal finding seen on re-review',
     });
-    today.push(v);
-    stages.push(`${v.patient.first_name} ${v.patient.last_name} — awaiting payment, ${label} 20% + VAT-exempt`);
+    await release(v);
+    today.push({ ...v, stage: 'released' });
+    note(v, 'AMENDED chest X-ray report (v2), released');
   }
 
-  // 2b. The same two statutory discounts, but SETTLED — otherwise the BIR statutory register is
-  //     empty, since it reads from payments rather than from entitlements. An empty register
-  //     looks like the feature does not work.
-  for (const [d, label, idNumber] of [[senior, 'Senior Citizen', 'OSCA-2026-0093'], [pwd, 'PWD', 'PWD-2026-0117']]) {
-    const v = await makeVisit({ category: 'Ultrasound', testIndex: 1 });
-    await call(`/discounts/visit/${v.visit.id}`, {
-      method: 'POST', token: tok.cashier, body: { discountTypeId: d.id, idNumber },
-    });
-    const paid = await payFor(v, 'Cash');
-    today.push(v);
-    stages.push(
-      `${v.patient.first_name} ${v.patient.last_name} — ${label} PAID: gross ${v.price.toFixed(2)}, ` +
-        `less VAT ${paid.vat_amount}, less 20% ${paid.discount_amount} = ${paid.amount}`
-    );
-  }
-
-  // 3. Paid and released — live on the modality worklists.
+  // 2b. And an amended LABORATORY result. [1.70.0]
   //
-  // These carry a referring physician. They are the tickets a technician actually looks at, and
-  // the worklist now shows "Ref: Dr. …" beside the test — without one on any live ticket the
-  // column is permanently blank and the feature is invisible in a demo. Varied by index so the
-  // screen shows more than one name.
-  for (const [i, category] of ['Laboratory', 'Xray', 'Ultrasound', 'ECG'].filter((c) => catalogue[c].length).entries()) {
-    const v = await makeVisit({ category, testIndex: 1, referrerIndex: i });
-    await payFor(v, pick(COUNTER_METHODS, today.length));
-    today.push(v);
-    stages.push(`${v.patient.first_name} ${v.patient.last_name} — paid, on the ${category} worklist`);
+  // result-version-timeline.spec looks for one in LABORATORY — it drives the laboratory
+  // technician's own history screen, which is where a lab amendment would be read back.
+  {
+    const v = await makeVisit({ person: TODAY_POOL.llamas, category: 'Laboratory', test: 'Lipid Profile', referrerIndex: 1, notes: 'Hypertension, maintenance medicines' });
+    await payFor(v, 'Cash');
+    // A comment on both versions as well as the grid (a laboratory form's COMMENT box is
+    // `findings`): the superseded version keeps its findings, which is what
+    // result-version-timeline.spec reads back and strikes through.
+    await recordFindings(v, { values: { cholesterol: 286 }, findings: 'Elevated total cholesterol.' });
+    await amend(v, {
+      findings: 'Total cholesterol within the desirable level.',
+      values: { cholesterol: { value_1: '186' } },
+      reason: 'Cholesterol transcribed as 286; corrected to 186 against the analyser printout',
+    });
+    await release(v);
+    today.push({ ...v, stage: 'released' });
+    note(v, 'AMENDED lipid profile (v2), released');
+  }
+
+  // 3. A CRITICAL result, released and awaiting callback — the escalation path.
+  {
+    // Names a referrer: a critical value is called back to the requesting physician, so this is
+    // the visit where that field most obviously has to be populated.
+    const v = await makeVisit({ person: TODAY_POOL.velez, category: 'Laboratory', test: 'Fasting Blood Sugar (FBS)', referrerIndex: 0, notes: 'Known diabetic, missed medicines' });
+    await payFor(v, 'Cash');
+    await recordFindings(v, {
+      values: { fbs: 452 },
+      findings: 'Critically high fasting blood sugar. A repeat run on the same specimen confirms the value. For urgent physician review.',
+      isCritical: true,
+    });
+    await release(v);
+    today.push({ ...v, stage: 'released' });
+    note(v, 'CRITICAL fasting blood sugar released, callback outstanding');
   }
 
   // 4. Findings recorded, awaiting authorisation — the 'Waiting for Release' state.
   {
-    const v = await makeVisit({ category: 'Laboratory', testIndex: 2 });
+    const v = await makeVisit({ person: TODAY_POOL.pabillore, category: 'Laboratory', test: 'Fasting Blood Sugar (FBS)', notes: 'Company check-up' });
     await payFor(v, 'Cash');
-    await recordFindings(v, { findings: 'Haemoglobin 13.4 g/dL. White cell count 7.2. Within normal limits.' });
-    today.push(v);
-    stages.push(`${v.patient.first_name} ${v.patient.last_name} — findings recorded, awaiting release`);
+    await recordFindings(v, { values: { fbs: 108 } });
+    today.push({ ...v, stage: 'recorded' });
+    note(v, 'fasting blood sugar recorded, awaiting release');
   }
 
-  // 5. A CRITICAL result, released and awaiting callback — the escalation path.
-  {
-    // Names a referrer: a critical value is called back to the requesting physician, so this is
-    // the visit where that field most obviously has to be populated.
-    const v = await makeVisit({ category: 'Laboratory', testIndex: 3, referrerIndex: 1 });
-    await payFor(v, 'Cash');
-    await recordFindings(v, {
-      findings: 'Potassium 7.1 mmol/L. CRITICALLY HIGH — repeat sample confirms. Urgent review required.',
-      isCritical: true,
+  // 5. A senior citizen and a PWD, SETTLED — otherwise the BIR statutory register is empty, since
+  //    it reads from payments rather than from entitlements. An empty register looks broken.
+  for (const [person, d, label, idNumber, test] of [
+    [TODAY_POOL.villareal, senior, 'Senior Citizen', 'OSCA-0412871', 'KUB / Prostate'],
+    [TODAY_POOL.ebarle, pwd, 'PWD', 'PWD-10-4305-0001276', 'Pelvic Ultrasound'],
+  ]) {
+    const v = await makeVisit({ person, category: 'Ultrasound', test });
+    await call(`/discounts/visit/${v.visit.id}`, {
+      method: 'POST', token: tok.cashier, body: { discountTypeId: d.id, idNumber },
     });
-    await release(v);
-    today.push(v);
-    stages.push(`${v.patient.first_name} ${v.patient.last_name} — CRITICAL result released, callback outstanding`);
+    const paid = await payFor(v, 'Cash');
+    today.push({ ...v, stage: 'paid' });
+    note(v, `${label} PAID: gross ${v.price.toFixed(2)}, less VAT ${paid.vat_amount}, less 20% ${paid.discount_amount} = ${paid.amount}`);
   }
 
-  // 6. An AMENDED result — two versions, so the amendment history has something in it.
-  {
-    // An amendment is re-issued to whoever received the first version, so it needs a referrer.
-    const v = await makeVisit({ category: 'Xray', testIndex: 2, referrerIndex: 2 });
-    await payFor(v, 'GCash');
-    await recordFindings(v, { findings: 'No acute cardiopulmonary findings.' });
-    const token = modalityToken[v.category];
-    const form = new FormData();
-    form.append('findings', 'Minimal left basal atelectasis. No consolidation. Heart size normal.');
-    form.append('remarks', 'Corrected on senior radiologist review.');
-    form.append('amendmentReason', 'Initial report missed a basal finding on re-review');
-    form.append('isCritical', 'false');
-    await fetch(`${API}/results/${v.visitTestId}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
-    await release(v);
-    today.push(v);
-    stages.push(`${v.patient.first_name} ${v.patient.last_name} — AMENDED X-ray report (v2), released`);
-  }
-
-  // 6b. And an amended LABORATORY result. [1.70.0]
+  // 6. Paid and released to the departments — live on the worklists.
   //
-  // The X-ray one above was the only amendment this seeder made, and result-version-timeline.spec
-  // looks for one in LABORATORY — it drives the laboratory technician's own history screen, which
-  // is where a lab amendment would be read back. So the fixture and the spec disagreed about where
-  // it lives, and the spec failed against a demo dataset that had never contained what it needed.
-  //
-  // The one amended laboratory result that DID exist carried no reason at all: it predates
-  // [1.15.0]'s rule, and resultService now refuses an amendment whose reason is under four
-  // characters. That row is left alone rather than back-filled — amendment_reason is a clinical
-  // audit field, and inventing one is the class of thing [1.51.0] removed from this repo.
-  {
-    const v = await makeVisit({ category: offered('Laboratory'), testIndex: 1, referrerIndex: 1 });
-    await payFor(v, 'Cash');
-    await recordFindings(v, { findings: 'Within normal limits.' });
-    const token = modalityToken[v.category];
-    const form = new FormData();
-    form.append('findings', 'Repeat run on a fresh specimen. Value corrected; see remarks.');
-    form.append('remarks', 'Re-run after the first specimen was found to be haemolysed.');
-    form.append('amendmentReason', 'First specimen haemolysed; assay repeated on a fresh draw');
-    form.append('isCritical', 'false');
-    await fetch(`${API}/results/${v.visitTestId}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
-    await release(v);
-    today.push(v);
-    stages.push(`${v.patient.first_name} ${v.patient.last_name} — AMENDED Laboratory report (v2), released`);
+  // These carry a referring physician. They are the tickets a technician actually looks at, and
+  // the worklist shows "Ref: Dr. …" beside the test — without one on any live ticket the column
+  // is permanently blank and the feature is invisible in a demo.
+  for (const [i, [person, category, test, notes]] of [
+    [TODAY_POOL.jamis, 'Laboratory', 'Urinalysis', 'Burning sensation on urination'],
+    [TODAY_POOL.yap, 'Xray', /chest/i, 'Pre-employment requirement'],
+    [TODAY_POOL.lagbas, 'Ultrasound', 'BPS', '34 weeks pregnant, referred by OB-GYN'],
+  ].entries()) {
+    const v = await makeVisit({ person, category, test, referrerIndex: i, notes });
+    await payFor(v, pick(COUNTER_METHODS, i));
+    today.push({ ...v, stage: 'paid' });
+    note(v, `paid, on the ${v.category} worklist`);
   }
 
-  // 7. Fully completed — shows in released history and patient records.
-  for (const category of ['Ultrasound', 'Laboratory']) {
-    const v = await makeVisit({ category, testIndex: 3 });
-    await payFor(v, 'Cash');
-    await recordFindings(v, { findings: `${category} study completed. No abnormality detected.` });
-    await release(v);
-    today.push(v);
-    stages.push(`${v.patient.first_name} ${v.patient.last_name} — ${category} completed and released`);
-  }
-
-  // 8. An HMO patient with a pending pre-authorisation, for the Service Requests screen.
+  // 7. An HMO patient with a pending pre-authorisation, for the Service Requests screen.
   {
     // Carries a referring physician: an HMO claim requires one [1.23.0], and this is the visit
     // the Service Requests screen opens, so it is also where Admin sees the field populated.
     const v = await makeVisit({
-      category: 'Ultrasound', patientTypeName: 'HMO', testIndex: 2, referrerIndex: 0,
+      person: TODAY_POOL.chaves, category: 'Ultrasound', test: 'Thyroid', patientTypeName: 'HMO', referrerIndex: 3,
+      notes: 'Neck swelling, for evaluation',
     });
     const providers = (await call('/hmo/providers', { token: tok.receptionist })).data.providers;
     await call('/hmo/request', {
       method: 'POST', token: tok.receptionist,
-      body: { hmoProviderId: providers[0].id, approvalCode: 'LOA-2026-88213', visitTestIds: [v.visitTestId] },
+      body: { hmoProviderId: providers[0].id, approvalCode: 'LOA-2026-091534', visitTestIds: [v.visitTestId] },
     });
-    today.push(v);
-    stages.push(`${v.patient.first_name} ${v.patient.last_name} — HMO pre-auth pending (${providers[0].name})`);
+    today.push({ ...v, stage: 'waiting' });
+    note(v, `HMO pre-auth pending (${providers[0].name})`);
   }
+
+  // 8. The latest arrivals, awaiting payment — the cashier's billing queue. A senior and a PWD
+  //    among them, so the statutory discount and its arithmetic are visible at the till.
+  for (const [person, category, test, notes, discount] of [
+    [TODAY_POOL.ocampo, 'Ultrasound', 'Whole Abdomen', 'Bloating after meals', [senior, 'OSCA-0398254']],
+    [TODAY_POOL.dagondon, 'Laboratory', 'Complete Blood Count (CBC)', 'Easy fatigability', [pwd, 'PWD-10-4305-0002044']],
+    [TODAY_POOL.bacarrisas, 'Xray', /chest/i, 'Annual physical exam', null],
+    [TODAY_POOL.maglangit, 'Laboratory', 'Lipid Profile', 'Company check-up', null],
+    [TODAY_POOL.tagailo, 'Laboratory', 'Blood Typing', 'Pre-employment requirement', null],
+  ]) {
+    const v = await makeVisit({ person, category, test, notes });
+    if (discount) {
+      await call(`/discounts/visit/${v.visit.id}`, {
+        method: 'POST', token: tok.cashier, body: { discountTypeId: discount[0].id, idNumber: discount[1] },
+      });
+    }
+    today.push({ ...v, stage: 'waiting' });
+    note(v, `awaiting payment (${v.test.name})${discount ? `, ${discount[0].name}` : ''}`);
+  }
+
+  // Spread today's visits across the clinic's day, in the order they arrived. The API stamped
+  // every one with the same minute, which reads as "everyone walked in at once" and gives every
+  // department a turnaround of 0 minutes. Skipped before 9 a.m., when there is no day to spread.
+  await retimeToday(today);
 
   // ── HISTORY: two weeks of completed, paid visits, then backdated ─────────────────────────
   // Without this the revenue trend, staff workload and every date-range report are empty, which
-  // reads as broken rather than new.
+  // reads as broken rather than new. The same sixteen people come and go, about once a week each.
   const historical = [];
-  const CATEGORIES = OFFERED;
+  const LAB_ROTATION = [
+    'Complete Blood Count (CBC)', 'Fasting Blood Sugar (FBS)', 'Urinalysis', 'Lipid Profile', 'Creatinine',
+    'Blood Uric Acid (BUA)', 'SGPT', 'HbA1c', 'Blood Typing', 'TSH', 'Stool Exam', 'Blood Urea Nitrogen (BUN)',
+  ];
+  const ULTRASOUND_ROTATION = {
+    Male: ['Whole Abdomen', 'KUB / Prostate', 'Upper Abdomen', 'HBT', 'Thyroid'],
+    Female: ['Pelvic Ultrasound', 'Whole Abdomen', 'Thyroid', 'Upper Abdomen', 'Trans-vaginal (TVS)'],
+  };
+  const HISTORY_CATEGORIES = ['Laboratory', 'Ultrasound', 'Laboratory', 'Xray', 'Ultrasound'].filter((c) => OFFERED.includes(c));
+  // A few results out of range, as in any real week: a raised sugar, a raised cholesterol, a
+  // fatty liver and a pneumonia. Keyed by the visit's position in the fortnight.
+  const ABNORMAL = {
+    4: { values: { fbs: 128 } },
+    9: { values: { cholesterol: 258, triglycerides: 210, hdl: 41, ldl: 175.0, vldl: 42.0, chol_hdl_ratio: 6.3 } },
+    12: { variant: 'fatty' },
+    16: { variant: 'pneumonia' },
+  };
+  let k = 0;
   for (let daysAgo = 14; daysAgo >= 1; daysAgo--) {
     // Two or three visits a day, varying so the trend line is not a flat bar.
     const perDay = 2 + (daysAgo % 2);
-    for (let i = 0; i < perDay; i++) {
-      const category = pick(CATEGORIES, daysAgo + i);
-      const v = await makeVisit({ category, testIndex: i });
+    for (let i = 0; i < perDay; i++, k++) {
+      const person = HISTORY_POOL[k % HISTORY_POOL.length];
+      const category = pick(HISTORY_CATEGORIES, k);
+      const test = category === 'Laboratory' ? pick(LAB_ROTATION, k)
+        : category === 'Ultrasound' ? pick(ULTRASOUND_ROTATION[person[2]], k)
+          : /chest/i;
+      const v = await makeVisit({ person, category, test, referrerIndex: k % 3 === 0 ? k : null });
       await payFor(v, pick([CASH_METHOD, ...COUNTER_METHODS], daysAgo + i));
-      await recordFindings(v, { findings: `${category} study. No abnormality detected.` });
+      await recordFindings(v, ABNORMAL[k] || {});
       await release(v);
       historical.push({ ...v, daysAgo });
     }
@@ -458,7 +775,7 @@ async function main() {
       // artificial fixture. Measured before this: every category reported "avg 0m median 0m".
       //
       // The numbers are per-modality and roughly what each actually takes: bloods come back
-      // inside the hour, a scan needs the room and a radiographer, an echo needs reporting.
+      // inside the hour, a scan needs the room and a radiographer.
       const TURNAROUND_MINUTES = { Laboratory: 45, ECG: 25, Xray: 70, Ultrasound: 95 };
       const arrival = 8 + (h.daysAgo % 8);                       // 08:00-15:00 arrival
       const waitToPay = 4 + (h.daysAgo % 17);                    // a few minutes at the desk
@@ -496,15 +813,22 @@ async function main() {
     }
   });
 
-  // ── Appointments: today, upcoming, and a no-show ─────────────────────────────────────────
+  // ── Appointments: the demo patient's online bookings, and the front desk's ────────────────
   const client = await login('client@enlogada.com');
   const profiles = (await call('/patients/my-profiles', { token: client })).data.patients;
+  const openSlots = async (date, token, after = null) => {
+    const slots = (await call(`/appointments/availability?date=${dateStr(date)}`, { token })).data.slots || [];
+    return slots
+      .filter((s) => s && s.available !== false)
+      .map((s) => (typeof s === 'string' ? s : s.time))
+      .filter((t) => t && (!after || t.slice(0, 5) > after));
+  };
+  const nextDay = (base, n) => { const d = new Date(base); d.setDate(d.getDate() + n); return d; };
+
   if (profiles.length > 0) {
-    const slotDate = new Date();
-    slotDate.setDate(slotDate.getDate() + 2);
-    const dateStr = `${slotDate.getFullYear()}-${String(slotDate.getMonth() + 1).padStart(2, '0')}-${String(slotDate.getDate()).padStart(2, '0')}`;
+    const slotDate = nextDay(new Date(), 2);
     try {
-      const slots = (await call(`/appointments/availability?date=${dateStr}`, { token: client })).data.slots || [];
+      const slots = await openSlots(slotDate, client);
       // Two bookings, because the QR pass has two states worth seeing side by side: one still to
       // be paid at the counter (the common case in this clinic) and one already settled online.
       // With a single unpaid booking the pass was invisible for a long time — the display used to
@@ -517,7 +841,7 @@ async function main() {
         if (!slots[i]) break;
         const booking = (await call('/appointments', {
           method: 'POST', token: client,
-          body: { patientId: profiles[0].id, scheduledDate: dateStr, scheduledTime: slots[i].time || slots[i], notes: 'Online booking' },
+          body: { patientId: profiles[0].id, scheduledDate: dateStr(slotDate), scheduledTime: slots[i], notes: 'Online booking' },
         })).data.appointment;
         // Deliberately a test that NEEDS preparation — a Fasting Blood Sugar if the catalogue has
         // one. It was Laboratory[0], which is a CBC and needs nothing, so the seeded booking
@@ -536,22 +860,58 @@ async function main() {
             body: { patientVisitId: booking.patient_visit_id, paymentMethod: 'GCash', amount: parseFloat(bill.totalAmount) },
           });
         }
-        stages.push(`${profiles[0].first_name} ${profiles[0].last_name} — online appointment ${dateStr}, ${plan.label} (QR booking pass)`);
+        stages.push(`${profiles[0].first_name} ${profiles[0].last_name} — online appointment ${dateStr(slotDate)}, ${plan.label} (QR booking pass)`);
       }
     } catch (err) {
       logger.warn(`  appointment booking skipped: ${err.message}`);
     }
   }
 
+  // The front desk books ahead for walk-ins who phone in. Two of them later TODAY when the day
+  // still has room, so the Desk has bookings to check in; the rest over the next working days.
+  const nowTime = new Date();
+  const laterToday = `${String(nowTime.getHours() + 1).padStart(2, '0')}:${String(nowTime.getMinutes()).padStart(2, '0')}`;
+  let dayOffset = 1;
+  for (const [i, b] of BOOKING_POOL.entries()) {
+    try {
+      const { patient } = await patientFor(b.person);
+      let date = null;
+      let time = null;
+      if (i < 2) {
+        const todays = await openSlots(nowTime, tok.receptionist, laterToday);
+        if (todays.length) { date = nowTime; time = todays[0]; }
+      }
+      for (let tries = 0; !date && tries < 7; tries++, dayOffset++) {
+        const candidate = nextDay(nowTime, dayOffset);
+        const slots = await openSlots(candidate, tok.receptionist);
+        if (!slots.length) continue;                       // closed that day
+        date = candidate;
+        time = slots.find((t) => t.slice(0, 5) >= b.time) || slots[0];
+        if (i % 2 === 1) dayOffset++;                     // about two bookings a day
+      }
+      if (!date) continue;
+      const testIds = b.tests.map((t) => findTest(t instanceof RegExp ? 'Xray' : (/Abdomen|Pelvic|KUB|Trans/.test(t) ? 'Ultrasound' : 'Laboratory'), t).id);
+      await call('/appointments', {
+        method: 'POST', token: tok.receptionist,
+        body: { patientId: patient.id, scheduledDate: dateStr(date), scheduledTime: time, notes: b.notes, testIds },
+      });
+      stages.push(`${b.person[0]} ${b.person[1]} — booked for ${dateStr(date)} ${time.slice(0, 5)} by the front desk`);
+    } catch (err) {
+      logger.warn(`  front-desk booking for ${b.person[0]} ${b.person[1]} skipped: ${err.message}`);
+    }
+  }
+
   // ── Summary ──────────────────────────────────────────────────────────────────────────────
   const counts = await db.query(`
     SELECT
-      (SELECT COUNT(*)::int FROM patient_visits WHERE created_at::date = CURRENT_DATE) AS visits_today,
+      (SELECT COUNT(*)::int FROM patient_visits WHERE created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + 1) AS visits_today,
       (SELECT COUNT(*)::int FROM patient_visits) AS visits_total,
-      (SELECT COUNT(*)::int FROM payments WHERE payment_status = 'Paid' AND paid_at::date = CURRENT_DATE) AS paid_today,
-      (SELECT COALESCE(SUM(amount),0)::numeric(10,2) FROM payments WHERE payment_status = 'Paid' AND paid_at::date = CURRENT_DATE) AS revenue_today,
+      (SELECT COUNT(*)::int FROM patients) AS patients,
+      (SELECT COUNT(*)::int FROM payments WHERE payment_status = 'Paid' AND paid_at >= CURRENT_DATE AND paid_at < CURRENT_DATE + 1) AS paid_today,
+      (SELECT COALESCE(SUM(amount),0)::numeric(10,2) FROM payments WHERE payment_status = 'Paid' AND paid_at >= CURRENT_DATE AND paid_at < CURRENT_DATE + 1) AS revenue_today,
       (SELECT COUNT(*)::int FROM test_results WHERE is_current AND is_critical) AS critical,
-      (SELECT COUNT(*)::int FROM test_results WHERE version > 1) AS amended
+      (SELECT COUNT(*)::int FROM test_results WHERE version > 1) AS amended,
+      (SELECT COUNT(*)::int FROM appointments) AS appointments
   `);
   const c = counts.rows[0];
 
@@ -559,14 +919,58 @@ async function main() {
   logger.info("Today's workflow:");
   for (const line of stages) logger.info(`   • ${line}`);
   logger.info('');
+  logger.info(`   patients            ${c.patients}`);
   logger.info(`   visits today        ${c.visits_today}   (${c.visits_total} including 14 days of history)`);
   logger.info(`   paid today          ${c.paid_today}   —  PHP ${c.revenue_today}`);
   logger.info(`   critical results    ${c.critical}   awaiting callback`);
   logger.info(`   amended results     ${c.amended}`);
+  logger.info(`   appointments        ${c.appointments}`);
   logger.info('');
   logger.info('Every "today" screen filters on the current date, so re-run this before a demo.');
   logger.info('Frontend: http://localhost:5173');
   process.exit(0);
+}
+
+/**
+ * Sets today's arrival, payment and result times across the clinic's day so far. [1.89.0]
+ *
+ * Visits were created in arrival order, so the queue and receipt numbers already rise with these
+ * times. The day runs from 08:00 to now (or to 17:00, if the seed runs after closing); with less
+ * than an hour of it behind us there is nothing to spread and the API's own times stand.
+ */
+async function retimeToday(visits) {
+  const now = new Date();
+  const open = new Date(now); open.setHours(8, 0, 0, 0);
+  const close = new Date(now); close.setHours(17, 0, 0, 0);
+  const end = new Date(Math.min(now.getTime() - 3 * 60000, close.getTime()));
+  const span = end.getTime() - open.getTime();
+  if (span < 60 * 60000 || visits.length === 0) return;
+
+  const TURNAROUND = { Laboratory: 40, Xray: 30, Ultrasound: 45 };
+  const step = span / (visits.length + 1);
+  const at = (ms) => new Date(Math.min(ms, end.getTime()));
+
+  await db.withTransaction(async () => {
+    for (const [i, v] of visits.entries()) {
+      const arrival = at(open.getTime() + step * (i + 0.4));
+      const paid = at(arrival.getTime() + Math.min(8 * 60000, step * 0.25));
+      const turnaround = (TURNAROUND[v.category] ?? 40) * 60000 * (0.8 + ((i * 7) % 5) / 10);
+      const reported = at(paid.getTime() + turnaround);
+
+      await db.query('UPDATE patient_visits SET created_at = $2, updated_at = $2 WHERE id = $1', [v.visit.id, arrival]);
+      // Cast, or Postgres reads `$2 + interval` as interval arithmetic and refuses the assignment.
+      await db.query(`UPDATE visit_tests SET created_at = $2::timestamp + interval '2 minutes' WHERE patient_visit_id = $1`, [v.visit.id, arrival]);
+      if (v.stage !== 'waiting') {
+        await db.query('UPDATE payments SET paid_at = $2 WHERE patient_visit_id = $1', [v.visit.id, paid]);
+      }
+      if (v.stage === 'released') {
+        await db.query(
+          'UPDATE test_results SET released_at = $2, authorised_at = $2 WHERE visit_test_id = $1 AND released_at IS NOT NULL',
+          [v.visitTestId, reported]
+        );
+      }
+    }
+  });
 }
 
 main().catch((err) => {

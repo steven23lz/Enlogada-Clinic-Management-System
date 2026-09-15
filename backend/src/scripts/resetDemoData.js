@@ -63,7 +63,19 @@ const TRANSACTIONAL_TABLES = [
   // Pending sign-ups and reset codes. Emptied whole: every one is dead within ten minutes, and a
   // pending sign-up has no account to protect. Replaced password_reset_tokens. [1.73.0]
   'auth_codes',
+  // Queue and receipt numbers start again at 1. [1.89.0] Only ever safe HERE: every number these
+  // counters issued belonged to a visit or payment deleted above, so none can be issued twice.
+  // Left alone, the first patient of a fresh demo was queue #037.
+  'daily_counters',
 ];
+
+// Payment channels the E2E suite published, which are reference rows only in shape. [1.89.0]
+// Every other reference table is kept; a channel named "E2E …" was made by a spec, and 64 had
+// built up before purgeE2eData.js learned to remove them. Counted before the deletes above, so the
+// dry run can only under-report; nothing a surviving proof names is ever removed.
+const FIXTURE_CHANNELS = `payment_methods pm
+  WHERE pm.label LIKE 'E2E %'
+    AND NOT EXISTS (SELECT 1 FROM payment_submissions ps WHERE ps.payment_method_id = pm.id)`;
 
 /**
  * Removes uploaded result files that no database row references any more.
@@ -166,6 +178,11 @@ async function main() {
   }
 
   const countOf = async (sql, params = []) => (await db.query(sql, params)).rows[0].c;
+
+  // After the loop, so payment_submissions is already empty and every E2E channel is unreferenced.
+  const fixtureChannels = await countOf(`SELECT COUNT(*)::int AS c FROM ${FIXTURE_CHANNELS}`);
+  logger.info(`  payment channels (E2E)   ${fixtureChannels} row(s)`);
+  if (confirmed && fixtureChannels > 0) await db.query(`DELETE FROM ${FIXTURE_CHANNELS}`);
   const linkedPatients = await countOf(
     `SELECT COUNT(*)::int AS c FROM patients WHERE user_id IN (${disposableUsers})`,
     PROTECTED_EMAILS

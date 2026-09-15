@@ -139,7 +139,13 @@ node src/scripts/pruneHmoCards.js --days=180
 node src/scripts/pruneHmoCards.js --confirm
 ```
 
-**Before a demo:** `resetDemoData.js --confirm` then `seedDemoScenario.js`.
+**Before a demo:** `cd backend && npm run demo`, on the day (every "today" screen reads the
+current date) and with both servers running. It runs `resetDemoData.js --confirm`, then
+`seedUsers.js`, then `seedDemoScenario.js`. `[1.89.0]` The seed is invented people
+with ordinary names and Bugo / Cagayan de Oro addresses, one record each, with every result form
+filled inside the clinic's printed ranges and the day spread across clinic hours; no patient has an
+email address. `seedUsers.js` renames any demo account still carrying a placeholder name. Keep new
+seed data looking real: no "Test", "E2E" or joke names, no shared phone number, no empty forms.
 
 The suite now cleans up after itself — `playwright.config.js` wires a global setup/teardown that stamps the run start and then deletes everything the run created (throwaway `@enlogada-e2e.test` accounts, plus any visit, payment, notification or audit row created inside the window). Row counts are identical before and after a run, so a seeded demo dataset survives testing. Set `E2E_SKIP_PURGE=1` to keep the data when debugging a failure. Cleanup never fails the run; if it errors it says so and leaves the data behind.
 
@@ -343,7 +349,12 @@ About, Services, Privacy and Terms, and loads every other screen through `lazySc
 407 KB. Add a new screen the same way, never as a plain import, or it lands back in the first file.
 Navigation (`selectNav`, `handleNavigate`) runs inside `startTransition`, so the screen being left
 stays up while the next one arrives; keep new navigation inside it. A screen's file missing after a
-deploy reloads the page once, then goes to the ErrorBoundary.
+deploy reloads the page once, then goes to the ErrorBoundary. In development, a screen that dies
+with "Failed to fetch dynamically imported module" while its own file loads is Vite's library
+cache gone stale (a 504 "Outdated Optimize Dep" in the network log), not the screen: restart Vite,
+or save `vite.config.js`, which restarts it and rebuilds the cache. Never start a second dev server
+on the same folder; it shares `node_modules/.vite`. `[1.89.0]` found the portal failing 25 specs
+this way.
 
 Every member of staff lands on **Today** (`pages/Today.jsx`) `[1.77.0]`; see "Every member of
 staff lands on Today" under UI conventions. The consoles their sidebar opens from there:

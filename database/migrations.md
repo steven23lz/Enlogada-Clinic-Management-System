@@ -1,5 +1,71 @@
 # Database Migration & Schema History
 
+## [1.89.0] - 2026-09-15 (Demo data that reads like a real clinic)
+
+No migration. Backend scripts and data only. Steven asked for the test records to go, and for
+every record in the system to look real, so it can be demonstrated.
+
+### What looked fake
+
+- 64 hidden payment channels called "E2E GCash channel" and "E2E Bank channel" on SuperAdmin's
+  Payment Methods, beside the clinic's real GCash account. manual-payment and proof-review publish
+  two on every run and hide them afterwards, and nothing ever removed them.
+- The demo accounts were "Super Admin", "Juan Cashier", "Doc Lab", "Sonya Ultrasound", "Xavier
+  Ray", "Elena Client" and "Multi Role", names a report, the audit log and every sidebar repeat.
+- The demo patients were national heroes (Andres Bonifacio, Emilio Aguinaldo …), registered
+  again on every visit, all living in "Sta. Rosa, Laguna" with the phone number 09170000000.
+- Result forms were empty: a CBC printed its grid with no values, because the seeder sent a
+  sentence and no measurements.
+- Every visit of the day was stamped in the same minute, so turnaround read 0 minutes.
+- Leftovers of old test runs: the demo patient's record ("Updated Address 123, Test City"), her
+  son's ("Noah Client", Quezon City) and an inactive HMO called "Test HMO Partner Renamed".
+
+### What changed
+
+- `purgeE2eData.js` removes the E2E payment channels each run publishes, once no proof names them.
+- `resetDemoData.js` removes the E2E channels already built up, and restarts `daily_counters`, so
+  a fresh demo's first patient is queue #001 rather than #037. That is safe only there: every
+  number the counters issued belonged to a visit or payment the reset has just deleted.
+- `seedUsers.js` gives each demo account an invented, ordinary name and number, and renames an
+  account only while it still carries its placeholder. The Admin account, renamed by hand to
+  "Jessie Uba", keeps its name.
+- `seedDemoScenario.js`:
+  - 40 invented people with ordinary names, addresses around Bugo and Cagayan de Oro, and a
+    number each. One record per person: a returning patient comes back to it.
+  - Every result form filled in, inside the clinic's own printed reference ranges; a written
+    report ending in its impression for every scan and X-ray; and a few abnormal results, as in a
+    real week: a raised sugar, a raised cholesterol, a fatty liver and a pneumonia.
+  - Today's visits spread across clinic hours in the order they arrived, so waits and turnaround
+    read in minutes, and the queue and receipt numbers rise with the arrival times.
+  - Six bookings by the front desk over the next working days, beside the demo patient's two
+    online ones.
+  - No patient has an email address, so the seed cannot send one.
+- The three old records were corrected by hand, and the old demo traffic and the E2E channels
+  removed with `resetDemoData.js --confirm`, after a dry run and a full backup of the database.
+
+### Kept, because it is real
+
+The clinic's GCash account and its QR, the price list and Packages A–E, 1CoopHealth, the opening
+hours, and the report signatories (Florence Mea D. Enlogada, RMT; Dr. Gerard L. Lamayra; Dr.
+Renato M. Rivera Jr.).
+
+### Before a demo
+
+`npm run demo` from `backend/`, with both servers running. It runs `resetDemoData.js --confirm`,
+then `seedUsers.js`, then `seedDemoScenario.js`. Every "today" screen reads the current date, so
+run it on the day.
+
+### Checked
+
+- A survey of every table afterwards: no row carrying "E2E", the test email domain or the test
+  phone number; one payment channel, the clinic's; nine accounts, every one named; 41 patients.
+- The full suite: 428 passed, 0 skipped. Its first run failed 25 patient-portal specs, and the
+  cause was not the code: the development server's library cache had gone stale (see CLAUDE.md,
+  under the routing model). The same run showed the seed had to write a comment on the amended
+  laboratory result, because result-version-timeline.spec reads the superseded version's findings.
+- `npm run demo` was run again after the suite, so the data on the database is the seed's own and
+  not what a test left.
+
 ## [1.88.0] - 2026-09-15 (The public header spreads into a full-width bar when the page scrolls)
 
 No migration. Frontend only.
