@@ -1,0 +1,404 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.5.2 Chrome/142.0.7444.265 Electron/39.6.1 Safari/537.36" version="29.5.2" pages="9">
+  <diagram id="Context" name="Context">
+    <mxGraphModel dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" value="Enlogada Ultrasound and Diagnostic Clinic Management System" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=middle;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="560" y="470" width="360" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" value="Client / Patient" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="bookings, payments, results" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;startArrow=classic;startFill=1;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" value="Receptionist" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="80" y="340" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="check-in, walk-ins, queue" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;startArrow=classic;startFill=1;" edge="1" parent="1" source="n4" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" value="Cashier" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="80" y="560" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="billing, receipts, takings" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;startArrow=classic;startFill=1;" edge="1" parent="1" source="n6" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n8" value="Laboratory Staff" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="80" y="780" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="laboratory results" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;startArrow=classic;startFill=1;" edge="1" parent="1" source="n8" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n10" value="Ultrasound Staff" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="120" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="ultrasound results" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;startArrow=classic;startFill=1;" edge="1" parent="1" source="n10" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n12" value="X-Ray Staff" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="340" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="x-ray results" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;startArrow=classic;startFill=1;" edge="1" parent="1" source="n12" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n14" value="Admin" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="560" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="HMO decisions, reports" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;startArrow=classic;startFill=1;" edge="1" parent="1" source="n14" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n16" value="Super Admin" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="780" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" value="access, services, schedule" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;startArrow=classic;startFill=1;" edge="1" parent="1" source="n16" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="SuperAdmin" name="Super Admin">
+    <mxGraphModel dx="1665" dy="841" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=middle;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" value="Enlogada Ultrasound and Diagnostic Clinic Management System" vertex="1">
+          <mxGeometry height="314" width="400" x="140" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" value="Super Admin" vertex="1">
+          <mxGeometry height="590" width="250" x="1080" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="n2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.0678;exitDx=0;exitDy=0;entryY=0.0678;entryDx=0;entryDy=0;" target="n1" value="Login details">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="n2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.1492;exitDx=0;exitDy=0;entryY=0.1492;entryDx=0;entryDy=0;" target="n1" value="Role access">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="n2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.2305;exitDx=0;exitDy=0;entryY=0.2305;entryDx=0;entryDy=0;" target="n1" value="Services and prices">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="n2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3119;exitDx=0;exitDy=0;entryY=0.3119;entryDx=0;entryDy=0;" target="n1" value="Payment channel">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="n2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3932;exitDx=0;exitDy=0;entryY=0.3932;entryDx=0;entryDy=0;" target="n1" value="Clinic hours">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="n2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.4746;exitDx=0;exitDy=0;entryY=0.4746;entryDx=0;entryDy=0;" target="n1" value="Report request">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="n1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6068;exitDx=0;exitDy=0;entryY=0.6068;entryDx=0;entryDy=0;" target="n2" value="Account confirmed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="n1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6881;exitDx=0;exitDy=0;entryY=0.6881;entryDx=0;entryDy=0;" target="n2" value="Updated access">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="n1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.7695;exitDx=0;exitDy=0;entryY=0.7695;entryDx=0;entryDy=0;" target="n2" value="Updated services">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="n1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.8508;exitDx=0;exitDy=0;entryY=0.8508;entryDx=0;entryDy=0;" target="n2" value="Analytics">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="n1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.9322;exitDx=0;exitDy=0;entryY=0.9322;entryDx=0;entryDy=0;" target="n2" value="Audit trail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="Admin" name="Admin">
+    <mxGraphModel dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" value="Enlogada Ultrasound and Diagnostic Clinic Management System" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=middle;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="140" y="90" width="400" height="542" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" value="Admin" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="90" width="250" height="542" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="Login details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.0738;exitDx=0;exitDy=0;entryY=0.0738;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="HMO decision" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.1624;exitDx=0;exitDy=0;entryY=0.1624;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="Staff account" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.2509;exitDx=0;exitDy=0;entryY=0.2509;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="Record correction" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3395;exitDx=0;exitDy=0;entryY=0.3395;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="Report request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.4280;exitDx=0;exitDy=0;entryY=0.4280;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="Account confirmed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.5720;exitDx=0;exitDy=0;entryY=0.5720;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="HMO claims" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6605;exitDx=0;exitDy=0;entryY=0.6605;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="Patient records" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.7491;exitDx=0;exitDy=0;entryY=0.7491;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="Reports" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.8376;exitDx=0;exitDy=0;entryY=0.8376;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="Payment records" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.9262;exitDx=0;exitDy=0;entryY=0.9262;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="Receptionist" name="Receptionist">
+    <mxGraphModel dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" value="Enlogada Ultrasound and Diagnostic Clinic Management System" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=middle;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="140" y="90" width="400" height="590" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" value="Receptionist" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="90" width="250" height="590" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="Login details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.0678;exitDx=0;exitDy=0;entryY=0.0678;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="Walk-in details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.1492;exitDx=0;exitDy=0;entryY=0.1492;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="Scanned QR code" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.2305;exitDx=0;exitDy=0;entryY=0.2305;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="Test request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3119;exitDx=0;exitDy=0;entryY=0.3119;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="HMO claim" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3932;exitDx=0;exitDy=0;entryY=0.3932;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="No-show" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.4746;exitDx=0;exitDy=0;entryY=0.4746;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="Account confirmed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6068;exitDx=0;exitDy=0;entryY=0.6068;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="Booking details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6881;exitDx=0;exitDy=0;entryY=0.6881;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="Queue ticket" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.7695;exitDx=0;exitDy=0;entryY=0.7695;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="Billing request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.8508;exitDx=0;exitDy=0;entryY=0.8508;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="HMO decision" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.9322;exitDx=0;exitDy=0;entryY=0.9322;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="Cashier" name="Cashier">
+    <mxGraphModel dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" value="Enlogada Ultrasound and Diagnostic Clinic Management System" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=middle;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="140" y="90" width="400" height="542" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" value="Cashier" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="90" width="250" height="542" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="Login details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.0738;exitDx=0;exitDy=0;entryY=0.0738;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="Payment details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.1624;exitDx=0;exitDy=0;entryY=0.1624;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="Discount claim" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.2509;exitDx=0;exitDy=0;entryY=0.2509;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="Proof decision" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3395;exitDx=0;exitDy=0;entryY=0.3395;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="Refund details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.4280;exitDx=0;exitDy=0;entryY=0.4280;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="Account confirmed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.5720;exitDx=0;exitDy=0;entryY=0.5720;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="Patients to bill" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6605;exitDx=0;exitDy=0;entryY=0.6605;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="Receipt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.7491;exitDx=0;exitDy=0;entryY=0.7491;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="Payment proofs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.8376;exitDx=0;exitDy=0;entryY=0.8376;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="Takings" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.9262;exitDx=0;exitDy=0;entryY=0.9262;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="LaboratoryStaff" name="Laboratory Staff">
+    <mxGraphModel dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" value="Enlogada Ultrasound and Diagnostic Clinic Management System" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=middle;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="140" y="90" width="400" height="446" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" value="Laboratory Staff" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="90" width="250" height="446" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="Login details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.0897;exitDx=0;exitDy=0;entryY=0.0897;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="Laboratory report file" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.1973;exitDx=0;exitDy=0;entryY=0.1973;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="Status update" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3049;exitDx=0;exitDy=0;entryY=0.3049;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="Report delivery" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.4126;exitDx=0;exitDy=0;entryY=0.4126;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="Account confirmed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.5874;exitDx=0;exitDy=0;entryY=0.5874;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="Laboratory requests" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6951;exitDx=0;exitDy=0;entryY=0.6951;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="Patient details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.8027;exitDx=0;exitDy=0;entryY=0.8027;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="Released result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.9103;exitDx=0;exitDy=0;entryY=0.9103;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="UltrasoundStaff" name="Ultrasound Staff">
+    <mxGraphModel dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" value="Enlogada Ultrasound and Diagnostic Clinic Management System" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=middle;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="140" y="90" width="400" height="446" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" value="Ultrasound Staff" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="90" width="250" height="446" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="Login details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.0897;exitDx=0;exitDy=0;entryY=0.0897;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="Ultrasound report file" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.1973;exitDx=0;exitDy=0;entryY=0.1973;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="Status update" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3049;exitDx=0;exitDy=0;entryY=0.3049;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="Report delivery" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.4126;exitDx=0;exitDy=0;entryY=0.4126;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="Account confirmed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.5874;exitDx=0;exitDy=0;entryY=0.5874;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="Ultrasound requests" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6951;exitDx=0;exitDy=0;entryY=0.6951;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="Patient details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.8027;exitDx=0;exitDy=0;entryY=0.8027;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="Released result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.9103;exitDx=0;exitDy=0;entryY=0.9103;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="XrayStaff" name="Xray Staff">
+    <mxGraphModel dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" value="Enlogada Ultrasound and Diagnostic Clinic Management System" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=middle;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="140" y="90" width="400" height="446" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" value="Xray Staff" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="90" width="250" height="446" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="Login details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.0897;exitDx=0;exitDy=0;entryY=0.0897;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="X-ray report file" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.1973;exitDx=0;exitDy=0;entryY=0.1973;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="Status update" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3049;exitDx=0;exitDy=0;entryY=0.3049;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="Report delivery" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.4126;exitDx=0;exitDy=0;entryY=0.4126;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="Account confirmed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.5874;exitDx=0;exitDy=0;entryY=0.5874;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="X-ray requests" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6951;exitDx=0;exitDy=0;entryY=0.6951;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="Patient details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.8027;exitDx=0;exitDy=0;entryY=0.8027;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="Released result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.9103;exitDx=0;exitDy=0;entryY=0.9103;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="ClientPatient" name="Client Patient">
+    <mxGraphModel dx="1200" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="n1" value="Enlogada Ultrasound and Diagnostic Clinic Management System" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=middle;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="140" y="90" width="400" height="590" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" value="Client Patient" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="90" width="250" height="590" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="Registration details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.0678;exitDx=0;exitDy=0;entryY=0.0678;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="Verification code" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.1492;exitDx=0;exitDy=0;entryY=0.1492;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="Login details" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.2305;exitDx=0;exitDy=0;entryY=0.2305;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="Patient profile" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3119;exitDx=0;exitDy=0;entryY=0.3119;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="Booking request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.3932;exitDx=0;exitDy=0;entryY=0.3932;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="Proof of payment" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=0;entryX=1;exitY=0.4746;exitDx=0;exitDy=0;entryY=0.4746;entryDx=0;entryDy=0;" edge="1" parent="1" source="n2" target="n1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="Account confirmed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6068;exitDx=0;exitDy=0;entryY=0.6068;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="QR booking pass" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.6881;exitDx=0;exitDy=0;entryY=0.6881;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="Preparation notes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.7695;exitDx=0;exitDy=0;entryY=0.7695;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="Receipt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.8508;exitDx=0;exitDy=0;entryY=0.8508;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="Results" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;exitX=1;entryX=0;exitY=0.9322;exitDx=0;exitDy=0;entryY=0.9322;entryDx=0;entryDy=0;" edge="1" parent="1" source="n1" target="n2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

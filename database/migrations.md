@@ -1,5 +1,31 @@
 # Database Migration & Schema History
 
+## [1.100.0] - 2026-10-07 (The DFD actor is never drawn big; the routing does the work)
+
+No migration. Documentation only.
+
+Steven, on [1.99.0]'s Level 0: follow the paper's own type of diagramming, and do not make the
+actor too big — then the same for Level 1. [1.99.0] had made both boxes as tall as the stack of
+flows so every arrow could run straight across, which is readable and is also a slab with one word
+in it where the paper has a small labelled rectangle.
+
+The boxes go back to the paper's sizes and the ROUTING carries the clarity instead.
+
+- **Level 0** is the original shape: a 420x170 process box, a 210x90 actor, flows routed around
+  them. Every flow gets a corridor of its own, and the corridors are NESTED — the one furthest
+  from the boxes starts furthest right on the actor and comes down furthest left on the system —
+  so no two flows in a group ever cross. Inputs run above the boxes, outputs below, so the
+  direction reads before the arrowhead does, and each label sits alone on its own corridor.
+- **Level 1** draws the actor beside each process at its ordinary size, which is the standard way
+  out of this problem and also what keeps every arrow short: the alternative, one box down the
+  side of the sheet, is the slab Steven objected to, and the version before that ran every flow
+  down a single trunk with ten labels on one vertical line. Both ends of a flow are read off the
+  same absolute height, so the line is dead straight rather than carrying the small jog that comes
+  of giving the shorter actor box its own even fractions. The foot of each sheet says the repeated
+  actor and any repeated store are one actor and one store.
+
+Checked: `checkDiagrams.cjs` clean on all 36 pages, and all 36 PNGs re-exported and distinct.
+
 ## [1.99.0] - 2026-10-07 (Diagrams: one flow one line, and one way through each role)
 
 No migration. Documentation only.

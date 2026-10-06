@@ -383,35 +383,41 @@ const USE_CASES = [
 const SYSTEM_NAME = 'Enlogada Ultrasound and Diagnostic\nClinic Management System';
 const SYSTEM_ONE_LINE = 'Enlogada Ultrasound and Diagnostic Clinic Management System';
 
-// One flow, one straight line, one label above it.
+// The paper's own Level 0 shape: a modest process box, a SMALL actor, and the flows routed
+// around them. Steven's note — the actor must not be drawn as a tall slab.
 //
-// The first version fanned every flow out of a single point on each box and bent it twice to
-// reach its own row, so eleven labels floated over a comb of parallel lines and nothing said
-// which label belonged to which arrow. Both boxes are now as TALL as the stack of flows, so each
-// arrow leaves and lands at its own height and runs straight across with nothing in its way.
-// The arrowhead is then the only thing that has to be read to know the direction.
+// What makes it readable is the routing, not the box sizes. Every flow gets a corridor of its own,
+// and the corridors are NESTED: the one furthest from the boxes starts furthest right on the actor
+// and lands furthest left on the system, so no two flows in a group ever cross. Inputs run above
+// the boxes and outputs below, so the direction is clear before the arrowhead is read, and each
+// label sits alone on its own corridor.
 function dfd0(spec) {
   const p = new Page(spec.name);
-  const ROW = 48, TOP = 90, GROUP_GAP = 30, PAD = 40;
-  const rows = spec.inputs.length + spec.outputs.length;
-  const boxH = Math.max(180, PAD * 2 + (rows - 1) * ROW + GROUP_GAP);
-  const sysX = 140, sysW = 400, entX = 1080, entW = 250;
-  const sys = p.node(SYSTEM_ONE_LINE, sysX, TOP, sysW, boxH, S.system);
-  const ent = p.node(spec.name, entX, TOP, entW, boxH, S.entity);
+  const G = 44, TOP = 70, LEAD = 34;
+  const SYS_X = 160, SYS_W = 420, SYS_H = 170;
+  const ACT_X = 1120, ACT_W = 210, ACT_H = 90;
+  const ins = spec.inputs, outs = spec.outputs;
 
-  // Inputs above, outputs below, with a gap between the two groups: a reader should be able to see
-  // at a glance what the actor gives the system and what it gets back, without counting arrowheads.
-  const yOf = (i) => TOP + PAD + i * ROW + (i >= spec.inputs.length ? GROUP_GAP : 0);
-  const frac = (y) => ((y - TOP) / boxH).toFixed(4);
-  const across = (y) => `exitY=${frac(y)};exitDx=0;exitDy=0;entryY=${frac(y)};entryDx=0;entryDy=0;`;
+  const sysY = TOP + LEAD + Math.max(0, ins.length - 1) * G;
+  const sys = p.node(SYSTEM_ONE_LINE, SYS_X, sysY, SYS_W, SYS_H, S.system);
+  const ent = p.node(spec.name, ACT_X, sysY + (SYS_H - ACT_H) / 2, ACT_W, ACT_H, S.entity);
 
-  spec.inputs.forEach((label, i) => {
-    const y = yOf(i);
-    p.edge(ent, sys, label, S.edgeFlow + 'exitX=0;entryX=1;' + across(y));
+  // Spread the attachment points along an edge, leaving the corners alone.
+  const spread = (i, n, from, to) => (n < 2 ? (from + to) / 2 : from + (i * (to - from)) / (n - 1));
+
+  ins.forEach((label, i) => {
+    const y = sysY - LEAD - i * G;
+    const fromX = spread(i, ins.length, 0.25, 0.8);          // further right the higher it climbs
+    const toX = spread(i, ins.length, 0.85, 0.15);           // and further left where it comes down
+    p.edge(ent, sys, label, S.edgeFlow + `exitX=${fromX.toFixed(3)};exitY=0;exitDx=0;exitDy=0;entryX=${toX.toFixed(3)};entryY=0;entryDx=0;entryDy=0;`,
+      [[ACT_X + fromX * ACT_W, y], [SYS_X + toX * SYS_W, y]]);
   });
-  spec.outputs.forEach((label, j) => {
-    const y = yOf(spec.inputs.length + j);
-    p.edge(sys, ent, label, S.edgeFlow + 'exitX=1;entryX=0;' + across(y));
+  outs.forEach((label, j) => {
+    const y = sysY + SYS_H + LEAD + j * G;
+    const fromX = spread(j, outs.length, 0.85, 0.15);
+    const toX = spread(j, outs.length, 0.25, 0.8);
+    p.edge(sys, ent, label, S.edgeFlow + `exitX=${fromX.toFixed(3)};exitY=1;exitDx=0;exitDy=0;entryX=${toX.toFixed(3)};entryY=1;entryDx=0;entryDy=0;`,
+      [[SYS_X + fromX * SYS_W, y], [ACT_X + toX * ACT_W, y]]);
   });
   return p;
 }
@@ -478,41 +484,45 @@ const STORES = {
 
 // A row per process, and every arrow in it horizontal.
 //
-// The actor box is as TALL as the whole column of processes, so a flow leaves it at its own
-// height and runs straight into the process it belongs to. Before this, every flow left the actor
-// from one point and ran down a single trunk, which put ten labels on one vertical line with
-// nothing to say which process each one was going to.
-//
-// A data store is drawn beside the process that uses it, so those arrows are short too. The same
-// store number appearing twice on a sheet is the same store -- the standard way to keep a data
-// flow diagram free of lines that cross the page to reach it.
+// The actor is drawn at its ordinary size beside each process rather than as one slab down the
+// side of the sheet — Steven's note, and it is also the standard way out of the problem this
+// layout solves: every flow then leaves a box an arm's length away instead of running down a
+// single trunk that put ten labels on one vertical line. A data store is drawn beside the process
+// that uses it for the same reason. The foot of the sheet says that the repeats are one actor and
+// one store, which is the only thing the reader has to be told.
 function dfd1(spec) {
   const p = new Page(spec.name);
   const PROC_H = 110, ROW_H = 190, TOP = 70;
-  const ENT_X = 60, ENT_W = 200, PROC_X = 520, PROC_W = 280, STORE_X = 1010;
+  const ENT_X = 60, ENT_W = 200, ENT_H = 90, PROC_X = 520, PROC_W = 280, STORE_X = 1010;
   const total = spec.processes.length * ROW_H - (ROW_H - PROC_H);
-  const entY = TOP, entH = total;
-  const ent = p.node(spec.name, ENT_X, entY, ENT_W, entH, S.entity);
-  const entFrac = (y) => ((y - entY) / entH).toFixed(4);
 
   spec.processes.forEach((proc, i) => {
     const y = TOP + i * ROW_H;
+    const ent = p.node(spec.name, ENT_X, y + (PROC_H - ENT_H) / 2, ENT_W, ENT_H, S.entity);
     const lane = p.node(proc.n, PROC_X, y, PROC_W, PROC_H, S.procHead);
     p.node(proc.name, 0, 24, PROC_W, PROC_H - 24, S.procBody, lane.id);
 
     // Inputs first, then outputs, spread evenly down the process box so no two share a height.
+    // The actor is shorter than the process, so its own end of each flow is spread over its edge
+    // in the same order, which keeps a flow horizontal at both ends or very nearly so.
     const ins = proc.in || [], outs = proc.out || [];
     const flows = ins.length + outs.length;
     const laneY = (j) => y + ((j + 1) * PROC_H) / (flows + 1);
+    // Both ends are read off the SAME absolute height, so the line is dead straight. Taking the
+    // actor's end as its own even fraction instead leaves a small jog in every flow, because the
+    // actor box is shorter than the process box.
+    const entY = y + (PROC_H - ENT_H) / 2;
+    const entFrac = (j) => Math.min(0.95, Math.max(0.05, (laneY(j) - entY) / ENT_H)).toFixed(4);
     ins.forEach((label, k) => {
       const fy = laneY(k);
       p.edge(ent, lane, label, S.edgeFlow
-        + `exitX=1;exitY=${entFrac(fy)};exitDx=0;exitDy=0;entryX=0;entryY=${(((fy - y) / PROC_H)).toFixed(4)};entryDx=0;entryDy=0;`);
+        + `exitX=1;exitY=${entFrac(k)};exitDx=0;exitDy=0;entryX=0;entryY=${(((fy - y) / PROC_H)).toFixed(4)};entryDx=0;entryDy=0;`);
     });
     outs.forEach((label, k) => {
-      const fy = laneY(ins.length + k);
+      const j = ins.length + k;
+      const fy = laneY(j);
       p.edge(lane, ent, label, S.edgeFlow
-        + `exitX=0;exitY=${(((fy - y) / PROC_H)).toFixed(4)};exitDx=0;exitDy=0;entryX=1;entryY=${entFrac(fy)};entryDx=0;entryDy=0;`);
+        + `exitX=0;exitY=${(((fy - y) / PROC_H)).toFixed(4)};exitDx=0;exitDy=0;entryX=1;entryY=${entFrac(j)};entryDx=0;entryDy=0;`);
     });
 
     // Each store sits at its own height beside this process, with its read and its write on their
@@ -539,14 +549,12 @@ function dfd1(spec) {
     });
   });
 
-  // Said once, at the foot of the sheet, and only on a sheet where a store really is drawn twice —
-  // otherwise it answers a question nobody asked. Without it a reader counts two Appointments and
-  // Visits.
+  // Said once, at the foot of the sheet. Without it a reader counts seven receptionists.
   const drawn = spec.processes.flatMap((proc) => (proc.stores || []).map((st) => st.id));
-  if (drawn.length !== new Set(drawn).size) {
-    p.node('A data store drawn more than once on this sheet is the same store.',
-      ENT_X, TOP + total + 40, 520, 44, S.note);
-  }
+  const dupStore = drawn.length !== new Set(drawn).size;
+  p.node(`The ${spec.name} box is one actor, drawn beside each process it takes part in`
+    + (dupStore ? ', and a data store drawn more than once is one store.' : '.'),
+    ENT_X, TOP + total + 40, 560, 50, S.note);
   return p;
 }
 

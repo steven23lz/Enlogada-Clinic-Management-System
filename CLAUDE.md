@@ -1063,8 +1063,13 @@ Services Catalogue.
   placement in the `.drawio` is fine and expected. The System Architecture figure is not generated.
   `checkDiagrams.cjs` reads the files back and fails on a decision with fewer than two exits, a
   dead end, overlapping boxes or a label too long to read; run it after any change.
-  **One flow, one straight line, one label above it** `[1.99.0]` — a DFD box is drawn as tall as
-  the stack of flows it carries so no arrow has to bend, the Level 1 actor spans the whole column
-  of processes, and a store sits beside the process that uses it. **A flowchart says a thing
-  once**: the Desk's walk-in path was drawn three times, each ending in its own queue ticket.
-  A branch that rejoins merges into the TOP of its target, never the right edge.
+  **One flow, one line, one label on it — and the actor is never drawn big** `[1.100.0]`. Steven's
+  rule: a DFD keeps the paper's own box sizes (a modest process box, a small actor), and the
+  ROUTING is what makes it readable. Level 0 gives every flow its own corridor and NESTS them —
+  the corridor furthest from the boxes starts furthest right on the actor and lands furthest left
+  on the system — so no two flows in a group cross, with inputs above the boxes and outputs below.
+  Level 1 draws the actor beside each process, at its ordinary size, and each store beside the
+  process that uses it, so every arrow is short and straight; the foot of the sheet says the
+  repeats are one actor and one store. **A flowchart says a thing once**: the Desk's walk-in path
+  was drawn three times, each ending in its own queue ticket. A branch that rejoins merges into
+  the TOP of its target, never the right edge.
