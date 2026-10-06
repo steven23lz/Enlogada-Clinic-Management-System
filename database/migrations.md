@@ -1,5 +1,31 @@
 # Database Migration & Schema History
 
+## [1.97.0] - 2026-10-06 (The department uploads the report; the diagrams no longer show encoding)
+
+No migration.
+
+Steven: the departments will only upload the test or report, so typing the values into a form is
+not part of the clinic's workflow. The diagrams now say upload:
+
+- the department flowcharts step from "Perform test" to "Upload report file";
+- the use cases read "Upload Laboratory / Ultrasound / X-Ray Report", and amending a released
+  result is "Replace Released Report";
+- the Level 0 inputs are report files, and Level 1 process 11.0 is "Upload Results", which no
+  longer reads the result form from D6.
+
+The upload path this describes is real: `POST /results/:visitTestId` takes multipart with a `file`
+field, the bytes are stored outside the database under `uploads/results`, and the file is served
+through an authenticated, ownership-checked route.
+
+**What this leaves undocumented, for a decision.** The system also has structured result entry,
+built from the clinic's own report archive: `result_field_sets`, `result_fields`,
+`result_field_set_tests` and `result_measurements` (4 of the 36 tables, still on the ERD because it
+is generated from the live database), ten seeded ultrasound field sets, the laboratory grid with
+reference ranges and its two-signatory printed form, and two specs. Together with the critical-value
+feature [1.96.0], the running app now does two sizeable things the paper will not describe. Either
+they come out of the system, or the paper carries one short paragraph saying the system supports
+them and the clinic does not use them. Left as built until Steven says which.
+
 ## [1.96.0] - 2026-10-06 (Critical-value callbacks out of the diagrams; the system still has them)
 
 No migration.
