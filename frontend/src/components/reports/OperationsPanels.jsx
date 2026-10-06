@@ -237,7 +237,7 @@ export const TurnaroundPanel = ({
               <TableHead className="text-right">Typical</TableHead>
               <TableHead className="text-right">Mean</TableHead>
               <TableHead className="text-right">Outstanding</TableHead>
-              <TableHead className="text-right">Flags</TableHead>
+              <TableHead className="text-right">Amended</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -283,24 +283,15 @@ export const TurnaroundPanel = ({
                     </TableCell>
                     <TableCell className="text-right">
                       <span className="inline-flex items-center justify-end gap-1.5">
-                        {row.critical > 0 && (
-                          <span
-                            title={`${row.critical} critical result${row.critical === 1 ? '' : 's'}`}
-                            className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-1.5 py-0.5 text-micro font-semibold leading-5 text-rose-700 ring-1 ring-inset ring-rose-200"
-                          >
-                            <AlertTriangle className="h-3 w-3" />
-                            {row.critical}
-                          </span>
-                        )}
                         {row.amended > 0 && (
                           <span
                             title={`${row.amended} amended report${row.amended === 1 ? '' : 's'}`}
                             className="rounded-md bg-amber-50 px-1.5 py-0.5 text-micro font-semibold leading-5 text-amber-800 ring-1 ring-inset ring-amber-200"
                           >
-                            {row.amended} amended
+                            {row.amended}
                           </span>
                         )}
-                        {row.critical === 0 && row.amended === 0 && <span className="text-slate-400">—</span>}
+                        {row.amended === 0 && <span className="text-slate-400">—</span>}
                       </span>
                     </TableCell>
                   </TableRow>

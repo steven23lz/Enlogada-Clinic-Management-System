@@ -66,14 +66,14 @@ class ResultController {
   async uploadResult(req, res, next) {
     try {
       const { visitTestId } = req.params;
-      const { findings, remarks, amendmentReason, isCritical } = req.body;
+      const { findings, remarks, amendmentReason } = req.body;
       const releasedBy = req.user.userId;
 
-      // Same multipart problem as `isCritical` below, one step worse: an object cannot survive
-      // form-data at all, so the client sends it as a JSON string. Parsed here rather than in the
-      // service, because a malformed body is a request problem and the service should never have
-      // to know how it arrived. A bad string is refused rather than treated as "no measurements",
-      // which would silently save a report with an empty Measurements block.
+      // An object cannot survive form-data at all, so the client sends it as a JSON string.
+      // Parsed here rather than in the service, because a malformed body is a request problem and
+      // the service should never have to know how it arrived. A bad string is refused rather than
+      // treated as "no measurements", which would silently save a report with an empty
+      // Measurements block.
       let measurements;
       if (req.body.measurements !== undefined) {
         if (typeof req.body.measurements === 'string') {
@@ -101,9 +101,6 @@ class ResultController {
         remarks,
         releasedBy,
         amendmentReason,
-        // Arrives as a string over multipart/form-data, where every field is text — a bare
-        // truthiness check would make the string "false" mean true.
-        isCritical: isCritical === true || isCritical === 'true',
         measurements
       }, req.user);
 
@@ -137,33 +134,6 @@ class ResultController {
       const { visitTestId } = req.params;
       const versions = await resultService.getVersionHistory(visitTestId, req.user);
       return res.status(200).json({ status: 'success', data: { versions } });
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  async getOutstandingCriticals(req, res, next) {
-    try {
-      const outstanding = await resultService.getOutstandingCriticals();
-      return res.status(200).json({
-        status: 'success',
-        data: { outstanding, count: outstanding.length },
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
-
-  async acknowledgeCritical(req, res, next) {
-    try {
-      const { visitTestId } = req.params;
-      const { note } = req.body;
-      const result = await resultService.acknowledgeCritical(visitTestId, { note }, req.user);
-      return res.status(200).json({
-        status: 'success',
-        message: 'Critical result acknowledged. The callback has been recorded.',
-        data: { result },
-      });
     } catch (err) {
       next(err);
     }

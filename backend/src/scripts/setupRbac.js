@@ -67,7 +67,6 @@ const PERMISSIONS = [
   { name: 'results:read', module: 'Results', description: 'View worklists and released results' },
   { name: 'results:write', module: 'Results', description: 'Record diagnostic findings' },
   { name: 'results:release', module: 'Results', description: 'Authorise release of a result to the patient' },
-  { name: 'results:acknowledge_critical', module: 'Results', description: 'Record a critical-result callback' },
 
   // Billing
   { name: 'billing:read', module: 'Billing', description: 'View bills and transaction history' },
@@ -94,7 +93,6 @@ const RECEPTION = [
   'visits:create', 'visits:read', 'visits:update',
   'appointments:read', 'appointments:update', 'appointments:cancel', 'appointments:reschedule',
   'tests:assign', 'tests:read_assigned', 'hmo:read', 'hmo:request',
-  'results:acknowledge_critical',
   // Files a proof of payment on a patient's behalf — somebody who paid online and then rang the
   // clinic rather than uploading it themselves. Reception cannot VERIFY one: that is
   // billing:process, and taking money stays with the cashier.
@@ -128,7 +126,7 @@ const CASHIER = [
 ];
 
 const MODALITY = [
-  'results:read', 'results:write', 'results:release', 'results:acknowledge_critical',
+  'results:read', 'results:write', 'results:release',
   'patients:read', 'tests:read_assigned',
 ];
 
@@ -143,7 +141,7 @@ const ADMIN = [
   'visits:create', 'visits:read', 'visits:update',
   'appointments:read', 'appointments:update', 'appointments:cancel', 'appointments:reschedule',
   'tests:manage', 'tests:assign', 'tests:read_assigned',
-  'results:read', 'results:acknowledge_critical',
+  'results:read',
   'billing:read', 'billing:refund', 'billing:discount', 'billing:submit_proof',
   'hmo:read', 'hmo:request', 'hmo:approve',
   'reports:view', 'audit:view', 'staff:manage',

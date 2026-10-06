@@ -1,5 +1,56 @@
 # Database Migration & Schema History
 
+## [1.98.0] - 2026-10-06 (The critical-value workflow is withdrawn from the system)
+
+`node src/scripts/migrateRemoveCriticalValues.js` — `--rollback` restores the columns, empty.
+
+Steven: the clinic is not responsible for telephoning a panic value back, so [1.96.0] took it out
+of the paper's diagrams. That left the opposite problem — a Critical Callbacks tile on the
+worklist, a "critical results to phone" row on Today and a callback dialog behind both, for a
+workflow the clinic does not perform. A feature nobody will use is worse than a missing one: it
+counts zero forever, and the first person who reads it as a promise is let down by it.
+
+**Dropped:** `test_results.is_critical`, `.critical_acknowledged_at`, `.critical_acknowledged_by`
+and `.critical_acknowledgement_note`, with `fk_results_critical_ack_by` and
+`idx_test_results_critical_ack_by`; the `results:acknowledge_critical` permission (its role and
+account grants cascade); `POST /results/:visitTestId/acknowledge-critical` and
+`GET /results/critical/outstanding`; `CriticalCallbackDialog`, `useCriticalCallbacks`, the tile,
+the Today descriptor `criticalNeed`, the entry dialog's flag, the version badge, and the `critical`
+column of the diagnostic throughput report and its CSV.
+
+**The flag is copied into `audit_log` before the drop.** A flag set on a released report is a
+clinical statement somebody made about a real patient, and `--rollback` can restore the shape of
+those columns but never their values. Every flagged row is written out as `result.critical_flag_retired`
+naming the result, its version, when it was released and whether a callback had been recorded. One
+row on this database; the entry is now the only record of it.
+
+**What stayed, and why.** The `critical` notification severity remains in
+`chk_notification_events_type` and in `notificationService.VALID_TYPES`, with the bell's rendering
+for it. Severity belongs to the notification subsystem rather than to this feature, and the next
+genuinely urgent event should not have to re-argue a CHECK constraint to say so. Nothing sends it
+today. Abnormal-value highlighting (`lib/abnormalValues.js`, `FindingsText`) also stays: it marks a
+figure outside the range printed beside it on the clinic's own form, which is a reading aid, not a
+judgement — the comments that called it "not a substitute for the critical-value workflow" now say
+what it is on its own terms.
+
+`migrateIndexHygiene.js` [1.29.0] no longer creates `idx_test_results_critical_ack_by`. Removed
+rather than guarded: a database old enough to need that script still has the column when it runs,
+and one new enough not to have it was built from `schema.sql`, where the index no longer exists
+either.
+
+**Structured result entry is the other half of [1.97.0]'s open question, and it STAYS.** The field
+sets, the laboratory grid and the two-signatory printed form are built from the clinic's own report
+archive and do real work; the paper will carry one paragraph saying the system supports structured
+entry and the clinic currently uploads its reports instead. That is a sentence in the paper, not a
+migration.
+
+Checked: 425 E2E (0 skipped, down from 430 — `critical-callback.spec.js` and five cases gone, one
+added for an amended release), 81 backend unit, 107 frontend unit, lint, build, prose scan,
+`verifyRbacWiring` (76 gated routes, 31 permissions), and `schema.sql` rebuilt into a throwaway
+database and diffed against the live one: 36 tables, 328 columns, 144 indexes, 316 constraints,
+identical but for four FK NAMES that predate this change (migration-created `*_fkey` against
+schema.sql's explicit names).
+
 ## [1.97.0] - 2026-10-06 (The department uploads the report; the diagrams no longer show encoding)
 
 No migration.

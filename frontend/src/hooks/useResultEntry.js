@@ -88,11 +88,6 @@ export function useResultEntry({ user, onOpened, onRecorded, onReleased } = {}) 
 
   const [isEditing, setIsEditing] = useState(false);
 
-  /**
-   * A panic value released with the same silent email as a routine result is the failure this
-   * flag prevents: flagging it routes an urgent callback notification to the front desk.
-   */
-  const [isCritical, setIsCritical] = useState(false);
   // The shape this ticket records in, and what has been typed into it. Held here rather than in a
   // hook of its own because the reset discipline below applies to them identically — see resetForm.
   const [fieldSet, setFieldSet] = useState(null);
@@ -129,9 +124,8 @@ export function useResultEntry({ user, onOpened, onRecorded, onReleased } = {}) 
     setActiveTest(test);
     setIsEditing(false);
     resetForm();
-    // Never carry a critical flag or an amendment reason over from the previous ticket — a stale
-    // flag raises a false callback, and a stale one cleared suppresses a real one.
-    setIsCritical(false);
+    // Never carry an amendment reason over from the previous ticket: it describes a change to
+    // one report and means nothing on the next.
     setAmendmentReason('');
     setJustReleased(null);
     setOpen(true);
@@ -179,10 +173,7 @@ export function useResultEntry({ user, onOpened, onRecorded, onReleased } = {}) 
     setError('');
     setFieldSet(null);
     setMeasurements({});
-    // Carry the existing critical flag into the amendment: correcting a typo in a panic result
-    // must not quietly downgrade it to routine. The reason starts empty on purpose — it
-    // describes THIS change, not the previous one.
-    setIsCritical(Boolean(test.is_critical));
+    // The reason starts empty on purpose — it describes THIS change, not the previous one.
     setAmendmentReason('');
     setJustReleased(null);
     setOpen(true);
@@ -264,8 +255,7 @@ export function useResultEntry({ user, onOpened, onRecorded, onReleased } = {}) 
    * One submit path for both exits from the form. Multipart when a file is attached, plain JSON
    * otherwise — the same endpoint accepts both, since uploadResultFileMiddleware only engages
    * for multipart bodies. `amendmentReason` is meaningful only when correcting an already
-   * recorded result and is ignored by the backend on a first version; `isCritical` travels as a
-   * string over multipart, which the controller parses explicitly rather than by truthiness.
+   * recorded result and is ignored by the backend on a first version.
    */
   /**
    * Every field the grid RENDERED, with null for one the user left blank.
@@ -318,7 +308,6 @@ export function useResultEntry({ user, onOpened, onRecorded, onReleased } = {}) 
       formData.append('file', resultFile);
       formData.append('findings', findings);
       formData.append('remarks', remarks);
-      formData.append('isCritical', String(isCritical));
       if (isEditing) formData.append('amendmentReason', amendmentReason);
       if (fieldSet) formData.append('measurements', JSON.stringify(submittableMeasurements()));
       await api.post(`/results/${activeTest.visit_test_id}`, formData, {
@@ -329,7 +318,6 @@ export function useResultEntry({ user, onOpened, onRecorded, onReleased } = {}) 
     await api.post(`/results/${activeTest.visit_test_id}`, {
       findings,
       remarks,
-      isCritical,
       ...(isEditing ? { amendmentReason } : {}),
       ...(fieldSet ? { measurements: submittableMeasurements() } : {}),
     });
@@ -445,7 +433,6 @@ export function useResultEntry({ user, onOpened, onRecorded, onReleased } = {}) 
     confirmingRelease, releasing,
     justReleased,
     isEditing, isAmendingReleased,
-    isCritical, setIsCritical,
     fieldSet, measurements, setMeasurements,
     amendmentReason, setAmendmentReason,
     openFor, openForEdit, openRelease,

@@ -1,25 +1,21 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 
-// Result versioning and critical-value flagging.
+// Result versioning.
 //
-// Two clinical-safety failures that shared one table:
-//
-//   Correcting a released result used to OVERWRITE it. test_results carried
-//   UNIQUE(visit_test_id) and the write was an ON CONFLICT DO UPDATE, so a radiology report
-//   already issued to a patient could be silently rewritten with nothing recording what it used
-//   to say. The audit entry noted only that a correction happened.
-//
-//   A panic value released with the same silent "your results are ready" email as a routine CBC.
+// Correcting a released result used to OVERWRITE it. test_results carried UNIQUE(visit_test_id)
+// and the write was an ON CONFLICT DO UPDATE, so a radiology report already issued to a patient
+// could be silently rewritten with nothing recording what it used to say. The audit entry noted
+// only that a correction happened.
 //
 // The assertions below are the ones that must never regress: the original text survives, exactly
-// one version is live, lists do not repeat a row per version, and a critical result escalates.
+// one version is live, lists do not repeat a row per version, and a release tells staff.
 
 const BACKEND_URL = process.env.E2E_API_URL || 'http://localhost:5000';
 const API = `${BACKEND_URL}/api`;
 const PASSWORD = 'Password123!';
 
-test.describe('Result versioning and critical values', () => {
+test.describe('Result versioning', () => {
   let apiContext;
   let lab, reception, admin;
   let visitTestId;
@@ -138,47 +134,20 @@ test.describe('Result versioning and critical values', () => {
     expect(released.filter((r) => r.visit_test_id === visitTestId).length).toBeLessThanOrEqual(1);
   });
 
-  test('a critical result escalates and can be acknowledged exactly once', async () => {
-    const critical = await record(lab, {
-      findings: 'Potassium 7.4 mmol/L. CRITICALLY HIGH.',
-      remarks: 'Urgent',
-      amendmentReason: 'Repeat sample confirms critical value',
-      isCritical: 'true',
-    });
-    expect(critical.status).toBe(201);
-    expect(critical.body.data.result.is_critical).toBe(true);
-
+  test('releasing an amended report tells staff it was amended, not newly released', async () => {
     const release = await apiContext.post(`${API}/results/${visitTestId}/release`, { headers: auth(lab) });
     expect(release.status()).toBe(200);
-    expect((await release.json()).data.result.isCritical).toBe(true);
+    expect((await release.json()).data.result.isAmendment).toBe(true);
 
-    // Reception is included on purpose: the front desk usually makes the call, and a callback
-    // that cannot be recorded by whoever made it does not get recorded.
-    const ack = await apiContext.post(`${API}/results/${visitTestId}/acknowledge-critical`, {
-      headers: auth(reception),
-      data: { note: 'Phoned patient 14:20, spoke to Dr Reyes' },
-    });
-    expect(ack.status()).toBe(200);
-
-    // Acknowledging twice would make the callback record ambiguous about when contact happened.
-    const again = await apiContext.post(`${API}/results/${visitTestId}/acknowledge-critical`, {
-      headers: auth(reception),
-      data: { note: 'duplicate' },
-    });
-    expect(again.status()).toBe(409);
-  });
-
-  test('the escalation reaches staff as a critical-severity notification', async () => {
+    // The notification is how reception and oversight learn a report moved. An amendment says so:
+    // "Result Released" on a corrected report reads as a first issue, and somebody reconciling a
+    // patient's copy against the clinic's needs to know which one they are looking at.
     const res = await apiContext.get(`${API}/notifications`, { headers: auth(admin) });
     expect(res.status()).toBe(200);
     const notifications = (await res.json()).data.notifications;
-
-    const alert = notifications.find((n) => /CRITICAL RESULT/i.test(n.title));
-    expect(alert, 'a critical release must raise a notification').toBeTruthy();
-    // Severity matters as much as the message: notification_events.type was CHECKed to
-    // ('info','success','warning') and the service silently downgrades anything else, so this
-    // escalation arrived looking exactly like "New Appointment Booked" until 'critical' existed.
-    expect(alert.type).toBe('critical');
+    const alert = notifications.find((n) => /Result Amended and Re-released/i.test(n.title));
+    expect(alert, 'an amended release must raise a notification').toBeTruthy();
+    expect(alert.type).toBe('info');
   });
 
   test('the amendment history is department-scoped like every other result read', async () => {

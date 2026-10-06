@@ -341,7 +341,7 @@ class ResultService {
   }
 
   async uploadResult(
-    { visitTestId, file, findings, remarks, releasedBy, amendmentReason, isCritical, measurements },
+    { visitTestId, file, findings, remarks, releasedBy, amendmentReason, measurements },
     requestingUser
   ) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
@@ -426,8 +426,7 @@ class ResultService {
         findings,
         remarks,
         releasedBy,
-        amendmentReason,
-        isCritical
+        amendmentReason
       });
 
       // The structured half, written against the version that was just created.
@@ -478,18 +477,6 @@ class ResultService {
             `Amended visit test #${visitTestId}: version ${existing.version} superseded by ` +
             `version ${created.version}` +
             (amendmentReason ? ` — ${amendmentReason}` : ' — no reason given')
-        });
-      }
-
-      // A critical result is an event in its own right, whoever recorded it. Logged here rather
-      // than only on release so the flag is traceable even if the ticket is never authorised.
-      if (isCritical) {
-        await auditService.log({
-          actorId: requestingUser?.userId,
-          action: 'result.flagged_critical',
-          entityType: 'test_result',
-          entityId: created.id,
-          description: `Flagged CRITICAL findings for visit test #${visitTestId} (version ${created.version})`
         });
       }
 
@@ -560,9 +547,8 @@ class ResultService {
    * Send the patient their report, and WRITE DOWN that it went. [1.59.0]
    *
    * One builder, called by release and by a manual re-send, because two copies of this would
-   * drift — and the copy that drifts is the one nobody is looking at, which here means a
-   * critical value going out under the cheerful wording while the release path uses the careful
-   * one.
+   * drift — and the copy that drifts is the one nobody is looking at, which here means an
+   * amended report going out under the wording for a first release.
    *
    * Recording happens only on success. `emailed_at IS NULL` has to keep meaning "this report has
    * never reached the patient", with no second reading — a failed attempt that stamped the column
@@ -572,45 +558,10 @@ class ResultService {
    * return value is the only way to know. Discarding it is how this used to report "patient
    * notified" over an unconfigured mail server.
    */
-  async deliverResultEmail({ patientInfo, isCritical, isAmendment, visitTestId }) {
+  async deliverResultEmail({ patientInfo, isAmendment, visitTestId }) {
     if (!patientInfo || !patientInfo.email) return 'no_email';
 
     const patientName = `${patientInfo.first_name} ${patientInfo.last_name}`;
-
-    /**
-     * A CRITICAL value does not travel by email. [1.61.0]
-     *
-     * Everything below sends the patient their actual report. This one case deliberately does
-     * not, and the reason is clinical rather than technical: a panic value read alone, at night,
-     * with no clinician attached to it, is how a patient ends up frightened and unadvised — or
-     * worse, reassured by a number they have misread. The clinic telephones for these, and
-     * `acknowledgeCritical` is the record that a human actually made contact.
-     *
-     * So the email says "please contact us", carries no findings and no attachment, and the
-     * report stays available in the portal and at the counter where somebody can explain it.
-     * This is a clinical policy decision, not a limitation — if the clinic decides otherwise,
-     * this is the one branch to change.
-     */
-    if (isCritical) {
-      const critical = await sendEmail({
-        to: patientInfo.email,
-        subject: `IMPORTANT: Please contact ${env.CLINIC_NAME} about your ${patientInfo.test_name} result`,
-        html: wrapEmail(`
-          <h2 style="margin:0 0 16px;font-size:18px;color:#0f172a;">Hello ${escapeHtml(patientName)},</h2>
-          <p>Your <strong>${escapeHtml(patientInfo.test_name)}</strong> result requires prompt discussion
-             with a clinician.</p>
-          <p><strong>Please contact the clinic as soon as you can</strong>, or proceed to the nearest
-             emergency department if you feel unwell. A member of our staff will also be trying to
-             reach you by phone.</p>
-          <p>We have not included the findings in this email on purpose. They are best read with
-             someone who can explain what they mean for you, and your full report is waiting at the
-             clinic and in your patient portal.</p>
-        `),
-      });
-      if (critical?.error || critical?.skipped) return 'failed';
-      await resultRepository.recordEmailDelivery(visitTestId, patientInfo.email);
-      return 'sent';
-    }
 
     // ── The report itself ──────────────────────────────────────────────────────────────────
     //
@@ -700,7 +651,6 @@ class ResultService {
 
     const emailStatus = await this.deliverResultEmail({
       patientInfo,
-      isCritical: Boolean(result.is_critical),
       isAmendment: (result.version || 1) > 1,
       visitTestId,
     });
@@ -792,14 +742,10 @@ class ResultService {
     // controller always reported "patient notified via email" even when nothing was sent.
     const patientInfo = await resultRepository.findPatientEmailByVisitTestId(visitTestId);
 
-    // A critical result must not leave the building looking like a routine one. `result` was read
-    // before the release, so this is the version being authorised.
-    const isCritical = Boolean(result.is_critical);
+    // `result` was read before the release, so this is the version being authorised.
     const isAmendment = (result.version || 1) > 1;
 
-    const emailStatus = await this.deliverResultEmail({
-      patientInfo, isCritical, isAmendment, visitTestId,
-    });
+    const emailStatus = await this.deliverResultEmail({ patientInfo, isAmendment, visitTestId });
 
     // Module 18 (Notification): Admin/SuperAdmin oversight of diagnostic throughput, matching
     // the existing Reports/oversight theme — not the releasing staff member themselves, who is
@@ -810,28 +756,14 @@ class ResultService {
     if (patientInfo) {
       const patientName = `${patientInfo.first_name} ${patientInfo.last_name}`;
 
-      if (isCritical) {
-        // The escalation. An email to the patient is not a callback, and a critical value that
-        // nobody is told about is the most dangerous state this system can produce. This puts it
-        // in front of the front desk and administrators as an urgent item so somebody picks up a
-        // phone — and acknowledgeCritical below records that they did.
-        await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
-          title: 'CRITICAL RESULT — patient callback required',
-          message: `${patientInfo.test_name} for ${patientName}${
-            patientInfo.contact_number ? ` — ${patientInfo.contact_number}` : ''
-          }`,
-          type: 'critical'
-        });
-      } else {
-        await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
-          title: isAmendment ? 'Result Amended and Re-released' : 'Result Released',
-          message: `${patientInfo.test_name} for ${patientName}`,
-          type: isAmendment ? 'info' : 'success'
-        });
-      }
+      await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
+        title: isAmendment ? 'Result Amended and Re-released' : 'Result Released',
+        message: `${patientInfo.test_name} for ${patientName}`,
+        type: isAmendment ? 'info' : 'success'
+      });
     }
 
-    return { ...result, emailStatus, isCritical, isAmendment };
+    return { ...result, emailStatus, isAmendment };
   }
 
   // Lets the modality re-open a ticket that is already 'Waiting for Release' and edit the
@@ -879,63 +811,6 @@ class ResultService {
   async getVersionHistory(visitTestId, requestingUser) {
     await assertStaffMayReadVisitTest(requestingUser, visitTestId);
     return await resultRepository.findVersionHistoryByVisitTestId(visitTestId);
-  }
-
-  /**
-   * Every released critical result still waiting for its callback. [1.26.0]
-   *
-   * Deliberately not department-scoped, unlike the worklists. A panic value is a clinical
-   * emergency belonging to whoever can act on it, not to the room that produced it — scoping this
-   * would mean a Laboratory potassium of 7.4 is invisible to the receptionist standing next to
-   * the telephone. `results:acknowledge_critical` is what gates the route, and every staff role
-   * that could make the call already holds it.
-   */
-  async getOutstandingCriticals() {
-    return await resultRepository.findOutstandingCriticals();
-  }
-
-  /**
-   * Records that a critical result was actually communicated to the patient or their physician.
-   *
-   * Deliberately open to the front desk as well as the department: reception is usually who makes
-   * the call, and a callback that cannot be recorded by the person who made it does not get
-   * recorded at all. The note is where "spoke to Dr Reyes at 14:20" goes — that sentence is the
-   * part with medico-legal weight, not the flag.
-   */
-  async acknowledgeCritical(visitTestId, { note }, requestingUser) {
-    const result = await resultRepository.findResultByVisitTestId(visitTestId);
-    if (!result) {
-      const error = new Error('No result found for this visit test.');
-      error.statusCode = 404;
-      throw error;
-    }
-    if (!result.is_critical) {
-      const error = new Error('This result is not flagged as critical, so there is nothing to acknowledge.');
-      error.statusCode = 400;
-      throw error;
-    }
-    if (result.critical_acknowledged_at) {
-      const error = new Error('This critical result has already been acknowledged.');
-      error.statusCode = 409;
-      throw error;
-    }
-
-    const acknowledged = await resultRepository.acknowledgeCritical(visitTestId, {
-      acknowledgedBy: requestingUser?.userId,
-      note,
-    });
-
-    await auditService.log({
-      actorId: requestingUser?.userId,
-      action: 'result.critical_acknowledged',
-      entityType: 'test_result',
-      entityId: acknowledged.id,
-      description:
-        `Acknowledged critical result for visit test #${visitTestId}` +
-        (note ? ` — ${note}` : ' — no note recorded'),
-    });
-
-    return acknowledged;
   }
 
   /**
