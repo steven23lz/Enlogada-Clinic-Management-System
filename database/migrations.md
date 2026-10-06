@@ -1,5 +1,38 @@
 # Database Migration & Schema History
 
+## [1.95.0] - 2026-10-06 (A checker for the diagrams, and the three faults it found)
+
+No migration. Documentation only.
+
+Steven read the figures and found a decision with only a "yes" coming out of it. Reading 36 figures
+by eye does not scale, so `docs/diagrams/checkDiagrams.cjs` now reads the generated files back and
+reports what a reader would trip over: a diamond with fewer than two ways out or an unlabelled
+branch, a step that leads nowhere, two boxes whose rectangles intersect, and a label too long to
+take in at a glance. It exits non-zero, so it can gate a rebuild.
+
+- **A decision with one exit is not a decision.** The Receptionist's "HMO patient?" had only a yes.
+  It now carries a no ("Bill as self pay"), and "Booking today?" has a real no ("Register as
+  walk-in") in place of a third branch labelled "scan", which was not an answer to the question.
+- **The client flowchart said the patient did four things at once.** Its columns hung off the
+  landing screen as parallel branches when they are one sequence: book, confirm, pay, collect. A
+  chart can now declare `chain`, which links each column to the end of the one before it and sends
+  only the last to End. The link leaves sideways into the gap between columns and climbs to a
+  corridor above them; routed directly it climbed through every box of the column it was heading
+  for.
+- **A side branch rejoining the chain drew on top of the decision's own "no" line.** It leaves from
+  the bottom of the side box and enters the next step from the right.
+
+The checker's own first version was wrong in a way worth recording: one regex with optional groups
+and lazy gaps returned undefined for whatever it skipped, so it reported every decision as having
+no way out and 336 dead ends. Attributes are read one at a time now. A checker that cries wolf is
+worse than none, because the real fault hides in the noise.
+
+### Checked
+
+- `node docs/diagrams/checkDiagrams.cjs`: 0 decisions with one way out, 0 dead ends, 0 overlapping
+  boxes, 0 over-long labels, across all 36 pages.
+- All 36 pages re-exported, 36 unique images.
+
 ## [1.94.0] - 2026-10-06 (The diagrams in black ink, with labels short enough to read)
 
 No migration. Documentation only.

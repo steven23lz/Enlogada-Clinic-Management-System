@@ -121,6 +121,7 @@ function flowchart(spec) {
   const topY = 320;
   let lowest = topY;
   const lastOfColumn = [];
+  const firstOfColumn = [];
   const merges = [];
   columns.forEach((col, ci) => {
     const cx = xs[ci];
@@ -136,8 +137,13 @@ function flowchart(spec) {
     });
     main.forEach((at, si) => {
       const step = col[si];
-      if (si === 0) p.edge(landing, at.cell);
-      else p.edge(main[si - 1].cell, at.cell, col[si - 1].k === 'dec' ? (col[si - 1].mainLabel || 'yes') : '');
+      // `chain` means the columns are one sequence wrapped into columns, not a menu of parallel
+      // branches: the client's story runs book, confirm, pay, collect, and drawing those four as
+      // independent branches off the landing screen says the patient does them all at once.
+      if (si === 0) {
+        if (spec.chain && ci > 0) firstOfColumn[ci] = at.cell;   // linked below, over the top
+        else p.edge(landing, at.cell);
+      } else p.edge(main[si - 1].cell, at.cell, col[si - 1].k === 'dec' ? (col[si - 1].mainLabel || 'yes') : '');
       if (step.side) {
         const side = p.node(step.side.l, cx + NODE_W + 36, at.y + (at.h - NODE_H) / 2, SIDE_W, NODE_H, kindStyle(step.side.k || 'proc'));
         p.edge(at.cell, side, step.side.label || 'yes');
@@ -147,7 +153,9 @@ function flowchart(spec) {
         } else if (step.side.toEnd || !rejoin) {
           merges.push(side);               // a branch that finishes here, e.g. a refusal
         } else {
-          p.edge(side, rejoin.cell);
+          // Down from the side box and in from the right. Routed by default it runs back along the
+          // decision's own "no" line and the two print on top of each other.
+          p.edge(side, rejoin.cell, '', S.edge + 'exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;');
         }
       }
     });
@@ -157,9 +165,26 @@ function flowchart(spec) {
   // Every column ends at the one End. Drop straight down to a clear corridor below the columns
   // first, then run across: routed along their own row instead, the lines cut through the boxes
   // of every column to their right.
+  // A chained chart snakes: leave the last step sideways into the gap between columns, climb to a
+  // corridor above the column tops, then drop into the next column. Routed directly, the link
+  // climbs straight through every box of the column it is heading for.
+  if (spec.chain) {
+    const linkY = topY - 34;
+    for (let ci = 1; ci < columns.length; ci += 1) {
+      const prev = lastOfColumn[ci - 1];
+      const next = firstOfColumn[ci];
+      if (!prev || !next) continue;
+      const gapX = xs[ci] - COL_GAP / 2;
+      p.edge(prev, next, '', S.edge + 'exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;',
+        [[gapX, prev.y + prev.h / 2], [gapX, linkY], [next.x + next.w / 2, linkY]]);
+    }
+  }
+
   const corridor = lowest + 14;
   const end = p.node('End', 60 + totalW / 2 - 60, corridor + 46, 120, 44, S.term);
-  lastOfColumn.concat(merges).forEach((cell) => {
+  // In a chained chart only the final column reaches End; the others continue into the next column.
+  const finishers = spec.chain ? [lastOfColumn[lastOfColumn.length - 1]] : lastOfColumn;
+  finishers.concat(merges).forEach((cell) => {
     p.edge(cell, end, '', S.edge + 'exitX=0.5;exitY=1;exitDx=0;exitDy=0;', [[cell.x + cell.w / 2, corridor]]);
   });
   return p;
@@ -198,14 +223,16 @@ const RECEPTIONIST_FLOW = {
   name: 'Receptionist', actor: 'Receptionist', landing: 'Desk',
   columns: [
     [{ k: 'proc', l: 'Search name or reference' },
-      { k: 'dec', l: 'Booking today?', mainLabel: 'yes', side: { l: 'Scan QR code', label: 'scan' } },
+      { k: 'dec', l: 'Booking today?', mainLabel: 'yes', side: { l: 'Register as walk-in', label: 'no', toEnd: true } },
+      { k: 'proc', l: 'Scan QR or reference' },
       { k: 'proc', l: 'Check in patient' },
       { k: 'proc', l: 'Issue queue ticket' },
       { k: 'dec', l: 'Already paid?', mainLabel: 'yes', side: { l: 'Send to cashier', label: 'no', toEnd: true } },
       { k: 'proc', l: 'Release to department' }],
     [{ k: 'proc', l: 'On file, no booking' }, { k: 'proc', l: 'Start visit' }, { k: 'proc', l: 'Attach tests' }, { k: 'proc', l: 'Issue queue ticket' }],
     [{ k: 'proc', l: 'New patient' }, { k: 'proc', l: 'Register walk-in' }, { k: 'proc', l: 'Create record' }, { k: 'proc', l: 'Issue queue ticket' }],
-    [{ k: 'dec', l: 'HMO patient?', mainLabel: 'yes' }, { k: 'proc', l: 'Get card and member number' }, { k: 'proc', l: 'Name referring doctor' }, { k: 'proc', l: 'Send claim to Admin' }],
+    [{ k: 'dec', l: 'HMO patient?', mainLabel: 'yes', side: { l: 'Bill as self pay', label: 'no', toEnd: true } },
+      { k: 'proc', l: 'Get card and member number' }, { k: 'proc', l: 'Name referring doctor' }, { k: 'proc', l: 'Send claim to Admin' }],
     [{ k: 'proc', l: 'Did not arrive' }, { k: 'proc', l: 'Mark no-show' }],
     [{ k: 'proc', l: 'Visit History' }, { k: 'proc', l: 'Review past visits' }],
   ],
@@ -252,7 +279,7 @@ function departmentFlow(dept, formStep) {
 
 const CLIENT_FLOW = {
   name: 'Client Patient', actor: 'Client / Patient', landing: 'View services', gate: false,
-  start: 'Open website',
+  start: 'Open website', chain: true,
   columns: [
     [{ k: 'proc', l: 'Book a visit' },
       { k: 'dec', l: 'Have an account?', mainLabel: 'yes', side: { l: 'Register and verify code', label: 'no' } },
