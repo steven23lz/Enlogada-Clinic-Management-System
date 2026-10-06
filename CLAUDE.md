@@ -1044,3 +1044,10 @@ Services Catalogue.
 - Keep files focused; split when they exceed roughly 300–500 lines.
 - `.agents/AGENTS.md` and `.agents/PROJECT_STRUCTURE.md` define an internal "AI team" convention (Architect/Backend/Frontend/Database/Business-Analyst roles) used to keep contributions consistent — the layering and naming rules above are drawn from it.
 - A version-control skill (`.agents/skills/version_control_agent/`) exists for timestamped checkpoint commits/rollback via PowerShell scripts; this explains the "Checkpoint (yyyymmdd-HHMMSS)" style commit messages seen in git history. Don't assume this workflow applies unless the user invokes it.
+- **The capstone paper's diagrams are generated, not hand-drawn.** `[1.93.0]`
+  `docs/diagrams/buildDiagrams.cjs` writes the flowcharts, use cases and DFDs from specs inside it,
+  and reads the ERD out of the live database, so the ERD cannot drift from the schema; it reports
+  any table missing from its sheets. `exportPng.ps1` exports every page (draw.io's `-p` is
+  ONE-based; `0` silently exports the first page and shifts a whole run). Change what a diagram
+  SAYS in the script, not in the `.drawio`, or the next regeneration discards it — hand-tuned
+  placement in the `.drawio` is fine and expected. The System Architecture figure is not generated.

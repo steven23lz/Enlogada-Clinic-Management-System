@@ -1,5 +1,37 @@
 # Database Migration & Schema History
 
+## [1.93.0] - 2026-10-06 (The capstone paper's diagrams, generated from the system)
+
+No migration. Documentation only, in `docs/diagrams/`.
+
+The paper's figures described an earlier, smaller system: the client flowchart still asked whether
+the patient was a human or a pet, the cashier issued the queue number, and the ERD showed 14 tables
+against the 36 the database holds. They are redrawn in the same draw.io style as the originals, as
+editable files plus exports.
+
+- `buildDiagrams.cjs` writes five `.drawio` files: 8 role flowcharts (including a Super Admin chart
+  the paper never had), 8 use case diagrams, 9 Level 0 sheets (the per-actor ones plus a context
+  diagram), 8 Level 1 sheets, and the ERD across 3 sheets. `exportPng.ps1` exports all 36 pages.
+- **The ERD is read from the live database** rather than transcribed: tables, columns, PostgreSQL
+  types, nullability, primary keys and foreign keys. The script reports if a table is missing from
+  the sheets, so a new table cannot quietly go undrawn.
+- The System Architecture figure is deliberately not regenerated; it stays as drawn in the paper.
+- What the new diagrams assert, each of which the old ones got wrong: there is no veterinary branch;
+  a booking issues a reference and QR code while the queue ticket comes at check-in [1.92.0]; the
+  cashier issues the receipt only; a rejected proof of payment ends the flow rather than reaching
+  "record the payment"; an Admin decides HMO claims but cannot write or email a result.
+- Processes are numbered from one master list (1.0–20.0) used across every Level 1 sheet, and the
+  nine data stores name the real tables behind them.
+
+### Checked
+
+- All five files parse as XML; 36 pages, 36 unique PNG exports at scale 3.
+- Every step in all eight flowcharts has an outgoing edge, checked by walking the generated XML, so
+  no branch dead-ends by accident.
+- 36 of 36 tables drawn across the three ERD sheets.
+- Found while exporting: draw.io's `-p` page index is one-based, and passing `0` exports the first
+  page with no error, which shifts a whole run by one. Both scripts and the README say so.
+
 ## [1.92.0] - 2026-09-15 (A booking joins the queue when the patient checks in)
 
 No migration: `queue_number` was already nullable, and the unique ticket index skips NULL.
