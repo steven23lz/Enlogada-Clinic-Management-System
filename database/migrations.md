@@ -1,5 +1,52 @@
 # Database Migration & Schema History
 
+## [1.99.0] - 2026-10-07 (Diagrams: one flow one line, and one way through each role)
+
+No migration. Documentation only.
+
+Steven, reading the figures in draw.io: the arrows on the data flow diagrams do not show what is
+related to what, and the role flowcharts have parts that are confusing and redundant.
+
+**Both DFD levels now draw every flow as a straight horizontal line with its own label.** The
+fault was the same on both, and it was the layout, not the content: a box 90 to 110 px tall had to
+carry five to eleven flows, so each one left a single point, bent twice and ran the width of the
+sheet to reach its own row. The labels floated over a comb of parallel lines, and nothing said
+which label belonged to which arrow. Now the two boxes on a Level 0 sheet are as TALL as the stack
+of flows, so each arrow leaves and lands at its own height; inputs sit above a gap and outputs
+below it, and the arrowhead is the only thing that has to be read. On Level 1 the actor is one tall
+box spanning the whole column of processes — before, every flow left it from one point and ran down
+a single trunk, which put ten labels on one vertical line. A data store is drawn beside the process
+that uses it, so those arrows are short too, and a sheet that draws one store twice says so at its
+foot rather than leaving a reader to count two Appointments and Visits.
+
+**The Receptionist chart drew the walk-in path three times.** "Booking today? no → Register as
+walk-in", then a column for a patient already on file, then another for a new patient — each
+ending in its own "Issue queue ticket". The Desk is ONE screen: a box that takes a name, a
+reference or a scan, and the answer decides whether the next click is Check in or Register. So
+there is one path now, the ticket is issued once on it, and registering is the no branch that
+rejoins. It also stops claiming the receptionist releases the visit to the department: paying does
+that, which is why the chart ends at "Send patient to the cashier" with the already-paid case
+going straight through.
+
+**The others, in the same spirit.** The Cashier's "Choose payment method" and "Enter cash and
+change" became one step, and reversing a receipt moved under Transaction History, where the
+receipt is found, instead of hanging off the landing screen as though a refund started from
+nowhere. A department chart now says that saving and releasing are two acts — saving parks the
+ticket in 'Waiting for Release' and nothing has left the department — and draws the patient's
+email as the consequence of releasing rather than as another thing the technologist does. Admin
+and Super Admin lost the steps that restated the step above them.
+
+**A branch that rejoins now merges into the TOP of the step it rejoins**, down its own column and
+across the gap above it. Entering from the right, which is the obvious way to draw it, put the line
+through the box in between, and where the target was a decision it arrived at the very vertex that
+decision's own branch leaves from — one arrowhead appearing to point into a diamond and out of it.
+
+Checked: `checkDiagrams.cjs` clean on all 36 pages (no decision with one exit, no dead end, no
+overlapping boxes, no label too long to read), and all 36 PNGs re-exported and distinct.
+
+**If draw.io has one of these files open, close it without saving before pulling.** It holds the
+copy it loaded, and saving would put the old drawing back.
+
 ## [1.98.0] - 2026-10-06 (The critical-value workflow is withdrawn from the system)
 
 `node src/scripts/migrateRemoveCriticalValues.js` — `--rollback` restores the columns, empty.

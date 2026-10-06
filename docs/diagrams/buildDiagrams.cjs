@@ -153,9 +153,16 @@ function flowchart(spec) {
         } else if (step.side.toEnd || !rejoin) {
           merges.push(side);               // a branch that finishes here, e.g. a refusal
         } else {
-          // Down from the side box and in from the right. Routed by default it runs back along the
-          // decision's own "no" line and the two print on top of each other.
-          p.edge(side, rejoin.cell, '', S.edge + 'exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;');
+          // Down the side column, across the gap above the step it rejoins, and into its TOP —
+          // the same point the main path arrives at, which is what a merge looks like.
+          //
+          // Entering from the RIGHT instead, which is the obvious way to draw it, put the line on
+          // top of two other things: it cut through the box between the branch and its target, and
+          // where the target was a decision it arrived at the very vertex that decision's own
+          // branch leaves from, so one arrowhead appeared to point into the diamond and out of it.
+          const laneY = rejoin.y - 26;
+          p.edge(side, rejoin.cell, '', S.edge + 'exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;',
+            [[cx + NODE_W + 36 + SIDE_W / 2, laneY], [cx + NODE_W / 2, laneY]]);
         }
       }
     });
@@ -193,8 +200,8 @@ function flowchart(spec) {
 const SUPER_ADMIN_FLOW = {
   name: 'Super Admin', actor: 'Super Admin', landing: 'Today',
   columns: [
-    [{ k: 'proc', l: 'Who Sees What' }, { k: 'proc', l: 'Edit role access' }, { k: 'proc', l: 'Review changes' }, { k: 'proc', l: 'Save' }],
-    [{ k: 'proc', l: 'One Person' }, { k: 'proc', l: 'Grant or revoke access' }, { k: 'proc', l: 'Saved to audit log' }],
+    [{ k: 'proc', l: 'Who Sees What' }, { k: 'proc', l: 'Edit role access' }, { k: 'proc', l: 'Review changes and save' }],
+    [{ k: 'proc', l: 'One Person' }, { k: 'proc', l: 'Grant or revoke access' }, { k: 'proc', l: 'Change is audited' }],
     [{ k: 'proc', l: 'Staff Accounts' }, { k: 'proc', l: 'Add or deactivate staff' }],
     [{ k: 'proc', l: 'Services Catalog' }, { k: 'proc', l: 'Edit tests and prices' }],
     [{ k: 'proc', l: 'Payment Methods' }, { k: 'proc', l: 'Publish GCash and QR' }],
@@ -207,71 +214,95 @@ const SUPER_ADMIN_FLOW = {
 const ADMIN_FLOW = {
   name: 'Admin', actor: 'Admin', landing: 'Today',
   columns: [
-    [{ k: 'proc', l: 'Service Requests' }, { k: 'proc', l: 'Open HMO claim' },
-      { k: 'dec', l: 'Approve claim?', mainLabel: 'yes', side: { l: 'Record reason', label: 'no', mergeTo: 2 } },
-      { k: 'proc', l: 'Record approval code' }, { k: 'proc', l: 'Notify cashier' }],
+    [{ k: 'proc', l: 'Service Requests' }, { k: 'proc', l: 'Open the HMO claim' },
+      { k: 'dec', l: 'Approve the claim?', mainLabel: 'yes',
+        side: { l: 'Record the reason', label: 'no', mergeTo: 2 } },
+      { k: 'proc', l: 'Record approval code' }, { k: 'proc', l: 'Cashier is notified' }],
     [{ k: 'proc', l: 'Appointments' }, { k: 'proc', l: 'View or update booking' }],
     [{ k: 'proc', l: 'Patient Records' }, { k: 'proc', l: 'Search and correct' }, { k: 'io', l: 'Print record' }],
-    [{ k: 'proc', l: 'Cashier Monitoring' }, { k: 'proc', l: 'Review payments' }],
+    [{ k: 'proc', l: 'Cashier Monitoring' }, { k: 'proc', l: 'Review takings and refunds' }],
     [{ k: 'proc', l: 'Staff Accounts' }, { k: 'proc', l: 'Add or update staff' }],
     [{ k: 'proc', l: 'Reports' }, { k: 'proc', l: 'Generate report' }, { k: 'io', l: 'Print or export' }],
     [{ k: 'proc', l: 'Activity Log' }, { k: 'proc', l: 'Review audit trail' }],
   ],
 };
 
+// One pass through the desk, not three.
+//
+// The first version drew the walk-in path three times — "Booking today? no -> Register as walk-in",
+// then a column for a patient on file and another for a new patient — and issued a queue ticket at
+// the end of each. The Desk is ONE screen: a box that takes a name, a reference or a scan, and the
+// answer decides whether the next click is Check in or Register. So the ticket is issued once, on
+// the one path, and registering is the no branch that rejoins it.
 const RECEPTIONIST_FLOW = {
   name: 'Receptionist', actor: 'Receptionist', landing: 'Desk',
   columns: [
-    [{ k: 'proc', l: 'Search name or reference' },
-      { k: 'dec', l: 'Booking today?', mainLabel: 'yes', side: { l: 'Register as walk-in', label: 'no', toEnd: true } },
-      { k: 'proc', l: 'Scan QR or reference' },
-      { k: 'proc', l: 'Check in patient' },
-      { k: 'proc', l: 'Issue queue ticket' },
-      { k: 'dec', l: 'Already paid?', mainLabel: 'yes', side: { l: 'Send to cashier', label: 'no', toEnd: true } },
-      { k: 'proc', l: 'Release to department' }],
-    [{ k: 'proc', l: 'On file, no booking' }, { k: 'proc', l: 'Start visit' }, { k: 'proc', l: 'Attach tests' }, { k: 'proc', l: 'Issue queue ticket' }],
-    [{ k: 'proc', l: 'New patient' }, { k: 'proc', l: 'Register walk-in' }, { k: 'proc', l: 'Create record' }, { k: 'proc', l: 'Issue queue ticket' }],
-    [{ k: 'dec', l: 'HMO patient?', mainLabel: 'yes', side: { l: 'Bill as self pay', label: 'no', toEnd: true } },
-      { k: 'proc', l: 'Get card and member number' }, { k: 'proc', l: 'Name referring doctor' }, { k: 'proc', l: 'Send claim to Admin' }],
-    [{ k: 'proc', l: 'Did not arrive' }, { k: 'proc', l: 'Mark no-show' }],
+    [{ k: 'proc', l: 'Search name, reference or QR' },
+      { k: 'dec', l: 'Booking for today?', mainLabel: 'yes',
+        side: { l: 'Register walk-in', label: 'no', mergeTo: 2 } },
+      { k: 'proc', l: 'Check in the booking' },
+      { k: 'io', l: 'Issue queue ticket' },
+      { k: 'proc', l: 'Attach or confirm tests' },
+      { k: 'dec', l: 'HMO patient?', mainLabel: 'no',
+        side: { l: 'Record card, send to Admin', label: 'yes' } },
+      { k: 'dec', l: 'Already paid online?', mainLabel: 'no',
+        side: { l: 'Visit goes to department', label: 'yes', toEnd: true } },
+      { k: 'proc', l: 'Send patient to the cashier' }],
+    [{ k: 'proc', l: 'Booking did not arrive' }, { k: 'proc', l: 'Mark no-show' }],
     [{ k: 'proc', l: 'Visit History' }, { k: 'proc', l: 'Review past visits' }],
   ],
 };
 
+// The till: one bill, one receipt, and the two other things the cashier does with a receipt.
+// Reversing one belongs under Transaction History, where the receipt is found, rather than
+// hanging off the landing screen as though a refund started from nowhere.
 const CASHIER_FLOW = {
   name: 'Cashier', actor: 'Cashier', landing: 'Billing Queue',
   columns: [
-    [{ k: 'proc', l: 'Select patient' },
-      { k: 'proc', l: 'Compute bill' },
-      { k: 'dec', l: 'Senior or PWD?', mainLabel: 'no', side: { l: 'Less 20% discount', label: 'yes' } },
-      { k: 'proc', l: 'Choose payment method' },
-      { k: 'proc', l: 'Enter cash and change' },
-      { k: 'proc', l: 'Issue receipt' },
-      { k: 'io', l: 'Print receipt' },
-      { k: 'proc', l: 'Release to department' }],
-    [{ k: 'proc', l: 'Online Payments' }, { k: 'proc', l: 'Open proof of payment' },
-      { k: 'proc', l: 'Check amount due' },
-      { k: 'dec', l: 'Proof valid?', mainLabel: 'yes', side: { l: 'Reject and email', label: 'no', toEnd: true } },
-      { k: 'proc', l: 'Record payment' }],
-    [{ k: 'proc', l: 'Transaction History' }, { k: 'proc', l: 'Pick date range' }, { k: 'proc', l: 'View takings' }, { k: 'io', l: 'Print receipt copy' }],
-    [{ k: 'proc', l: 'Reverse a receipt' }, { k: 'proc', l: 'Record refund' }],
+    [{ k: 'proc', l: 'Select patient to bill' },
+      { k: 'proc', l: 'System computes the bill' },
+      { k: 'dec', l: 'Senior or PWD ID?', mainLabel: 'no',
+        side: { l: 'Apply 20% discount', label: 'yes' } },
+      { k: 'proc', l: 'Take payment and change' },
+      { k: 'io', l: 'Issue and print receipt' },
+      { k: 'proc', l: 'Visit goes to department' }],
+    [{ k: 'proc', l: 'Online Payments' },
+      { k: 'proc', l: 'Open proof of payment' },
+      { k: 'dec', l: 'Proof matches the bill?', mainLabel: 'yes',
+        side: { l: 'Reject and email patient', label: 'no', toEnd: true } },
+      { k: 'proc', l: 'Approve: receipt issued' }],
+    [{ k: 'proc', l: 'Transaction History' },
+      { k: 'proc', l: 'Pick date range' },
+      { k: 'proc', l: 'View takings and receipts' },
+      { k: 'dec', l: 'Reverse a receipt?', mainLabel: 'no',
+        side: { l: 'Record the refund', label: 'yes', toEnd: true } },
+      { k: 'io', l: 'Print receipt copy' }],
   ],
 };
 
+// A department ticket is recorded and then released, which are two separate acts in the system —
+// saving parks it in 'Waiting for Release' and nothing has left the department yet. The decision
+// says so. Releasing is what emails the patient, so that is drawn as its consequence rather than
+// as another thing the technologist does.
 function departmentFlow(dept, formStep) {
   return {
     name: dept, actor: `${dept} Staff`, landing: `${dept} Worklist`,
     columns: [
-      [{ k: 'proc', l: 'View released tickets' },
-        { k: 'proc', l: 'Select ticket' },
-        { k: 'proc', l: 'Perform test' },
-        { k: 'proc', l: formStep },
-        { k: 'proc', l: 'Save result' },
-        { k: 'proc', l: 'Release result' },
-        { k: 'io', l: 'Print report' },
-        { k: 'proc', l: 'Email to patient' }],
-      [{ k: 'proc', l: 'Open released result' }, { k: 'proc', l: 'Amend findings' }, { k: 'proc', l: 'Save new version' }, { k: 'proc', l: 'Old version kept' }],
-      [{ k: 'proc', l: `${dept} History` }, { k: 'proc', l: 'Search records' }, { k: 'io', l: 'Reprint report' }],
+      [{ k: 'proc', l: 'Open a released ticket' },
+        { k: 'proc', l: 'Perform the test' },
+        { k: 'io', l: formStep },
+        { k: 'proc', l: 'Save findings' },
+        { k: 'dec', l: 'Ready to release?', mainLabel: 'yes',
+          side: { l: 'Leave for release later', label: 'no', toEnd: true } },
+        { k: 'proc', l: 'Release the result' },
+        { k: 'proc', l: 'Patient emailed the report' }],
+      [{ k: 'proc', l: 'Open a released result' },
+        { k: 'proc', l: 'Amend the findings' },
+        { k: 'proc', l: 'Save as a new version' },
+        { k: 'proc', l: 'Earlier version kept' }],
+      [{ k: 'proc', l: `${dept} History` },
+        { k: 'proc', l: 'Search past reports' },
+        { k: 'io', l: 'Print or resend report' }],
     ],
   };
 }
@@ -350,25 +381,37 @@ const USE_CASES = [
 
 // ── 3. DFD level 0 ──────────────────────────────────────────────────────────────────────────────
 const SYSTEM_NAME = 'Enlogada Ultrasound and Diagnostic\nClinic Management System';
+const SYSTEM_ONE_LINE = 'Enlogada Ultrasound and Diagnostic Clinic Management System';
 
+// One flow, one straight line, one label above it.
+//
+// The first version fanned every flow out of a single point on each box and bent it twice to
+// reach its own row, so eleven labels floated over a comb of parallel lines and nothing said
+// which label belonged to which arrow. Both boxes are now as TALL as the stack of flows, so each
+// arrow leaves and lands at its own height and runs straight across with nothing in its way.
+// The arrowhead is then the only thing that has to be read to know the direction.
 function dfd0(spec) {
   const p = new Page(spec.name);
-  const rows = spec.inputs.length;
-  const topBand = 60, bandGap = 34;
-  const sysY = topBand + rows * bandGap + 80;
-  const sys = p.node(SYSTEM_NAME.replace('\n', ' '), 120, sysY, 320, 110, S.system);
-  const ent = p.node(spec.name, 900, sysY - 60, 210, 90, S.entity);
+  const ROW = 48, TOP = 90, GROUP_GAP = 30, PAD = 40;
+  const rows = spec.inputs.length + spec.outputs.length;
+  const boxH = Math.max(180, PAD * 2 + (rows - 1) * ROW + GROUP_GAP);
+  const sysX = 140, sysW = 400, entX = 1080, entW = 250;
+  const sys = p.node(SYSTEM_ONE_LINE, sysX, TOP, sysW, boxH, S.system);
+  const ent = p.node(spec.name, entX, TOP, entW, boxH, S.entity);
+
+  // Inputs above, outputs below, with a gap between the two groups: a reader should be able to see
+  // at a glance what the actor gives the system and what it gets back, without counting arrowheads.
+  const yOf = (i) => TOP + PAD + i * ROW + (i >= spec.inputs.length ? GROUP_GAP : 0);
+  const frac = (y) => ((y - TOP) / boxH).toFixed(4);
+  const across = (y) => `exitY=${frac(y)};exitDx=0;exitDy=0;entryY=${frac(y)};entryDx=0;entryDy=0;`;
 
   spec.inputs.forEach((label, i) => {
-    const y = topBand + i * bandGap;
-    const dropX = 150 + (i + 1) * (300 / (rows + 1));
-    p.edge(ent, sys, label, S.edgeFlow + 'exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=' + (((dropX - 120) / 320).toFixed(3)) + ';entryY=0;entryDx=0;entryDy=0;',
-      [[860, y], [dropX, y]]);
+    const y = yOf(i);
+    p.edge(ent, sys, label, S.edgeFlow + 'exitX=0;entryX=1;' + across(y));
   });
   spec.outputs.forEach((label, j) => {
-    const y = sysY + 24 + j * 30;
-    p.edge(sys, ent, label, S.edgeFlow + 'exitX=1;exitY=' + (((24 + j * 30) / 110).toFixed(3)) + ';exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;',
-      [[520, y], [860, y]]);
+    const y = yOf(spec.inputs.length + j);
+    p.edge(sys, ent, label, S.edgeFlow + 'exitX=1;entryX=0;' + across(y));
   });
   return p;
 }
@@ -402,7 +445,7 @@ const DFD0 = [
 
 function dfd0Context() {
   const p = new Page('Context');
-  const sys = p.node(SYSTEM_NAME.replace('\n', ' '), 560, 470, 360, 140, S.system);
+  const sys = p.node(SYSTEM_ONE_LINE, 560, 470, 360, 140, S.system);
   const left = ['Client / Patient', 'Receptionist', 'Cashier', 'Laboratory Staff'];
   const right = ['Ultrasound Staff', 'X-Ray Staff', 'Admin', 'Super Admin'];
   const labels = {
@@ -433,37 +476,77 @@ const STORES = {
   D7: 'HMO Claims', D8: 'Clinic Schedule', D9: 'Logs and Notifications',
 };
 
+// A row per process, and every arrow in it horizontal.
+//
+// The actor box is as TALL as the whole column of processes, so a flow leaves it at its own
+// height and runs straight into the process it belongs to. Before this, every flow left the actor
+// from one point and ran down a single trunk, which put ten labels on one vertical line with
+// nothing to say which process each one was going to.
+//
+// A data store is drawn beside the process that uses it, so those arrows are short too. The same
+// store number appearing twice on a sheet is the same store -- the standard way to keep a data
+// flow diagram free of lines that cross the page to reach it.
 function dfd1(spec) {
   const p = new Page(spec.name);
-  const procH = 100, gap = 70;
-  const total = spec.processes.length * (procH + gap) - gap;
-  const ent = p.node(spec.name, 60, 60 + total / 2 - 50, 200, 100, S.entity);
-  const storeCells = {};
+  const PROC_H = 110, ROW_H = 190, TOP = 70;
+  const ENT_X = 60, ENT_W = 200, PROC_X = 520, PROC_W = 280, STORE_X = 1010;
+  const total = spec.processes.length * ROW_H - (ROW_H - PROC_H);
+  const entY = TOP, entH = total;
+  const ent = p.node(spec.name, ENT_X, entY, ENT_W, entH, S.entity);
+  const entFrac = (y) => ((y - entY) / entH).toFixed(4);
 
   spec.processes.forEach((proc, i) => {
-    const y = 60 + i * (procH + gap);
-    const lane = p.node(proc.n, 470, y, 260, procH, S.procHead);
-    p.node(proc.name, 0, 24, 260, procH - 24, S.procBody, lane.id);
-    (proc.in || []).forEach((label, k) => p.edge(ent, lane, label, S.edgeFlow + `exitX=1;exitY=${(0.3 + k * 0.25).toFixed(2)};exitDx=0;exitDy=0;entryX=0;entryY=${(0.3 + k * 0.3).toFixed(2)};entryDx=0;entryDy=0;`));
-    (proc.out || []).forEach((label, k) => p.edge(lane, ent, label, S.edgeFlow + `exitX=0;exitY=${(0.7 - k * 0.25).toFixed(2)};exitDx=0;exitDy=0;entryX=1;entryY=${(0.7 - k * 0.2).toFixed(2)};entryDx=0;entryDy=0;`));
-    (proc.stores || []).forEach((st, k) => {
-      let store = storeCells[st.id];
-      if (!store) {
-        const sy = y + k * 80;
-        const tag = p.node(st.id, 980, sy, 44, 56, S.storeTag);
-        p.node(STORES[st.id], 1024, sy, 250, 56, S.storeName);
-        store = tag;
-        storeCells[st.id] = store;
+    const y = TOP + i * ROW_H;
+    const lane = p.node(proc.n, PROC_X, y, PROC_W, PROC_H, S.procHead);
+    p.node(proc.name, 0, 24, PROC_W, PROC_H - 24, S.procBody, lane.id);
+
+    // Inputs first, then outputs, spread evenly down the process box so no two share a height.
+    const ins = proc.in || [], outs = proc.out || [];
+    const flows = ins.length + outs.length;
+    const laneY = (j) => y + ((j + 1) * PROC_H) / (flows + 1);
+    ins.forEach((label, k) => {
+      const fy = laneY(k);
+      p.edge(ent, lane, label, S.edgeFlow
+        + `exitX=1;exitY=${entFrac(fy)};exitDx=0;exitDy=0;entryX=0;entryY=${(((fy - y) / PROC_H)).toFixed(4)};entryDx=0;entryDy=0;`);
+    });
+    outs.forEach((label, k) => {
+      const fy = laneY(ins.length + k);
+      p.edge(lane, ent, label, S.edgeFlow
+        + `exitX=0;exitY=${(((fy - y) / PROC_H)).toFixed(4)};exitDx=0;exitDy=0;entryX=1;entryY=${entFrac(fy)};entryDx=0;entryDy=0;`);
+    });
+
+    // Each store sits at its own height beside this process, with its read and its write on their
+    // own lines. Two stores fit inside the row; a third would start crowding the row below.
+    const stores = proc.stores || [];
+    const ST_H = 62, ST_GAP = 12;
+    stores.forEach((st, k) => {
+      const sy = y - 4 + k * (ST_H + ST_GAP);
+      const tag = p.node(st.id, STORE_X, sy, 44, ST_H, S.storeTag);
+      p.node(STORES[st.id], STORE_X + 44, sy, 250, ST_H, S.storeName);
+      const pair = (st.to ? 1 : 0) + (st.from ? 1 : 0);
+      let n = 0;
+      const at = () => { n += 1; return sy + (n * ST_H) / (pair + 1); };
+      if (st.to) {
+        const fy = at();
+        p.edge(lane, tag, st.to, S.edgeFlow
+          + `exitX=1;exitY=${(((fy - y) / PROC_H)).toFixed(4)};exitDx=0;exitDy=0;entryX=0;entryY=${(((fy - sy) / ST_H)).toFixed(4)};entryDx=0;entryDy=0;`);
       }
-      // Separate the two directions, stagger each store down the process edge, and pull the labels
-      // back towards their own process. Without all three, a process that reads two stores prints
-      // both labels in the same place ("DiTests and prices").
-      const yTo = Math.min(0.88, 0.62 + k * 0.16);
-      const yFrom = Math.min(0.46, 0.18 + k * 0.16);
-      if (st.to) p.edge(lane, store, st.to, S.edgeFlow + `exitX=1;exitY=${yTo};exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;`, [], -0.4 + k * 0.12);
-      if (st.from) p.edge(store, lane, st.from, S.edgeFlow + `exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=1;entryY=${yFrom};entryDx=0;entryDy=0;`, [], 0.4 - k * 0.12);
+      if (st.from) {
+        const fy = at();
+        p.edge(tag, lane, st.from, S.edgeFlow
+          + `exitX=0;exitY=${(((fy - sy) / ST_H)).toFixed(4)};exitDx=0;exitDy=0;entryX=1;entryY=${(((fy - y) / PROC_H)).toFixed(4)};entryDx=0;entryDy=0;`);
+      }
     });
   });
+
+  // Said once, at the foot of the sheet, and only on a sheet where a store really is drawn twice —
+  // otherwise it answers a question nobody asked. Without it a reader counts two Appointments and
+  // Visits.
+  const drawn = spec.processes.flatMap((proc) => (proc.stores || []).map((st) => st.id));
+  if (drawn.length !== new Set(drawn).size) {
+    p.node('A data store drawn more than once on this sheet is the same store.',
+      ENT_X, TOP + total + 40, 520, 44, S.note);
+  }
   return p;
 }
 

@@ -1061,3 +1061,10 @@ Services Catalogue.
   ONE-based; `0` silently exports the first page and shifts a whole run). Change what a diagram
   SAYS in the script, not in the `.drawio`, or the next regeneration discards it — hand-tuned
   placement in the `.drawio` is fine and expected. The System Architecture figure is not generated.
+  `checkDiagrams.cjs` reads the files back and fails on a decision with fewer than two exits, a
+  dead end, overlapping boxes or a label too long to read; run it after any change.
+  **One flow, one straight line, one label above it** `[1.99.0]` — a DFD box is drawn as tall as
+  the stack of flows it carries so no arrow has to bend, the Level 1 actor spans the whole column
+  of processes, and a store sits beside the process that uses it. **A flowchart says a thing
+  once**: the Desk's walk-in path was drawn three times, each ending in its own queue ticket.
+  A branch that rejoins merges into the TOP of its target, never the right edge.
