@@ -25,7 +25,7 @@ const esc = (s) => String(s)
 const FONT = 'fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;';
 const SMALL = 'fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;';
 const S = {
-  actor: 'shape=actor;fillColor=none;strokeColor=#000000;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fontStyle=1',
+  actor: 'shape=actor;fillColor=none;strokeColor=#000000;html=1;verticalLabelPosition=top;verticalAlign=bottom;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fontStyle=1',
   umlActor: 'shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontFamily=Helvetica;fontSize=12;fontStyle=1',
   term: 'ellipse;whiteSpace=wrap;html=1;' + FONT,
   proc: 'rounded=0;whiteSpace=wrap;html=1;' + FONT,
@@ -110,21 +110,31 @@ function flowchart(spec) {
   widths.forEach((w) => { xs.push(x); x += w + COL_GAP; });
   const totalW = x - COL_GAP - 60;
 
-  p.node(spec.actor, 60, 20, 30, 50, S.actor);
-  const start = p.node(spec.start || 'Login', 40, 96, 150, 44, S.term);
+  // The paper's own header, which Steven asked for: the actor, Login, the access check and the
+  // landing screen in ONE centred stack above the columns, with the no branch looping back up the
+  // left side into Login. The columns then fan out from the landing screen below it.
+  //
+  // Centred over the whole block, except on a chained chart, where the sequence starts at the
+  // first column and the header belongs over that one — a fan that reached left across the other
+  // columns would cross the link corridor that carries the chain.
+  const headX = spec.chain ? xs[0] + NODE_W / 2 : 60 + totalW / 2;
+  p.node(spec.actor, headX - 15, 44, 30, 50, S.actor);
+  const start = p.node(spec.start || 'Login', headX - 75, 118, 150, 44, S.term);
   let landing;
   if (spec.gate === false) {
-    landing = p.node(spec.landing, 40, 180, NODE_W, NODE_H, S.proc);
+    landing = p.node(spec.landing, headX - NODE_W / 2, 196, NODE_W, NODE_H, S.proc);
     p.edge(start, landing);
   } else {
-    const gate = p.node('Access Granted?', 30, 176, 170, 80, S.dec);
-    landing = p.node(spec.landing, 300, 187, NODE_W, NODE_H, S.proc);
+    const gate = p.node('Access Granted?', headX - 85, 194, 170, 80, S.dec);
+    landing = p.node(spec.landing, headX - NODE_W / 2, 310, NODE_W, NODE_H, S.proc);
     p.edge(start, gate);
     p.edge(gate, landing, 'yes');
-    p.edge(gate, start, 'no', S.edge, [[-30, 216], [-30, 118]]);
+    // Out of the diamond's left point, up the outside of the stack, and back into Login's left.
+    p.edge(gate, start, 'no', S.edge + 'exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;',
+      [[headX - 155, 234], [headX - 155, 140]]);
   }
 
-  const topY = 320;
+  const topY = 440;
   let lowest = topY;
   const lastOfColumn = [];
   const firstOfColumn = [];
@@ -148,7 +158,15 @@ function flowchart(spec) {
       // independent branches off the landing screen says the patient does them all at once.
       if (si === 0) {
         if (spec.chain && ci > 0) firstOfColumn[ci] = at.cell;   // linked below, over the top
-        else p.edge(landing, at.cell);
+        else {
+          // Down out of the landing screen onto one shared bus, then across and down into each
+          // column — the comb the paper's figures draw. Left to its own devices draw.io takes the
+          // nearest edge of the landing box, so one branch left its left side, one its bottom and
+          // one its right, which reads as three different kinds of thing.
+          const busY = landing.y + landing.h + 34;
+          p.edge(landing, at.cell, '', S.edge + 'exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;',
+            [[landing.x + landing.w / 2, busY], [cx + NODE_W / 2, busY]]);
+        }
       } else p.edge(main[si - 1].cell, at.cell, col[si - 1].k === 'dec' ? (col[si - 1].mainLabel || 'yes') : '');
       if (step.side) {
         const side = p.node(step.side.l, cx + NODE_W + 36, at.y + (at.h - NODE_H) / 2, SIDE_W, NODE_H, kindStyle(step.side.k || 'proc'));
