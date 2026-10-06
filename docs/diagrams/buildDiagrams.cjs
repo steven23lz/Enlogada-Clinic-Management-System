@@ -20,10 +20,12 @@ const BACKEND = path.join(__dirname, '..', '..', 'backend');
 const esc = (s) => String(s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const FONT = 'fontFamily=Helvetica;fontSize=12;';
-const SMALL = 'fontFamily=Helvetica;fontSize=11;';
+// Black ink on white, like a printed figure. Nothing in these diagrams uses colour to mean
+// anything, so colour only costs the reader contrast on a photocopy or a projector.
+const FONT = 'fontFamily=Helvetica;fontSize=14;fontColor=#000000;strokeColor=#000000;';
+const SMALL = 'fontFamily=Helvetica;fontSize=12;fontColor=#000000;strokeColor=#000000;';
 const S = {
-  actor: 'shape=actor;fillColor=#E8761A;strokeColor=none;html=1;',
+  actor: 'shape=actor;fillColor=none;strokeColor=#000000;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontFamily=Helvetica;fontSize=14;fontColor=#000000;fontStyle=1',
   umlActor: 'shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fontFamily=Helvetica;fontSize=12;fontStyle=1',
   term: 'ellipse;whiteSpace=wrap;html=1;' + FONT,
   proc: 'rounded=0;whiteSpace=wrap;html=1;' + FONT,
@@ -38,14 +40,14 @@ const S = {
   storeName: 'rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=8;' + FONT,
   edge: 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;' + SMALL,
   edgeStraight: 'edgeStyle=none;rounded=0;html=1;endArrow=none;' + SMALL,
-  edgeFlow: 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontColor=#1A4D8F;verticalAlign=bottom;' + SMALL,
+  edgeFlow: 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;' + SMALL,
   edgeDashed: 'endArrow=open;endSize=12;dashed=1;html=1;' + SMALL,
-  table: 'shape=table;startSize=28;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=1;align=center;resizeLast=1;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontFamily=Helvetica;fontSize=12;',
-  tableGhost: 'shape=table;startSize=28;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=2;align=center;resizeLast=1;html=1;fillColor=#F5F5F5;strokeColor=#B3B3B3;fontColor=#666666;fontFamily=Helvetica;fontSize=12;',
+  table: 'shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=1;align=center;resizeLast=1;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=14;',
+  tableGhost: 'shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=2;align=center;resizeLast=1;html=1;fillColor=none;strokeColor=#000000;dashed=1;fontColor=#000000;fontFamily=Helvetica;fontSize=14;',
   tableRow: 'shape=tableRow;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;fillColor=none;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=0;',
-  tableCell: 'shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;overflow=hidden;html=1;fontFamily=Helvetica;fontSize=11;',
-  erEdge: 'edgeStyle=entityRelationEdgeStyle;fontSize=11;html=1;endArrow=ERmandOne;startArrow=ERmany;rounded=0;strokeColor=#6C8EBF;',
-  note: 'shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#FFF2CC;strokeColor=#D6B656;align=left;spacingLeft=6;' + SMALL,
+  tableCell: 'shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;align=left;spacingLeft=6;overflow=hidden;html=1;fontFamily=Helvetica;fontSize=12;fontColor=#000000;',
+  erEdge: 'edgeStyle=entityRelationEdgeStyle;fontSize=12;html=1;endArrow=ERmandOne;startArrow=ERmany;rounded=0;strokeColor=#000000;',
+  note: 'shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=none;strokeColor=#000000;align=left;spacingLeft=6;' + SMALL,
 };
 
 class Page {
@@ -56,11 +58,14 @@ class Page {
     this.cells.push(`<mxCell id="${id}" value="${esc(value)}" style="${style}" vertex="1" parent="${parent}"><mxGeometry x="${x}" y="${y}" width="${w}" height="${h}" as="geometry" /></mxCell>`);
     return { id, x, y, w, h };
   }
-  edge(from, to, label = '', style = S.edge, points = []) {
+  // labelX slides the label along the edge (-1 at the source, 1 at the target), which is what keeps
+  // two flows between the same pair of boxes from printing their labels on top of each other.
+  edge(from, to, label = '', style = S.edge, points = [], labelX = null) {
     const id = this.id('e');
+    const pos = labelX === null ? 'relative="1"' : `relative="1" x="${labelX}"`;
     const geo = points.length
-      ? `<mxGeometry relative="1" as="geometry"><Array as="points">${points.map((p) => `<mxPoint x="${p[0]}" y="${p[1]}" />`).join('')}</Array></mxGeometry>`
-      : '<mxGeometry relative="1" as="geometry" />';
+      ? `<mxGeometry ${pos} as="geometry"><Array as="points">${points.map((p) => `<mxPoint x="${p[0]}" y="${p[1]}" />`).join('')}</Array></mxGeometry>`
+      : `<mxGeometry ${pos} as="geometry" />`;
     this.cells.push(`<mxCell id="${id}" value="${esc(label)}" style="${style}" edge="1" parent="1" source="${from.id}" target="${to.id}">${geo}</mxCell>`);
   }
   xml() {
@@ -83,7 +88,7 @@ function writeFile(file, pages) {
 // ── 1. Flowcharts ───────────────────────────────────────────────────────────────────────────────
 // A chart is an actor, a preamble (login / access check / landing screen) and columns of steps that
 // all meet at one End, which is how the originals in the paper are drawn.
-const NODE_W = 210, NODE_H = 58, DEC_H = 76, V_GAP = 46, SIDE_W = 190, COL_GAP = 48;
+const NODE_W = 240, NODE_H = 66, DEC_H = 88, V_GAP = 50, SIDE_W = 215, COL_GAP = 52;
 
 function kindStyle(k) {
   return k === 'dec' ? S.dec : k === 'io' ? S.io : k === 'term' ? S.term : S.proc;
@@ -149,74 +154,80 @@ function flowchart(spec) {
     lastOfColumn.push(main[main.length - 1].cell);
   });
 
-  const end = p.node('End', 60 + totalW / 2 - 60, lowest + 30, 120, 44, S.term);
-  lastOfColumn.concat(merges).forEach((cell) => p.edge(cell, end));
+  // Every column ends at the one End. Drop straight down to a clear corridor below the columns
+  // first, then run across: routed along their own row instead, the lines cut through the boxes
+  // of every column to their right.
+  const corridor = lowest + 14;
+  const end = p.node('End', 60 + totalW / 2 - 60, corridor + 46, 120, 44, S.term);
+  lastOfColumn.concat(merges).forEach((cell) => {
+    p.edge(cell, end, '', S.edge + 'exitX=0.5;exitY=1;exitDx=0;exitDy=0;', [[cell.x + cell.w / 2, corridor]]);
+  });
   return p;
 }
 
 const SUPER_ADMIN_FLOW = {
   name: 'Super Admin', actor: 'Super Admin', landing: 'Today',
   columns: [
-    [{ k: 'proc', l: 'Who Sees What' }, { k: 'proc', l: "Change a role's permissions" }, { k: 'proc', l: 'Review the listed changes' }, { k: 'proc', l: 'Save changes' }],
-    [{ k: 'proc', l: 'One Person' }, { k: 'proc', l: 'Grant or revoke access for one account' }, { k: 'proc', l: 'Change recorded in the Activity Log' }],
-    [{ k: 'proc', l: 'Staff Accounts' }, { k: 'proc', l: 'Create, update or deactivate an account' }],
-    [{ k: 'proc', l: 'Services Catalog' }, { k: 'proc', l: 'Add or update a test, price or package' }],
-    [{ k: 'proc', l: 'Payment Methods' }, { k: 'proc', l: "Publish the clinic's GCash account and QR" }],
-    [{ k: 'proc', l: 'Clinic Schedule' }, { k: 'proc', l: 'Set weekly hours or a date override' }],
-    [{ k: 'proc', l: 'Reports' }, { k: 'proc', l: 'View clinic analytics' }, { k: 'io', l: 'Export CSV' }],
-    [{ k: 'proc', l: 'Activity Log' }, { k: 'proc', l: 'Review the audit trail' }],
+    [{ k: 'proc', l: 'Who Sees What' }, { k: 'proc', l: 'Edit role access' }, { k: 'proc', l: 'Review changes' }, { k: 'proc', l: 'Save' }],
+    [{ k: 'proc', l: 'One Person' }, { k: 'proc', l: 'Grant or revoke access' }, { k: 'proc', l: 'Saved to audit log' }],
+    [{ k: 'proc', l: 'Staff Accounts' }, { k: 'proc', l: 'Add or deactivate staff' }],
+    [{ k: 'proc', l: 'Services Catalog' }, { k: 'proc', l: 'Edit tests and prices' }],
+    [{ k: 'proc', l: 'Payment Methods' }, { k: 'proc', l: 'Publish GCash and QR' }],
+    [{ k: 'proc', l: 'Clinic Schedule' }, { k: 'proc', l: 'Set hours and closures' }],
+    [{ k: 'proc', l: 'Reports' }, { k: 'proc', l: 'View analytics' }, { k: 'io', l: 'Export CSV' }],
+    [{ k: 'proc', l: 'Activity Log' }, { k: 'proc', l: 'Review audit trail' }],
   ],
 };
 
 const ADMIN_FLOW = {
   name: 'Admin', actor: 'Admin', landing: 'Today',
   columns: [
-    [{ k: 'proc', l: 'Service Requests' }, { k: 'proc', l: 'Open an HMO claim' },
-      { k: 'dec', l: 'Approve the claim?', mainLabel: 'yes', side: { l: 'Record the refusal reason', label: 'no', mergeTo: 2 } },
-      { k: 'proc', l: 'Record the approval code' }, { k: 'proc', l: 'Cashier is notified of the decision' }],
-    [{ k: 'proc', l: 'Appointments' }, { k: 'proc', l: 'View or update a booking' }],
-    [{ k: 'proc', l: 'Patient Records' }, { k: 'proc', l: 'Search and correct a record' }, { k: 'io', l: 'Print record or result' }],
-    [{ k: 'proc', l: 'Cashier Monitoring' }, { k: 'proc', l: 'Review payments and reversals' }],
-    [{ k: 'proc', l: 'Staff Accounts' }, { k: 'proc', l: 'Create or update a staff account' }],
-    [{ k: 'proc', l: 'Reports' }, { k: 'proc', l: 'Generate a report' }, { k: 'io', l: 'Print or export CSV' }],
-    [{ k: 'proc', l: 'Activity Log' }, { k: 'proc', l: 'Review the audit trail' }],
+    [{ k: 'proc', l: 'Service Requests' }, { k: 'proc', l: 'Open HMO claim' },
+      { k: 'dec', l: 'Approve claim?', mainLabel: 'yes', side: { l: 'Record reason', label: 'no', mergeTo: 2 } },
+      { k: 'proc', l: 'Record approval code' }, { k: 'proc', l: 'Notify cashier' }],
+    [{ k: 'proc', l: 'Appointments' }, { k: 'proc', l: 'View or update booking' }],
+    [{ k: 'proc', l: 'Patient Records' }, { k: 'proc', l: 'Search and correct' }, { k: 'io', l: 'Print record' }],
+    [{ k: 'proc', l: 'Cashier Monitoring' }, { k: 'proc', l: 'Review payments' }],
+    [{ k: 'proc', l: 'Staff Accounts' }, { k: 'proc', l: 'Add or update staff' }],
+    [{ k: 'proc', l: 'Reports' }, { k: 'proc', l: 'Generate report' }, { k: 'io', l: 'Print or export' }],
+    [{ k: 'proc', l: 'Activity Log' }, { k: 'proc', l: 'Review audit trail' }],
   ],
 };
 
 const RECEPTIONIST_FLOW = {
   name: 'Receptionist', actor: 'Receptionist', landing: 'Desk',
   columns: [
-    [{ k: 'proc', l: 'Search a name, queue number or reference' },
-      { k: 'dec', l: "Booking for today?", mainLabel: 'yes', side: { l: 'Scan the QR code on the pass', label: 'scan' } },
-      { k: 'proc', l: 'Check in the patient' },
-      { k: 'proc', l: "Stamp arrival and issue today's queue ticket" },
-      { k: 'dec', l: 'Already paid?', mainLabel: 'yes', side: { l: 'Send the patient to the cashier', label: 'no', toEnd: true } },
-      { k: 'proc', l: 'Released to the department worklist' }],
-    [{ k: 'proc', l: 'Record on file, no booking' }, { k: 'proc', l: 'Start a visit' }, { k: 'proc', l: 'Attach the requested tests' }, { k: 'proc', l: 'Issue the queue ticket' }],
-    [{ k: 'proc', l: 'Nobody on file' }, { k: 'proc', l: 'Register walk-in' }, { k: 'proc', l: 'Create the record and the visit' }, { k: 'proc', l: 'Issue the queue ticket' }],
-    [{ k: 'dec', l: 'HMO patient?', mainLabel: 'yes' }, { k: 'proc', l: 'Record member number and upload the HMO card' }, { k: 'proc', l: 'Name the referring physician' }, { k: 'proc', l: 'Raise the claim for an Admin decision' }],
-    [{ k: 'proc', l: 'Booking not arrived' }, { k: 'proc', l: 'Mark as No-Show' }],
-    [{ k: 'proc', l: 'Visit History' }, { k: 'proc', l: 'Review earlier visits' }],
+    [{ k: 'proc', l: 'Search name or reference' },
+      { k: 'dec', l: 'Booking today?', mainLabel: 'yes', side: { l: 'Scan QR code', label: 'scan' } },
+      { k: 'proc', l: 'Check in patient' },
+      { k: 'proc', l: 'Issue queue ticket' },
+      { k: 'dec', l: 'Already paid?', mainLabel: 'yes', side: { l: 'Send to cashier', label: 'no', toEnd: true } },
+      { k: 'proc', l: 'Release to department' }],
+    [{ k: 'proc', l: 'On file, no booking' }, { k: 'proc', l: 'Start visit' }, { k: 'proc', l: 'Attach tests' }, { k: 'proc', l: 'Issue queue ticket' }],
+    [{ k: 'proc', l: 'New patient' }, { k: 'proc', l: 'Register walk-in' }, { k: 'proc', l: 'Create record' }, { k: 'proc', l: 'Issue queue ticket' }],
+    [{ k: 'dec', l: 'HMO patient?', mainLabel: 'yes' }, { k: 'proc', l: 'Get card and member number' }, { k: 'proc', l: 'Name referring doctor' }, { k: 'proc', l: 'Send claim to Admin' }],
+    [{ k: 'proc', l: 'Did not arrive' }, { k: 'proc', l: 'Mark no-show' }],
+    [{ k: 'proc', l: 'Visit History' }, { k: 'proc', l: 'Review past visits' }],
   ],
 };
 
 const CASHIER_FLOW = {
   name: 'Cashier', actor: 'Cashier', landing: 'Billing Queue',
   columns: [
-    [{ k: 'proc', l: 'Select a patient who is here' },
-      { k: 'proc', l: 'Bill built from the attached tests and packages' },
-      { k: 'dec', l: 'Senior Citizen or PWD?', mainLabel: 'no', side: { l: 'Apply the 20% statutory discount', label: 'yes' } },
-      { k: 'proc', l: 'Choose Cash, GCash or Bank' },
-      { k: 'proc', l: 'Enter cash tendered and give change' },
-      { k: 'proc', l: 'Take payment and issue the receipt number' },
-      { k: 'io', l: 'Print the receipt' },
-      { k: 'proc', l: 'Visit released to the department if checked in' }],
-    [{ k: 'proc', l: 'Online Payments' }, { k: 'proc', l: 'Open the uploaded proof of payment' },
-      { k: 'proc', l: 'Compare amount claimed with amount due' },
-      { k: 'dec', l: 'Proof verified?', mainLabel: 'yes', side: { l: 'Reject with a reason and email the patient', label: 'no', toEnd: true } },
-      { k: 'proc', l: 'Record the payment and issue the receipt' }],
-    [{ k: 'proc', l: 'Transaction History' }, { k: 'proc', l: 'Select a date range' }, { k: 'proc', l: 'View takings and receipts' }, { k: 'io', l: 'Print a receipt copy' }],
-    [{ k: 'proc', l: 'Reverse a receipt' }, { k: 'proc', l: 'Record the refund on its own date' }],
+    [{ k: 'proc', l: 'Select patient' },
+      { k: 'proc', l: 'Compute bill' },
+      { k: 'dec', l: 'Senior or PWD?', mainLabel: 'no', side: { l: 'Less 20% discount', label: 'yes' } },
+      { k: 'proc', l: 'Choose payment method' },
+      { k: 'proc', l: 'Enter cash and change' },
+      { k: 'proc', l: 'Issue receipt' },
+      { k: 'io', l: 'Print receipt' },
+      { k: 'proc', l: 'Release to department' }],
+    [{ k: 'proc', l: 'Online Payments' }, { k: 'proc', l: 'Open proof of payment' },
+      { k: 'proc', l: 'Check amount due' },
+      { k: 'dec', l: 'Proof valid?', mainLabel: 'yes', side: { l: 'Reject and email', label: 'no', toEnd: true } },
+      { k: 'proc', l: 'Record payment' }],
+    [{ k: 'proc', l: 'Transaction History' }, { k: 'proc', l: 'Pick date range' }, { k: 'proc', l: 'View takings' }, { k: 'io', l: 'Print receipt copy' }],
+    [{ k: 'proc', l: 'Reverse a receipt' }, { k: 'proc', l: 'Record refund' }],
   ],
 };
 
@@ -224,40 +235,41 @@ function departmentFlow(dept, formStep) {
   return {
     name: dept, actor: `${dept} Staff`, landing: `${dept} Worklist`,
     columns: [
-      [{ k: 'proc', l: 'View the released tickets for this department' },
-        { k: 'proc', l: 'Select a ticket and perform the test' },
+      [{ k: 'proc', l: 'View released tickets' },
+        { k: 'proc', l: 'Select ticket' },
+        { k: 'proc', l: 'Perform test' },
         { k: 'proc', l: formStep },
-        { k: 'dec', l: 'Critical value?', mainLabel: 'no', side: { l: 'Phone the physician and record the call', label: 'yes' } },
-        { k: 'proc', l: 'Save the result' },
-        { k: 'proc', l: 'Release the result, recording who and when' },
-        { k: 'io', l: 'Print the report' },
-        { k: 'proc', l: 'Email the report and record the delivery' }],
-      [{ k: 'proc', l: 'Open a released result' }, { k: 'proc', l: 'Amend the findings' }, { k: 'proc', l: 'Save as a new version' }, { k: 'proc', l: 'Earlier version kept and still readable' }],
-      [{ k: 'proc', l: `${dept} History` }, { k: 'proc', l: 'Search by patient or queue number' }, { k: 'io', l: 'View or reprint the report' }],
+        { k: 'dec', l: 'Critical value?', mainLabel: 'no', side: { l: 'Call doctor and log it', label: 'yes' } },
+        { k: 'proc', l: 'Save result' },
+        { k: 'proc', l: 'Release result' },
+        { k: 'io', l: 'Print report' },
+        { k: 'proc', l: 'Email to patient' }],
+      [{ k: 'proc', l: 'Open released result' }, { k: 'proc', l: 'Amend findings' }, { k: 'proc', l: 'Save new version' }, { k: 'proc', l: 'Old version kept' }],
+      [{ k: 'proc', l: `${dept} History` }, { k: 'proc', l: 'Search records' }, { k: 'io', l: 'Reprint report' }],
     ],
   };
 }
 
 const CLIENT_FLOW = {
-  name: 'Client Patient', actor: 'Client / Patient', landing: 'View the services and tests', gate: false,
-  start: 'Open the Enlogada website',
+  name: 'Client Patient', actor: 'Client / Patient', landing: 'View services', gate: false,
+  start: 'Open website',
   columns: [
     [{ k: 'proc', l: 'Book a visit' },
-      { k: 'dec', l: 'Already have an account?', mainLabel: 'yes', side: { l: 'Register and enter the 6-digit code emailed to you', label: 'no' } },
-      { k: 'proc', l: 'Select or add a patient profile' },
-      { k: 'proc', l: 'Choose a date and an available time' },
-      { k: 'proc', l: 'Select the tests or a package' }],
-    [{ k: 'dec', l: 'Covered by HMO?', mainLabel: 'no', side: { l: 'Enter the member number and upload the HMO card', label: 'yes' } },
-      { k: 'proc', l: 'Confirm the booking' },
-      { k: 'proc', l: 'Reference and QR code issued, no queue number yet' },
-      { k: 'proc', l: 'Confirmation email with the preparation instructions' }],
-    [{ k: 'dec', l: 'Pay before the visit?', mainLabel: 'no', side: { l: "Send payment to the clinic's GCash and upload the proof", label: 'yes' } },
-      { k: 'proc', l: 'Arrive at the clinic' },
-      { k: 'proc', l: 'The desk scans the QR code' },
-      { k: 'proc', l: 'Queue ticket issued' }],
-    [{ k: 'proc', l: 'Tests performed by the department' },
-      { k: 'proc', l: 'Result released and emailed' },
-      { k: 'io', l: 'View or print the result in the portal' }],
+      { k: 'dec', l: 'Have an account?', mainLabel: 'yes', side: { l: 'Register and verify code', label: 'no' } },
+      { k: 'proc', l: 'Choose patient profile' },
+      { k: 'proc', l: 'Pick date and time' },
+      { k: 'proc', l: 'Pick tests' }],
+    [{ k: 'dec', l: 'HMO patient?', mainLabel: 'no', side: { l: 'Enter member and card', label: 'yes' } },
+      { k: 'proc', l: 'Confirm booking' },
+      { k: 'proc', l: 'Get reference and QR' },
+      { k: 'proc', l: 'Email with instructions' }],
+    [{ k: 'dec', l: 'Pay now?', mainLabel: 'no', side: { l: 'Pay GCash, upload proof', label: 'yes' } },
+      { k: 'proc', l: 'Arrive at clinic' },
+      { k: 'proc', l: 'Desk scans QR' },
+      { k: 'proc', l: 'Get queue ticket' }],
+    [{ k: 'proc', l: 'Test performed' },
+      { k: 'proc', l: 'Result released' },
+      { k: 'io', l: 'View or print result' }],
   ],
 };
 
@@ -337,29 +349,29 @@ function dfd0(spec) {
 
 const DFD0 = [
   { name: 'Super Admin',
-    inputs: ['Login Credentials', 'Role Permission Details', 'Service and Pricing Details', 'Payment Channel Details', 'Clinic Schedule Details', 'Analytics Request Details'],
-    outputs: ['Account Confirmed Details', 'Updated Permission Matrix', 'Updated Service Catalogue', 'System Analytics', 'Audit Trail Records'] },
+    inputs: ['Login details', 'Role access', 'Services and prices', 'Payment channel', 'Clinic hours', 'Report request'],
+    outputs: ['Account confirmed', 'Updated access', 'Updated services', 'Analytics', 'Audit trail'] },
   { name: 'Admin',
-    inputs: ['Login Credentials', 'HMO Claim Decision', 'Staff Account Details', 'Patient Record Corrections', 'Report Request Details'],
-    outputs: ['Account Confirmed Details', 'HMO Claim Requests', 'Patient Records', 'Report Details', 'Cashier Transaction Records'] },
+    inputs: ['Login details', 'HMO decision', 'Staff account', 'Record correction', 'Report request'],
+    outputs: ['Account confirmed', 'HMO claims', 'Patient records', 'Reports', 'Payment records'] },
   { name: 'Receptionist',
-    inputs: ['Login Credentials', 'Walk-In Patient Registration', 'Scanned QR Code', 'Visit Test Request Details', 'HMO Claim Details', 'No-Show Details'],
-    outputs: ['Account Confirmed Details', 'Verified Booking Details', 'Queue Ticket', 'Billing Request', 'HMO Claim Decision'] },
+    inputs: ['Login details', 'Walk-in details', 'Scanned QR code', 'Test request', 'HMO claim', 'No-show'],
+    outputs: ['Account confirmed', 'Booking details', 'Queue ticket', 'Billing request', 'HMO decision'] },
   { name: 'Cashier',
-    inputs: ['Login Credentials', 'Billing and Payment Details', 'Statutory Discount Details', 'Proof of Payment Decision', 'Refund Details'],
-    outputs: ['Account Confirmed Details', 'Patients Waiting to Pay', 'Receipt Details', 'Proof of Payment Submissions', 'Takings Summary'] },
+    inputs: ['Login details', 'Payment details', 'Discount claim', 'Proof decision', 'Refund details'],
+    outputs: ['Account confirmed', 'Patients to bill', 'Receipt', 'Payment proofs', 'Takings'] },
   { name: 'Laboratory Staff',
-    inputs: ['Login Credentials', 'Laboratory Result Details', 'Result Status Update', 'Critical Value Callback'],
-    outputs: ['Account Confirmed Details', 'Laboratory Test Requests', 'Patient Details', 'Released Result Record'] },
+    inputs: ['Login details', 'Laboratory result', 'Status update', 'Critical callback'],
+    outputs: ['Account confirmed', 'Laboratory requests', 'Patient details', 'Released result'] },
   { name: 'Ultrasound Staff',
-    inputs: ['Login Credentials', 'Ultrasound Measurements and Findings', 'Result Status Update', 'Critical Value Callback'],
-    outputs: ['Account Confirmed Details', 'Ultrasound Test Requests', 'Patient Details', 'Released Result Record'] },
+    inputs: ['Login details', 'Ultrasound result', 'Status update', 'Critical callback'],
+    outputs: ['Account confirmed', 'Ultrasound requests', 'Patient details', 'Released result'] },
   { name: 'Xray Staff',
-    inputs: ['Login Credentials', 'X-Ray Findings', 'Result Status Update', 'Critical Value Callback'],
-    outputs: ['Account Confirmed Details', 'X-Ray Test Requests', 'Patient Details', 'Released Result Record'] },
+    inputs: ['Login details', 'X-ray result', 'Status update', 'Critical callback'],
+    outputs: ['Account confirmed', 'X-ray requests', 'Patient details', 'Released result'] },
   { name: 'Client Patient',
-    inputs: ['Registration Details', 'Emailed Verification Code', 'Login Credentials', 'Patient Profile Details', 'Appointment Request Details', 'Proof of Payment'],
-    outputs: ['Account Confirmed Details', 'QR Booking Pass and Reference', 'Preparation Instructions', 'Receipt Details', 'Diagnostic Results'] },
+    inputs: ['Registration details', 'Verification code', 'Login details', 'Patient profile', 'Booking request', 'Proof of payment'],
+    outputs: ['Account confirmed', 'QR booking pass', 'Preparation notes', 'Receipt', 'Results'] },
 ];
 
 function dfd0Context() {
@@ -390,9 +402,9 @@ function dfd0Context() {
 
 // ── 4. DFD level 1 ──────────────────────────────────────────────────────────────────────────────
 const STORES = {
-  D1: 'User and Access Data', D2: 'Patient Data', D3: 'Appointment and Visit Data',
-  D4: 'Payment Data', D5: 'Service Catalogue', D6: 'Diagnostic Result Data',
-  D7: 'HMO Data', D8: 'Schedule Data', D9: 'System Log and Notification Data',
+  D1: 'Users and Access', D2: 'Patients', D3: 'Appointments and Visits',
+  D4: 'Payments', D5: 'Service Catalogue', D6: 'Diagnostic Results',
+  D7: 'HMO Claims', D8: 'Clinic Schedule', D9: 'Logs and Notifications',
 };
 
 function dfd1(spec) {
@@ -417,73 +429,77 @@ function dfd1(spec) {
         store = tag;
         storeCells[st.id] = store;
       }
-      // Separate the two directions, or the labels print on top of each other.
-      if (st.to) p.edge(lane, store, st.to, S.edgeFlow + 'exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;');
-      if (st.from) p.edge(store, lane, st.from, S.edgeFlow + 'exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;');
+      // Separate the two directions, stagger each store down the process edge, and pull the labels
+      // back towards their own process. Without all three, a process that reads two stores prints
+      // both labels in the same place ("DiTests and prices").
+      const yTo = Math.min(0.88, 0.62 + k * 0.16);
+      const yFrom = Math.min(0.46, 0.18 + k * 0.16);
+      if (st.to) p.edge(lane, store, st.to, S.edgeFlow + `exitX=1;exitY=${yTo};exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;`, [], -0.4 + k * 0.12);
+      if (st.from) p.edge(store, lane, st.from, S.edgeFlow + `exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=1;entryY=${yFrom};entryDx=0;entryDy=0;`, [], 0.4 - k * 0.12);
     });
   });
   return p;
 }
 
 const P = {
-  login: { n: '1.0', name: 'Manage Login and Verification' },
+  login: { n: '1.0', name: 'Manage Login' },
   profiles: { n: '2.0', name: 'Manage Patient Profiles' },
-  appts: { n: '3.0', name: 'Manage Appointments and Slots' },
-  checkin: { n: '4.0', name: 'Check In and Issue Queue Ticket' },
-  requests: { n: '5.0', name: 'Manage Visit Service Requests' },
+  appts: { n: '3.0', name: 'Manage Appointments' },
+  checkin: { n: '4.0', name: 'Check In and Issue Ticket' },
+  requests: { n: '5.0', name: 'Manage Test Requests' },
   hmoRaise: { n: '6.0', name: 'Record HMO Claim' },
   hmoDecide: { n: '7.0', name: 'Decide HMO Claim' },
-  billing: { n: '8.0', name: 'Process Billing and Payment' },
-  proof: { n: '9.0', name: 'Review Online Payment Proof' },
-  release: { n: '10.0', name: 'Release Visit to Departments' },
-  results: { n: '11.0', name: 'Record Diagnostic Results' },
-  deliver: { n: '12.0', name: 'Release and Deliver Results' },
+  billing: { n: '8.0', name: 'Process Payment' },
+  proof: { n: '9.0', name: 'Review Payment Proof' },
+  release: { n: '10.0', name: 'Release Visit' },
+  results: { n: '11.0', name: 'Record Results' },
+  deliver: { n: '12.0', name: 'Release Results' },
   records: { n: '13.0', name: 'Manage Patient Records' },
-  catalogue: { n: '14.0', name: 'Manage Services, Packages and Pricing' },
-  schedule: { n: '15.0', name: 'Manage Clinic Schedule' },
+  catalogue: { n: '14.0', name: 'Manage Services and Prices' },
+  schedule: { n: '15.0', name: 'Manage Schedule' },
   staff: { n: '16.0', name: 'Manage Staff Accounts' },
-  rbac: { n: '17.0', name: 'Manage Roles and Permissions' },
-  reports: { n: '18.0', name: 'Generate Reports and Analytics' },
-  notify: { n: '19.0', name: 'Send Notifications and Emails' },
-  audit: { n: '20.0', name: 'Record Audit Trail and Retention' },
+  rbac: { n: '17.0', name: 'Manage Roles and Access' },
+  reports: { n: '18.0', name: 'Generate Reports' },
+  notify: { n: '19.0', name: 'Send Emails' },
+  audit: { n: '20.0', name: 'Record Audit Trail' },
 };
-const login = (entity) => ({ ...P.login, in: ['Login Credentials'], out: ['Account Confirmed Details'], stores: [{ id: 'D1', to: 'Verify Login Credentials', from: 'Verified Login Credentials' }] });
+const login = () => ({ ...P.login, in: ['Login details'], out: ['Account confirmed'], stores: [{ id: 'D1', to: 'Check credentials', from: 'Account details' }] });
 
 const DFD1 = [
   { name: 'Super Admin', processes: [
-    login(), { ...P.rbac, in: ['Role Permission Details'], out: ['Updated Permission Matrix'], stores: [{ id: 'D1', to: 'Store Permission Changes' }] },
-    { ...P.catalogue, in: ['Service and Pricing Details'], out: ['Updated Service Catalogue'], stores: [{ id: 'D5', to: 'Store Service Details', from: 'Service Records' }] },
-    { ...P.schedule, in: ['Clinic Schedule Details'], out: ['Published Clinic Hours'], stores: [{ id: 'D8', to: 'Store Hours and Overrides' }] },
-    { ...P.reports, in: ['Analytics Request Details'], out: ['System Analytics'], stores: [{ id: 'D4', from: 'Payment Records' }, { id: 'D3', from: 'Visit Records' }] },
-    { ...P.audit, out: ['Audit Trail Records'], stores: [{ id: 'D9', from: 'Audit Entries' }] }] },
+    login(), { ...P.rbac, in: ['Role access'], out: ['Updated access'], stores: [{ id: 'D1', to: 'Save access' }] },
+    { ...P.catalogue, in: ['Services and prices'], out: ['Updated services'], stores: [{ id: 'D5', to: 'Save service', from: 'Service list' }] },
+    { ...P.schedule, in: ['Clinic hours'], out: ['Published hours'], stores: [{ id: 'D8', to: 'Save hours' }] },
+    { ...P.reports, in: ['Report request'], out: ['Analytics'], stores: [{ id: 'D4', from: 'Payments' }, { id: 'D3', from: 'Visits' }] },
+    { ...P.audit, out: ['Audit trail'], stores: [{ id: 'D9', from: 'Audit entries' }] }] },
   { name: 'Admin', processes: [
-    login(), { ...P.hmoDecide, in: ['HMO Claim Decision'], out: ['HMO Claim Requests'], stores: [{ id: 'D7', to: 'Store Decision and Reason', from: 'Pending Claims' }] },
-    { ...P.staff, in: ['Staff Account Details'], out: ['Created Account Details'], stores: [{ id: 'D1', to: 'Store Staff Account' }] },
-    { ...P.records, in: ['Patient Record Corrections'], out: ['Patient Records'], stores: [{ id: 'D2', to: 'Update Patient Record', from: 'Patient Details' }] },
-    { ...P.reports, in: ['Report Request Details'], out: ['Report Details'], stores: [{ id: 'D4', from: 'Payment Records' }, { id: 'D3', from: 'Visit and Test Records' }] }] },
+    login(), { ...P.hmoDecide, in: ['HMO decision'], out: ['HMO claims'], stores: [{ id: 'D7', to: 'Save decision', from: 'Pending claims' }] },
+    { ...P.staff, in: ['Staff account'], out: ['Account created'], stores: [{ id: 'D1', to: 'Save account' }] },
+    { ...P.records, in: ['Record correction'], out: ['Patient records'], stores: [{ id: 'D2', to: 'Update record', from: 'Patient details' }] },
+    { ...P.reports, in: ['Report request'], out: ['Reports'], stores: [{ id: 'D4', from: 'Payments' }, { id: 'D3', from: 'Visits and tests' }] }] },
   { name: 'Receptionist', processes: [
-    login(), { ...P.profiles, in: ['Walk-In Patient Registration'], out: ['Patient Record Created'], stores: [{ id: 'D2', to: 'Store Patient Details', from: 'Existing Patient Details' }] },
-    { ...P.checkin, in: ['Scanned QR Code'], out: ['Queue Ticket'], stores: [{ id: 'D3', to: 'Stamp Arrival and Ticket', from: "Today's Bookings" }] },
-    { ...P.requests, in: ['Visit Test Request Details'], out: ['Billing Request'], stores: [{ id: 'D3', to: 'Store Visit Tests' }, { id: 'D5', from: 'Service and Package Details' }] },
-    { ...P.hmoRaise, in: ['HMO Claim Details'], out: ['Claim Raised for Decision'], stores: [{ id: 'D7', to: 'Store Claim and Card Evidence' }] }] },
+    login(), { ...P.profiles, in: ['Walk-in details'], out: ['Record created'], stores: [{ id: 'D2', to: 'Save patient', from: 'Patient details' }] },
+    { ...P.checkin, in: ['Scanned QR code'], out: ['Queue ticket'], stores: [{ id: 'D3', to: 'Save arrival and ticket', from: "Today's bookings" }] },
+    { ...P.requests, in: ['Test request'], out: ['Billing request'], stores: [{ id: 'D3', to: 'Save visit tests' }, { id: 'D5', from: 'Services and packages' }] },
+    { ...P.hmoRaise, in: ['HMO claim'], out: ['Claim sent'], stores: [{ id: 'D7', to: 'Save claim and card' }] }] },
   { name: 'Cashier', processes: [
-    login(), { ...P.billing, in: ['Billing and Payment Details'], out: ['Receipt Details'], stores: [{ id: 'D4', to: 'Store Payment and Receipt', from: 'Discount Types' }, { id: 'D3', from: 'Visit Tests and Prices' }] },
-    { ...P.proof, in: ['Proof of Payment Decision'], out: ['Proof of Payment Submissions'], stores: [{ id: 'D4', to: 'Store Verification Outcome', from: 'Uploaded Proofs' }] },
-    { ...P.release, out: ['Ticket Sent to the Department'], stores: [{ id: 'D3', to: 'Set Visit to Processing' }] },
-    { ...P.reports, in: ['Date Range'], out: ['Takings Summary'], stores: [{ id: 'D4', from: 'Settled and Reversed Payments' }] }] },
+    login(), { ...P.billing, in: ['Payment details'], out: ['Receipt'], stores: [{ id: 'D4', to: 'Save payment', from: 'Discount types' }, { id: 'D3', from: 'Tests and prices' }] },
+    { ...P.proof, in: ['Proof decision'], out: ['Payment proofs'], stores: [{ id: 'D4', to: 'Save outcome', from: 'Uploaded proofs' }] },
+    { ...P.release, out: ['Sent to department'], stores: [{ id: 'D3', to: 'Set to processing' }] },
+    { ...P.reports, in: ['Date range'], out: ['Takings'], stores: [{ id: 'D4', from: 'Payments and refunds' }] }] },
   ...['Laboratory', 'Ultrasound', 'Xray'].map((dept) => ({
     name: `${dept} Staff`, processes: [
       login(),
-      { ...P.results, in: [`${dept === 'Xray' ? 'X-Ray' : dept} Result Details`], out: ['Test Requests for the Department'], stores: [{ id: 'D6', to: 'Store Result Version and Measurements', from: 'Result Form Fields' }, { id: 'D3', from: 'Released Visit Tests' }] },
-      { ...P.deliver, in: ['Result Status Update'], out: ['Released Result Record'], stores: [{ id: 'D6', to: 'Record Release and Delivery' }] },
-      { ...P.notify, out: ['Result Emailed to the Patient'], stores: [{ id: 'D9', to: 'Store Notification Event' }] }],
+      { ...P.results, in: [`${dept === 'Xray' ? 'X-ray' : dept} result`], out: ['Test requests'], stores: [{ id: 'D6', to: 'Save result version', from: 'Result form' }, { id: 'D3', from: 'Released tests' }] },
+      { ...P.deliver, in: ['Status update'], out: ['Released result'], stores: [{ id: 'D6', to: 'Save release' }] },
+      { ...P.notify, out: ['Result emailed'], stores: [{ id: 'D9', to: 'Save notification' }] }],
   })),
   { name: 'Client Patient', processes: [
-    { ...P.login, in: ['Registration Details', 'Login Credentials'], out: ['Emailed Verification Code', 'Account Confirmed Details'], stores: [{ id: 'D1', to: 'Store Account and Code', from: 'Verified Credentials' }] },
-    { ...P.profiles, in: ['Patient Profile Details'], out: ['Saved Patient Profiles'], stores: [{ id: 'D2', to: 'Store Patient Profile', from: 'Profile Details' }] },
-    { ...P.appts, in: ['Appointment Request Details'], out: ['QR Booking Pass and Reference'], stores: [{ id: 'D3', to: 'Store Visit and Appointment', from: 'Available Slots' }, { id: 'D8', from: 'Clinic Hours and Overrides' }] },
-    { ...P.proof, in: ['Proof of Payment'], out: ['Receipt Details'], stores: [{ id: 'D4', to: 'Store Payment Submission' }] },
-    { ...P.deliver, out: ['Diagnostic Results'], stores: [{ id: 'D6', from: 'Released Results' }] }] },
+    { ...P.login, in: ['Registration details', 'Login details'], out: ['Verification code', 'Account confirmed'], stores: [{ id: 'D1', to: 'Save account and code', from: 'Account details' }] },
+    { ...P.profiles, in: ['Patient profile'], out: ['Saved profiles'], stores: [{ id: 'D2', to: 'Save profile', from: 'Profile details' }] },
+    { ...P.appts, in: ['Booking request'], out: ['QR booking pass'], stores: [{ id: 'D3', to: 'Save booking', from: 'Open slots' }, { id: 'D8', from: 'Clinic hours' }] },
+    { ...P.proof, in: ['Proof of payment'], out: ['Receipt'], stores: [{ id: 'D4', to: 'Save submission' }] },
+    { ...P.deliver, out: ['Results'], stores: [{ id: 'D6', from: 'Released results' }] }] },
 ];
 
 // ── 5. ERD, read from the live database ─────────────────────────────────────────────────────────
@@ -513,7 +529,7 @@ function erdSheet(sheet, schema) {
   const placed = {};
   const COL_X = [60, 460, 860, 1260];
   const colBottom = [60, 60, 60, 60];
-  const ROW_H = 22, HEAD = 28;
+  const ROW_H = 26, HEAD = 30;
 
   const rowIds = {};
   const order = sheet.tables.slice().sort((a, b) => (columns[b] || []).length - (columns[a] || []).length);
@@ -533,9 +549,9 @@ function erdSheet(sheet, schema) {
       const isPk = (pks[tbl] || []).includes(c.column_name);
       const isFk = (fks[tbl] || []).some((f) => f.column === c.column_name);
       const key = isPk ? 'PK' : isFk ? 'FK' : '';
-      p.node(key, 0, 0, 34, ROW_H, S.tableCell + 'align=center;fontStyle=1;', row.id);
-      p.node(c.column_name, 34, 0, 190, ROW_H, S.tableCell + (isPk ? 'fontStyle=1;' : ''), row.id);
-      p.node(pgType(c) + (c.is_nullable === 'NO' ? '' : ' ?'), 224, 0, 136, ROW_H, S.tableCell + 'fontColor=#5A6B7B;', row.id);
+      p.node(key, 0, 0, 36, ROW_H, S.tableCell + 'align=center;fontStyle=1;', row.id);
+      p.node(c.column_name, 36, 0, 196, ROW_H, S.tableCell + (isPk ? 'fontStyle=1;' : ''), row.id);
+      p.node(pgType(c) + (c.is_nullable === 'NO' ? '' : ' ?'), 232, 0, 148, ROW_H, S.tableCell, row.id);
     });
   });
 
@@ -563,8 +579,8 @@ function erdSheet(sheet, schema) {
     });
   });
 
-  p.node(`Figure note: ${sheet.name} — ${sheet.tables.length} tables. Types are PostgreSQL. "?" marks a nullable column. PK is the primary key, FK a foreign key.`,
-    60, Math.max(...colBottom) + 20, 700, 60, S.note);
+  p.node(`${sheet.name}: ${sheet.tables.length} tables. PostgreSQL types. "?" = nullable. PK = primary key. FK = foreign key.`,
+    60, Math.max(...colBottom) + 20, 640, 56, S.note);
   return p;
 }
 
@@ -599,9 +615,9 @@ async function readSchema() {
 (async () => {
   writeFile('flowcharts.drawio', [
     flowchart(SUPER_ADMIN_FLOW), flowchart(ADMIN_FLOW), flowchart(RECEPTIONIST_FLOW), flowchart(CASHIER_FLOW),
-    flowchart(departmentFlow('Laboratory', 'Enter the result on the clinic laboratory form: analytes, units and reference ranges')),
-    flowchart(departmentFlow('Ultrasound', 'Enter the measurements, findings and impression')),
-    flowchart(departmentFlow('X-Ray', 'Enter the findings and impression')),
+    flowchart(departmentFlow('Laboratory', 'Encode values and ranges')),
+    flowchart(departmentFlow('Ultrasound', 'Encode measurements and impression')),
+    flowchart(departmentFlow('X-Ray', 'Encode findings and impression')),
     flowchart(CLIENT_FLOW),
   ]);
   writeFile('usecases.drawio', USE_CASES.map(useCase));

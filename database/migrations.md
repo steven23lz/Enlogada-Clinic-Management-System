@@ -1,5 +1,26 @@
 # Database Migration & Schema History
 
+## [1.94.0] - 2026-10-06 (The diagrams in black ink, with labels short enough to read)
+
+No migration. Documentation only.
+
+Steven: black ink, simplified text. Colour carried no meaning in these figures and only cost
+contrast on a photocopy or a projector, and the labels were written as sentences, which a reader
+has to decode at a glance.
+
+- Everything is black on white: the blue flow labels, the blue ERD tables and the orange actor are
+  gone. Type sizes up (14 in boxes, 12 on flows and in the ERD), boxes larger to match.
+- Every label cut to a phrase: "Stamp arrival and issue today's queue ticket" is now "Issue queue
+  ticket", "Compare amount claimed with amount due" is "Check amount due". Process and data store
+  names shortened the same way.
+- Three faults the exports showed, each fixed in the layout rather than by hand:
+  - A column's last step ran along its own row to reach End, cutting through the boxes of every
+    column to its right. Each column now drops to a clear corridor below the columns first.
+  - The actor's name printed on top of the figure; it sits below it now.
+  - Two flows between one process and one data store printed their labels in the same place
+    ("DiTests and prices"). The anchors are staggered per store and the labels pulled back towards
+    their own process.
+
 ## [1.93.0] - 2026-10-06 (The capstone paper's diagrams, generated from the system)
 
 No migration. Documentation only, in `docs/diagrams/`.
