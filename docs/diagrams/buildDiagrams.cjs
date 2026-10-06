@@ -62,9 +62,15 @@ class Page {
   // two flows between the same pair of boxes from printing their labels on top of each other.
   edge(from, to, label = '', style = S.edge, points = [], labelX = null) {
     const id = this.id('e');
-    const pos = labelX === null ? 'relative="1"' : `relative="1" x="${labelX}"`;
-    const geo = points.length
-      ? `<mxGeometry ${pos} as="geometry"><Array as="points">${points.map((p) => `<mxPoint x="${p[0]}" y="${p[1]}" />`).join('')}</Array></mxGeometry>`
+    // A number slides the label along the path. An {at, dx, dy} pins it to one END of the path and
+    // offsets it in pixels, which is the only way to put a label in the same place on every flow
+    // when the paths are wildly different lengths — see dfd1.
+    const pinned = labelX !== null && typeof labelX === 'object';
+    const pos = labelX === null ? 'relative="1"' : `relative="1" x="${pinned ? labelX.at : labelX}"`;
+    const inner = (points.length ? `<Array as="points">${points.map((p) => `<mxPoint x="${p[0]}" y="${p[1]}" />`).join('')}</Array>` : '')
+      + (pinned ? `<mxPoint x="${labelX.dx}" y="${labelX.dy}" as="offset" />` : '');
+    const geo = inner
+      ? `<mxGeometry ${pos} as="geometry">${inner}</mxGeometry>`
       : `<mxGeometry ${pos} as="geometry" />`;
     this.cells.push(`<mxCell id="${id}" value="${esc(label)}" style="${style}" edge="1" parent="1" source="${from.id}" target="${to.id}">${geo}</mxCell>`);
   }
@@ -482,48 +488,60 @@ const STORES = {
   D7: 'HMO Claims', D8: 'Clinic Schedule', D9: 'Logs and Notifications',
 };
 
-// A row per process, and every arrow in it horizontal.
+// The shape the paper's own Level 1 figures use, and Steven's reference: ONE small actor at the
+// top left, the processes numbered down the middle, the data stores down the right.
 //
-// The actor is drawn at its ordinary size beside each process rather than as one slab down the
-// side of the sheet — Steven's note, and it is also the standard way out of the problem this
-// layout solves: every flow then leaves a box an arm's length away instead of running down a
-// single trunk that put ten labels on one vertical line. A data store is drawn beside the process
-// that uses it for the same reason. The foot of the sheet says that the repeats are one actor and
-// one store, which is the only thing the reader has to be told.
+// What has to be got right is the left margin, because that is where every flow to and from the
+// actor runs. Each flow is given a TRACK of its own there — a vertical line at its own x — rather
+// than a single shared trunk, which is what put ten labels on one line and left nothing to say
+// which process each belonged to. The tracks are ordered so the lower the process, the further
+// left its track, and a flow leaves the actor lower the further down it is going; with those two
+// rules together no two flows ever cross. Each label sits on the horizontal run at the PROCESS
+// end, where it is next to the thing it describes.
 function dfd1(spec) {
   const p = new Page(spec.name);
   const PROC_H = 110, ROW_H = 190, TOP = 70;
-  const ENT_X = 60, ENT_W = 200, ENT_H = 90, PROC_X = 520, PROC_W = 280, STORE_X = 1010;
+  const ENT_X = 40, ENT_W = 200, ENT_H = 150;
+  const PROC_X = 700, PROC_W = 280, STORE_X = 1180;
+  // The tracks stop 170px short of the process, which leaves a clear band for the labels.
+  const TRACK_GAP = 24, TRACK_FIRST = PROC_X - 170, LABEL = { dx: -80, dy: 0 };
+
+  const ent = p.node(spec.name, ENT_X, TOP, ENT_W, ENT_H, S.entity);
+  const entRight = ENT_X + ENT_W;
   const total = spec.processes.length * ROW_H - (ROW_H - PROC_H);
 
+  // Every flow on the sheet, in the order it leaves the actor: top to bottom, process by process.
+  const all = spec.processes.flatMap((proc, i) => [
+    ...(proc.in || []).map((label) => ({ i, label, into: true })),
+    ...(proc.out || []).map((label) => ({ i, label, into: false })),
+  ]);
+  const entY = (g) => TOP + ((g + 1) * ENT_H) / (all.length + 1);
+
+  let g = 0;
   spec.processes.forEach((proc, i) => {
     const y = TOP + i * ROW_H;
-    const ent = p.node(spec.name, ENT_X, y + (PROC_H - ENT_H) / 2, ENT_W, ENT_H, S.entity);
     const lane = p.node(proc.n, PROC_X, y, PROC_W, PROC_H, S.procHead);
     p.node(proc.name, 0, 24, PROC_W, PROC_H - 24, S.procBody, lane.id);
 
-    // Inputs first, then outputs, spread evenly down the process box so no two share a height.
-    // The actor is shorter than the process, so its own end of each flow is spread over its edge
-    // in the same order, which keeps a flow horizontal at both ends or very nearly so.
     const ins = proc.in || [], outs = proc.out || [];
     const flows = ins.length + outs.length;
     const laneY = (j) => y + ((j + 1) * PROC_H) / (flows + 1);
-    // Both ends are read off the SAME absolute height, so the line is dead straight. Taking the
-    // actor's end as its own even fraction instead leaves a small jog in every flow, because the
-    // actor box is shorter than the process box.
-    const entY = y + (PROC_H - ENT_H) / 2;
-    const entFrac = (j) => Math.min(0.95, Math.max(0.05, (laneY(j) - entY) / ENT_H)).toFixed(4);
-    ins.forEach((label, k) => {
-      const fy = laneY(k);
-      p.edge(ent, lane, label, S.edgeFlow
-        + `exitX=1;exitY=${entFrac(k)};exitDx=0;exitDy=0;entryX=0;entryY=${(((fy - y) / PROC_H)).toFixed(4)};entryDx=0;entryDy=0;`);
-    });
-    outs.forEach((label, k) => {
-      const j = ins.length + k;
-      const fy = laneY(j);
-      p.edge(lane, ent, label, S.edgeFlow
-        + `exitX=0;exitY=${(((fy - y) / PROC_H)).toFixed(4)};exitDx=0;exitDy=0;entryX=1;entryY=${entFrac(j)};entryDx=0;entryDy=0;`);
-    });
+
+    [...ins.map((l) => ({ l, into: true })), ...outs.map((l) => ({ l, into: false }))]
+      .forEach(({ l, into }, j) => {
+        const ay = entY(g), py = laneY(j), track = TRACK_FIRST - g * TRACK_GAP;
+        g += 1;
+        const at = `exitX=1;exitY=${(((ay - TOP) / ENT_H)).toFixed(4)};exitDx=0;exitDy=0;`;
+        const on = `entryX=0;entryY=${(((py - y) / PROC_H)).toFixed(4)};entryDx=0;entryDy=0;`;
+        if (into) {
+          p.edge(ent, lane, l, S.edgeFlow + at + on, [[track, ay], [track, py]], { at: 1, ...LABEL });
+        } else {
+          p.edge(lane, ent, l, S.edgeFlow
+            + `exitX=0;exitY=${(((py - y) / PROC_H)).toFixed(4)};exitDx=0;exitDy=0;`
+            + `entryX=1;entryY=${(((ay - TOP) / ENT_H)).toFixed(4)};entryDx=0;entryDy=0;`,
+            [[track, py], [track, ay]], { at: -1, ...LABEL });
+        }
+      });
 
     // Each store sits at its own height beside this process, with its read and its write on their
     // own lines. Two stores fit inside the row; a third would start crowding the row below.
@@ -535,26 +553,26 @@ function dfd1(spec) {
       p.node(STORES[st.id], STORE_X + 44, sy, 250, ST_H, S.storeName);
       const pair = (st.to ? 1 : 0) + (st.from ? 1 : 0);
       let n = 0;
-      const at = () => { n += 1; return sy + (n * ST_H) / (pair + 1); };
+      const nextY = () => { n += 1; return sy + (n * ST_H) / (pair + 1); };
       if (st.to) {
-        const fy = at();
+        const fy = nextY();
         p.edge(lane, tag, st.to, S.edgeFlow
           + `exitX=1;exitY=${(((fy - y) / PROC_H)).toFixed(4)};exitDx=0;exitDy=0;entryX=0;entryY=${(((fy - sy) / ST_H)).toFixed(4)};entryDx=0;entryDy=0;`);
       }
       if (st.from) {
-        const fy = at();
+        const fy = nextY();
         p.edge(tag, lane, st.from, S.edgeFlow
           + `exitX=0;exitY=${(((fy - sy) / ST_H)).toFixed(4)};exitDx=0;exitDy=0;entryX=1;entryY=${(((fy - y) / PROC_H)).toFixed(4)};entryDx=0;entryDy=0;`);
       }
     });
   });
 
-  // Said once, at the foot of the sheet. Without it a reader counts seven receptionists.
+  // Said once, at the foot, and only where a store really is drawn twice.
   const drawn = spec.processes.flatMap((proc) => (proc.stores || []).map((st) => st.id));
-  const dupStore = drawn.length !== new Set(drawn).size;
-  p.node(`The ${spec.name} box is one actor, drawn beside each process it takes part in`
-    + (dupStore ? ', and a data store drawn more than once is one store.' : '.'),
-    ENT_X, TOP + total + 40, 560, 50, S.note);
+  if (drawn.length !== new Set(drawn).size) {
+    p.node('A data store drawn more than once on this sheet is the same store.',
+      ENT_X, TOP + total + 40, 520, 44, S.note);
+  }
   return p;
 }
 

@@ -1,5 +1,31 @@
 # Database Migration & Schema History
 
+## [1.101.0] - 2026-10-07 (Level 1 is one actor at the top left, with a track per flow)
+
+No migration. Documentation only.
+
+Steven, with a reference figure: follow that type for Level 1, and — on [1.100.0]'s attempt —
+"the way u make the same actor but multiple what the hell". Fair. Repeating the actor beside each
+process is a textbook convention, and it is also seven boxes with the same word in them, which is
+not what the paper's figures look like.
+
+The sheet is now the reference's shape: one small actor at the TOP LEFT, the processes numbered
+down the middle, the data stores down the right.
+
+What makes it readable is the left margin, where every flow to and from the actor runs. Each flow
+gets a TRACK of its own there — a vertical line at its own x — rather than the single shared trunk
+of the first version, which is what put ten labels on one line with nothing to say which process
+each belonged to. Two rules keep the tracks from crossing: the lower the process, the further LEFT
+its track, and a flow leaves the actor lower the further down it is going. Each label is pinned
+beside its own process rather than floated along the path, because the paths differ in length by a
+factor of ten and a label at the same fraction of each lands somewhere different every time — on
+the first row it landed on top of another flow's track.
+
+`Page.edge` takes `{at, dx, dy}` for a label pinned to one END of a path with a pixel offset; a
+plain number still slides it along, which is what the flowcharts use.
+
+Checked: `checkDiagrams.cjs` clean on all 36 pages, and all 36 PNGs re-exported and distinct.
+
 ## [1.100.0] - 2026-10-07 (The DFD actor is never drawn big; the routing does the work)
 
 No migration. Documentation only.

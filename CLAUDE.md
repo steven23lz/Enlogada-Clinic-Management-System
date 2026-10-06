@@ -1068,8 +1068,11 @@ Services Catalogue.
   ROUTING is what makes it readable. Level 0 gives every flow its own corridor and NESTS them —
   the corridor furthest from the boxes starts furthest right on the actor and lands furthest left
   on the system — so no two flows in a group cross, with inputs above the boxes and outputs below.
-  Level 1 draws the actor beside each process, at its ordinary size, and each store beside the
-  process that uses it, so every arrow is short and straight; the foot of the sheet says the
-  repeats are one actor and one store. **A flowchart says a thing once**: the Desk's walk-in path
+  Level 1 is the shape Steven's reference uses: ONE small actor at the top left, the processes
+  numbered down the middle, the stores down the right. Each flow gets a TRACK of its own in the
+  left margin — never a shared trunk — ordered so the lower the process the further left its
+  track, which is what keeps them from crossing; each label is PINNED beside its process
+  (`labelX` as `{at, dx, dy}`), because a label floated along the path lands in a different place
+  on every flow. **Never draw the same actor more than once.** **A flowchart says a thing once**: the Desk's walk-in path
   was drawn three times, each ending in its own queue ticket. A branch that rejoins merges into
   the TOP of its target, never the right edge.
