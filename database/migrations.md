@@ -1,5 +1,28 @@
 # Database Migration & Schema History
 
+## [1.96.0] - 2026-10-06 (Critical-value callbacks out of the diagrams; the system still has them)
+
+No migration.
+
+Steven: the clinic is not responsible for calling a physician about a critical result, so it does
+not belong in the paper. Removed from the diagrams:
+
+- the "Critical value?" decision and its "Call doctor and log it" branch, in all three department
+  flowcharts;
+- "Record Critical Value Callback" from the Laboratory, Ultrasound and X-Ray use cases;
+- the "Critical callback" flow into the three department Level 0 sheets, now "Report delivery".
+
+**The ERD still shows four columns, and that is not an oversight.** It is generated from the live
+database, where `test_results` still carries `is_critical`, `critical_acknowledged_at`,
+`critical_acknowledged_by` and `critical_acknowledgement_note`, with one row flagged. Deleting them
+from the drawing would make the ERD describe a database that does not exist.
+
+The feature is also still in the running system: 29 files, the `results:acknowledge_critical`
+permission, the callback dialog, the Critical Callbacks tile on Today, and `critical-callback.spec`.
+Left alone pending Steven's decision — either it comes out of the system too (a migration to drop
+the columns, the permission, the screens and the spec), or it stays and the paper says nothing about
+it, which leaves a tile on Today that no figure explains.
+
 ## [1.95.0] - 2026-10-06 (A checker for the diagrams, and the three faults it found)
 
 No migration. Documentation only.
