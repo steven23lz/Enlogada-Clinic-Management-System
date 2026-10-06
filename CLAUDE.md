@@ -1073,6 +1073,10 @@ Services Catalogue.
   left margin — never a shared trunk — ordered so the lower the process the further left its
   track, which is what keeps them from crossing; each label is PINNED beside its process
   (`labelX` as `{at, dx, dy}`), because a label floated along the path lands in a different place
-  on every flow. **Never draw the same actor more than once.** **A flowchart says a thing once**: the Desk's walk-in path
-  was drawn three times, each ending in its own queue ticket. A branch that rejoins merges into
-  the TOP of its target, never the right edge.
+  on every flow. **Never draw the same actor more than once.**
+  **A flowchart has the paper's header** `[1.102.0]`: the actor, Login, Access Granted? and the
+  landing screen in one CENTRED stack, the no branch looping back up the left into Login, and the
+  columns fanning out below off one shared bus (on a chained chart the header sits over the first
+  column, or its fan crosses the chain's link corridor). **It says a thing once**: the Desk's
+  walk-in path was drawn three times, each ending in its own queue ticket. A branch that rejoins
+  merges into the TOP of its target, never the right edge.

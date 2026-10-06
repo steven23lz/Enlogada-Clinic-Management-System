@@ -1,5 +1,28 @@
 # Database Migration & Schema History
 
+## [1.102.0] - 2026-10-07 (The flowcharts take the paper's own header)
+
+No migration. Documentation only.
+
+Steven, with Figure 4 (Cashier Side) from the paper: make the flowcharts that way.
+
+The content was already right; the opening was not. The actor, Login and the access check sat in a
+diagonal across the top left, with the landing screen off to their right, where the paper stacks
+all four CENTRED above the columns: the actor and its name, Login, Access Granted? with the no
+branch looping back up the left side into Login, then the landing screen, and only then the
+columns. That is what the figures now draw.
+
+The fan out of the landing screen is one shared BUS — down out of its bottom edge, across, and
+down into each column head. Left to itself draw.io took the nearest perimeter point, so one branch
+left the landing box by its left side, one by its bottom and one by its right, which reads as three
+different kinds of thing when they are the same thing three times.
+
+On a chained chart (the client's, which is one sequence wrapped into columns) the header is
+centred over the FIRST column instead of the whole block: a fan reaching left across the other
+columns would cross the link corridor that carries the chain.
+
+Checked: `checkDiagrams.cjs` clean on all 36 pages, and all 36 PNGs re-exported and distinct.
+
 ## [1.101.0] - 2026-10-07 (Level 1 is one actor at the top left, with a track per flow)
 
 No migration. Documentation only.
