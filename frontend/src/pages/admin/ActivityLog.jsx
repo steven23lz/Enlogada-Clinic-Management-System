@@ -131,16 +131,18 @@ const ActivityLog = () => {
             />
           ) : (
             <ul className="m-0 list-none divide-y divide-[#eef2f6] p-0">
+              {/* Stacked on a phone: beside the description, the nowrap action badge took half the
+                  row and left the sentence a word a line. */}
               {entries.map(entry => (
-                <li key={entry.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                <li key={entry.id} className="flex flex-col gap-1.5 px-5 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                   <div className="min-w-0">
                     <p className="m-0 text-note font-medium text-slate-800">{entry.description}</p>
                     <p className="m-0 mt-0.5 text-fine text-slate-500">
-                      {entry.actor_name} &middot; <DateTime value={entry.created_at} />
+                      <span className="whitespace-nowrap">{entry.actor_name} &middot;</span> <DateTime value={entry.created_at} />
                     </p>
                   </div>
                   <span
-                    className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase leading-5 tracking-[0.06em] ring-1 ring-inset ${ACTION_TONES[entry.action] || DEFAULT_TONE}`}
+                    className={`self-start whitespace-nowrap rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase leading-5 tracking-[0.06em] ring-1 ring-inset ${ACTION_TONES[entry.action] || DEFAULT_TONE}`}
                   >
                     {entry.action.replace(/[._]/g, ' ')}
                   </span>

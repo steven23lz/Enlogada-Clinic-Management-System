@@ -39,6 +39,8 @@ const db = require('../config/database');
 const { LAB_FIELD_SETS, SIGNATORIES } = require('../constants/labResultForms');
 // [1.125.0] The demo's reports are drawn on the clinic's own form, not as a page of text.
 const { renderClinicReport } = require('./demoReportPdf');
+const { doctorRequestPdf } = require('./demoDoctorRequestPdf');
+const { findMissingDemoFiles } = require('./repairMissingDemoFiles');
 // The vocabulary, not a copy of it: a seeder that invents a method the CHECK constraint
 // rejects fails halfway through, leaving a half-built demo. [1.33.0]
 const { COUNTER_METHODS, CASH_METHOD } = require('../constants/paymentMethods');
@@ -242,6 +244,15 @@ const signatoriesFor = (category) => SIGNATORIES
   .filter((sig) => sig.category === (category === 'Xray' ? 'Ultrasound' : category))
   .sort((a, b) => a.order - b.order);
 
+// How the clinic's form names a patient's type. [1.125.0]
+const FORM_PATIENT_TYPE = { 'Self Pay': 'WALK-IN', HMO: 'HMO', Private: 'PRIVATE' };
+
+/** "IMPRESSION:\n..." split off the written report, for the form's own Impression block. */
+const splitImpression = (text) => {
+  const at = String(text || '').lastIndexOf('IMPRESSION:');
+  return at < 0 ? [String(text || ''), ''] : [text.slice(0, at).trim(), text.slice(at + 'IMPRESSION:'.length).trim()];
+};
+
 // Which written report an ultrasound service gets. These were the names of its typed form.
 const ULTRASOUND_REPORT = {
   'HBT': 'Hepatobiliary Tree', 'Liver / Biliary Tree': 'Liver', 'Upper Abdomen': 'Upper Abdomen',
@@ -422,55 +433,6 @@ const callMultipart = async (path, { token, fields = {}, files = {} }) => {
   return json;
 };
 
-/**
- * A doctor's request for a demo booking, as a one-page PDF. [1.106.0]
- *
- * Every online booking carries one now, and the seed books online as the demo patient. Written
- * out by hand because the backend has no PDF library and this needs nothing but lines of text in
- * Helvetica: a valid file with a correct xref, which every browser's viewer opens. The doctor and
- * the licence number are invented, like every person the seed creates.
- */
-function doctorRequestPdf({ patientName, testName, date }) {
-  const lines = [
-    'Dr. Ramon C. Villanueva, MD',
-    'Internal Medicine - Clinic Hours Mon-Sat 9:00-3:00',
-    'Bugo, Cagayan de Oro City',
-    '',
-    `Name: ${patientName}`,
-    `Date: ${date}`,
-    '',
-    'Rx: Please do the following:',
-    `    ${testName}`,
-    '',
-    'Clinical impression: routine check-up, for evaluation',
-    '',
-    '',
-    '______________________________',
-    'Ramon C. Villanueva, MD',
-    'PRC Lic. No. 0098213',
-  ];
-  const esc = (s) => String(s).replace(/[\\()]/g, (c) => `\\${c}`);
-  const content = ['BT', '/F1 11 Tf', '40 540 Td', '15 TL', ...lines.map((l, i) => `${i ? 'T* ' : ''}(${esc(l)}) Tj`), 'ET'].join('\n');
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 595] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    `<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`,
-  ];
-  let out = '%PDF-1.4\n';
-  const offsets = [];
-  objects.forEach((body, i) => {
-    offsets.push(Buffer.byteLength(out, 'latin1'));
-    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
-  });
-  const xref = Buffer.byteLength(out, 'latin1');
-  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  out += offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('');
-  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  return Buffer.from(out, 'latin1');
-}
-
 const login = async (email) =>
   (await call('/auth/login', { method: 'POST', body: { email, password: PASSWORD } })).data.token;
 
@@ -480,6 +442,11 @@ const dateStr = (d) =>
 
 async function main() {
   logger.info(`Seeding demo data against ${API}`);
+  // Where this run starts, so the file check at the end judges only the rows it creates.
+  const before = (await db.query(`
+    SELECT (SELECT COALESCE(MAX(id), 0) FROM test_results)::int AS result_id,
+           (SELECT COALESCE(MAX(id), 0) FROM patient_visits)::int AS visit_id
+  `)).rows[0];
 
   const tok = {};
   for (const [key, email] of Object.entries(STAFF)) tok[key] = await login(email);
@@ -613,15 +580,6 @@ async function main() {
       method: 'POST', token: tok.cashier,
       body: { patientVisitId: v.visit.id, paymentMethod: method, amount: parseFloat(bill.totalAmount) },
     })).data.payment;
-  };
-
-  // How the clinic's form names a patient's type. [1.125.0]
-  const FORM_PATIENT_TYPE = { 'Self Pay': 'WALK-IN', HMO: 'HMO', Private: 'PRIVATE' };
-
-  /** "IMPRESSION:\n..." split off the written report, for the form's own Impression block. */
-  const splitImpression = (text) => {
-    const at = String(text || '').lastIndexOf('IMPRESSION:');
-    return at < 0 ? [String(text || ''), ''] : [text.slice(0, at).trim(), text.slice(at + 'IMPRESSION:'.length).trim()];
   };
 
   /**
@@ -1322,6 +1280,18 @@ async function main() {
   logger.info('');
   logger.info('Every "today" screen filters on the current date, so re-run this before a demo.');
   logger.info('Frontend: http://localhost:5173');
+
+  // Every file this run uploaded went to whichever backend answered ${API}. When that is not this
+  // checkout's, the rows are here and the files are not, and each report opens on "missing from
+  // storage" — 448 of them, silently, before this check existed. Said loudly instead.
+  const missing = await findMissingDemoFiles({ afterResultId: before.result_id, afterVisitId: before.visit_id });
+  if (missing.results.length || missing.requests.length) {
+    logger.error('');
+    logger.error(`${missing.results.length} result report(s) and ${missing.requests.length} doctor's request(s) this run created point at files ` +
+      `missing from this checkout's uploads folder. The backend at ${API} is not storing files here — stop any other ` +
+      'backend and re-run, or see repairMissingDemoFiles.js.');
+    process.exit(1);
+  }
   process.exit(0);
 }
 
@@ -1441,7 +1411,12 @@ async function renumberSeeded(visitIds) {
   });
 }
 
-main().catch((err) => {
-  logger.error(`Seeding failed: ${err.message}`);
-  process.exit(1);
-});
+// Run as a script; required, it lends the report helpers to redrawDemoReports.js. [1.141.0]
+if (require.main === module) {
+  main().catch((err) => {
+    logger.error(`Seeding failed: ${err.message}`);
+    process.exit(1);
+  });
+}
+
+module.exports = { labFormFor, labReportRows, signatoriesFor, splitImpression, FORM_PATIENT_TYPE, ULTRASOUND_REPORT };

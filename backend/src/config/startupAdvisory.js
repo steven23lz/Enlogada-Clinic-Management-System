@@ -47,7 +47,7 @@
 const db = require('./database');
 const paymentGatewayService = require('../services/paymentGatewayService');
 const logger = require('./logger');
-const { missingMailConfig } = require('./email');
+const { missingMailConfig, verifyMailLogin } = require('./email');
 
 async function reportPendingRepairs() {
   try {
@@ -106,12 +106,25 @@ function reportGatewayConfiguration() {
  */
 function reportAccountMail() {
   const missing = missingMailConfig();
-  if (missing.length === 0) return;
-  logger.warn(
-    `[mail] Email is not configured (${missing.join(', ')}), so new accounts cannot be confirmed and ` +
-    'forgotten passwords cannot be reset — both send a 6-digit code by email. Existing accounts can ' +
-    'still sign in. Set it in backend/.env and restart. See .env.example.'
-  );
+  if (missing.length > 0) {
+    logger.warn(
+      `[mail] Email is not configured (${missing.join(', ')}), so new accounts cannot be confirmed and ` +
+      'forgotten passwords cannot be reset — both send a 6-digit code by email. Existing accounts can ' +
+      'still sign in. Set it in backend/.env and restart. See .env.example.'
+    );
+    return;
+  }
+  // Present is not the same as working. Gmail refused this checkout's password for months with
+  // nothing at boot to say so: every invitation, result email, reminder and sign-up code failed one
+  // at a time, each looking like a problem with that one message. One login, nothing sent.
+  verifyMailLogin().then((reason) => {
+    if (!reason) return;
+    logger.warn(
+      `[mail] The mail server refused the clinic's login (${reason}). No email will send — sign-up and ` +
+      'reset codes, portal invitations, result emails, reminders. For Gmail, SMTP_PASS must be an App ' +
+      'Password (16 letters, 2-Step Verification on) for the SMTP_USER account. Fix backend/.env and restart.'
+    );
+  });
 }
 
 module.exports = { reportPendingRepairs, reportGatewayConfiguration, reportAccountMail };

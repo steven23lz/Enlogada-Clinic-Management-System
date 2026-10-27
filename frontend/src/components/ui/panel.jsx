@@ -70,12 +70,16 @@ export const PanelHeader = ({ title, description, icon: Icon, actions, className
             here skips a level — an audit found that jump on almost every screen. A screen reader
             user navigating by heading reads the outline as though a section were missing, and
             the visual size is set by the class either way, so nothing moves. */}
-        {title && <h2 className="m-0 truncate text-note font-semibold text-slate-900">{title}</h2>}
-        {description && <p className="m-0 mt-0.5 truncate text-fine font-normal text-slate-500">{description}</p>}
+        {/* Wrapped on a phone, one line from `sm`: truncated at 360px the subtitle lost the part
+            that mattered ("…last 7 days", "Open a name…"). [1.142.0] */}
+        {title && <h2 className="m-0 break-words text-note font-semibold text-slate-900 sm:truncate">{title}</h2>}
+        {description && <p className="m-0 mt-0.5 break-words text-fine font-normal text-slate-500 sm:truncate">{description}</p>}
         {children}
       </div>
     </div>
-    {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
+    {/* Wraps within the panel on a phone instead of running out of it (Super Admin's three
+        buttons were cut by the panel's edge). [1.142.0] */}
+    {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
   </div>
 );
 

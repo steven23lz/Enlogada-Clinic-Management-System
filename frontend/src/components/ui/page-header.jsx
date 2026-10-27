@@ -88,7 +88,10 @@ const PageHeader = ({
         {description && <p className="m-0 mt-1 max-w-2xl text-note leading-relaxed text-slate-500">{description}</p>}
         {meta && <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-fine text-slate-500">{meta}</div>}
       </div>
-      {actions && <div className="flex flex-shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      {/* `max-w-full`, not `flex-shrink-0`: an unshrinkable box is as wide as all its buttons in
+          one line, so on a phone "Refresh" + "Add Staff Account" ran off the screen instead of
+          wrapping. [1.142.0] */}
+      {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 };

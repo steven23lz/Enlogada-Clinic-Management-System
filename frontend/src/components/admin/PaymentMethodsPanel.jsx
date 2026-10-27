@@ -67,7 +67,7 @@ export default function PaymentMethodsPanel({ paymentMethods }) {
             </div>
 
             <div className="relative w-full overflow-auto">
-              <Table>
+              <Table stack>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Method</TableHead>
@@ -80,13 +80,13 @@ export default function PaymentMethodsPanel({ paymentMethods }) {
                 <TableBody>
                   {paymentMethods.methods.map((m) => (
                     <TableRow key={m.id}>
-                      <TableCell>
+                      <TableCell label="Method">
                         <span className="block font-semibold text-slate-900">{m.label}</span>
                         <span className="block text-meta uppercase tracking-[0.08em] text-slate-400">
                           {m.kind}{m.bank_name ? ` · ${m.bank_name}` : ''}
                         </span>
                       </TableCell>
-                      <TableCell>
+                      <TableCell label="Account">
                         {/* Tabular figures, because this is a number somebody will read back
                             digit by digit against a bank app. */}
                         <span className="block font-mono text-note font-semibold tabular-nums text-slate-800">
@@ -96,7 +96,7 @@ export default function PaymentMethodsPanel({ paymentMethods }) {
                           <span className="block text-fine text-slate-500">{m.account_name}</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell label="QR">
                         {m.has_qr ? (
                           <span className="inline-flex items-center gap-1.5 text-fine font-semibold text-brand-700">
                             <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
@@ -106,7 +106,7 @@ export default function PaymentMethodsPanel({ paymentMethods }) {
                           <span className="text-fine text-slate-400">None</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell label="Status">
                         <button
                           type="button"
                           onClick={() => paymentMethods.askToggle(m)}

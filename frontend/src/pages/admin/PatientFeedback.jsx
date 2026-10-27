@@ -355,7 +355,8 @@ function FeedbackQuestions() {
                       {q.answer_count > 0 ? `${q.answer_count} answer${q.answer_count === 1 ? '' : 's'} — wording kept` : 'Not answered yet — wording can still be changed'}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  {/* Its own row on a phone; beside the text, it squeezed the wording to a word a line. */}
+                  <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
                     <Button type="button" variant="outline" size="xs"
                       disabled={q.answer_count > 0}
                       title={q.answer_count > 0 ? 'Answered questions keep their wording. Turn it off and add a new one instead.' : undefined}

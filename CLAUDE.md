@@ -122,6 +122,16 @@ node src/scripts/resetDemoData.js --confirm   # apply
 # Needs both servers running. Every "today" screen filters on the current date, so re-run before
 # a demo — data seeded yesterday leaves the queues legitimately empty.
 node src/scripts/seedDemoScenario.js
+# [1.140.0] It now ends by checking every file it uploaded is in THIS checkout's uploads, and exits 1
+# if not: a backend from another folder answering on :5000 stores the files there, not here.
+
+# Put a file back behind demo records whose file is missing from uploads (dry run by default;
+# refuses production). Result reports get a copy of the image named; doctor's requests are redrawn.
+node src/scripts/repairMissingDemoFiles.js
+# [1.141.0] Redraw every demo report on the current form, each from its own record (dry run by default;
+# refuses production). --values keeps lab numbers read back out of older files, keyed by result id.
+node src/scripts/redrawDemoReports.js --confirm --values=../../db-backups/report-files-before-redraw-2026-10-22/lab-values-by-result-id.json
+node src/scripts/repairMissingDemoFiles.js --confirm --image="C:\path\to\report.jpeg"
 
 # Retention passes. Schedule both in any long-lived environment — notifications daily, audit
 # monthly. audit_log now records PHI reads, so it grows with staff activity rather than with
@@ -159,7 +169,10 @@ seed data looking real: no "Test", "E2E" or joke names, no shared phone number, 
 `[1.125.0]` Every report is drawn on the clinic's own form (`scripts/demoReportPdf.js`, from their
 photographed CBC: letterhead, patient block, TEST / RESULT / UNIT / REFERENCE RANGE, the seal note
 and the department's signatories from `constants/labResultForms.js`), with a small foot line saying
-it is a demo record; never copy a real patient's report into the seed. The history is ~60 generated
+it is a demo record; never copy a real patient's report into the seed. `[1.141.0]` Placed as the
+photograph places it (positions measured off the scan, Calibri via `@pdf-lib/fontkit`, Helvetica where
+either is missing). The letterhead is `scripts/assets/clinic-letterhead.jpg` when present, else drawn;
+that file is not in the repo. The history is ~60 generated
 people over 60 days, each visit a real mix (`VISIT_KINDS`, weighted so ultrasound leads), about one
 in six abnormal, with senior/PWD discounts and approved HMO claims; its notifications are deleted, as
 the staff saw them weeks ago. The reset deletes every account but the nine seeded ones, so list a
@@ -336,6 +349,11 @@ reads as a mail outage rather than an unfinished setting. Nothing is ever sent t
 domains `[1.86.0]` (`utils/fixtureRecipient.js`): the suite's `@enlogada-e2e.test` accounts, and
 the seeded `@enlogada.com` ones, a domain that does not exist. A booking made as
 `client@enlogada.com` therefore sends no email; test real delivery with an address you can read.
+`[1.140.0]` Present is not working: on 2026-10-22 this checkout's Gmail login was refused (535
+BadCredentials — `SMTP_PASS` was not a 16-letter App Password) and nothing had warned. The server
+now logs in once at boot (`verifyMailLogin`, `startupAdvisory.reportAccountMail`) and says so. A
+failed send carries `recipientRejected`; only that answers "Check the address" — the clinic's own
+login, connection or quota answers "The clinic can't send email right now" (`isRecipientRejection`).
 
 `TURNAROUND_TARGETS` (optional, e.g. `Laboratory:90,Xray:30`) sets the per-department turnaround
 benchmarks the Today screen's department table judges against (it reads "Not set" without one).
@@ -987,6 +1005,11 @@ that answers "nothing changed" when something did is, and a receptionist watchin
 silently stopped updating is worse off than one on a slow connection.
 
 ### UI conventions
+
+**Every screen works at 360px.** `[1.142.0]` A row of controls wraps (`flex-wrap`, never
+`flex-shrink-0` on a box of buttons); a list table is `<Table stack>` with a `label` on each cell; a
+name, price or status is never `truncate`d on a phone; a date range is `grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]`
+below `sm`. An `m-0` paragraph inside `space-y-*` cancels the gap — use `flex flex-col gap-*` there.
 
 **Everything visual is decided once, in `frontend/src/index.css`.** The brand is unchanged —
 `#769046` green, dark slate chrome, 'Outfit' — but it is now reached through tokens rather than

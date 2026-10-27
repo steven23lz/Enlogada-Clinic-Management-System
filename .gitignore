@@ -44,3 +44,6 @@ test-results/
 
 # draw.io desktop scratch files
 docs/diagrams/.$*
+
+# Letterhead cut from a scanned patient report, for demo reports only [1.141.0]
+backend/src/scripts/assets/clinic-letterhead.jpg

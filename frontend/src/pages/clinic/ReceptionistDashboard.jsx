@@ -315,7 +315,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
                         className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2.5 py-1.5"
                       >
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-fine font-semibold text-slate-800">
+                          {/* Wraps: truncated, a phone showed "Fasting Blood Sugar …" and no more. */}
+                          <span className="block break-words text-fine font-semibold text-slate-800">
                             {line.test_name}
                             {line.package_name && (
                               <span className="ml-1.5 font-normal text-azure-700">

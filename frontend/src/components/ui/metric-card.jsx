@@ -139,7 +139,11 @@ const MetricCard = ({
           // pinning the number to the bottom instead opened a hole under every short label while
           // still not aligning it with a neighbour that had a caption. It is the CAPTION that
           // takes mt-auto below, so the cards agree along their bottom edge.
-          'mt-2.5 text-stat font-extrabold leading-none tracking-tight tabular-nums break-words',
+          // [1.142.0] One line, a size smaller on a phone: two cards a row leave ~160px each, and
+          // `break-words` split an amount mid-number ("₱19,180" / ".00"), the one thing a
+          // reader must never have to reassemble. Sized to the screen below `sm` — a fixed 24px
+          // still ran 12px out of a half-width card at 360px.
+          'mt-2.5 whitespace-nowrap text-[clamp(1.125rem,5.4vw,1.5rem)] font-extrabold leading-none tracking-tight tabular-nums sm:text-stat',
           'text-slate-900'
         )}
       >

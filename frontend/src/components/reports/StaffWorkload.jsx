@@ -65,10 +65,13 @@ const StaffWorkload = () => {
           <h3 className="text-sm font-bold text-slate-900 m-0">Per-Staff Workload</h3>
           <p className="text-xs text-gray-500 m-0">Reception check-ins, and diagnostic work by staff member: reports released, and X-ray exams marked done.</p>
         </div>
-        <div className="flex items-center space-x-2">
-          <DateField presets={RANGE_PRESETS.start} value={startDate} onChange={(e) => setStartDate(e.target.value)} containerClassName="w-36" aria-label="Workload start date" />
-          <span className="text-xs text-gray-400">to</span>
-          <DateField presets={RANGE_PRESETS.end} value={endDate} onChange={(e) => setEndDate(e.target.value)} containerClassName="w-36" aria-label="Workload end date" />
+        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+          {/* One item, so a phone keeps both dates and their "to" on one row and wraps the buttons below. */}
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:w-auto">
+            <DateField presets={RANGE_PRESETS.start} value={startDate} onChange={(e) => setStartDate(e.target.value)} containerClassName="w-full sm:w-36" aria-label="Workload start date" />
+            <span className="text-xs text-gray-400">to</span>
+            <DateField presets={RANGE_PRESETS.end} value={endDate} onChange={(e) => setEndDate(e.target.value)} containerClassName="w-full sm:w-36" aria-label="Workload end date" />
+          </div>
           <Button variant="outline" onClick={() => fetchWorkload(startDate, endDate)} className="flex items-center space-x-1.5 text-xs font-semibold">
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Apply</span>

@@ -176,8 +176,11 @@ export default function WhoSeesWhat({ access, grid }) {
         </table>
       </div>
 
+      {/* On a phone the summary takes the full width and the buttons a row below it; side by side,
+          the list of changes was squeezed to a word a line. A gap rather than space-y, because
+          the m-0 on each line cancels space-y's margin. */}
       <PanelFooter>
-        <div className="min-w-0 flex-1 space-y-1.5" data-testid="who-changes">
+        <div className="flex min-w-0 grow basis-full flex-col gap-1.5 sm:basis-0" data-testid="who-changes">
           {grid.saveError && <p role="alert" className="m-0 text-fine font-semibold text-rose-700">{grid.saveError}</p>}
           {grid.changes.length > 0 ? (
             <>
@@ -209,7 +212,7 @@ export default function WhoSeesWhat({ access, grid }) {
             <span className="text-fine text-slate-500">No unsaved changes. A change here applies to everyone in that role.</span>
           )}
         </div>
-        <div className="flex flex-shrink-0 gap-2">
+        <div className="flex w-full flex-shrink-0 justify-end gap-2 sm:w-auto">
           <Button variant="outline" onClick={grid.discard} disabled={!grid.changes.length || grid.saving}>Discard</Button>
           <Button onClick={grid.save} loading={grid.saving} disabled={!grid.changes.length}>Save changes</Button>
         </div>

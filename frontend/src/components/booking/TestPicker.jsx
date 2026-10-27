@@ -168,7 +168,7 @@ const TestPicker = ({
           </p>
           {packages.map((p) => (
             <div key={p.id} className="overflow-hidden rounded-lg border border-azure-200 bg-azure-50/50 transition-colors hover:border-azure-300">
-              {/* ONE line per bundle. [1.54.0] Spelling out every component inline, five packages
+              {/* ONE row per bundle. [1.54.0] Spelling out every component inline, five packages
                   of six-to-nine tests each filled the picker before the individual list began —
                   which is the "scroll past everything to reach the tests" complaint. Name, size
                   and price on one row keeps every bundle visible, because a package is the cheaper
@@ -177,21 +177,26 @@ const TestPicker = ({
 
                   The disclosure control is a SIBLING of the label, not a child: a <button> inside
                   a <label> also toggles that label's checkbox, so opening the details would have
-                  silently added the package to the booking. */}
-              <div className="flex items-center gap-2 pr-2">
-                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 p-2.5">
+                  silently added the package to the booking.
+
+                  The name WRAPS rather than truncating. On a 360px phone `truncate` cut every
+                  bundle to "Package…", and five identical rows cannot be told apart. The count
+                  takes its own line under the name; `items-start` keeps the checkbox, price and
+                  chevron level with the first line when the name runs to two. */}
+              <div className="flex items-start gap-2 pr-2">
+                <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 p-2.5 sm:gap-3">
                   <input
                     type="checkbox"
                     checked={selectedPackageIds.includes(p.id.toString())}
                     onChange={() => onTogglePackage?.(p.id.toString())}
                     disabled={disabled}
-                    className="rounded text-azure-600 focus:ring-azure-500"
+                    className="mt-0.5 rounded text-azure-600 focus:ring-azure-500"
                   />
-                  <Package className="h-3.5 w-3.5 flex-shrink-0 text-azure-600" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-800">
+                  <Package className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-azure-600" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 break-words text-xs font-bold leading-snug text-slate-800">
                     {p.name}
-                    <span className="ml-1.5 font-medium text-slate-500">
-                      · {(p.tests || []).length} tests
+                    <span className="block text-meta font-medium text-slate-500">
+                      {(p.tests || []).length} tests
                     </span>
                   </span>
                   <span className="flex-shrink-0 text-xs font-extrabold tabular-nums text-azure-700">
@@ -203,7 +208,7 @@ const TestPicker = ({
                   onClick={() => togglePackageDetail(p.id.toString())}
                   aria-expanded={openPackages.has(p.id.toString())}
                   aria-label={`What is included in ${p.name}`}
-                  className="flex h-6 w-6 flex-shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-azure-600 transition-colors hover:bg-azure-100"
+                  className="mt-1.5 flex h-6 w-6 flex-shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-azure-600 transition-colors hover:bg-azure-100"
                 >
                   <ChevronRight
                     className={`h-3.5 w-3.5 transition-transform duration-200 ${openPackages.has(p.id.toString()) ? 'rotate-90' : ''}`}

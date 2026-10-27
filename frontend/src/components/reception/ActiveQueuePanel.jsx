@@ -242,9 +242,11 @@ export default function ActiveQueuePanel({ queue, hmo, testAssignment, onCallPat
                             <div className="flex flex-wrap gap-1">
                               {visit.tests.map(t => (
                                 <span key={t.id} className="inline-flex items-center gap-0.5">
-                                  <Badge variant="outline" className="text-slate-600">
+                                  {/* Wraps, so a long status drops under the name instead of standing
+                                      beside it as a second narrow column of words. */}
+                                  <Badge variant="outline" className="flex-wrap gap-x-1 text-slate-600">
                                     {t.test_name}
-                                    <span className="ml-1 text-slate-400">({t.test_status})</span>
+                                    <span className="text-slate-400">({t.test_status})</span>
                                   </Badge>
                                   {canRaiseHmo && (
                                     <button

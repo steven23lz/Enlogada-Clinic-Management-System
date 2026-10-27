@@ -210,12 +210,15 @@ export default function OnlinePaymentsPanel({ review }) {
         </Panel>
       )}
 
+      {/* Decisions only on a Pending row. "Recently Reviewed" opens the same dialog, and offering
+          Verify or Reject on one already settled is a button whose only possible answer is the
+          server's "already verified". */}
       {reviewing && (
         <ProofReviewDialog
           submission={reviewing}
           onClose={() => setReviewing(null)}
-          onVerify={(sub) => { setReviewing(null); review.askVerify(sub); }}
-          onReject={(sub) => { setReviewing(null); review.askReject(sub); }}
+          onVerify={reviewing.status === 'Pending' ? (sub) => { setReviewing(null); review.askVerify(sub); } : undefined}
+          onReject={reviewing.status === 'Pending' ? (sub) => { setReviewing(null); review.askReject(sub); } : undefined}
           busy={review.acting === reviewing.id}
         />
       )}

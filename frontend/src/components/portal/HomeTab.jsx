@@ -156,7 +156,10 @@ export default function HomeTab({
                       <span className={cn('flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg', NEED_TONE[need.tone])}>
                         <Icon className="h-4 w-4" aria-hidden="true" />
                       </span>
-                      <span className="min-w-0 flex-1">
+                      {/* On a phone the text claims the whole row beside the icon (2.75rem = the
+                          h-8 icon plus gap-3), so the button wraps beneath it, indented to the
+                          text's edge. Side by side, the button left the text about 130px. */}
+                      <span className="min-w-0 flex-1 basis-[calc(100%-2.75rem)] sm:basis-0">
                         <span className="block text-note font-semibold text-ink">{need.title}</span>
                         <span className="block text-fine leading-relaxed text-ink-muted">{need.detail}</span>
                       </span>
@@ -165,6 +168,7 @@ export default function HomeTab({
                           size="sm"
                           aria-label={need.acceptInvitation?.patientName ? `Review ${need.acceptInvitation.patientName}'s record` : undefined}
                           variant={need.id.startsWith('pay-') ? 'default' : 'outline'}
+                          className="ml-11 sm:ml-0"
                           onClick={() => {
                             if (need.acceptInvitation) onAcceptInvitation?.(need.acceptInvitation);
                             else if (need.feedbackVisit) onRate?.(need.feedbackVisit);

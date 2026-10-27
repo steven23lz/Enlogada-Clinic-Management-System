@@ -69,10 +69,14 @@ const HmoClaimsReport = () => {
             the visit, so a claim decided later never moves money out of a period already reported.
           </p>
         </div>
-        <div className="flex items-center space-x-2">
-          <DateField presets={RANGE_PRESETS.start} value={startDate} onChange={(e) => setStartDate(e.target.value)} containerClassName="w-36" aria-label="HMO report start date" />
-          <span className="text-xs text-gray-400">to</span>
-          <DateField presets={RANGE_PRESETS.end} value={endDate} onChange={(e) => setEndDate(e.target.value)} containerClassName="w-36" aria-label="HMO report end date" />
+        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+          {/* The range is one item, so on a phone it fills a row and the buttons wrap below it,
+              rather than "to" being left at the end of a line on its own. */}
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:w-auto">
+            <DateField presets={RANGE_PRESETS.start} value={startDate} onChange={(e) => setStartDate(e.target.value)} containerClassName="w-full sm:w-36" aria-label="HMO report start date" />
+            <span className="text-xs text-gray-400">to</span>
+            <DateField presets={RANGE_PRESETS.end} value={endDate} onChange={(e) => setEndDate(e.target.value)} containerClassName="w-full sm:w-36" aria-label="HMO report end date" />
+          </div>
           <Button variant="outline" onClick={() => fetchClaims(startDate, endDate)} className="flex items-center space-x-1.5 text-xs font-semibold">
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Apply</span>
@@ -146,8 +150,9 @@ const HmoClaimsReport = () => {
           </div>
 
           {/* Said in words, once, where the figure is read. A caption on a tile is easy to skim
-              past, and this is the one misreading that would overstate the clinic's income. */}
-          <p className="m-0 flex items-start gap-2 rounded-xl border border-azure-200 bg-azure-50/50 px-3.5 py-2.5 text-fine leading-relaxed text-slate-700">
+              past, and this is the one misreading that would overstate the clinic's income. No
+              m-0: it would cancel the parent's space-y gap and sit flush on the card below. */}
+          <p className="flex items-start gap-2 rounded-xl border border-azure-200 bg-azure-50/50 px-3.5 py-2.5 text-fine leading-relaxed text-slate-700">
             <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-azure-600" aria-hidden="true" />
             <span>
               <strong>Approved is money still owed to the clinic</strong>, billed to the provider and

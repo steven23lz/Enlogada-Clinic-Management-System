@@ -273,7 +273,7 @@ class PatientInvitationService {
         await patientInvitationRepository.revoke(invitation.id, { reason: 'not_delivered' });
         await patientInvitationRepository.reopen(superseded.map((row) => row.id));
       });
-      throw sent.missing
+      throw sent.missing || !sent.recipientRejected
         ? new ServiceUnavailableError("The clinic can't send email right now, so the invitation was not sent. Try again later.")
         : new UpstreamServiceError("The invitation email could not be sent. Check the address and try again.");
     }
@@ -338,8 +338,10 @@ class PatientInvitationService {
       relationshipLabel: resent.relationship === 'self' ? null : RELATIONSHIPS[resent.relationship],
       expiresOn: readableDate(resent.expires_at),
     });
-    if (sent?.missing) throw new ServiceUnavailableError("The clinic can't send email right now. Try again later.");
-    if (sent?.error) throw new UpstreamServiceError('The invitation email could not be sent. Try again.');
+    if (sent?.missing || (sent?.error && !sent.recipientRejected)) {
+      throw new ServiceUnavailableError("The clinic can't send email right now. Try again later.");
+    }
+    if (sent?.error) throw new UpstreamServiceError('The invitation email could not be sent. Check the address.');
 
     await auditService.log({
       actorId: requestingUser.userId,

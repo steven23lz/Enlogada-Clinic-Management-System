@@ -91,8 +91,40 @@ const sendEmail = async ({ to, subject, html, attachments }) => {
   } catch (err) {
     logger.error('Email sending failed:', err);
     // Don't throw — email failure should not break the main workflow
-    return { error: err.message };
+    return { error: err.message, recipientRejected: isRecipientRejection(err) };
   }
 };
 
-module.exports = { sendEmail, missingMailConfig, E2E_EMAIL_DOMAIN };
+/**
+ * Whether a failed send was the ADDRESS being refused, rather than the clinic's own mail account.
+ *
+ * Every nodemailer failure used to arrive as one `{ error }`, and the invitation dialog answered
+ * all of them with "Check the address". Gmail refusing the clinic's own login (535 BadCredentials)
+ * then sent staff to retype a correct patient address, on every patient, while no email at all was
+ * leaving the building. Only a refused RECIPIENT is the address's fault: nodemailer's own "Invalid
+ * recipient", or a permanent (5xx) answer to RCPT TO. Not EENVELOPE as such — nodemailer gives that
+ * code to a refused MAIL FROM and a failed DATA too, which is how Gmail's daily sending limit
+ * arrives ("Mail command failed: 550-5.4.5"). That limit is checked first, whatever the command.
+ */
+const isRecipientRejection = (err) => {
+  if (!err) return false;
+  if (/sending limit|5\.4\.5/i.test(String(err.response || err.message || ''))) return false;
+  if (err.command === 'API') return /^Invalid recipient/.test(String(err.message || ''));
+  return err.command === 'RCPT TO' && err.responseCode >= 500 && err.responseCode < 600;
+};
+
+/**
+ * Logs in to the mail server without sending anything, so a wrong App Password is found at boot
+ * rather than by the first patient whose email does not arrive. Resolves to null when the login
+ * works, else the server's reason. Never throws.
+ */
+const verifyMailLogin = async () => {
+  try {
+    await transporter.verify();
+    return null;
+  } catch (err) {
+    return err.response || err.message || String(err);
+  }
+};
+
+module.exports = { sendEmail, missingMailConfig, verifyMailLogin, isRecipientRejection, E2E_EMAIL_DOMAIN };

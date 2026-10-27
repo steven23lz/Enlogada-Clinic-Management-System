@@ -20,6 +20,7 @@
     "demo": "node src/scripts/resetDemoData.js --confirm && node src/scripts/seedUsers.js && node src/scripts/seedDemoScenario.js"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "1.1.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

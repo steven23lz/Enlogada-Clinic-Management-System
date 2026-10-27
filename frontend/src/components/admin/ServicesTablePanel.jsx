@@ -86,7 +86,8 @@ export default function ServicesTablePanel({ catalogue }) {
               action={<Button size="sm" onClick={catalogue.openAdd}><Plus className="h-3.5 w-3.5" />Add New Service</Button>}
             />
           ) : (
-            <Table data-testid="services-table">
+            /* Cards on a phone, where the scrolled table broke "SRV-14" at its hyphen. */
+            <Table stack data-testid="services-table">
               <TableHeader className="bg-slate-50/70">
                 <TableRow>
                   <TableHead className="text-xs font-bold uppercase">ID</TableHead>
@@ -100,7 +101,7 @@ export default function ServicesTablePanel({ catalogue }) {
               <TableBody>
                 {catalogue.paged.map(test => (
                   <TableRow key={test.id}>
-                    <TableCell className="font-bold text-xs text-slate-900">SRV-{test.id}</TableCell>
+                    <TableCell label="ID" className="whitespace-nowrap font-bold text-xs text-slate-900">SRV-{test.id}</TableCell>
                     {/* Whether this service tells the patient how to prepare. [1.24.0] added
                         `tests.preparation` and every patient-facing screen reads it, but this
                         screen — the one where it is written — gave no sign of which services
@@ -108,7 +109,7 @@ export default function ServicesTablePanel({ catalogue }) {
                         practice nobody did, and a Fasting Blood Sugar with no instruction looks
                         exactly like one that needs none. Shown truncated: the point is to see
                         at a glance which rows are blank. */}
-                    <TableCell className="font-semibold text-xs text-slate-800">
+                    <TableCell label="Service" className="font-semibold text-xs text-slate-800">
                       {test.name}
                       {test.preparation && (
                         <span
@@ -120,9 +121,9 @@ export default function ServicesTablePanel({ catalogue }) {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs text-gray-600 font-medium">{test.category_name}</TableCell>
-                    <TableCell className="font-bold text-xs text-slate-900">{formatCurrency(test.price)}</TableCell>
-                    <TableCell>
+                    <TableCell label="Category" className="text-xs text-gray-600 font-medium">{test.category_name}</TableCell>
+                    <TableCell label="Price" className="font-bold text-xs text-slate-900">{formatCurrency(test.price)}</TableCell>
+                    <TableCell label="Status">
                       {/* A real button around the badge, as Packages and Payment Methods do, so the
                           switch is reachable by keyboard. [1.128.0] */}
                       <button

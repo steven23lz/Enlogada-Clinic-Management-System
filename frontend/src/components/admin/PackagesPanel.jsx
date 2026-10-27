@@ -53,7 +53,8 @@ export default function PackagesPanel({ packageAdmin }) {
           />
         ) : (
           <div className="relative w-full overflow-auto">
-            <Table>
+            {/* Cards on a phone: scrolled sideways, Includes was squeezed to a word a line. */}
+            <Table stack>
               <TableHeader>
                 <TableRow>
                   <TableHead>Package</TableHead>
@@ -70,21 +71,21 @@ export default function PackagesPanel({ packageAdmin }) {
                   const saving = listTotal - Number(pkg.price);
                   return (
                     <TableRow key={pkg.id}>
-                      <TableCell>
+                      <TableCell label="Package">
                         <span className="block font-semibold text-slate-900">{pkg.name}</span>
                         <span className="block text-meta uppercase tracking-[0.08em] text-slate-400">
                           {pkg.code}
                         </span>
                       </TableCell>
-                      <TableCell className="max-w-[22rem]">
+                      <TableCell label="Includes" className="max-w-[22rem]">
                         <span className="block text-fine leading-relaxed text-slate-600">
                           {(pkg.tests || []).map((t) => t.name).join(', ') || '— nothing yet'}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right font-bold tabular-nums text-slate-900">
+                      <TableCell label="Price" className="text-right font-bold tabular-nums text-slate-900">
                         {formatCurrency(pkg.price)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
+                      <TableCell label="Patient saves" className="text-right tabular-nums">
                         {/* A bundle that costs MORE than its parts is stated plainly rather than
                             shown as a negative saving, which reads as a discount at a glance. */}
                         {saving > 0 ? (
@@ -95,7 +96,7 @@ export default function PackagesPanel({ packageAdmin }) {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell label="Status">
                         <button
                           type="button"
                           onClick={() => packageAdmin.askToggle(pkg)}

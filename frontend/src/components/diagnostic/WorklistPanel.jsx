@@ -166,8 +166,9 @@ export default function WorklistPanel({ worklist, entry, examDone }) {
 
   return (
       <>
-      {/* Department Modality Worklist Header Cards */}
-      <div className={cn('grid grid-cols-1 gap-4', reportsHere && 'sm:grid-cols-2')}>
+      {/* Department Modality Worklist Header Cards. Side by side on a phone too: stacked, the two
+          full-width cards pushed the first ticket below the fold. */}
+      <div className={cn('grid gap-3 sm:gap-4', reportsHere ? 'grid-cols-2' : 'grid-cols-1')}>
         {/* "—" on a failure, and the table below says why with its Try again — not a caption here too. */}
         <MetricCard label="Awaiting Exam" value={worklistFailed ? '—' : processingCount} caption="Paid and released to you" captionTone="slate" icon={Clock} tone="indigo" />
         {reportsHere && (

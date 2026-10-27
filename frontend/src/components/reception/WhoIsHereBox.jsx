@@ -115,8 +115,9 @@ export default function WhoIsHereBox({ lookup, checkIn, disposition, arrivals, q
               value={lookup.query}
               onChange={(e) => onChange(e.target.value)}
               // Short enough to show whole on a phone, where the input keeps a 16px font so iOS does
-              // not zoom on focus. The label above says what the box is for.
-              placeholder="Name, queue # or reference"
+              // not zoom on focus — "…or reference" was cut at 360px. The label above says what the
+              // box is for.
+              placeholder="Name, queue # or ref."
               className="pl-9"
             />
           </div>

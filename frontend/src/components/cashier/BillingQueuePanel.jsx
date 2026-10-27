@@ -66,7 +66,9 @@ export default function BillingQueuePanel({ queue, checkout }) {
               </div>
             </div>
 
-            <div className="max-h-[520px] space-y-2 overflow-y-auto p-3">
+            {/* Its own scroll only beside the terminal. On a phone the page already scrolls, and a list
+                scrolling inside it trapped the thumb in one or the other. */}
+            <div className="space-y-2 p-3 lg:max-h-[520px] lg:overflow-y-auto">
               {/* Before the empty state, not after it. [1.74.0] A failed fetch left the list empty
                   and fell through to "Nothing awaiting payment" — sending the cashier to ask the
                   front desk why nobody was coming, while the server was the one not answering.
@@ -105,15 +107,17 @@ export default function BillingQueuePanel({ queue, checkout }) {
                           : 'border-line bg-surface hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
-                      <span className="flex items-start justify-between gap-2">
+                      {/* The badges go under the name on a phone. Beside it they never shrink, so
+                          the name was the one cut: "Marites Dagond…". */}
+                      <span className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <span className="min-w-0">
-                          <span className="block truncate text-note font-semibold text-slate-900">{visit.first_name} {visit.last_name}</span>
+                          <span className="block break-words text-note font-semibold text-slate-900">{visit.first_name} {visit.last_name}</span>
                           {/* A booking has no ticket until it is checked in [1.92.0]; an internal id in its place read as test data. [1.125.0] */}
                           {visit.queue_number
                             ? <DataBadge variant="patient" label="Queue ticket" className="block">{visit.queue_number}</DataBadge>
                             : <span className="block whitespace-nowrap text-fine text-slate-500">Not checked in</span>}
                         </span>
-                        <span className="flex flex-shrink-0 flex-col items-end gap-1">
+                        <span className="flex flex-wrap items-center gap-1 sm:flex-shrink-0 sm:flex-col sm:items-end">
                           <span className="flex items-center gap-1">
                             <Badge variant="outline" className={visit.visit_type === 'Walk in' ? 'text-slate-600' : 'border-indigo-200 bg-indigo-50 text-indigo-700'}>
                               {visit.visit_type}

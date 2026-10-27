@@ -9,6 +9,12 @@
  * comment line, the official-seal note and the department's signatories, with ENLOGADA faint across
  * the page. Imaging gets the same letterhead around a written report ending in its impression.
  *
+ * [1.141.0] Placed as that photograph places it. Every position below is measured off the scan
+ * (read at 1462 px across, an A4 width, so one scan pixel is `S` points) and the type is the form's own
+ * Calibri, bold almost throughout, where Windows has it. The letterhead is `assets/clinic-
+ * letterhead.jpg` when that file is present — the band cut from the clinic's form — and is drawn
+ * otherwise. Without fontkit or Calibri it falls back to Helvetica, so the seed still runs anywhere.
+ *
  * Every label, unit, range and signatory comes from constants/labResultForms.js, the transcription
  * of the clinic's workbook; nothing about the form is invented here.
  *
@@ -20,22 +26,36 @@ const fs = require('fs');
 const path = require('path');
 const { PDFDocument, StandardFonts, rgb, degrees } = require('pdf-lib');
 
+let fontkit = null;
+try { fontkit = require('@pdf-lib/fontkit'); } catch { /* Helvetica, below */ }
+
 const LOGO = path.join(__dirname, '..', '..', '..', 'frontend', 'src', 'assets', 'Enlogada_Logo.png');
+const LETTERHEAD = path.join(__dirname, 'assets', 'clinic-letterhead.jpg');
+const FONT_DIR = process.env.WINDIR ? path.join(process.env.WINDIR, 'Fonts') : 'C:\\Windows\\Fonts';
+const FONTS = {
+  regular: 'calibri.ttf', bold: 'calibrib.ttf', boldItalic: 'calibriz.ttf', heavy: 'ariblk.ttf',
+};
 const CLINIC = {
   title: ['ENLOGADA ULTRASOUND AND', 'DIAGNOSTIC CLINIC'],
   address: ['National Highway, Diesto Building, Bugo', 'Cagayan de Oro City, Misamis Oriental, 9000'],
   phone: '+639361320650',
-  facebook: 'Enlogada Ultrasound and Diagnostic Clinic',
+  facebook: 'Enlogada Ulltrasound and Diagnostic Clinic',
 };
 
-const GREEN = rgb(0.30, 0.56, 0.18);
-const NAVY = rgb(0.09, 0.16, 0.31);
-const INK = rgb(0.08, 0.08, 0.10);
+const GREEN = rgb(0.24, 0.40, 0.17);
+const LIME = rgb(0.47, 0.71, 0.12);
+const NAVY = rgb(0.10, 0.27, 0.53);
+const INK = rgb(0.06, 0.06, 0.08);
 const MUTED = rgb(0.42, 0.45, 0.50);
 const PAGE = { w: 595.28, h: 841.89 };
-const COLS = { test: 135, result: 305, unit: 395, range: 505 };
-// The lowest the Comment line may sit: above the seal note (168), with room for two lines.
-const COMMENT_FLOOR = 196;
+const S = PAGE.w / 1462;                       // one pixel of the scan, in points
+const X = (px) => px * S;                      // scan x to page x
+const Y = (px) => PAGE.h - px * S;             // scan y (from the top) to page y (from the bottom)
+const COLS = { test: X(200), result: X(610), unit: X(873), range: X(1215) };
+const LEFT = X(55);
+const RIGHT = X(1425);
+// The lowest the Comment line may sit: above the seal note, with room for two lines.
+const COMMENT_FLOOR = Y(1610);
 
 /** What the standard fonts can encode (WinAnsi). Anything else is flattened, never dropped silently. */
 const safe = (s) => String(s ?? '')
@@ -49,9 +69,12 @@ const usDate = (value) => {
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
 };
 
+/** Line breaks as stored ("\r\n" from a textarea) to "\n", before `safe` would strip them. */
+const lf = (s) => String(s ?? '').replace(/\r\n?/g, '\n');
+
 function wrap(text, font, size, width) {
   const lines = [];
-  for (const para of safe(text).split('\n')) {
+  for (const para of lf(text).split('\n').map(safe)) {
     let line = '';
     for (const word of para.split(/\s+/).filter(Boolean)) {
       const next = line ? `${line} ${word}` : word;
@@ -62,11 +85,48 @@ function wrap(text, font, size, width) {
   return lines;
 }
 
-let logoBytes;
-const logo = () => {
-  if (logoBytes === undefined) logoBytes = fs.existsSync(LOGO) ? fs.readFileSync(LOGO) : null;
-  return logoBytes;
+const cache = {};
+const fileOnce = (key, file) => {
+  if (!(key in cache)) cache[key] = fs.existsSync(file) ? fs.readFileSync(file) : null;
+  return cache[key];
 };
+
+/** Calibri where it can be embedded, else the standard Helvetica family. */
+async function embedFonts(pdf) {
+  const ttf = (name) => (fontkit ? fileOnce(name, path.join(FONT_DIR, FONTS[name])) : null);
+  if (fontkit) pdf.registerFontkit(fontkit);
+  const pick = async (name, fallback) => (ttf(name) ? pdf.embedFont(ttf(name), { subset: true }) : pdf.embedFont(fallback));
+  return {
+    regular: await pick('regular', StandardFonts.Helvetica),
+    bold: await pick('bold', StandardFonts.HelveticaBold),
+    italic: await pick('boldItalic', StandardFonts.HelveticaBoldOblique),
+    heavy: await pick('heavy', StandardFonts.HelveticaBold),
+  };
+}
+
+/** The letterhead band, drawn: for a checkout without the image cut from the clinic's form. */
+async function drawLetterhead(pdf, page, fonts, text, department) {
+  if (fileOnce('logo', LOGO)) {
+    const img = await pdf.embedPng(fileOnce('logo', LOGO));
+    const h = X(240);
+    page.drawImage(img, { x: X(72), y: Y(310), width: (img.width / img.height) * h, height: h });
+  }
+  text(CLINIC.title[0], X(698), Y(103), { font: fonts.heavy, size: 18, color: GREEN, align: 'center' });
+  text(CLINIC.title[1], X(698), Y(162), { font: fonts.heavy, size: 18, color: GREEN, align: 'center' });
+  text(CLINIC.address[0], X(705), Y(199), { font: fonts.bold, size: 10, align: 'center' });
+  text(CLINIC.address[1], X(708), Y(230), { font: fonts.bold, size: 10, align: 'center' });
+  text(`${CLINIC.phone}          ${CLINIC.facebook}`, X(690), Y(262), { font: fonts.bold, size: 10, align: 'center' });
+  // The department's ring top right, open at the lower left, standing on its own base line.
+  page.drawSvgPath('M -39 108 A 115 115 0 1 0 -108 39', { x: X(1265), y: Y(165), borderColor: NAVY, borderWidth: 5, scale: S });
+  page.drawLine({ start: { x: X(1125), y: Y(255) }, end: { x: X(1405), y: Y(255) }, thickness: 1.8, color: NAVY });
+  text(department, X(1265), Y(178), { font: fonts.heavy, size: 13, color: NAVY, align: 'center' });
+  // The band beneath: lime from a thick left end rising to the right, black from a thin left end
+  // over the top and thickening down to the right, and a fine grey line under the lime.
+  const band = (d, color) => page.drawSvgPath(d, { x: X(48), y: Y(320), color, scale: S });
+  band('M 0 78 C 350 70, 700 95, 1000 75 C 1200 62, 1300 42, 1377 42 L 1377 62 C 1300 62, 1150 85, 1000 98 C 700 120, 350 108, 0 110 Z', LIME);
+  band('M 0 66 C 300 40, 650 5, 900 20 C 1100 32, 1300 75, 1377 80 L 1377 128 C 1250 110, 1100 70, 900 55 C 650 38, 300 62, 0 72 Z', INK);
+  band('M 0 116 C 400 122, 800 100, 1377 74 L 1377 77 C 800 104, 400 126, 0 119 Z', MUTED);
+}
 
 /**
  * @param {object} r
@@ -78,165 +138,159 @@ const logo = () => {
  * @param {{title:string, exam:string, body:string, impression:string}} [r.narrative]
  * @param {string} [r.comment]
  * @param {Array<{name:string, caption:string, prc?:string|null}>} r.signatories
- * @returns {Promise<Buffer>}
  */
 async function renderClinicReport(r) {
   const pdf = await PDFDocument.create();
   pdf.setTitle(safe(`${r.lab?.title || r.narrative?.exam || 'Result'} - ${r.patient.name}`));
   pdf.setProducer('Enlogada Clinic Management System (demo data)');
   const page = pdf.addPage([PAGE.w, PAGE.h]);
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const italic = await pdf.embedFont(StandardFonts.HelveticaBoldOblique);
+  const fonts = await embedFonts(pdf);
+  const { regular, bold, italic } = fonts;
 
-  const text = (s, x, y, { font = regular, size = 10, color = INK, align = 'left' } = {}) => {
+  const text = (s, x, y, { font = bold, size = 10.5, color = INK, align = 'left' } = {}) => {
     const t = safe(s);
     const w = font.widthOfTextAtSize(t, size);
     const left = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
     page.drawText(t, { x: left, y, size, font, color });
     return w;
   };
+  const rule = (px, thickness = 1.3) =>
+    page.drawLine({ start: { x: X(48), y: Y(px) }, end: { x: RIGHT, y: Y(px) }, thickness, color: INK });
 
-  // ── The faint mark across the page, under everything ──────────────────────────────────────
+  // ── The faint mark across the page, under everything, rising left to right as on the form ──
   page.drawText('ENLOGADA', {
-    x: 120, y: 250, size: 110, font: bold, color: rgb(0.80, 0.82, 0.86), opacity: 0.22, rotate: degrees(38),
+    x: X(300), y: Y(1440), size: 88, font: fonts.heavy, color: rgb(0.78, 0.79, 0.81), opacity: 0.18, rotate: degrees(50),
   });
 
   // ── Letterhead ─────────────────────────────────────────────────────────────────────────────
-  const top = PAGE.h - 36;
-  if (logo()) {
-    const img = await pdf.embedPng(logo());
-    const h = 92;
-    page.drawImage(img, { x: 44, y: top - h, width: (img.width / img.height) * h, height: h });
+  if (fileOnce('letterhead', LETTERHEAD)) {
+    const img = await pdf.embedJpg(fileOnce('letterhead', LETTERHEAD));
+    const h = (img.height / img.width) * PAGE.w;
+    page.drawImage(img, { x: 0, y: PAGE.h - h, width: PAGE.w, height: h });
+  } else {
+    await drawLetterhead(pdf, page, fonts, text, r.lab ? 'LAB' : r.narrative?.title?.startsWith('RADIO') ? 'X-RAY' : 'US');
   }
-  text(CLINIC.title[0], 318, top - 20, { font: bold, size: 19, color: GREEN, align: 'center' });
-  text(CLINIC.title[1], 318, top - 42, { font: bold, size: 19, color: GREEN, align: 'center' });
-  text(CLINIC.address[0], 318, top - 58, { size: 8.5, align: 'center' });
-  text(CLINIC.address[1], 318, top - 69, { size: 8.5, align: 'center' });
-  text(`${CLINIC.phone}      ${CLINIC.facebook}`, 318, top - 80, { size: 8.5, align: 'center' });
-  // The department's ring, top right, as on the clinic's form.
-  page.drawCircle({ x: PAGE.w - 82, y: top - 42, size: 34, borderColor: NAVY, borderWidth: 5, opacity: 0, borderOpacity: 1 });
-  text(r.lab ? 'LAB' : r.narrative?.title?.startsWith('RADIO') ? 'X-RAY' : 'US', PAGE.w - 82, top - 46, { font: bold, size: 11, color: NAVY, align: 'center' });
 
-  // The wave: navy over green, the clinic's band beneath the letterhead.
-  const waveY = top - 112;
-  page.drawSvgPath('M 0 34 C 140 6, 330 -4, 595 16 L 595 24 C 330 6, 150 18, 0 44 Z', { x: 0, y: waveY, color: NAVY });
-  page.drawSvgPath('M 0 46 C 160 20, 360 14, 595 26 L 595 36 C 360 26, 170 34, 0 56 Z', { x: 0, y: waveY, color: GREEN });
-  page.drawSvgPath('M 0 58 C 170 36, 370 30, 595 40 L 595 42 C 370 34, 170 40, 0 60 Z', { x: 0, y: waveY, color: rgb(0.62, 0.66, 0.70) });
-
-  // ── Patient block ──────────────────────────────────────────────────────────────────────────
-  let y = waveY - 82;
-  page.drawLine({ start: { x: 40, y: y + 16 }, end: { x: PAGE.w - 40, y: y + 16 }, thickness: 1.6, color: INK });
-  const field = (label, value, x, vx, yy) => {
-    text(label, x, yy, { font: bold, size: 10 });
-    text(value, vx, yy, { font: bold, size: 10 });
+  // ── Patient block, between the double rule and the single one ─────────────────────────────
+  rule(470, 1.1);
+  rule(476, 1.1);
+  // A value steps down a size rather than running off the page (a long physician's name).
+  const field = (label, value, lx, vx, px) => {
+    text(label, X(lx), Y(px), { size: 12.5 });
+    const room = (vx < 872 ? X(872) : PAGE.w - 10) - X(vx) - 6;
+    let size = 12.5;
+    while (size > 8 && bold.widthOfTextAtSize(safe(value), size) > room) size -= 0.5;
+    text(value, X(vx), Y(px), { size });
   };
-  field('Name:', r.patient.name.toUpperCase(), 44, 112, y);
-  field('Date:', usDate(r.date), 340, 450, y);
-  field('Birthday:', usDate(r.patient.birthdate), 44, 112, y - 15);
-  field('Patient Type:', (r.patientType || 'WALK-IN').toUpperCase(), 340, 450, y - 15);
-  field('Sex:', String(r.patient.sex || '').toUpperCase(), 44, 112, y - 30);
-  field('Physician:', (r.physician || '').toUpperCase(), 340, 450, y - 30);
-  y -= 40;
-  page.drawLine({ start: { x: 40, y }, end: { x: PAGE.w - 40, y }, thickness: 1.2, color: INK });
+  field('Name:', r.patient.name.toUpperCase(), 55, 198, 500);
+  field('Date:', usDate(r.date), 872, 1157, 500);
+  field('Birthday:', usDate(r.patient.birthdate), 55, 198, 540);
+  field('Patient Type:', (r.patientType || 'WALK-IN').toUpperCase(), 872, 1157, 540);
+  field('Sex:', String(r.patient.sex || '').toUpperCase(), 55, 198, 577);
+  field('Physician:', (r.physician || '').toUpperCase(), 872, 1157, 577);
+  rule(592, 1.8);
 
+  let y;
   if (r.lab) {
     // The table's own header row, letter-spaced as the form prints it.
-    y -= 13;
-    text('TEST', COLS.test, y, { font: bold, size: 10, align: 'center' });
-    text('R E S U L T', COLS.result, y, { font: bold, size: 10, align: 'center' });
-    text('U N I T', COLS.unit, y, { font: bold, size: 10, align: 'center' });
-    text('R E F E R E N C E   R A N G E', COLS.range, y, { font: bold, size: 9.5, align: 'center' });
-    y -= 6;
-    page.drawLine({ start: { x: 40, y }, end: { x: PAGE.w - 40, y }, thickness: 1.2, color: INK });
+    text('TEST', COLS.test, Y(615), { size: 12.5, align: 'center' });
+    text('R E S U L T', COLS.result, Y(619), { size: 12.5, align: 'center' });
+    text('U N I T', COLS.unit, Y(619), { size: 12.5, align: 'center' });
+    text('R E F E R E N C E   R A N G E', COLS.range, Y(619), { size: 12, align: 'center' });
+    rule(630, 1.8);
 
     // Measured first, then drawn: a long form (Urinalysis is fourteen rows in three sections)
     // runs into the comment and the seal note at the CBC's spacing, so a long one is tightened.
+    const ROW = X(36.5);
     const height = () => {
-      let h = 26 + 26 + 30;
+      let h = X(55) + X(75) + X(73);
       let sec = null;
       for (const row of r.lab.rows) {
-        if (row.section && row.section !== sec) h += (sec === null ? 4 : 10) + 15;
-        if (!row.section && sec) h += 10;
+        if (row.section && row.section !== sec) h += (sec === null ? 0 : X(36)) + ROW;
+        if (!row.section && sec) h += X(36);
         sec = row.section || null;
-        h += 15.5;
+        h += ROW;
       }
       return h;
     };
+    y = Y(630);
     const k = Math.min(1, (y - COMMENT_FLOOR - 14) / height());
 
-    y -= 26 * k;
-    text(r.lab.discipline, 50, y, { font: bold, size: 10.5 });
-    y -= 26 * k;
-    text(r.lab.title.toUpperCase(), 50, y, { font: bold, size: 10.5 });
-    y -= 30 * k;
+    y -= X(63) * k;
+    text(r.lab.discipline.toUpperCase(), LEFT, y, { size: 12.5 });
+    y -= X(75) * k;
+    text(r.lab.title.toUpperCase(), LEFT, y, { size: 12.5 });
+    y -= X(73) * k;
     let section = null;
+    let drawn = false;
     for (const row of r.lab.rows) {
       if (row.section && row.section !== section) {
-        y -= (section === null ? 4 : 10) * k;
-        text(row.section.replace(/:$/, ''), 70, y, { font: bold, size: 10 });
-        y -= 15 * k;
+        // A section opens after a blank line, as Differential Count does on the CBC.
+        if (drawn) y -= X(36) * k;
+        text(row.section.replace(/:$/, ''), X(200), y, { size: 12, align: 'center' });
+        y -= ROW * k;
       }
-      if (!row.section && section) y -= 10 * k;
+      if (!row.section && section) y -= X(36) * k;
       section = row.section || null;
-      text(row.label, COLS.test, y, { font: bold, size: 10, align: 'center' });
-      text(row.value, COLS.result, y, { size: 10, align: 'center' });
-      if (row.unit) text(row.unit, COLS.unit, y, { font: bold, size: 9.5, align: 'center' });
-      if (row.note) text(row.note.replace(/\s*\/\s*/g, '/ '), COLS.range, y, { font: bold, size: 9, align: 'center' });
-      y -= 15.5 * k;
+      text(row.label, COLS.test, y, { size: 12, align: 'center' });
+      text(row.value, COLS.result, y, { size: 12, align: 'center' });
+      if (row.unit) text(row.unit, COLS.unit, y, { size: 12, align: 'center' });
+      if (row.note) text(row.note.replace(/\s*\/\s*/g, '/ '), COLS.range, y, { size: row.note.length > 30 ? 11 : 12, align: 'center' });
+      y -= ROW * k;
+      drawn = true;
     }
   } else if (r.narrative) {
-    y -= 30;
-    text(r.narrative.title, PAGE.w / 2, y, { font: bold, size: 12, align: 'center' });
-    y -= 26;
-    text('EXAMINATION:', 50, y, { font: bold, size: 10 });
-    text(r.narrative.exam.toUpperCase(), 140, y, { font: bold, size: 10 });
+    text(r.narrative.title, PAGE.w / 2, Y(640), { size: 13, align: 'center' });
+    y = Y(700);
+    text('EXAMINATION:', LEFT, y, { size: 11 });
+    text(r.narrative.exam.toUpperCase(), X(300), y, { size: 11 });
     y -= 26;
     // A long report steps down a size rather than running into the signatures.
-    const paras = r.narrative.body.split(/\n\n+/);
-    const fits = (size, lead) => paras.reduce((h, para) => h + wrap(para, regular, size, PAGE.w - 110).length * lead + 8, 0)
-      + 6 + lead + 2 + wrap(r.narrative.impression, bold, size, PAGE.w - 130).length * lead <= y - COMMENT_FLOOR - 14;
-    const [size, lead] = fits(10.5, 15) ? [10.5, 15] : fits(9.5, 13) ? [9.5, 13] : [8.5, 11.5];
+    const width = RIGHT - LEFT - 10;
+    const paras = lf(r.narrative.body).split(/\n\s*\n+/);
+    const fits = (size, lead) => paras.reduce((h, para) => h + wrap(para, regular, size, width).length * lead + 8, 0)
+      + 6 + lead + 2 + wrap(r.narrative.impression, bold, size, width - 20).length * lead <= y - COMMENT_FLOOR - 14;
+    const [size, lead] = fits(11.5, 16) ? [11.5, 16] : fits(10.5, 14) ? [10.5, 14] : [9.5, 12.5];
     for (const para of paras) {
-      for (const line of wrap(para, regular, size, PAGE.w - 110)) {
-        text(line, 55, y, { size });
+      for (const line of wrap(para, regular, size, width)) {
+        text(line, LEFT + 5, y, { font: regular, size });
         y -= lead;
       }
       y -= 8;
     }
     y -= 6;
-    text('IMPRESSION:', 55, y, { font: bold, size });
+    text('IMPRESSION:', LEFT + 5, y, { size });
     y -= lead + 2;
-    for (const line of wrap(r.narrative.impression, bold, size, PAGE.w - 130)) {
-      text(line, 75, y, { font: bold, size });
+    for (const line of wrap(r.narrative.impression, bold, size, width - 20)) {
+      text(line, LEFT + 25, y, { size });
       y -= lead;
     }
   }
 
   // ── Comment, the seal note, the signatories ────────────────────────────────────────────────
-  y = Math.max(Math.min(y - 20, 250), COMMENT_FLOOR);
-  text('Comment:', 70, y, { font: bold, size: 10 });
+  y = Math.max(Math.min((y ?? Y(1528)) - 24, Y(1528)), COMMENT_FLOOR);
+  text('Comment:', X(135), y, { size: 11 });
   if (r.comment) {
     let cy = y;
-    for (const line of wrap(r.comment, regular, 10, PAGE.w - 200)) {
-      text(line, 128, cy, { size: 10 });
-      cy -= 13;
+    for (const line of wrap(r.comment, regular, 10.5, RIGHT - X(300))) {
+      text(line, X(290), cy, { font: regular, size: 10.5 });
+      cy -= 14;
     }
   }
 
-  text('NOTE: DO NOT ACKNOWLEDGE THE RESULT WITHOUT THE OFFICIAL SEAL', PAGE.w / 2, 168, { font: bold, size: 8.5, align: 'center' });
+  text('NOTE: DO NOT ACKNOWLEDGE THE RESULT WITHOUT THE OFFICIAL SEAL', PAGE.w / 2, Y(1690), { font: regular, size: 9.5, align: 'center' });
   const sigs = r.signatories || [];
-  const centres = sigs.length > 1 ? [160, 430] : [430];
+  const centres = sigs.length > 1 ? [X(390), X(1080)] : [X(1080)];
   sigs.slice(0, 2).forEach((sig, i) => {
     const cx = centres[i];
-    const w = text(sig.name, cx, 120, { font: bold, size: 10.5, align: 'center' });
-    page.drawLine({ start: { x: cx - w / 2, y: 118 }, end: { x: cx + w / 2, y: 118 }, thickness: 0.8, color: INK });
-    text(sig.caption, cx, 105, { font: bold, size: 10.5, align: 'center' });
-    if (sig.prc) text(`PRC License No. ${sig.prc}`, cx, 91, { font: italic, size: 10, align: 'center' });
+    const w = text(sig.name, cx, Y(1802), { size: 11.5, align: 'center' });
+    page.drawLine({ start: { x: cx - w / 2, y: Y(1806) }, end: { x: cx + w / 2, y: Y(1806) }, thickness: 0.9, color: INK });
+    text(sig.caption, cx, Y(1840), { size: 11.5, align: 'center' });
+    if (sig.prc) text(`PRC License No.${sig.prc}`, cx, Y(1878), { font: italic, size: 11, align: 'center' });
   });
 
   text('Demo record, Enlogada Clinic Management System. The patient is fictional; this is not a medical result.',
-    PAGE.w / 2, 26, { size: 6.5, color: MUTED, align: 'center' });
+    PAGE.w / 2, 12, { font: regular, size: 6.5, color: MUTED, align: 'center' });
 
   return Buffer.from(await pdf.save());
 }

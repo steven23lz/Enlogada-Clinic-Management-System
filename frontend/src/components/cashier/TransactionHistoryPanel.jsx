@@ -30,9 +30,14 @@ export default function TransactionHistoryPanel({ history, receipt, operations }
   return (
       <div>
         <Toolbar attached>
-          <DateField presets={RANGE_PRESETS.start} value={history.startDate} onChange={e => history.setStartDate(e.target.value)} containerClassName="w-[9.375rem]" aria-label="History start date" />
-          <span className="text-fine text-slate-400">to</span>
-          <DateField presets={RANGE_PRESETS.end} value={history.endDate} onChange={e => history.setEndDate(e.target.value)} containerClassName="w-[9.375rem]" aria-label="History end date" />
+          {/* The range is one unit: on a phone the two dates share a full-width row with "to" between
+              them, and Apply takes the row after. Loose in the toolbar, the second date wrapped alone
+              and left "to" dangling at the end of the first line. */}
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:w-auto">
+            <DateField presets={RANGE_PRESETS.start} value={history.startDate} onChange={e => history.setStartDate(e.target.value)} containerClassName="w-full sm:w-[9.375rem]" aria-label="History start date" />
+            <span className="text-fine text-slate-400">to</span>
+            <DateField presets={RANGE_PRESETS.end} value={history.endDate} onChange={e => history.setEndDate(e.target.value)} containerClassName="w-full sm:w-[9.375rem]" aria-label="History end date" />
+          </div>
           <Button variant="outline" onClick={() => history.reload()}>
             <RefreshCw className="h-3.5 w-3.5" />
             Apply
@@ -60,7 +65,7 @@ export default function TransactionHistoryPanel({ history, receipt, operations }
             of the drawer: "Cash collected ₱4,200" against the cash filter is the figure being
             counted. That is why `search` deliberately does not narrow the totals and this does —
             a name typed to find one receipt is a lookup, not a slice of the day. */}
-        <Toolbar attached className="border-t-0">
+        <Toolbar attached className="rounded-t-none border-t-0">
           <SegmentedFilter
             ariaLabel="Filter receipts by payment method"
             options={['All', ...COUNTER_PAYMENT_METHODS].map(m => ({

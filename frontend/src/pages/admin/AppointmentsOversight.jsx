@@ -96,7 +96,9 @@ const AppointmentsOversight = () => {
 
         <Panel className="overflow-hidden rounded-t-none">
           <PanelBody flush>
-          <Table>
+          {/* Cards on a phone: scrolled sideways, the reference broke at its hyphen and the time
+              ran over three lines. */}
+          <Table stack>
             <TableHeader sticky>
               <TableRow>
                 <TableHead>Reference</TableHead>
@@ -126,10 +128,13 @@ const AppointmentsOversight = () => {
               ) : pagedAppointments.length > 0 ? (
                 pagedAppointments.map(a => (
                   <TableRow key={a.id}>
-                    <TableCell className="font-mono text-fine text-slate-500">{a.appointment_reference}</TableCell>
-                    <TableCell className="font-semibold text-slate-900">{a.first_name} {a.last_name}</TableCell>
-                    <TableCell>
-                      {new Date(a.scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &bull; {formatTime12(a.scheduled_time)}
+                    <TableCell label="Reference" className="whitespace-nowrap font-mono text-fine text-slate-500">{a.appointment_reference}</TableCell>
+                    <TableCell label="Patient" className="font-semibold text-slate-900">{a.first_name} {a.last_name}</TableCell>
+                    <TableCell label="Scheduled">
+                      <span>
+                        {new Date(a.scheduled_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}{' '}
+                        <span className="whitespace-nowrap">&bull; {formatTime12(a.scheduled_time)}</span>
+                      </span>
                       {/* Why it moved. [1.105.0] A move made before the reason was asked has a
                           date and no reason, and says so rather than leaving a blank. */}
                       {a.rescheduled_at && (
@@ -138,8 +143,8 @@ const AppointmentsOversight = () => {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-slate-500">{a.visit_type}</TableCell>
-                    <TableCell><StatusBadge status={a.status} /></TableCell>
+                    <TableCell label="Visit type" className="text-slate-500">{a.visit_type}</TableCell>
+                    <TableCell label="Status"><StatusBadge status={a.status} /></TableCell>
                   </TableRow>
                 ))
               ) : (

@@ -46,9 +46,14 @@ export default function VisitHistoryPanel({ history, operations, canRecordFeedba
               onChange={e => history.setSearch(e.target.value)}
               containerClassName="w-full sm:w-56"
             />
-            <DateField presets={RANGE_PRESETS.start} value={history.startDate} onChange={e => history.setStartDate(e.target.value)} containerClassName="w-[9.375rem]" aria-label="History start date" />
-            <span className="text-fine text-slate-400">to</span>
-            <DateField presets={RANGE_PRESETS.end} value={history.endDate} onChange={e => history.setEndDate(e.target.value)} containerClassName="w-[9.375rem]" aria-label="History end date" />
+            {/* The range is one unit: on a phone the two dates share a full-width row with "to" between
+                them, and Apply takes the row after. Loose in the toolbar, the second date wrapped alone
+                and left "to" dangling at the end of the first line. */}
+            <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:w-auto">
+              <DateField presets={RANGE_PRESETS.start} value={history.startDate} onChange={e => history.setStartDate(e.target.value)} containerClassName="w-full sm:w-[9.375rem]" aria-label="History start date" />
+              <span className="text-fine text-slate-400">to</span>
+              <DateField presets={RANGE_PRESETS.end} value={history.endDate} onChange={e => history.setEndDate(e.target.value)} containerClassName="w-full sm:w-[9.375rem]" aria-label="History end date" />
+            </div>
             <Button variant="outline" onClick={history.reload}>
               <RefreshCw className="h-3.5 w-3.5" />
               Apply
@@ -62,7 +67,7 @@ export default function VisitHistoryPanel({ history, operations, canRecordFeedba
               A second row rather than more chips in the first: the row above is the RANGE, which
               needs an Apply, and these apply on click. Mixing controls that commit differently
               into one strip is how a filter comes to look broken. */}
-          <Toolbar attached className="border-t-0">
+          <Toolbar attached className="rounded-t-none border-t-0">
             <SegmentedFilter
               ariaLabel="Filter visits by how they arrived"
               options={VISIT_TYPE_FILTERS.map(v => ({ value: v, label: v === 'All' ? 'All types' : v }))}

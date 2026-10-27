@@ -150,8 +150,10 @@ const CashierMonitoring = () => {
               PHP 0.00" directly above a panel saying the data could not be loaded. Two claims
               that contradict each other is worse than either alone, and the peso figure is the
               one a reader believes. */}
+          {/* Same reason below lg, where the strip is always two across: an odd last card spans
+              both columns instead of leaving a grey cell beside it. */}
           {!loadError && !loading && (
-          <div className={`grid grid-cols-2 gap-px border-b border-line bg-[#e6ebf1] ${
+          <div className={`grid grid-cols-2 gap-px border-b border-line bg-[#e6ebf1] max-lg:[&>*:last-child:nth-child(odd)]:col-span-2 ${
             { 2: 'lg:grid-cols-2', 3: 'lg:grid-cols-3', 4: 'lg:grid-cols-4' }[cardCount]
           }`}>
             {/* Named on the figure itself when a method filter is on. The strip's own note above

@@ -56,7 +56,7 @@ export const SegmentedFilter = ({ options, value, onChange, className, ariaLabel
   <div
     role="tablist"
     aria-label={ariaLabel}
-    className={cn('inline-flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5', className)}
+    className={cn('inline-flex max-w-full flex-wrap items-center gap-0.5 rounded-lg bg-slate-100 p-0.5', className)}
   >
     {options.map((option) => {
       const active = option.value === value;
@@ -68,7 +68,7 @@ export const SegmentedFilter = ({ options, value, onChange, className, ariaLabel
           aria-selected={active}
           onClick={() => onChange(option.value)}
           className={cn(
-            'inline-flex cursor-pointer items-center gap-1.5 rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors',
+            'inline-flex flex-shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-[7px] border-0 px-2.5 py-1.5 text-fine font-semibold transition-colors',
             active
               ? 'bg-surface text-slate-900 shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]'
               : 'bg-transparent text-slate-500 hover:text-slate-800'

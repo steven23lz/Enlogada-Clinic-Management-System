@@ -42,6 +42,11 @@ import {
  * carries that name and public-queue-status.spec.js finds it by role, so a second match would be a
  * strict-mode failure on the one test proving the live queue card renders signed-out.
  *
+ * "Verify Report" is the third, in the same brand style as Book Now and either side of the glass
+ * View Services: whoever holds a printed or forwarded copy reaches `?verify` in one tap, rather
+ * than finding the footer link. Its name avoids "Verify a report", which report-verification.spec.js
+ * reads from the footer.
+ *
  * Every sentence states something the system does. The staff titles are the report signatories'
  * own; the payment channels are the ones `payments` accepts.
  */
@@ -142,6 +147,9 @@ const Home = ({ onNavigate, section = null }) => {
               </Button>
               <Button variant="glass" size="lg" onClick={() => go('services')} className="rounded-full px-8">
                 View Services
+              </Button>
+              <Button variant="brand" size="lg" onClick={() => go('verify')} className="rounded-full px-8">
+                Verify Report
               </Button>
             </Reveal>
           </PageShell>

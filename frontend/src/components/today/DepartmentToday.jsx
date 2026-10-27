@@ -25,8 +25,10 @@ export default function DepartmentToday({ category, ops, analytics, needs, headi
   const median = !answered ? undefined : released > 0 ? formatDuration(Number(row.median_turnaround_minutes)) : 'None yet';
   const target = sla?.target_minutes;
 
+  // Two across on a phone, the third tile under them full width: three stacked full-width tiles
+  // were a screen of three numbers.
   const figures = (
-    <div data-testid="today-department" data-category={category} className={cn('grid grid-cols-1 gap-3', needs ? 'sm:grid-cols-3 lg:grid-cols-1' : 'sm:grid-cols-3')}>
+    <div data-testid="today-department" data-category={category} className={cn('grid grid-cols-2 gap-3', needs ? 'sm:grid-cols-3 lg:grid-cols-1' : 'sm:grid-cols-3')}>
       <MetricCard label="Released today" value={figureValue(ops, released)} icon={CheckCircle2} tone="green" />
       <MetricCard
         label="Median turnaround"
@@ -43,6 +45,7 @@ export default function DepartmentToday({ category, ops, analytics, needs, headi
         tone="amber"
         captionTone="slate"
         caption="Corrected after release"
+        className="col-span-2 sm:col-span-1"
       />
     </div>
   );

@@ -82,7 +82,7 @@ function NeedRow({ need, primary, onAction }) {
         <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1 basis-48">
-        <span className="block text-note font-semibold text-slate-900">{need.title}</span>
+        <span className="block text-balance text-note font-semibold text-slate-900">{need.title}</span>
         {need.detail && <span className="block text-fine text-slate-500">{need.detail}</span>}
       </span>
       {need.action && (

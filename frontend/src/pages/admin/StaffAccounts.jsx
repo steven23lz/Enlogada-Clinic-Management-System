@@ -341,7 +341,9 @@ const StaffAccounts = () => {
           icon={Users}
           actions={
             <SearchInput
-              placeholder="Search name, email, or role…"
+              // Short enough to be read whole in a phone-width field; the label keeps the detail.
+              placeholder="Search staff…"
+              aria-label="Search staff by name, email, or role"
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }}
               containerClassName="w-full sm:w-64"

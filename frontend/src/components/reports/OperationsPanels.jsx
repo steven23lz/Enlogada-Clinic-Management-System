@@ -120,7 +120,9 @@ export const SalesByServicePanel = ({ billing, loading, error, onRetry, limit })
             ) : (
               shown.map((row) => (
                 <TableRow key={`${row.category_name}-${row.test_name}`}>
-                  <TableCell className="font-medium text-slate-900">{row.test_name}</TableCell>
+                  {/* A floor under the name: the table scrolls on a phone, and without one the
+                      service was squeezed to three or four lines to make room for the figures. */}
+                  <TableCell className="min-w-[10rem] font-medium text-slate-900">{row.test_name}</TableCell>
                   <TableCell className="text-slate-500">{row.category_name}</TableCell>
                   <TableCell className="text-right tabular-nums">{row.sold}</TableCell>
                   <TableCell className="text-right tabular-nums text-slate-500">{formatCurrency(row.gross)}</TableCell>

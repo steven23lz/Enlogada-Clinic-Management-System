@@ -24,17 +24,17 @@ const Pagination = ({ page, totalPages, onPageChange, totalLabel, total, pageSiz
   if (totalPages <= 1 && !label) return null;
 
   return (
-    <div className={`flex items-center justify-between px-4 py-3 border-t border-line ${className}`}>
-      <span className="text-fine font-semibold text-gray-400">{label}</span>
-      <div className="flex items-center space-x-2">
+    <div className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 border-t border-line ${className}`}>
+      <span className="whitespace-nowrap text-fine font-semibold text-gray-400">{label}</span>
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent cursor-pointer transition-colors"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent cursor-pointer transition-colors"
           aria-label="Previous page"
         >
-          <ChevronLeft className="w-3.5 h-3.5" />
+          <ChevronLeft className="w-4 h-4" />
         </button>
         <span className="text-fine font-bold text-gray-600 whitespace-nowrap">
           Page {page} of {totalPages || 1}
@@ -43,10 +43,10 @@ const Pagination = ({ page, totalPages, onPageChange, totalLabel, total, pageSiz
           type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
-          className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent cursor-pointer transition-colors"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent cursor-pointer transition-colors"
           aria-label="Next page"
         >
-          <ChevronRight className="w-3.5 h-3.5" />
+          <ChevronRight className="w-4 h-4" />
         </button>
       </div>
     </div>

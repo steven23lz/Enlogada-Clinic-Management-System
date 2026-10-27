@@ -257,13 +257,19 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                             "Select Tests" and "Schedule & HMO", and these pills right under it called
                             the same two steps "Schedule & Services" and "HMO / Payment Note": one
                             wizard with two sets of names. The pills stay, because they also move
-                            between the steps. */}
-                        <div className="flex items-center justify-between border-b border-line pb-3">
+                            between the steps.
+
+                            Two equal columns, not two pills pushed apart. On a 360px phone each
+                            label wraps to two lines, and a two-line rounded-full pill is a blob;
+                            a grid with a real gap and rounded-xl keeps them reading as a pair of
+                            tabs. The labels stay whole — the e2e helpers find step two by its
+                            accessible name. */}
+                        <div className="grid grid-cols-2 gap-2 border-b border-line pb-3">
                           <button
                             type="button"
                             onClick={() => setBookingStep(1)}
                             aria-current={bookingStep === 1 ? 'step' : undefined}
-                            className={`text-xs font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${bookingStep === 1 ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-500'}`}
+                            className={`text-xs font-bold leading-tight text-center px-3 py-1.5 rounded-xl border-0 cursor-pointer ${bookingStep === 1 ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-500'}`}
                           >
                             1. Schedule & Services
                           </button>
@@ -271,7 +277,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                             type="button"
                             onClick={() => setBookingStep(2)}
                             aria-current={bookingStep === 2 ? 'step' : undefined}
-                            className={`text-xs font-bold px-3 py-1 rounded-full border-0 cursor-pointer ${bookingStep === 2 ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-500'}`}
+                            className={`text-xs font-bold leading-tight text-center px-3 py-1.5 rounded-xl border-0 cursor-pointer ${bookingStep === 2 ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-500'}`}
                           >
                             2. HMO &amp; Doctor&apos;s Notes
                           </button>

@@ -12,7 +12,10 @@ const TabsList = React.forwardRef(({ className, ...props }, ref) => (
       // A segmented control, matching SegmentedFilter in toolbar.jsx — the two do the same job in
       // different places and previously looked nothing alike. `w-fit` so a two-tab strip does not
       // stretch across the page as the old `h-10 justify-center` version did on flex parents.
-      "inline-flex w-fit items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 text-slate-500",
+      // `max-w-full flex-wrap`: five tabs (Reports) are wider than a phone. They wrap onto a
+      // second row rather than push the page sideways — or scroll, which hid the last tab with
+      // nothing to say it was there. [1.142.0]
+      "inline-flex w-fit max-w-full flex-wrap items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 text-slate-500",
       className
     )}
     {...props} />
@@ -23,7 +26,7 @@ const TabsTrigger = React.forwardRef(({ className, ...props }, ref) => (
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 py-1.5 text-note font-semibold transition-colors hover:text-slate-800 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface data-[state=active]:text-slate-900 data-[state=active]:shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]",
+      "inline-flex flex-shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] px-3 py-1.5 text-note font-semibold transition-colors hover:text-slate-800 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-surface data-[state=active]:text-slate-900 data-[state=active]:shadow-[0_1px_2px_rgb(15_23_42_/_0.08)]",
       className
     )}
     {...props} />

@@ -73,8 +73,8 @@ function DayRow({ day, onSave, saving }) {
 
   return (
     <TableRow data-testid={`schedule-day-${day.day_of_week}`}>
-      <TableCell className="font-bold text-slate-900">{day.day_name}</TableCell>
-      <TableCell>
+      <TableCell label="Day" className="font-bold text-slate-900">{day.day_name}</TableCell>
+      <TableCell label="Status">
         <label className="flex cursor-pointer items-center gap-2 text-fine font-semibold text-slate-600">
           <input
             type="checkbox"
@@ -86,26 +86,30 @@ function DayRow({ day, onSave, saving }) {
           {draft.isOpen ? 'Open' : 'Closed'}
         </label>
       </TableCell>
-      <TableCell>
+      <TableCell label="Hours">
         {draft.isOpen ? (
-          <div className="flex items-center gap-1.5">
+          // On a phone card the pair wraps as "07:30 AM" over "to 05:00 PM": "to" stays with the
+          // closing time instead of dangling after the opening one.
+          <div className="flex flex-wrap items-center justify-end gap-1.5 sm:flex-nowrap sm:justify-start">
             <Input
               type="time" value={draft.openTime} aria-label={day.day_name + ' opening time'}
               onChange={(e) => setDraft((d) => ({ ...d, openTime: e.target.value }))}
-              className="w-28"
+              className="w-[8.5rem] sm:w-28"
             />
-            <span className="text-fine text-slate-400">to</span>
-            <Input
-              type="time" value={draft.closeTime} aria-label={day.day_name + ' closing time'}
-              onChange={(e) => setDraft((d) => ({ ...d, closeTime: e.target.value }))}
-              className="w-28"
-            />
+            <span className="flex items-center gap-1.5">
+              <span className="text-fine text-slate-400">to</span>
+              <Input
+                type="time" value={draft.closeTime} aria-label={day.day_name + ' closing time'}
+                onChange={(e) => setDraft((d) => ({ ...d, closeTime: e.target.value }))}
+                className="w-[8.5rem] sm:w-28"
+              />
+            </span>
           </div>
         ) : (
           <span className="text-fine text-slate-400">&mdash;</span>
         )}
       </TableCell>
-      <TableCell>
+      <TableCell label="Slot (min)">
         {draft.isOpen ? (
           <Input
             type="number" min={5} max={240} step={5} value={draft.slotIntervalMinutes}
@@ -115,7 +119,7 @@ function DayRow({ day, onSave, saving }) {
           />
         ) : <span className="text-fine text-slate-400">&mdash;</span>}
       </TableCell>
-      <TableCell>
+      <TableCell label="Per slot">
         {draft.isOpen ? (
           <Input
             type="number" min={0} max={50} value={draft.maxConcurrentBookings}
@@ -125,7 +129,7 @@ function DayRow({ day, onSave, saving }) {
           />
         ) : <span className="text-fine text-slate-400">&mdash;</span>}
       </TableCell>
-      <TableCell className="text-fine tabular-nums text-slate-500">
+      <TableCell label="Capacity" className="text-fine tabular-nums text-slate-500">
         {draft.isOpen ? dailyCapacity + ' bookings/day' : '—'}
       </TableCell>
       <TableCell className="text-right">
@@ -274,8 +278,10 @@ export default function ClinicSchedule() {
               icon={CalendarCog}
             />
             <PanelBody flush>
+              {/* Stacked on a phone [1.142.0]: the week was a 1030px row of time inputs in a
+                  330px scroller, so editing a day's hours meant dragging sideways past it. */}
               <div className="overflow-x-auto">
-                <Table>
+                <Table stack>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Day</TableHead>
@@ -302,7 +308,11 @@ export default function ClinicSchedule() {
             </PanelBody>
           </Panel>
 
-          <Panel className="overflow-hidden">
+          {/* No `overflow-hidden` on this Panel, unlike the one above: the date field's calendar
+              opens downward out of the form, and with nothing listed below it the card ends half
+              way down that calendar and cut it off. The clipping that keeps the table's corners
+              rounded lives on the table's own body instead. */}
+          <Panel>
             <PanelHeader
               title="Specific dates"
               description="A holiday, or a day the clinic runs short. Overrides only the date named — the weekly pattern is untouched."
@@ -402,7 +412,7 @@ export default function ClinicSchedule() {
               )}
             </PanelBody>
 
-            <PanelBody flush>
+            <PanelBody flush className="overflow-hidden rounded-b-xl">
               {overrides.length === 0 ? (
                 <EmptyState
                   compact
@@ -411,7 +421,7 @@ export default function ClinicSchedule() {
                 />
               ) : (
                 <div className="overflow-x-auto">
-                  <Table>
+                  <Table stack>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>
@@ -426,28 +436,28 @@ export default function ClinicSchedule() {
                     <TableBody>
                       {overrides.map((o) => (
                         <TableRow key={o.id} data-testid={'schedule-override-' + o.override_date}>
-                          <TableCell className="font-bold tabular-nums text-slate-900">
+                          <TableCell label="Date" className="font-bold tabular-nums text-slate-900">
                             {o.override_date}
                           </TableCell>
-                          <TableCell>
+                          <TableCell label="Status">
                             <Badge variant={o.is_open ? 'default' : 'destructive'}>
                               {o.is_open ? 'Open' : 'Closed'}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-fine text-slate-600">
+                          <TableCell label="Hours" className="text-fine text-slate-600">
                             {o.open_time
                               ? formatTime12(hhmm(o.open_time)) + ' – ' + formatTime12(hhmm(o.close_time))
                               : <span className="text-slate-400">As usual</span>}
                           </TableCell>
-                          <TableCell className="text-fine tabular-nums text-slate-600">
+                          <TableCell label="Per slot" className="text-fine tabular-nums text-slate-600">
                             {o.max_concurrent_bookings === null
                               ? <span className="text-slate-400">As usual</span>
                               : o.max_concurrent_bookings}
                           </TableCell>
-                          <TableCell className="text-fine text-slate-600">
+                          <TableCell label="Reason" className="text-fine text-slate-600">
                             {o.note || <span className="text-slate-400">&mdash;</span>}
                           </TableCell>
-                          <TableCell className="text-fine text-slate-500">
+                          <TableCell label="Set by" className="text-fine text-slate-500">
                             {o.created_by_first_name
                               ? (o.created_by_first_name + ' ' + (o.created_by_last_name || '')).trim()
                               : '—'}

@@ -96,7 +96,7 @@ export default function ElevatedAccountsPanel({ elevated }) {
 
     <Panel className="overflow-hidden">
       <PanelBody flush>
-        <Table>
+        <Table stack>
           <TableHeader sticky>
             <TableRow>
               <TableHead>Name</TableHead>
@@ -113,21 +113,21 @@ export default function ElevatedAccountsPanel({ elevated }) {
                 const isSelf = elevated.currentUser?.id === a.id;
                 return (
                   <TableRow key={a.id}>
-                    <TableCell className="font-semibold text-slate-900">
+                    <TableCell label="Name" className="font-semibold text-slate-900">
                       {a.first_name} {a.last_name} {isSelf && <span className="font-normal text-slate-400">(you)</span>}
                     </TableCell>
-                    <TableCell className="text-slate-500">{a.email}</TableCell>
+                    <TableCell label="Email" className="text-slate-500">{a.email}</TableCell>
                     {/* Every role, like the Staff Accounts table. An account holding both
                         Admin and SuperAdmin would otherwise be listed under one of them, on the
                         screen whose entire purpose is elevated-access oversight. */}
-                    <TableCell>
+                    <TableCell label="Role">
                       <div className="flex flex-wrap gap-1">
                         {(a.roles || []).map((role) => (
                           <Badge key={role} variant="outline" className="text-slate-600">{role}</Badge>
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell label="Status">
                       {/* A real button, and genuinely disabled for your own row rather than
                           just dimmed — the previous version was a clickable <div> whose
                           "cannot deactivate yourself" rule lived only in an early return. */}

@@ -197,7 +197,8 @@ const ServiceRequests = () => {
 
         <Panel className="overflow-hidden rounded-t-none">
           <PanelBody flush>
-            <Table>
+            {/* Cards on a phone: six columns scrolled sideways broke names and dates mid-word. */}
+            <Table stack>
               <TableHeader sticky>
                 <TableRow>
                   {/* Patient first. It is the only thing that distinguishes one row from the
@@ -232,7 +233,7 @@ const ServiceRequests = () => {
                 ) : pagedRequests.length > 0 ? (
                   pagedRequests.map(r => (
                     <TableRow key={r.id}>
-                      <TableCell>
+                      <TableCell label="Patient">
                         <span className="block font-semibold text-slate-900">
                           {r.patient_first_name ? `${r.patient_first_name} ${r.patient_last_name}` : 'Unlinked claim'}
                         </span>
@@ -247,26 +248,30 @@ const ServiceRequests = () => {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell label="Provider & member">
                         <span className="block text-slate-700">{r.provider_name}</span>
                         {r.member_number && (
                           <span className="text-fine tabular-nums text-slate-500">{r.member_number}</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-slate-500">{new Date(r.request_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</TableCell>
+                      <TableCell label="Requested" className="text-slate-500">{new Date(r.request_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</TableCell>
                       {/* Approved AND refused, not just approved. "1 / 2" left the reader unable to
-                          tell a claim half-decided from one where the other half was turned down. */}
-                      <TableCell className="font-medium tabular-nums">
-                        <span className="text-emerald-700">{r.approved_test_count}</span>
-                        {parseInt(r.rejected_test_count, 10) > 0 && (
-                          <>
-                            <span className="text-slate-300"> / </span>
-                            <span className="text-rose-700">{r.rejected_test_count} refused</span>
-                          </>
-                        )}
-                        <span className="text-slate-400"> of {r.test_count}</span>
+                          tell a claim half-decided from one where the other half was turned down.
+                          One span, because a stacked card puts each child of a cell on its own
+                          line, and this is one phrase. */}
+                      <TableCell label="Tests decided" className="font-medium tabular-nums">
+                        <span>
+                          <span className="text-emerald-700">{r.approved_test_count}</span>
+                          {parseInt(r.rejected_test_count, 10) > 0 && (
+                            <>
+                              <span className="text-slate-300"> / </span>
+                              <span className="text-rose-700">{r.rejected_test_count} refused</span>
+                            </>
+                          )}
+                          <span className="text-slate-400"> of {r.test_count}</span>
+                        </span>
                       </TableCell>
-                      <TableCell><StatusBadge status={r.status} /></TableCell>
+                      <TableCell label="Status"><StatusBadge status={r.status} /></TableCell>
                       <TableCell className="text-right">
                         <Button onClick={() => openDetail(r.id)} variant="outline" size="xs">
                           Review
@@ -478,7 +483,10 @@ const ServiceRequests = () => {
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
                           <span className="block truncate text-note font-semibold text-slate-900">{t.test_name}</span>
-                          <span className="text-fine text-slate-500">{t.category_name} &bull; {formatCurrency(t.price_at_time)}</span>
+                          {/* The bullet travels with the price, so a wrap never leaves it dangling. */}
+                          <span className="text-fine text-slate-500">
+                            {t.category_name} <span className="whitespace-nowrap">&bull; {formatCurrency(t.price_at_time)}</span>
+                          </span>
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-1">
                           <StatusBadge status={t.approval_status} />
@@ -487,7 +495,7 @@ const ServiceRequests = () => {
                               type="button"
                               onClick={() => handleSetTestApproval(t.id, 'Approved')}
                               aria-label={`Approve ${t.test_name}`}
-                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-emerald-600 hover:bg-emerald-50"
+                              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-emerald-600 hover:bg-emerald-50"
                             >
                               <Check className="h-3.5 w-3.5" />
                             </button>
@@ -497,7 +505,7 @@ const ServiceRequests = () => {
                               type="button"
                               onClick={() => { setRejecting(t.id); setRejectReason(''); }}
                               aria-label={`Reject ${t.test_name}`}
-                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-rose-600 hover:bg-rose-50"
+                              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-rose-600 hover:bg-rose-50"
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -551,7 +559,8 @@ const ServiceRequests = () => {
                           <span className="font-semibold text-slate-700">Refused:</span> {t.decision_reason}
                           {t.decided_by_first_name && (
                             <span className="text-slate-400">
-                              {' '}&bull; recorded by {t.decided_by_first_name} {t.decided_by_last_name}
+                              {' '}<span className="whitespace-nowrap">&bull; recorded by</span>{' '}
+                              {t.decided_by_first_name} {t.decided_by_last_name}
                             </span>
                           )}
                         </p>

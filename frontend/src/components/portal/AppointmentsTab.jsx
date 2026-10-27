@@ -134,8 +134,10 @@ export default function AppointmentsTab({ bookings, visits = null }) {
         data-status={appt.status}
         className="border border-line rounded-xl p-3 space-y-2 bg-slate-50/70"
       >
-        <div className="flex justify-between items-start">
-          <div>
+        {/* `min-w-0 flex-1` on the text and `flex-shrink-0` on the badge: on a 360px phone the
+            badge was winning the width and "Please arrive by 7:45 AM" broke with "AM" alone. */}
+        <div className="flex justify-between items-start gap-2">
+          <div className="min-w-0 flex-1">
             <span className="block text-xs font-extrabold text-slate-900">
               {formatAppointmentDate(appt.scheduled_date)}
             </span>
@@ -150,7 +152,7 @@ export default function AppointmentsTab({ bookings, visits = null }) {
               </span>
             )}
           </div>
-          <StatusBadge status={appt.status} />
+          <StatusBadge status={appt.status} className="flex-shrink-0" />
         </div>
         {/* Booked online by the patient, or booked by the clinic. [1.136.0] */}
         <OriginBadge row={appt} />

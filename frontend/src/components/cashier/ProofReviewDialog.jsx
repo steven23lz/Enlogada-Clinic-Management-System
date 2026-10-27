@@ -3,7 +3,9 @@ import { AlertTriangle, Maximize2, Minus, Plus, RotateCcw, ShieldAlert } from 'l
 import api from '../../config/api';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../lib/currency';
+import { formatDateTime } from '../../lib/date';
 import { reviewConcerns } from '../../lib/paymentReview';
+import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import DataBadge from '../ui/data-badge';
 import EmptyState from '../ui/empty-state';
@@ -108,8 +110,8 @@ function ProofCanvas({ submissionId }) {
   // would be two zoom controls fighting over one document.
   if (isPdf) {
     return src
-      ? <iframe src={src} title="Proof of payment" className="h-[60vh] w-full rounded-lg border border-line" />
-      : <div className="h-[60vh] animate-pulse rounded-lg bg-skeleton" aria-hidden="true" />;
+      ? <iframe src={src} title="Proof of payment" className="h-[40vh] sm:h-[60vh] w-full rounded-lg border border-line" />
+      : <div className="h-[40vh] sm:h-[60vh] animate-pulse rounded-lg bg-skeleton" aria-hidden="true" />;
   }
 
   return (
@@ -121,7 +123,7 @@ function ProofCanvas({ submissionId }) {
           // `checkFillRoles.js` caught it here, which is the third time that guard has paid for
           // itself. A sunken well is what this actually is: a recess the screenshot sits in, so a
           // white receipt on a white panel still has an edge.
-          'relative h-[60vh] overflow-hidden rounded-lg border border-line bg-sunken',
+          'relative h-[40vh] sm:h-[60vh] overflow-hidden rounded-lg border border-line bg-sunken',
           zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
         )}
         onPointerDown={onPointerDown}
@@ -169,7 +171,8 @@ function ProofCanvas({ submissionId }) {
 
 /**
  * @param {object} props
- * @param {object} props.submission  A row from the pending queue.
+ * @param {object} props.submission  A row from the pending queue, or a settled one from "Recently
+ *   Reviewed" — which is read, not decided, so the caller passes no onVerify/onReject for it.
  * @param {() => void} props.onClose
  * @param {(s: object) => void} [props.onVerify]
  * @param {(s: object) => void} [props.onReject]
@@ -183,12 +186,17 @@ export default function ProofReviewDialog({ submission, onClose, onVerify, onRej
   // three copies of it that can drift apart.
   const { claimed, due, mismatch, duplicates } = reviewConcerns(submission);
 
+  // A settled row comes from the reviewed list, which carries no amount_due: `due` reads ₱0.00
+  // there, and a "Visit owes ₱0.00" beside a verified payment is a figure that means nothing.
+  const settled = Boolean(submission.status) && submission.status !== 'Pending';
+  const reviewer = [submission.reviewed_by_first_name, submission.reviewed_by_last_name].filter(Boolean).join(' ');
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       {/* Wider than the old viewer, because it now holds two columns rather than one image. */}
       <DialogContent className="max-w-5xl">
         <DialogHeader>
-          <DialogTitle>Review proof of payment</DialogTitle>
+          <DialogTitle>{settled ? 'Proof of payment' : 'Review proof of payment'}</DialogTitle>
           <DialogDescription>
             {submission.first_name} {submission.last_name}
             {submission.queue_number ? ` · queue ${submission.queue_number}` : ''}
@@ -211,7 +219,7 @@ export default function ProofReviewDialog({ submission, onClose, onVerify, onRej
 
           {/* ── The claim ─────────────────────────────────────────────────────────────────── */}
           <div className="min-w-0 space-y-3">
-            {duplicates > 0 && (
+            {!settled && duplicates > 0 && (
               <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-300 bg-rose-50 p-3">
                 <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0 text-rose-700" aria-hidden="true" />
                 <span className="text-fine leading-relaxed text-rose-900">
@@ -243,6 +251,12 @@ export default function ProofReviewDialog({ submission, onClose, onVerify, onRej
               {/* The two figures, together. [1.48.0] The claimed amount is EVIDENCE; approval bills
                   the recomputed total. Showing only one of them is how a drawer ends up short with
                   nothing on screen to explain it. */}
+              {settled ? (
+                <div className="rounded-lg border border-line bg-sunken p-2.5">
+                  <dt className="text-micro font-semibold uppercase tracking-wide text-ink-muted">Patient claimed</dt>
+                  <dd className="m-0 mt-0.5 text-note font-bold tabular-nums text-ink">{formatCurrency(claimed)}</dd>
+                </div>
+              ) : (
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-lg border border-line bg-sunken p-2.5">
                   <dt className="text-micro font-semibold uppercase tracking-wide text-ink-muted">Patient claims</dt>
@@ -258,8 +272,9 @@ export default function ProofReviewDialog({ submission, onClose, onVerify, onRej
                   </dd>
                 </div>
               </div>
+              )}
 
-              {mismatch && (
+              {!settled && mismatch && (
                 <p className="m-0 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-fine leading-relaxed text-amber-900">
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
                   <span>
@@ -271,7 +286,26 @@ export default function ProofReviewDialog({ submission, onClose, onVerify, onRej
               )}
             </dl>
 
-            {(onVerify || onReject) && (
+            {settled && (
+              <div className="space-y-1.5 border-t border-line pt-3" data-testid="proof-review-outcome">
+                <Badge variant={submission.status === 'Verified' ? 'default' : 'secondary'}>
+                  {submission.status}
+                </Badge>
+                <p className="m-0 text-fine leading-relaxed text-ink-muted">
+                  {submission.status}
+                  {reviewer ? ` by ${reviewer}` : ''}
+                  {submission.reviewed_at ? ` on ${formatDateTime(submission.reviewed_at)}` : ''}
+                  {submission.receipt_number && (
+                    <> · Receipt <span className="font-mono text-ink">{submission.receipt_number}</span></>
+                  )}
+                </p>
+                {submission.status === 'Rejected' && submission.review_note && (
+                  <p className="m-0 text-fine leading-relaxed text-ink">&ldquo;{submission.review_note}&rdquo;</p>
+                )}
+              </div>
+            )}
+
+            {!settled && (onVerify || onReject) && (
               <div className="flex flex-wrap gap-2 border-t border-line pt-3">
                 {onVerify && (
                   <Button type="button" onClick={() => onVerify(submission)} loading={busy} className="flex-1">

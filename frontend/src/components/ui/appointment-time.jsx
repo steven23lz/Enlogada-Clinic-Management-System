@@ -63,7 +63,9 @@ const AppointmentTime = ({
           // The parent is already flex-wrap, so no call site changes.
           <span className="flex basis-full items-center gap-1 text-fine font-bold text-amber-900">
             <LogIn className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-            Please arrive by {times.arrival}
+            {/* The time never splits: "7:45" on one line and "AM" alone on the next reads as two
+                facts. The sentence may wrap before it; the clock may not wrap inside. */}
+            <span>Please arrive by <span className="whitespace-nowrap">{times.arrival}</span></span>
           </span>
         )}
       </span>

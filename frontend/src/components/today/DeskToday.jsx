@@ -43,7 +43,7 @@ export default function DeskToday({ queue, ops, bookings, hmo, hours, needs, hea
   const reception = ops.data?.reception;
 
   const figures = (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 max-sm:[&>*:last-child:nth-child(odd)]:col-span-2">
       <MetricCard
         label="With the cashier"
         value={figureValue(queue, withCashier.length)}
@@ -84,28 +84,35 @@ export default function DeskToday({ queue, ops, bookings, hmo, hours, needs, hea
             const StateIcon = state.icon;
             const name = personName(b);
             return (
-              <li key={b.id} data-testid="today-booking" className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-5 py-2.5">
+              <li key={b.id} data-testid="today-booking" className="flex items-center gap-x-3 px-5 py-2.5">
                 <span className="w-16 flex-shrink-0 text-fine font-semibold tabular-nums text-slate-500">
                   {formatTime12(b.scheduled_time)}
                 </span>
-                {/* Wraps rather than truncating: on a phone "Tomas …" is a name the desk cannot read. */}
-                <span className="min-w-0 flex-1 break-words text-note font-semibold text-slate-900">{name}</span>
-                <span className={cn('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-micro font-semibold ring-1 ring-inset', state.tone)}>
-                  {StateIcon && <StateIcon aria-hidden="true" className="h-3 w-3" />}
-                  {state.label}
+                {/* The name and its state wrap beside the time, not under it. The name has a real
+                    basis: at flex-basis 0 everything "fitted" on one phone line and the name was
+                    squeezed until it broke mid-word ("Jocel / yn"); now the badge and Check in drop
+                    to a second line together instead. */}
+                <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <span className="min-w-0 flex-1 basis-[9rem] break-words text-note font-semibold text-slate-900">{name}</span>
+                  <span className="flex flex-shrink-0 items-center gap-3">
+                    <span className={cn('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-micro font-semibold ring-1 ring-inset', state.tone)}>
+                      {StateIcon && <StateIcon aria-hidden="true" className="h-3 w-3" />}
+                      {state.label}
+                    </span>
+                    {canCheckIn && (b.state === 'due' || b.state === 'late') && (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        // The slot as well as the name: one person can hold two bookings in a day, and
+                        // two buttons both called "Check in Elena Client" cannot be told apart.
+                        aria-label={`Check in ${name}, ${formatTime12(b.scheduled_time)}`}
+                        onClick={() => onGo?.('reception-queue', { verify: b.appointment_reference })}
+                      >
+                        Check in
+                      </Button>
+                    )}
+                  </span>
                 </span>
-                {canCheckIn && (b.state === 'due' || b.state === 'late') && (
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    // The slot as well as the name: one person can hold two bookings in a day, and
-                    // two buttons both called "Check in Elena Client" cannot be told apart.
-                    aria-label={`Check in ${name}, ${formatTime12(b.scheduled_time)}`}
-                    onClick={() => onGo?.('reception-queue', { verify: b.appointment_reference })}
-                  >
-                    Check in
-                  </Button>
-                )}
               </li>
             );
           })}

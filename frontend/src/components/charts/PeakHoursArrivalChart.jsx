@@ -92,7 +92,11 @@ const PeakHoursArrivalChart = ({ data }) => {
           tick={{ fontSize: 10, fontWeight: 600, fill: AXIS.label }}
           axisLine={false}
           tickLine={false}
-          interval={0}
+          // Every hour where there is room, as on a desktop; on a phone, every other one rather
+          // than "9am10am11am" run together. The first and last hour are always kept, so the
+          // day's span is still readable, and the tooltip names the hour of any bar.
+          interval="preserveStartEnd"
+          minTickGap={6}
         />
         <YAxis
           tick={{ fontSize: 10, fill: AXIS.tick }}

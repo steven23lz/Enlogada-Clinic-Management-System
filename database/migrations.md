@@ -1,5 +1,89 @@
 # Database Migration & Schema History
 
+## [1.142.0] - 2026-10-22 (The whole app at phone width)
+
+No migration. Front end only, plus one functional fix found on the way.
+
+Audited by crawling every screen, tab and opened dialog for each role, signed in, at 360px and
+412px, measuring horizontal overflow, text spilling or cut by a container, and overlapping text,
+then reviewing every screenshot.
+
+- **Shared, fixing many screens at once:** `DialogContent` gets `grid-cols-[minmax(0,1fr)]` (its
+  `auto` column grew to the widest child: the booking dialog was wider than a phone, title and
+  close button cut). `PageHeader`/`PanelHeader` actions wrap instead of being one unshrinkable line.
+  `TabsList` and `SegmentedFilter` wrap onto a second row. `PanelHeader` title and description wrap
+  on a phone (truncated, they lost "…last 7 days"). `MetricCard` values never break mid-amount and
+  are a size smaller on a phone. `DialogHeader` clears the close button. Pagination wraps and its
+  arrows are 36px. `SelectTrigger` text matches the inputs.
+- **Stacked cards (`<Table stack>`):** a labelled cell is now a grid, label left and everything the
+  cell holds stacked on the right. As flex, a name and its PT number, a test and its category, were
+  thrown to opposite edges. A cell's desktop `max-w`/`truncate` no longer applies in card mode, the
+  actions cell wraps, and cards sit inside the panel rather than on its border. Service Requests,
+  Appointments, Services, Packages, Super Admin's Elevated Accounts and Payment Methods, and both
+  Clinic Schedule tables (the week was a 1030px row of time inputs) now stack on a phone. Matrices
+  and figure tables (who sees what, sales by service, HMO by provider) still scroll sideways.
+- **Per screen:** the result dialog's three buttons (two were off-screen), Today's booking names
+  breaking mid-word, booking packages all reading "Package…", Billing Queue names, Activity Log,
+  feedback questions, the who-sees-what save bar, Patient Records' action buttons, date ranges
+  leaving "to" dangling, the hourly chart's labels, the proof dialog's image height, and others.
+- **Fix:** `useDiagnosticWorklist` resets its status and delivery filters when the department
+  changes. A filter set on Ultrasound carried into X-Ray, which has neither control, and showed
+  "Nothing matches this filter" over two waiting exams.
+- Specs: `failure-states.spec.js` and `staff-roles.spec.js` follow two shortened search placeholders.
+
+## [1.141.0] - 2026-10-22 (Every demo report on the clinic's form)
+
+No migration. A new backend dependency, `@pdf-lib/fontkit` 1.1.1. Data change on the development
+database (below).
+
+- **`demoReportPdf.js` lays the page out as the clinic's scanned CBC does.** Every position is
+  measured off that scan; the type is its Calibri, bold almost throughout, embedded through fontkit
+  from the Windows fonts folder (Helvetica where either is absent). Double rule over the patient
+  block, letter-spaced column heads, a blank line before a section such as Differential Count, the
+  signatories as the form prints them (typed: no signature image, no seal). A long value, such as a
+  referring physician's full name, steps down a size rather than running off the page. Stored line
+  breaks (`
+`) now survive into a written report's paragraphs; they were being stripped.
+- **The letterhead** is `scripts/assets/clinic-letterhead.jpg` when that file exists, and is drawn
+  otherwise. It is not committed.
+- **`redrawDemoReports.js`** redraws every result's report from its own record: patient, visit date,
+  patient type, referring physician, the service's form, an imaging report's stored findings. Lab
+  values are not stored, so `--values` supplies those read back out of older files (by result id), and
+  otherwise the seed's normal values are used, or the abnormal value a stored summary names. Only the
+  file columns change. The seed's report helpers are exported for it, and the seed runs `main()` only
+  as a script.
+- Run on 2026-10-22: all 672 reports redrawn, 222 keeping their original lab values. The previous
+  files and file columns, and the values file, are in `db-backups/report-files-before-redraw-2026-10-22/`.
+
+## [1.140.0] - 2026-10-22 (Seven fixes from a walk-through)
+
+No migration. Data repair on the development database (below).
+
+- **Clinic Schedule → Specific dates: the calendar was cut in half.** The date field's popup opens
+  downward inside its card, and that Panel had `overflow-hidden`; with no dates listed the card ends
+  half way down the calendar. The clipping moved to the table's own body (`ClinicSchedule.jsx`). No
+  other `DateField` sits under an `overflow-hidden` ancestor.
+- **Online Payments: Verify and Reject on a settled payment.** "Recently Reviewed" opens the same
+  review dialog, which offered both buttons whatever the status, and either could only answer
+  "already verified". Decisions are passed for a Pending row only (`OnlinePaymentsPanel.jsx`); a
+  settled one shows who decided it, when, and the receipt or the reason (`ProofReviewDialog.jsx`,
+  `proof-review-outcome`), and drops "Visit owes", which the reviewed list does not carry and read
+  ₱0.00.
+- **Portal invitation: "Check the address" for a refused login.** Every nodemailer failure read as a
+  bad address. The cause on this checkout was Gmail refusing the clinic's own login. `sendEmail`
+  now marks `recipientRejected`; anything else is the clinic's ("can't send email right now"). The
+  server checks the mail login at boot. `tests/unit/mailFailure.test.js`.
+- **Payment Methods: see the QR being published.** The edit dialog shows the saved QR, or the file
+  chosen to replace it (`PaymentMethodFormDialog.jsx`, `payment-method-qr-preview`).
+- **Home: a Verify Report button.** Third in the hero, in Book Now's brand style either side of View
+  Services; opens `?verify`. Named so it does not collide with the footer's "Verify a report".
+- **Missing demo report files.** Two seed runs were answered by a backend outside this checkout, so
+  448 result rows and 2 doctor's requests pointed at files never written here.
+  `repairMissingDemoFiles.js` restores them (results: a copy of a named image per row, file columns
+  updated, nothing else touched; requests: redrawn by `demoDoctorRequestPdf.js`, split out of the
+  seed). The seed now fails loudly when this happens again. Run on 2026-10-22 with a sample report
+  image; the previous file columns are saved in `db-backups/`.
+
 ## [1.139.0] - 2026-10-22 (Dark mode: paper keeps its ink; the payment accounts read)
 
 No migration. Front end only.

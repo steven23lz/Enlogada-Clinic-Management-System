@@ -179,7 +179,9 @@ export default function PortalAccessDialog({ open, onOpenChange, patientId, pati
         ) : !access ? (
           <SkeletonList rows={2} />
         ) : (
-          <div className="space-y-3">
+          // A gap, not space-y: every line in here is a `m-0` paragraph, and m-0 cancels space-y's
+          // margin, which left the status line flush against the "Email address" label below it.
+          <div className="flex flex-col gap-3">
             {state === 'linked' && (
               <p className="m-0 flex items-start gap-2 text-note text-slate-700" data-testid="portal-access-linked">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600" aria-hidden="true" />
@@ -194,7 +196,7 @@ export default function PortalAccessDialog({ open, onOpenChange, patientId, pati
             )}
 
             {(state === 'pending' || state === 'expired') && inv && (
-              <div className="space-y-2 rounded-lg border border-line bg-slate-50 p-3" data-testid="portal-access-pending">
+              <div className="flex flex-col gap-2 rounded-lg border border-line bg-slate-50 p-3" data-testid="portal-access-pending">
                 <p className="m-0 flex items-start gap-2 text-note text-slate-800">
                   <MailCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-azure-600" aria-hidden="true" />
                   <span>

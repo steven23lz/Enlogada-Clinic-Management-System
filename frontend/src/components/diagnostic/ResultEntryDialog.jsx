@@ -103,8 +103,12 @@ export default function ResultEntryDialog({ entry, patientHistory }) {
               {entry.isEditing ? 'Correct Released Result' : 'Attach Report & Release Result'}
             </DialogTitle>
             <DialogDescription>
-              Patient: <strong>{entry.activeTest?.first_name} {entry.activeTest?.last_name}</strong> &bull; Examination: <strong>{entry.activeTest?.test_name}</strong>
-              {entry.isEditing && " — the corrected report replaces the old one in the patient's portal."}
+              {/* Two lines, not one joined by a bullet: on a phone the bullet wrapped onto a line of its own. */}
+              <span className="block">Patient: <strong>{entry.activeTest?.first_name} {entry.activeTest?.last_name}</strong></span>
+              <span className="block">
+                Examination: <strong>{entry.activeTest?.test_name}</strong>
+                {entry.isEditing && " — the corrected report replaces the old one in the patient's portal."}
+              </span>
             </DialogDescription>
           </DialogHeader>
 
@@ -203,13 +207,15 @@ export default function ResultEntryDialog({ entry, patientHistory }) {
               </div>
             )}
 
-            <div className="flex justify-end space-x-2 pt-2 border-t border-line">
-              <Button type="button" variant="outline" onClick={entry.close}>Cancel</Button>
+            {/* Stacked on a phone, release on top: in one right-aligned row the three ran off the
+                left edge, and Cancel and Save for Later could not be tapped. */}
+            <div className="flex flex-col-reverse gap-2 pt-2 border-t border-line sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={entry.close} className="w-full sm:w-auto">Cancel</Button>
               <Button
                 type="submit"
                 disabled={entry.saving || (entry.isAmendingReleased && entry.amendmentReason.trim().length < 4)}
                 variant="outline"
-                className="font-bold text-xs px-5 py-2 rounded-xl border-gray-200 flex items-center space-x-1.5"
+                className="w-full sm:w-auto font-bold text-xs px-5 py-2 rounded-xl border-gray-200 flex items-center space-x-1.5"
               >
                 <FileText className="w-4 h-4" />
                 <span>{entry.saving ? 'Saving…' : 'Save for Later'}</span>
@@ -219,7 +225,7 @@ export default function ResultEntryDialog({ entry, patientHistory }) {
                 onClick={entry.requestRelease}
                 disabled={!entry.hasReport()}
                 title={entry.hasReport() ? undefined : 'Attach the report file first'}
-                className="font-bold text-xs px-5 py-2 rounded-xl flex items-center space-x-1.5"
+                className="w-full sm:w-auto font-bold text-xs px-5 py-2 rounded-xl flex items-center space-x-1.5"
               >
                 <Send className="w-4 h-4" />
                 <span>{entry.isEditing ? 'Save Correction & Re-release' : 'Authorize & Release Result'}</span>

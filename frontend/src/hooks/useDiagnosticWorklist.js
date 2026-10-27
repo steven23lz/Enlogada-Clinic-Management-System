@@ -83,6 +83,28 @@ export function useDiagnosticWorklist({ activeNav, roles, mode, paused = false }
    */
   const [deliveryFilter, setDeliveryFilter] = useState('all');
 
+  /**
+   * The status and delivery filters belong to the department they were set on.
+   *
+   * The console stays mounted across the sidebar's departments, so both used to carry over: after
+   * Ultrasound's "Waiting for Release", X-ray's worklist said "Nothing matches this filter" over two
+   * tickets awaiting exam — X-ray shows no status filter, so nothing on screen could clear it — and
+   * its History showed the Sent tab's empty state with no tabs. Both go back to their defaults when
+   * the department changes.
+   *
+   * Reset during render, not in an effect: an effect would let one fetch go out with the old
+   * filter first, which is the last-response-wins race described above. The first resolution is
+   * not a change — Today's "Open History" sets the delivery filter on mount, and that must survive.
+   */
+  const [filtersFor, setFiltersFor] = useState(null);
+  if (categoryResolved && filtersFor !== category) {
+    if (filtersFor !== null) {
+      setStatus('All');
+      setDeliveryFilter('all');
+    }
+    setFiltersFor(category);
+  }
+
   // History searches at the server [1.128.0], so it waits for a pause in typing rather than
   // asking once per keystroke. The worklist still filters the tickets in hand, instantly.
   const [historySearch, setHistorySearch] = useState('');

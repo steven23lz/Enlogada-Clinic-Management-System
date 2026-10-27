@@ -11,6 +11,9 @@ import Reveal from './Reveal';
  * always gets a light ground: its green and azure measure only 2.8–4.3:1 on any dark surface.
  *
  * The Aurora panel is wider than the card and runs below it, so it shows on three sides.
+ *
+ * The caption is `text-balance`: on a 360px phone the tracked uppercase line breaks once, and
+ * unbalanced it left "2011" alone on the second line.
  */
 export default function ClinicShowcase({ photo, caption = 'Serving Bugo since 2011' }) {
   return (
@@ -26,14 +29,14 @@ export default function ClinicShowcase({ photo, caption = 'Serving Bugo since 20
             className="h-full w-full object-cover"
             style={{ objectPosition: photo.position || '50% 50%' }}
           />
-          <figcaption className="absolute inset-x-3 bottom-3 rounded-lg bg-white px-3 py-2 text-center text-meta font-semibold uppercase tracking-[0.18em] text-primary">
+          <figcaption className="absolute inset-x-3 bottom-3 rounded-lg bg-white px-3 py-2 text-center text-meta font-semibold uppercase tracking-[0.18em] text-balance text-primary">
             {caption}
           </figcaption>
         </figure>
       ) : (
         <div className="relative mx-auto flex aspect-[4/5] w-[78%] flex-col items-center justify-center gap-5 rounded-2xl bg-white p-8 text-center shadow-raised">
           <LogoFull className="h-40 sm:h-48" />
-          <p className="m-0 text-meta font-semibold uppercase tracking-[0.18em] text-primary">{caption}</p>
+          <p className="m-0 text-meta font-semibold uppercase tracking-[0.18em] text-balance text-primary">{caption}</p>
         </div>
       )}
     </Reveal>

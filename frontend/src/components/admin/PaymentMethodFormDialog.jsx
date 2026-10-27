@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import api from '../../config/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -14,6 +15,48 @@ import { METHOD_KINDS } from '../../hooks/usePaymentMethodAdmin';
  * anywhere — the money simply goes somewhere else — so the only defence is making it easy to read
  * back against the bank app it was copied from.
  */
+/**
+ * The QR as patients will see it: the one already saved, or the file just chosen to replace it.
+ * Without this the SuperAdmin publishes the image a patient's money follows having only a line of
+ * text — "already saved" — to say which image that is.
+ */
+function QrPreview({ methodId, file }) {
+  const [src, setSrc] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = '';
+    setSrc('');
+    if (file) {
+      objectUrl = URL.createObjectURL(file);
+      setSrc(objectUrl);
+    } else if (methodId) {
+      // Authenticated route, so fetched as a blob rather than a bare <img src> that would 401.
+      api.get(`/payment-methods/${methodId}/qr`, { responseType: 'blob' })
+        .then((res) => {
+          if (cancelled) return;
+          objectUrl = URL.createObjectURL(res.data);
+          setSrc(objectUrl);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [methodId, file]);
+
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt="QR image patients will see"
+      data-testid="payment-method-qr-preview"
+      className="mt-2 h-auto w-36 rounded-lg border border-line bg-[#ffffff] p-1.5"
+    />
+  );
+}
+
 export default function PaymentMethodFormDialog({ paymentMethods }) {
   const { form, editing, submitting, modalError, qrFile } = paymentMethods;
   const isBank = form.kind === 'Bank';
@@ -155,6 +198,9 @@ export default function PaymentMethodFormDialog({ paymentMethods }) {
               <p className="m-0 mt-1 text-fine text-slate-500">
                 A QR image is already saved. Choosing a file replaces it.
               </p>
+            )}
+            {(qrFile || editing?.has_qr) && (
+              <QrPreview methodId={editing?.has_qr ? editing.id : null} file={qrFile} />
             )}
           </div>
 

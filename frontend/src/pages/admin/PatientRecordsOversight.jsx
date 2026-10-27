@@ -245,22 +245,26 @@ const PatientRecordsOversight = ({ onSelectNav }) => {
               aria-label="Search patient records"
             />
             {/* Filters on WHEN THEY WERE LAST HERE, not when the record was typed. Both dates or
-                neither — a half-open range the reader did not intend is worse than no filter. */}
-            <DateField
-              presets={RANGE_PRESETS.start}
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              containerClassName="w-[9.5rem]"
-              aria-label="Seen from"
-            />
-            <span className="pb-2 text-fine text-slate-400">to</span>
-            <DateField
-              presets={RANGE_PRESETS.end}
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              containerClassName="w-[9.5rem]"
-              aria-label="Seen to"
-            />
+                neither — a half-open range the reader did not intend is worse than no filter.
+                The two dates and their "to" are one item, so a phone wraps them as a row rather
+                than leaving "to" dangling at the end of a line. */}
+            <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:w-auto">
+              <DateField
+                presets={RANGE_PRESETS.start}
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                containerClassName="w-full sm:w-[9.5rem]"
+                aria-label="Seen from"
+              />
+              <span className="text-fine text-slate-400">to</span>
+              <DateField
+                presets={RANGE_PRESETS.end}
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                containerClassName="w-full sm:w-[9.5rem]"
+                aria-label="Seen to"
+              />
+            </div>
             <Button type="submit" loading={searching}>Apply</Button>
             {(query || from || to) && (
               <Button
@@ -412,7 +416,7 @@ const PatientRecordsOversight = ({ onSelectNav }) => {
                           )}
 
                           <TableCell className="py-3.5 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
                               {/* Only for accounts holding patients:update; the API enforces the same. */}
                               {canEditPatients && (
                                 <Button type="button" variant="outline" size="xs" onClick={() => setEditingPatient(patient)}>

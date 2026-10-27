@@ -1250,11 +1250,46 @@ body.printing-report {
     border: 0;
   }
 
+  /* [1.142.0] A labelled cell is a grid: the column name on the left, and EVERYTHING the cell
+     holds stacked together on the right. As flex, each child was its own item — a test's name
+     and its category, a patient's name and PT number, "Ref: Dr. …" — and space-between threw
+     them to opposite edges or dropped some under the label, so one value read as three. */
+  /* A desktop cell's `max-w-[10rem] truncate` is a column width; on a card it shrank the value to
+     the middle of the row (Staff Accounts' name, Cashier Monitoring's cashier). */
+  table[data-stack='true'] td {
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+  }
+
+  table[data-stack='true'] td[data-label] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    column-gap: 0.75rem;
+    row-gap: 0.2rem;
+  }
+  table[data-stack='true'] td[data-label] > * {
+    grid-column: 2;
+    justify-self: end;
+    min-width: 0;
+    max-width: 100%;
+  }
+  /* A stack of badges inside the value lines up on the right edge with it. */
+  table[data-stack='true'] td[data-label] > .flex-col {
+    align-items: flex-end;
+  }
+  table[data-stack='true'] td[data-label] > .flex:not(.flex-col) {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
   /* The column name, on the left, quiet — the value is what is being read. */
   table[data-stack='true'] td[data-label]::before {
     content: attr(data-label);
-    flex: 0 0 auto;
-    max-width: 45%;
+    grid-column: 1;
+    grid-row: 1;
+    max-width: 8.5rem;
     text-align: left;
     font-size: 0.6875rem;
     font-weight: 600;
@@ -1263,10 +1298,21 @@ body.printing-report {
     color: var(--color-slate-500, #64748b);
   }
 
-  /* A cell with no label — the actions column — spans the card and sits at the end. */
+  /* A cell with no label — the actions column — spans the card and sits at the end. Its buttons
+     wrap rather than run out of the card's left edge (Patient Records' three). */
   table[data-stack='true'] td:not([data-label]) {
     justify-content: flex-end;
     padding-top: 0.5rem;
+  }
+  table[data-stack='true'] td:not([data-label]) > .flex {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  /* Room between the cards and the panel they sit in, so two borders do not read as one thick
+     edge. */
+  table[data-stack='true'] tbody {
+    padding: 0.5rem 0.5rem 0;
   }
 
   /* An empty-state or error row is a panel, not a card: it must not get the row chrome. */

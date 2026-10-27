@@ -133,7 +133,9 @@ const ServicesPage = ({ onNavigate }) => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 aria-label="Search services by name"
-                placeholder="Search a test — CBC, urinalysis, X-ray…"
+                // Short enough to show whole at 360px; the longer "CBC, urinalysis, X-ray…" was cut.
+                // Keep it starting "Search a test" — the public-site specs find the field by it.
+                placeholder="Search a test, e.g. CBC"
                 // text-base on a phone: iOS zooms the page into any field under 16px.
                 className="min-w-0 flex-1 border-0 bg-transparent text-base text-aurora-ink outline-none placeholder:text-aurora-soft sm:text-sm"
               />

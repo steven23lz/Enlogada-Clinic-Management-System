@@ -52,7 +52,10 @@ const DialogContent = React.forwardRef(({ className, children, onEscapeKeyDown, 
         onEscapeKeyDown?.(event);
       }}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid max-h-[90vh] w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-2xl border border-line bg-surface p-6 shadow-overlay duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
+        // `grid-cols-[minmax(0,1fr)]`: a grid's one implicit column is `auto`, which grows to the
+        // widest child's min-content — one row of unwrappable buttons made the whole booking
+        // dialog wider than a phone, cutting off its title, steps and close button. [1.142.0]
+        "fixed left-[50%] top-[50%] z-50 grid grid-cols-[minmax(0,1fr)] max-h-[90vh] w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-2xl border border-line bg-surface p-6 shadow-overlay duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
         className
       )}
       {...props}>
@@ -72,7 +75,9 @@ const DialogHeader = ({
   ...props
 }) => (
   <div
-    className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)}
+    // Clear of the close button, which sits absolute top-right: a long centred title ran under
+    // it on a phone. [1.142.0]
+    className={cn("flex flex-col space-y-1.5 px-6 text-center sm:pl-0 sm:pr-8 sm:text-left", className)}
     {...props} />
 )
 DialogHeader.displayName = "DialogHeader"

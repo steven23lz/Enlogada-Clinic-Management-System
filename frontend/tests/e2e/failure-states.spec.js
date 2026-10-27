@@ -221,7 +221,7 @@ const FILTERED_QUEUES = [
   { email: 'cashier@enlogada.com', nav: 'Billing Queue', placeholder: /search ticket # or name/i,
     says: /no tickets match/i, mustNotSay: /nothing awaiting payment/i },
   // On the Desk the Who's here box is the queue's search. [1.75.0]
-  { email: 'receptionist@enlogada.com', nav: 'Desk', placeholder: /name, queue # or reference/i,
+  { email: 'receptionist@enlogada.com', nav: 'Desk', placeholder: /name, queue # or ref/i,
     says: /no visits match/i, mustNotSay: /nobody is waiting/i },
   { email: 'lab@enlogada.com', nav: 'Laboratory Worklist', placeholder: /search patient, test, queue/i,
     says: /nothing matches/i, mustNotSay: /nothing waiting in/i },

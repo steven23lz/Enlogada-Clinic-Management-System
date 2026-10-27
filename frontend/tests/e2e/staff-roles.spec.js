@@ -160,7 +160,7 @@ test.describe('Staff roles', () => {
 
   test('Staff Accounts changes them from the row', async ({ page }) => {
     await signInTo(page, 'clinicadmin@enlogada.com', 'Staff Accounts');
-    await page.getByPlaceholder('Search name, email, or role…').fill(email);
+    await page.getByLabel('Search staff by name, email, or role').fill(email);
     const row = page.locator('tbody tr', { hasText: email });
     await expect(row).toBeVisible({ timeout: 15000 });
     await row.getByRole('button', { name: 'Roles' }).click();
