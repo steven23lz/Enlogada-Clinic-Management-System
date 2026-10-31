@@ -82,6 +82,14 @@ const PAY_WINDOW_EXPIRY_SQL = `CURRENT_TIMESTAMP + INTERVAL '${PAY_WINDOW_MINUTE
  */
 const HMO_HOLD_SQL = (date, time) => `(${date})::date + (${time})::time`;
 
+/**
+ * How far ahead a booking must start: the time to pay. [1.144.0] Steven: an hour's notice. Equal
+ * to PAY_WINDOW_MINUTES on purpose, so a patient's time to pay always ends before their slot
+ * starts (utils/bookingNotice.js has the arithmetic).
+ */
+const BOOKING_NOTICE_MINUTES = PAY_WINDOW_MINUTES;
+
 module.exports = {
   OCCUPIES_SLOT, HOLD_MINUTES, HOLD_EXPIRY_SQL, PAY_WINDOW_MINUTES, PAY_WINDOW_EXPIRY_SQL, HMO_HOLD_SQL,
+  BOOKING_NOTICE_MINUTES,
 };

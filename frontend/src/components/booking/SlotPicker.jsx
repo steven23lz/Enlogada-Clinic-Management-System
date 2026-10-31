@@ -11,6 +11,15 @@ const BOOKING_HORIZON_END = () => {
   return toDateInput(d);
 };
 
+/** "1 hour", "2 hours", "90 minutes", as the server says it (utils/bookingNotice.js). */
+const noticeLabel = (minutes) => (minutes % 60 === 0
+  ? `${minutes / 60} hour${minutes === 60 ? '' : 's'}`
+  : `${minutes} minutes`);
+
+// How often today's grid is re-read while it is on screen. [1.144.0] A grid fetched at 10:58
+// offered 11:00 for as long as the page stayed open.
+const TODAY_REFRESH_MS = 60 * 1000;
+
 /**
  * Pick a date, then a time the clinic actually has free.
  *
@@ -43,13 +52,16 @@ const SlotPicker = ({
   const [loading, setLoading] = useState(false);
   const [dayIsOpen, setDayIsOpen] = useState(true);
   const [note, setNote] = useState('');
+  // The booking notice the server applies to today's times (an hour). [1.144.0]
+  const [noticeMinutes, setNoticeMinutes] = useState(null);
   const [error, setError] = useState('');
   // Closed dates, so the calendar can grey them BEFORE the patient picks one. Without this the
   // only way to learn the clinic is shut on the 30th is to choose the 30th — and then guess again.
   const [unavailable, setUnavailable] = useState({});
 
-  const fetchAvailability = useCallback(async (forDate) => {
-    setLoading(true);
+  // `quiet`: a re-read of the same day, which keeps the grid in place instead of a loading line.
+  const fetchAvailability = useCallback(async (forDate, { quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
     setError('');
     try {
       const res = await api.get('/appointments/availability', { params: { date: forDate } });
@@ -57,7 +69,9 @@ const SlotPicker = ({
       setSlots(data.slots || []);
       setDayIsOpen(data.isOpen !== false);
       setNote(data.note || '');
+      setNoticeMinutes(data.noticeMinutes ?? null);
     } catch {
+      if (quiet) return;
       // Distinguished from "no slots": an empty grid after a failed request reads as a fully
       // booked day, which is a different thing to tell a patient than "we could not check".
       setSlots([]);
@@ -76,6 +90,18 @@ const SlotPicker = ({
     }
     fetchAvailability(date);
   }, [date, refreshKey, fetchAvailability]);
+
+  // Today's times run out as the clock moves, so today's grid is re-read every minute: a time
+  // that comes within the booking notice stops being offered, and the effect below clears it if
+  // it was chosen. [1.144.0] The server refuses it either way; this says so before submit.
+  const isToday = date === todayStr();
+  useEffect(() => {
+    if (!isToday) return undefined;
+    const timer = setInterval(() => fetchAvailability(date, { quiet: true }), TODAY_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [isToday, date, fetchAvailability]);
+  const notice = noticeMinutes ? noticeLabel(noticeMinutes) : null;
+  const tooSoonToday = isToday && slots.some((s) => s.tooSoon);
 
   // The clinic's published diary: which weekdays it opens, and which upcoming dates differ.
   // Fetched once — it changes when an administrator edits it, not while a patient fills a form.
@@ -172,12 +198,16 @@ const SlotPicker = ({
           ) : slots.every((s) => !s.available) ? (
             // Open, but every slot is spoken for. Rendering the grid struck through end to end
             // leaves the patient hunting for a gap that is not there.
-            <div className="alert alert-warning">
+            <div className="alert alert-warning" data-testid="slots-none-left">
               <CalendarX2 />
               <span>
-                {note
-                  ? `Fully booked on this date — ${note}. Please choose another day.`
-                  : 'Every time on this date is already booked. Please choose another day.'}
+                {tooSoonToday
+                  // [1.144.0] Late in the day the times are gone because of the notice, not
+                  // because they are booked: "already booked" would be untrue.
+                  ? `There are no more times today${notice ? `: bookings are made at least ${notice} ahead` : ''}. Please choose another day.`
+                  : note
+                    ? `Fully booked on this date — ${note}. Please choose another day.`
+                    : 'Every time on this date is already booked. Please choose another day.'}
               </span>
             </div>
           ) : (
@@ -222,6 +252,11 @@ const SlotPicker = ({
                   );
                 })}
               </div>
+              {tooSoonToday && notice && (
+                <p className="text-micro text-slate-500" data-testid="slots-notice">
+                  Bookings are made at least {notice} ahead, so earlier times today are not offered.
+                </p>
+              )}
               {currentDate === date && currentTime && (
                 <p className="m-0 text-micro text-slate-500">
                   <span className="mr-1 inline-block h-2 w-2 rounded-full bg-brand-300 align-middle" />

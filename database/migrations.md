@@ -1,5 +1,29 @@
 # Database Migration & Schema History
 
+## [1.144.0] - 2026-10-31 (A booking needs an hour's notice)
+
+No migration. Steven: a patient booked 11:00 when it was 11:00, and it went through.
+
+- **What let it through.** The server refused a slot only once its start had passed (`m <= now`),
+  so a booking made at 10:59 for 11:00 was accepted, and the time picker fetched its grid once:
+  opened at 10:58, it went on offering 11:00 after 11:00. A slot a minute away is not one anybody
+  can come to, and under payment first the patient's hour to pay ran past the slot's start.
+- **The rule, his pick: an hour's notice.** At 10:00 the earliest time is 11:00; at 10:01, 11:30.
+  `BOOKING_NOTICE_MINUTES` (`constants/slotHold.js`) is `PAY_WINDOW_MINUTES`, so the time to pay
+  always ends before the slot starts, and moves with `BOOKING_PAYMENT_MINUTES` if that is changed.
+  `assertSlotWithinOperatingHours` refuses a time under it, for booking and rescheduling alike (409,
+  "Bookings are made at least 1 hour ahead. The earliest time today is 11:30 AM.", or "There are no
+  more times today"). Availability marks such a slot unavailable with `tooSoon: true` and returns
+  `noticeMinutes`. The arithmetic is `utils/bookingNotice.js`, with `tests/unit/bookingNotice.test.js`.
+- **The time picker** re-reads today's grid every minute while it is open (quietly, without the
+  loading line), so a time that comes within the hour stops being offered and is unselected if it
+  was chosen. Under the grid it says "Bookings are made at least 1 hour ahead, so earlier times
+  today are not offered" (`slots-notice`); once nothing is left today, it says that, not "already
+  booked" (`slots-none-left`).
+- **Tests:** `booking-notice.spec.js` opens today 00:00-23:59 with a date override (removed after,
+  and skipped if today has an override of its own), then checks the grid, the server's refusal and
+  the picker's wording at whatever hour it runs.
+
 ## [1.143.0] - 2026-10-31 (X-ray reports here again)
 
 No migration, no schema change. Steven: "i want the x-ray results uploading to be back". This

@@ -273,6 +273,16 @@ saved image. Open GCash only OPENS the app (an Android intent with a Play Store 
 `gcash://` on iPhone); nothing can hand GCash the amount and recipient from a personal QR. That
 takes the gateway. The published QR is the clinic's real InstaPay card, shown at its own shape.
 
+**A booking needs an hour's notice.** `[1.144.0]` Steven booked 11:00 at 11:00 and it went
+through: the server refused only a slot whose start had passed, so 10:59 for 11:00 was accepted,
+and a grid opened before 11:00 kept offering it. Today, a time less than `BOOKING_NOTICE_MINUTES`
+away is neither offered (availability marks it `tooSoon`, and returns `noticeMinutes`) nor
+accepted by booking or rescheduling (409 naming the earliest time left, or none). It equals
+`PAY_WINDOW_MINUTES` (`constants/slotHold.js`), so a patient's time to pay ends before the slot
+starts. Arithmetic in `utils/bookingNotice.js` (unit-tested). `SlotPicker` re-reads today's grid
+every minute and says why the earlier times are missing. `booking-notice.spec.js` opens today
+around the clock with a date override to check it at any hour, and removes it after.
+
 **Payment first: an unpaid online booking holds its slot only for the payment window.** `[1.123.0]`
 Whenever the clinic publishes a payment account, a self-pay booking a patient makes is provisional
 for `BOOKING_PAYMENT_MINUTES` (default 60, `PAY_WINDOW_MINUTES` in `constants/slotHold.js`), the

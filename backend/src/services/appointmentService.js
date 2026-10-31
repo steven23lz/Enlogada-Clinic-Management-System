@@ -4,7 +4,8 @@ const db = require('../config/database');
 const { formatTime12 } = require('../constants/clockFormat');
 const { isStaffUser } = require('../constants/roles');
 const paymentGatewayService = require('./paymentGatewayService');
-const { OCCUPIES_SLOT } = require('../constants/slotHold');
+const { OCCUPIES_SLOT, BOOKING_NOTICE_MINUTES } = require('../constants/slotHold');
+const { minuteOfDay, isTooSoon, earliestSlotToday, noticeLabel } = require('../utils/bookingNotice');
 const appointmentRepository = require('../repositories/appointmentRepository');
 const patientRepository = require('../repositories/patientRepository');
 const visitRepository = require('../repositories/visitRepository');
@@ -82,6 +83,8 @@ async function resolveDay(date) {
  * either, but the API is reachable directly and the check is the only thing that makes the
  * availability screen more than a suggestion. [1.124.0] It now asks `resolveDay`, so it also
  * refuses a closed DATE, a time off the slot grid (09:07 was accepted) and a time already gone.
+ * [1.144.0] "Already gone" is now "less than the booking notice away" (an hour): 11:00 booked at
+ * 10:59 went through, and so would 11:00 from a grid fetched before 11:00.
  */
 async function assertSlotWithinOperatingHours(scheduledDate, scheduledTime) {
   const fail = (message, statusCode = 409) => {
@@ -104,8 +107,14 @@ async function assertSlotWithinOperatingHours(scheduledDate, scheduledTime) {
     fail(`Choose one of the times offered: appointments start every ${day.interval} minutes from ${minutesToTime(day.openMinutes)}.`, 400);
   }
   if (scheduledDate === todayLocalDateString()) {
-    const now = new Date();
-    if (requested <= now.getHours() * 60 + now.getMinutes()) fail('That time has already passed today. Choose a later time.');
+    const nowMinute = minuteOfDay(new Date());
+    if (isTooSoon(requested, nowMinute, BOOKING_NOTICE_MINUTES)) {
+      const next = earliestSlotToday({ nowMinute, noticeMinutes: BOOKING_NOTICE_MINUTES, ...day });
+      const notice = `Bookings are made at least ${noticeLabel(BOOKING_NOTICE_MINUTES)} ahead.`;
+      fail(next === null
+        ? `${notice} There are no more times today. Choose another day.`
+        : `${notice} The earliest time today is ${formatTime12(minutesToTime(next))}.`);
+    }
   }
   return { max_concurrent_bookings: day.maxConcurrent };
 }
@@ -149,7 +158,8 @@ function todayLocalDateString() {
  * queue nobody will ever call.
  *
  * INCLUSIVE of today, deliberately. The elapsed part of today is already handled where it
- * belongs, in getAvailableSlots, which marks a time unavailable once it has passed. Rejecting
+ * belongs, in getAvailableSlots and assertSlotWithinOperatingHours, which refuse a time less than
+ * the booking notice away [1.144.0]. Rejecting
  * today outright here would refuse a walk-in booked for this afternoon.
  *
  * String comparison rather than Date arithmetic: both sides are YYYY-MM-DD, which sorts
@@ -326,20 +336,21 @@ class AppointmentService {
     });
 
     const isToday = date === todayLocalDateString();
-    const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    const nowMinute = minuteOfDay(new Date());
 
+    // [1.144.0] Today, a time less than the booking notice away (an hour) is not offered, and
+    // says why (`tooSoon`), so the screen can tell "too soon" from "taken".
     const slots = [];
     for (let m = openMinutes; m < closeMinutes; m += interval) {
       const time = minutesToTime(m);
       const bookedCount = bookedCounts[time] || 0;
-      const isPast = isToday && m <= nowMinutes;
-      slots.push({ time, available: bookedCount < maxConcurrent && !isPast });
+      const tooSoon = isToday && isTooSoon(m, nowMinute, BOOKING_NOTICE_MINUTES);
+      slots.push({ time, available: bookedCount < maxConcurrent && !tooSoon, ...(tooSoon && { tooSoon: true }) });
     }
 
     // `note` rides along on an OPEN day too: "Half day — staff training" is exactly the sort of
     // thing a patient should read before choosing a time, not after arriving.
-    return { date, isOpen: true, slots, note: day.note };
+    return { date, isOpen: true, slots, note: day.note, noticeMinutes: BOOKING_NOTICE_MINUTES };
   }
 
   // Books an appointment and everything that belongs to it in ONE transaction.
