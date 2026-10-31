@@ -408,22 +408,6 @@ function departmentFlow(dept, formStep) {
   };
 }
 
-// The X-ray department gives its results through its own system [1.129.0], so nothing is uploaded,
-// released or emailed here. The technologist marks the exam done on the worklist.
-const XRAY_FLOW = {
-  name: 'X-Ray', actor: 'X-Ray Staff', landing: 'Today',
-  columns: [
-    [{ k: 'proc', l: 'X-Ray Worklist' },
-      { k: 'proc', l: 'Open a released ticket' },
-      { k: 'proc', l: 'Perform the X-ray exam' },
-      { k: 'proc', l: 'Confirm and mark exam done' },
-      { k: 'proc', l: 'Ticket moves to history' }],
-    [{ k: 'proc', l: 'X-Ray History' },
-      { k: 'proc', l: 'Search completed exams' },
-      { k: 'proc', l: 'View exam and who did it' }],
-  ],
-};
-
 const CLIENT_FLOW = {
   name: 'Client Patient', actor: 'Client / Patient', landing: 'View services', gate: false,
   start: 'Open website', chain: true,
@@ -496,9 +480,10 @@ const USE_CASES = [
   { name: 'Ultrasound Staff', actor: 'Ultrasound Staff',
     cases: ['Login', 'View Today', 'View Ultrasound Worklist', 'Upload Ultrasound Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
     relations: [{ from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: 'Print Ultrasound Result', kind: 'extend' }] },
+  // [1.143.0] X-ray uploads and releases its reports here again, as the other departments do.
   { name: 'Xray Staff', actor: 'X-Ray Staff',
-    cases: ['Login', 'View Today', 'View X-Ray Worklist', 'Mark X-Ray Exam Done', 'Search X-Ray History', 'View Patient Records', 'Logout'],
-    relations: [{ from: 'Mark X-Ray Exam Done', to: 'Record Exam Completion', kind: 'include' }] },
+    cases: ['Login', 'View Today', 'View X-Ray Worklist', 'Upload X-Ray Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
+    relations: [{ from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: 'Print X-Ray Result', kind: 'extend' }] },
   { name: 'Client Patient', actor: 'Client / Patient',
     cases: ['Register Account', 'Login', 'View Available Services', 'Manage Patient Profiles', 'Book Appointment', "Upload Doctor's Request", 'Reschedule Booking', 'Pay Online and Upload Proof', 'View Digital Copy of Results', 'View Receipt', 'Answer Visit Feedback', 'Manage Account Profile', 'Logout'],
     relations: [{ from: 'Register Account', to: 'Verify Emailed Code', kind: 'include' }, { from: 'Login', to: 'Sign In with Google', kind: 'extend' }, { from: 'Book Appointment', to: 'Generate QR Booking Pass', kind: 'extend' }, { from: 'Pay Online and Upload Proof', to: 'Confirm Final Tests', kind: 'include' }] },
@@ -567,8 +552,8 @@ const DFD0 = [
     inputs: ['Login details', 'Ultrasound report file', 'Release authorisation', 'Email request'],
     outputs: ['Account confirmed', 'Ultrasound requests', 'Patient details', 'Released result'] },
   { name: 'Xray Staff',
-    inputs: ['Login details', 'Exam marked done'],
-    outputs: ['Account confirmed', 'X-ray requests', 'Patient details', 'Completed exams'] },
+    inputs: ['Login details', 'X-ray report file', 'Release authorisation', 'Email request'],
+    outputs: ['Account confirmed', 'X-ray requests', 'Patient details', 'Released result'] },
   { name: 'Client Patient',
     inputs: ['Registration details', 'Verification code', 'Login details', 'Patient profile', 'Booking and doctor request', 'Reschedule request', 'Proof of payment', 'Visit feedback'],
     outputs: ['Account confirmed', 'Booking reference', 'QR booking pass', 'Reminder and status emails', 'Receipt', 'Digital copy of result'] },
@@ -585,7 +570,7 @@ function dfd0Context() {
     Cashier: 'billing, receipts, takings',
     'Laboratory Staff': 'laboratory results',
     'Ultrasound Staff': 'ultrasound results',
-    'X-Ray Staff': 'x-ray exams done',
+    'X-Ray Staff': 'x-ray results',
     Admin: 'HMO decisions, reports',
     'Super Admin': 'access, services, schedule',
   };
@@ -717,8 +702,7 @@ const P = {
   reports: { n: '18.0', name: 'Generate Reports' },
   notify: { n: '19.0', name: 'Send Emails' },
   audit: { n: '20.0', name: 'Record Audit Trail' },
-  examDone: { n: '21.0', name: 'Record Completed Exam' },
-  feedback: { n: '22.0', name: 'Manage Patient Feedback' },
+  feedback: { n: '21.0', name: 'Manage Patient Feedback' },
 };
 const login = () => ({ ...P.login, in: ['Login details'], out: ['Account confirmed'], stores: [{ id: 'D1', to: 'Check credentials', from: 'Account details' }] });
 
@@ -748,17 +732,13 @@ const DFD1 = [
     { ...P.proof, in: ['Proof decision'], out: ['Payment proofs'], stores: [{ id: 'D4', to: 'Save outcome', from: 'Uploaded proofs' }] },
     { ...P.release, out: ['Sent to department'], stores: [{ id: 'D3', to: 'Set to processing' }] },
     { ...P.reports, in: ['Date range'], out: ['Takings'], stores: [{ id: 'D4', from: 'Payments' }] }] },
-  ...['Laboratory', 'Ultrasound'].map((dept) => ({
+  ...['Laboratory', 'Ultrasound', 'Xray'].map((dept) => ({
     name: `${dept} Staff`, processes: [
       login(),
-      { ...P.results, in: [`${dept} report file`], out: ['Test requests'], stores: [{ id: 'D6', to: 'Save report and version' }, { id: 'D3', from: 'Released tests' }] },
+      { ...P.results, in: [`${dept === 'Xray' ? 'X-ray' : dept} report file`], out: ['Test requests'], stores: [{ id: 'D6', to: 'Save report and version' }, { id: 'D3', from: 'Released tests' }] },
       { ...P.deliver, in: ['Release authorisation'], out: ['Released result'], stores: [{ id: 'D6', to: 'Save release and code' }] },
       { ...P.notify, in: ['Email request'], out: ['Result emailed'], stores: [{ id: 'D9', to: 'Save notification' }] }],
   })),
-  { name: 'Xray Staff', processes: [
-    login(),
-    { ...P.examDone, in: ['Exam marked done'], out: ['X-ray requests'], stores: [{ id: 'D3', to: 'Save exam completion', from: 'Released X-ray tests' }] },
-    { ...P.records, out: ['Patient details'], stores: [{ id: 'D2', from: 'Patient records' }] }] },
   { name: 'Client Patient', processes: [
     { ...P.login, in: ['Registration details', 'Login details'], out: ['Verification code', 'Account confirmed'], stores: [{ id: 'D1', to: 'Save account and code', from: 'Account details' }] },
     { ...P.profiles, in: ['Patient profile'], out: ['Saved profiles'], stores: [{ id: 'D2', to: 'Save profile', from: 'Profile details' }] },
@@ -887,7 +867,7 @@ async function readSchema() {
     flowchart(SUPER_ADMIN_FLOW), flowchart(ADMIN_FLOW), flowchart(RECEPTIONIST_FLOW), flowchart(CASHIER_FLOW),
     flowchart(departmentFlow('Laboratory', 'Upload report file')),
     flowchart(departmentFlow('Ultrasound', 'Upload report file')),
-    flowchart(XRAY_FLOW),
+    flowchart(departmentFlow('X-Ray', 'Upload report file')),
     flowchart(CLIENT_FLOW),
   ]);
   writeFile('usecases.drawio', USE_CASES.map(useCase));

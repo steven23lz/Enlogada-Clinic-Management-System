@@ -3,28 +3,30 @@ import { test, expect, request } from 'playwright/test';
 import { signIn, signInTo } from './helpers/auth.js';
 import { payAndReleaseWalkIn } from './helpers/ticketRelease.js';
 import { patientTypeId } from './helpers/patients.js';
-import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
+import { fixturePerson, fixtureEmail, FIXTURE_CONTACT } from './helpers/people.js';
+import { registerClient } from './helpers/accounts.js';
 import { reportPart } from './helpers/reportFile.js';
+import { runScript } from './helpers/backendScript.js';
 import { todayStr } from './helpers/dates.js';
 import { openPortalTab } from './helpers/portal.js';
 
 /**
- * X-ray issues no report here. [1.129.0]
+ * X-ray reports here again. [1.143.0]
  *
- * The clinic's X-ray department gives its results through its own system, so nothing is uploaded,
- * released or emailed for an X-ray in this one. It still queues and bills here, and the clinic
- * still counts its X-ray patients, so the worklist marks an exam DONE instead: the test completes,
- * the visit completes with it, and the reports count it as the department's work for that day.
+ * From [1.129.0] the X-ray department gave its results through its own system: nothing was
+ * uploaded, released or emailed here for an X-ray, and its worklist marked an exam DONE instead.
+ * Steven asked for X-ray report uploading back, so an X-ray is attached, released and sent like a
+ * laboratory or ultrasound report, and it finishes the same way: by its report, not by a status.
  *
- * The refusals are on the server, not only on the screen. A hidden button that the API still
- * honours is a report sent to a patient that the department never meant to send.
+ * The exams marked done meanwhile stay as they were: Done, with no report to open, send or amend.
+ * Nothing in the API makes one any more, so the last test makes one with `e2eMarkExamDone.js`.
  */
 
 const BACKEND_URL = process.env.E2E_API_URL || 'http://localhost:5000';
 const API = `${BACKEND_URL}/api`;
 const PASSWORD = 'Password123!';
 
-test.describe('X-ray: marked done, never reported here', () => {
+test.describe('X-ray: reported here, like every department', () => {
   let ctx;
   let reception, cashier, xray, lab, admin, client;
   let xrayTest, labTest;
@@ -63,6 +65,12 @@ test.describe('X-ray: marked done, never reported here', () => {
   const markDone = (token, visitTestId) => ctx.patch(`${API}/results/test-status/${visitTestId}`, {
     headers: auth(token), data: { status: 'Completed' },
   });
+  const attachAndRelease = async (token, visitTestId) => {
+    const upload = await ctx.post(`${API}/results/${visitTestId}`, { headers: auth(token), multipart: { file: reportPart('xray') } });
+    expect(upload.status(), await upload.text()).toBeLessThan(300);
+    const release = await ctx.post(`${API}/results/${visitTestId}/release`, { headers: auth(token) });
+    expect(release.status(), await release.text()).toBe(200);
+  };
   const visitStatus = async (visitId) =>
     (await (await ctx.get(`${API}/visits/${visitId}`, { headers: auth(reception) })).json()).data.visit.status;
 
@@ -80,7 +88,7 @@ test.describe('X-ray: marked done, never reported here', () => {
     const workload = await get('staff-workload', 'workload');
     const xr = (rows) => (rows || []).find((r) => r.category_name === 'Xray') || {};
     return {
-      done: Number(xr(ops.diagnostics?.byCategory).released || 0),
+      released: Number(xr(ops.diagnostics?.byCategory).released || 0),
       turnaround: Number(xr(analytics.turnaroundSla).released || 0),
       workload: (workload.diagnosticWorkload || [])
         .filter((r) => r.category_name === 'Xray')
@@ -105,40 +113,40 @@ test.describe('X-ray: marked done, never reported here', () => {
     await ctx?.dispose();
   });
 
-  test('nothing is uploaded, released or emailed for an X-ray; the exam is marked done', async ({ page }) => {
+  test('an X-ray report is attached and released, and finishes the visit', async ({ page }) => {
     const { person, visit, lineFor } = await paidVisit([xrayTest.id]);
     const line = lineFor(xrayTest.id);
 
-    const upload = await ctx.post(`${API}/results/${line}`, { headers: auth(xray), multipart: { file: reportPart('xray') } });
-    expect(upload.status(), 'an upload').toBe(409);
-    expect((await upload.json()).message).toMatch(/X-ray department's own system/i);
-    expect((await ctx.post(`${API}/results/${line}/release`, { headers: auth(xray) })).status(), 'a release').toBe(409);
-    expect((await ctx.post(`${API}/results/${line}/email`, { headers: auth(xray) })).status(), 'an email').toBe(409);
+    // Finished by its report, as every department is: not by setting a status.
+    const byHand = await markDone(xray, line);
+    expect(byHand.status(), 'Completed by hand on an X-ray').toBe(403);
+    expect((await byHand.json()).message).toMatch(/releasing their report/i);
 
     const before = await xrayFigures();
-    const done = await markDone(xray, line);
-    expect(done.status(), await done.text()).toBe(200);
-    expect(await visitStatus(visit.id), 'its only test done, the visit is over').toBe('Completed');
+    await attachAndRelease(xray, line);
+    expect(await visitStatus(visit.id), 'its only test released, the visit is over').toBe('Completed');
 
-    // Once. A second "done" is a mistake, not more work.
-    expect((await markDone(xray, line)).status()).toBe(409);
+    // Emailing is offered as for any report; this patient simply has no address to send to.
+    const email = await ctx.post(`${API}/results/${line}/email`, { headers: auth(xray) });
+    expect((await email.json()).message || '').not.toMatch(/own system/i);
 
     // Counted as the department's work for today, in each report that counts it.
     const after = await xrayFigures();
-    expect(after.done, 'Departments: X-ray done today').toBe(before.done + 1);
+    expect(after.released, 'Departments: X-ray released today').toBe(before.released + 1);
     expect(after.turnaround, "Today's department table").toBe(before.turnaround + 1);
     expect(after.workload, 'Staff Workload').toBe(before.workload + 1);
 
-    // And on the department's History, with who did it.
+    // On the department's History as a report, with the delivery state every report carries.
     const history = (await (await ctx.get(`${API}/results/released/Xray`, {
       headers: auth(xray), params: { days: 0, limit: 50 },
     })).json()).data.released;
     const row = history.find((r) => r.visit_test_id === line);
-    expect(row, 'a done exam is on X-ray History').toBeTruthy();
-    expect(row.performed_at).toBeTruthy();
-    expect(row.performed_by_first_name).toBeTruthy();
+    expect(row, 'a released X-ray is on X-ray History').toBeTruthy();
+    expect(row.result_id).toBeTruthy();
+    expect(row.performed_at).toBeNull();
+    expect(row).toHaveProperty('emailed_at');
 
-    // [1.130.0] Finished, so it is on the patient's record at the front desk, as Done.
+    // Finished, so it is on the patient's file at the front desk, as Released.
     await signInTo(page, 'receptionist@enlogada.com', 'Patient Records');
     await page.getByRole('searchbox', { name: 'Search patient records' }).fill(person.fullName);
     await page.getByRole('button', { name: 'Apply' }).click();
@@ -146,57 +154,16 @@ test.describe('X-ray: marked done, never reported here', () => {
     await expect(patientRow).toBeVisible({ timeout: 20000 });
     await patientRow.getByTestId('patient-records-toggle').click();
     const file = page.getByTestId('patient-file');
-    await expect(file.getByTestId('patient-file-visit')).toHaveCount(1);
-    await expect(file.getByTestId('patient-file-test')).toHaveAttribute('data-state', 'done');
-    await expect(file.getByTestId('patient-file-test')).toContainText('Result from the X-Ray department');
-    await expect(file.getByTestId('patient-file-open')).toHaveCount(0);
+    await expect(file.getByTestId('patient-file-test')).toHaveAttribute('data-state', 'released');
   });
 
-  test('a visit with X-ray and laboratory work ends when both are finished', async () => {
+  test('a visit with X-ray and laboratory work ends when both reports are released', async () => {
     const { visit, lineFor } = await paidVisit([xrayTest.id, labTest.id]);
-    expect((await markDone(xray, lineFor(xrayTest.id))).status()).toBe(200);
+    await attachAndRelease(xray, lineFor(xrayTest.id));
     expect(await visitStatus(visit.id), 'the laboratory test is still out').not.toBe('Completed');
 
-    const labLine = lineFor(labTest.id);
-    await ctx.post(`${API}/results/${labLine}`, { headers: auth(lab), multipart: { file: reportPart('lab') } });
-    expect((await ctx.post(`${API}/results/${labLine}/release`, { headers: auth(lab) })).status()).toBe(200);
+    await attachAndRelease(lab, lineFor(labTest.id));
     expect(await visitStatus(visit.id)).toBe('Completed');
-  });
-
-  // [1.130.0] Patient Records is the final record, and an X-ray done is final with no report. It
-  // listed released reports only, so X-rays dropped out of every patient's record.
-  test('Patient Records keeps an X-ray done in the final record, and nothing pending', async ({ page }) => {
-    const { person, visit, lineFor } = await paidVisit([xrayTest.id, labTest.id]);
-    const patientId = visit.patient_id;
-    const records = async () => (await (await ctx.get(`${API}/results/history/${patientId}`, {
-      headers: auth(admin), params: { released: 'true' },
-    })).json()).data.results;
-
-    expect(await records(), 'nothing is final yet').toHaveLength(0);
-    expect((await markDone(xray, lineFor(xrayTest.id))).status()).toBe(200);
-
-    const rows = await records();
-    expect(rows.map((r) => r.visit_test_id), 'the X-ray, and not the laboratory test still waiting')
-      .toEqual([lineFor(xrayTest.id)]);
-    expect(rows[0].result_id).toBeNull();
-    expect(rows[0].performed_at).toBeTruthy();
-
-    const roster = (await (await ctx.get(`${API}/patients/search`, {
-      headers: auth(admin), params: { q: person.fullName, limit: 50 },
-    })).json()).data.patients.find((p) => p.id === patientId);
-    expect(Number(roster.done_count)).toBe(1);
-    expect(Number(roster.released_count), 'released still means reports').toBe(0);
-
-    await signInTo(page, 'clinicadmin@enlogada.com', 'Patient Records');
-    await page.getByLabel('Search patient records').fill(person.fullName);
-    await page.getByRole('button', { name: 'Apply' }).click();
-    const row = page.locator(`[data-testid="patient-row"][data-patient-id="${patientId}"]`);
-    await expect(row).toContainText('1 X-ray done', { timeout: 20000 });
-    await row.getByTestId('patient-records-toggle').click();
-    const done = page.getByTestId('patient-results').locator('[data-final="done"]');
-    await expect(done).toContainText(xrayTest.name);
-    await expect(done).toContainText('Result given by the X-Ray department');
-    await expect(page.getByTestId('patient-results')).not.toContainText(labTest.name);
   });
 
   test('a department that issues reports is finished by its report, not by a status', async () => {
@@ -206,10 +173,10 @@ test.describe('X-ray: marked done, never reported here', () => {
     expect((await res.json()).message).toMatch(/releasing their report/i);
   });
 
-  test('the X-ray worklist marks an exam done, and the patient is told where the result comes from', async ({ page }) => {
+  test('the X-ray worklist attaches a report, and the patient opens it in the portal', async ({ page }) => {
     // The seeded client's own profile, so the portal half can be checked on the same visit.
     const profile = (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth(client) })).json()).data.patients[0];
-    const { visit, lineFor } = await paidVisit([xrayTest.id], profile.id);
+    const { lineFor } = await paidVisit([xrayTest.id], profile.id);
     const line = lineFor(xrayTest.id);
     const fullName = `${profile.first_name} ${profile.last_name}`;
 
@@ -217,22 +184,75 @@ test.describe('X-ray: marked done, never reported here', () => {
     await page.getByPlaceholder('Search patient, test, queue...').fill(profile.last_name);
     const row = page.locator('tbody tr', { hasText: fullName }).filter({ hasText: xrayTest.name }).first();
     await expect(row).toBeVisible({ timeout: 20000 });
-    // No report to attach or release here: the one action is Mark done.
-    await expect(row.getByRole('button', { name: /Attach Report|Edit Report|Release/ })).toHaveCount(0);
-    await row.getByRole('button', { name: 'Mark done' }).click();
+    await expect(row.getByRole('button', { name: 'Attach Report' })).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Mark done' })).toHaveCount(0);
 
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('heading', { name: 'Mark this exam done?' })).toBeVisible();
-    await dialog.getByRole('button', { name: 'Mark done' }).click();
-    await expect(dialog).toBeHidden({ timeout: 15000 });
+    await attachAndRelease(xray, line);
 
-    const lines = (await (await ctx.get(`${API}/tests/visit-tests/${visit.id}`, { headers: auth(reception) })).json()).data.visitTests;
-    expect(lines.find((l) => l.id === line)?.status, 'marked done from the screen').toBe('Completed');
-
-    // The patient's portal: no "not released yet" that would wait forever, and no report to open.
     await page.context().clearCookies();
     await page.evaluate(() => localStorage.clear());
     await signIn(page, 'client@enlogada.com');
+    await openPortalTab(page, 'results');
+    const item = page.locator('li', { hasText: `REQ-${line}` });
+    await expect(item).toBeVisible({ timeout: 20000 });
+    await expect(item.getByRole('button', { name: 'View report' })).toBeVisible();
+    await expect(item).not.toContainText(/given by the X-Ray department/i);
+  });
+
+  // [1.129.0]-[1.143.0] An exam marked done while X-ray gave results through its own system has
+  // no report. It must still read Done, and offer nothing that needs one.
+  test('an X-ray marked done before reports came back still reads Done, with nothing to send', async ({ page }) => {
+    // A patient of their own, with an account, so the portal half can be read too. The script
+    // only touches a fixture's test, so the profile carries the fixture number.
+    const person = fixturePerson();
+    const email = fixtureEmail(person);
+    const { token } = await registerClient(ctx, { ...person, email, password: PASSWORD });
+    const own = (await (await ctx.post(`${API}/patients`, {
+      headers: auth(token),
+      data: {
+        patientTypeId: await patientTypeId(ctx, API, token, 'Self Pay'),
+        firstName: person.firstName, lastName: person.lastName, birthdate: '1979-05-14', sex: 'Female',
+        address: 'Bugo, Cagayan de Oro City', contactNumber: FIXTURE_CONTACT, emergencyContact: '',
+      },
+    })).json()).data.patient;
+    const { visit, lineFor } = await paidVisit([xrayTest.id], own.id);
+    const line = lineFor(xrayTest.id);
+    runScript('e2eMarkExamDone.js', [`--visit-test=${line}`], 'mark exam done');
+    expect(await visitStatus(visit.id)).toBe('Completed');
+
+    // History lists it as done, outside the "Not sent" pile.
+    const released = async (params) => (await (await ctx.get(`${API}/results/released/Xray`, {
+      headers: auth(xray), params: { days: 0, limit: 200, search: person.lastName, ...params },
+    })).json()).data.released;
+    const row = (await released({})).find((r) => r.visit_test_id === line);
+    expect(row?.result_id ?? null).toBeNull();
+    expect(row?.performed_at).toBeTruthy();
+    expect((await released({ delivery: 'unsent' })).map((r) => r.visit_test_id)).not.toContain(line);
+
+    await signInTo(page, 'xray@enlogada.com', 'X-Ray History');
+    await page.getByPlaceholder('Search patient, test, queue...').fill(person.fullName);
+    const historyRow = page.locator('tbody tr', { hasText: person.fullName }).first();
+    await expect(historyRow).toBeVisible({ timeout: 20000 });
+    await expect(historyRow).toContainText('Marked done');
+    await expect(historyRow).toContainText('No report here');
+    await expect(historyRow.getByRole('button', { name: /View Report|Email|Send again|Edit/ })).toHaveCount(0);
+
+    // Patient Records' final record keeps it, as Done.
+    await page.context().clearCookies();
+    await page.evaluate(() => localStorage.clear());
+    await signInTo(page, 'clinicadmin@enlogada.com', 'Patient Records');
+    await page.getByLabel('Search patient records').fill(person.fullName);
+    await page.getByRole('button', { name: 'Apply' }).click();
+    const patientRow = page.locator(`[data-testid="patient-row"][data-patient-id="${visit.patient_id}"]`);
+    await expect(patientRow).toContainText('1 X-ray done', { timeout: 20000 });
+    await patientRow.getByTestId('patient-records-toggle').click();
+    await expect(page.getByTestId('patient-results').locator('[data-final="done"]'))
+      .toContainText('Result given by the X-Ray department');
+
+    // And the patient is told where that result came from, with no report to open.
+    await page.context().clearCookies();
+    await page.evaluate(() => localStorage.clear());
+    await signIn(page, email, PASSWORD);
     await openPortalTab(page, 'results');
     const item = page.locator('li', { hasText: `REQ-${line}` });
     await expect(item).toBeVisible({ timeout: 20000 });

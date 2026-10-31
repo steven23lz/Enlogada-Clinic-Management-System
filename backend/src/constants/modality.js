@@ -32,16 +32,21 @@ const CATEGORY_TO_STAFF_ROLE = {
 const DIAGNOSTIC_CATEGORIES = ['Laboratory', 'Xray', 'Ultrasound'];
 
 /**
- * Departments whose results are NOT issued through this system. [1.129.0]
+ * Departments whose results are NOT issued through this system. EMPTY since [1.143.0].
  *
- * The X-ray department gives its results through its own system, so nothing is uploaded,
- * released, emailed or verified here for an X-ray test. It still queues, bills and is counted
- * like any other: the worklist marks an exam DONE (visit_tests.performed_at / performed_by), and
- * the reports count those exams beside the released reports of the other departments.
+ * [1.129.0] named X-ray here, because its department gave results through its own system: nothing
+ * was uploaded, released, emailed or verified here for an X-ray, and its worklist marked an exam
+ * DONE instead (visit_tests.performed_at / performed_by). [1.143.0] X-ray uploads and releases its
+ * reports here again, like the other departments. The exams marked done meanwhile stay as they
+ * are: Done, with no report here, which is what History, Patient Records and the portal show for
+ * them, and the reports still count them by `performed_at`.
+ *
+ * A department named here goes back to that rule: upload, release and email refused (409), and
+ * its exam marked done on its worklist.
  *
  * Mirrored in frontend/src/lib/categories.js (`NO_REPORT_CATEGORIES`). Change both together.
  */
-const NO_REPORT_CATEGORIES = ['Xray'];
+const NO_REPORT_CATEGORIES = [];
 
 /** Whether results for this department are uploaded and released in this system. */
 const issuesReports = (categoryName) => !NO_REPORT_CATEGORIES.includes(categoryName);

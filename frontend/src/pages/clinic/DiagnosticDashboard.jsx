@@ -73,7 +73,8 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav, intent }) => 
   // that just happened rather than the state it was fetched with.
   const delivery = useResultDelivery({ onDelivered: worklist.refresh });
 
-  // X-ray: an exam is marked done, not reported here. [1.129.0]
+  // A department that issues no report here marks an exam done instead. [1.129.0] None does since
+  // [1.143.0], when X-ray reported here again; `NO_REPORT_CATEGORIES` is the switch.
   const examDone = useMarkExamDone({ onDone: () => worklist.refresh() });
   const reportsHere = issuesReports(worklist.category);
 

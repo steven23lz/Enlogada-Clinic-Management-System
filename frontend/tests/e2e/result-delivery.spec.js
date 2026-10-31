@@ -381,8 +381,9 @@ test.describe('Where the report is sent', () => {
 
 /**
  * The button belongs to every department that issues reports, not just Laboratory. [1.61.0]
- * [1.129.0] X-ray issues none here: its results come from the X-ray department's own system, so its
- * History says when an exam was done and offers nothing to send.
+ * [1.143.0] X-ray included again: from [1.129.0] it issued none here and its History only said
+ * when an exam was done. An exam marked done then still has nothing to send, so each department's
+ * check reads a row that holds a report (xray-reports.spec.js holds the done ones).
  *
  * `DiagnosticDashboard` is one file serving Laboratory, X-Ray and Ultrasound — a nav id ending
  * `-history` puts it in history mode and it renders one `ResultHistoryPanel` with one `delivery`
@@ -396,21 +397,12 @@ test.describe('Where the report is sent', () => {
  */
 test.describe('Every department that issues reports can send one', () => {
   const DEPARTMENTS = [
-    { account: 'lab@enlogada.com', nav: 'Laboratory History', category: 'Laboratory', reports: true },
-    { account: 'xray@enlogada.com', nav: 'X-Ray History', category: 'Xray', reports: false },
-    { account: 'ultrasound@enlogada.com', nav: 'Ultrasound History', category: 'Ultrasound', reports: true },
+    { account: 'lab@enlogada.com', nav: 'Laboratory History', category: 'Laboratory' },
+    { account: 'xray@enlogada.com', nav: 'X-Ray History', category: 'Xray' },
+    { account: 'ultrasound@enlogada.com', nav: 'Ultrasound History', category: 'Ultrasound' },
   ];
 
-  test('X-ray History says when an exam was done, and offers nothing to send', async ({ page }) => {
-    await signIn(page, 'xray@enlogada.com');
-    await page.getByRole('button', { name: 'X-Ray History' }).first().click();
-    await expect(page.getByRole('columnheader', { name: 'Done' })).toBeVisible({ timeout: 20000 });
-    await expect(page.getByRole('columnheader', { name: 'Sent to patient' })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: 'Not sent' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^(Email|Send again)/ })).toHaveCount(0);
-  });
-
-  for (const dept of DEPARTMENTS.filter((d) => d.reports)) {
+  for (const dept of DEPARTMENTS) {
     test(`${dept.category} carries the delivery column and the action`, async ({ page }) => {
       await signIn(page, dept.account);
       await page.getByRole('button', { name: dept.nav }).first().click();
@@ -422,7 +414,8 @@ test.describe('Every department that issues reports can send one', () => {
       // And the filter that finds the reports nobody was told about.
       await expect(page.getByRole('tab', { name: 'Not sent' })).toBeVisible();
 
-      const firstRow = page.locator('tbody tr').first();
+      // A row holding a report: an X-ray marked done while X-ray reported elsewhere has none.
+      const firstRow = page.locator('tbody tr').filter({ has: page.getByRole('button', { name: 'View Report' }) }).first();
       await expect(firstRow).toBeVisible();
 
       // Either an address to send to, or an explicit statement that there is none. What must
@@ -447,7 +440,7 @@ test.describe('Every department that issues reports can send one', () => {
       expect(res.status(), `${dept.category} reads its own history`).toBe(200);
 
       const rows = (await res.json()).data.released;
-      if (rows.length && dept.reports) {
+      if (rows.length) {
         // The delivery state travels on every department's rows, not only Laboratory's.
         for (const field of ['emailed_at', 'emailed_to', 'email_count', 'patient_email']) {
           expect(rows[0], `${dept.category} row must carry ${field}`).toHaveProperty(field);

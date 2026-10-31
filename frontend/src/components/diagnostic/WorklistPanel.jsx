@@ -51,7 +51,8 @@ function Referrer({ test }) {
  * of a row under a patient's name.
  */
 function TestCells({ test, entry, examDone, canRecord, canRelease, showReferrer = true }) {
-  // X-ray: no report here, so the exam is marked done instead. [1.129.0]
+  // A department that issues no report here marks the exam done instead. [1.129.0] None does
+  // since [1.143.0] (`NO_REPORT_CATEGORIES`), when X-ray attached and released reports again.
   const reportsHere = issuesReports(test.category_name);
   return (
     <>
@@ -133,8 +134,8 @@ export default function WorklistPanel({ worklist, entry, examDone }) {
   // A failed load empties `pending`, so the counts above would read 0. That is a claim about the
   // department's workload, and a false one — the tiles say they don't know instead. [1.74.0]
   const worklistFailed = Boolean(worklist.worklistError);
-  // X-ray marks exams done rather than releasing reports [1.129.0], so it has no "awaiting
-  // release" stage to count or filter by.
+  // A department that marks exams done rather than releasing reports [1.129.0] has no "awaiting
+  // release" stage to count or filter by. None does since [1.143.0].
   const reportsHere = issuesReports(worklist.category);
 
   // Client-side, because the worklist a department holds at once is small — a handful of

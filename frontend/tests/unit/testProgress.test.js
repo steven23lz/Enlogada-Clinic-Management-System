@@ -11,12 +11,14 @@ describe('testProgress', () => {
     expect(p).toMatchObject({ state: 'released', label: `Released ${formatDate(ON)}` });
   });
 
+  // An X-ray marked done from [1.129.0] until [1.143.0], when its department gave results
+  // through its own system. It keeps saying so.
   it('an X-ray done says when, and where its result comes from', () => {
     const p = testProgress({ category: 'Xray', status: 'Completed', done_at: ON });
     expect(p).toMatchObject({ state: 'done', label: `Done ${formatDate(ON)}`, detail: 'Result from the X-Ray department' });
   });
 
-  it('an X-ray released before X-ray stopped issuing reports still reads as released', () => {
+  it('an X-ray report reads as released, like any other [1.143.0]', () => {
     expect(testProgress({ category: 'Xray', status: 'Completed', released_at: ON }).state).toBe('released');
   });
 

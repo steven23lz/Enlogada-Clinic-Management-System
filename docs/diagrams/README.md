@@ -56,8 +56,7 @@ Worth knowing before a panelist asks, because each one differs from the old figu
 - Before taking payment, the cashier confirms the final list of tests with the patient and issues the **receipt** (never the queue number). There is no refund or receipt reversal in the system.
 - Bookings and visits are never cancelled or marked no-show by hand. Unpaid bookings and unpaid visits expire automatically on a timer and log the expiry to the Activity Log; paid bookings that need another date are rescheduled.
 - An Admin decides HMO claims (a claim on a booking must be decided by the booking's start time, shown as "decide by") and generates four-tab A4/Excel reports, but cannot write or release a diagnostic result; the department does that.
-- Laboratory and Ultrasound attach and authorise a report file, placing a marked digital copy with a verification code in the patient's portal. Emailing the report to the patient is an optional choice after release or from History, never automatic on release.
-- The X-ray department gives its results through its own system, so X-Ray staff never upload, release, print, or email a report file here; they mark the exam done on the X-Ray Worklist (`performed_at` and `performed_by`), and the patient's portal says the result comes from the X-ray department.
+- Laboratory, Ultrasound and X-Ray attach and authorise a report file, placing a marked digital copy with a verification code in the patient's portal. Emailing the report to the patient is an optional choice after release or from History, never automatic on release. (From [1.129.0] to [1.143.0] X-ray only marked its exams done; those exams still read Done, with no report.)
 - Results keep their history: an amendment releases a new version and the previous one stays on record.
 - Patients can answer a visit feedback survey in the portal (or have a paper form recorded by the Receptionist from Visit History), and Admin / Super Admin manage the survey questions.
 

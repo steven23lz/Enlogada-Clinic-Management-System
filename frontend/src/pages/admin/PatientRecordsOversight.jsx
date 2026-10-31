@@ -602,7 +602,7 @@ function PatientResults({ id, entry, scoped, onRetry, onView, onPrint }) {
           title="Nothing final yet"
           description={scoped
             ? 'Nothing from your department is finished for this patient yet.'
-            : 'A test appears here once it is finished: its report released, or its X-ray marked done.'}
+            : 'A test appears here once it is finished and its report released.'}
         />
       </div>
     );
@@ -613,7 +613,7 @@ function PatientResults({ id, entry, scoped, onRetry, onView, onPrint }) {
       {entry.rows.map((row) => {
         const printable = Boolean(previewKindFor(row.file_mime_type));
         const releasedBy = [row.released_by_first_name, row.released_by_last_name].filter(Boolean).join(' ');
-        // An exam marked done with no report here (X-ray). [1.130.0]
+        // An exam marked done with no report here: an X-ray from [1.129.0] until [1.143.0]. [1.130.0]
         if (!row.result_id) {
           const doneBy = [row.performed_by_first_name, row.performed_by_last_name].filter(Boolean).join(' ');
           return (

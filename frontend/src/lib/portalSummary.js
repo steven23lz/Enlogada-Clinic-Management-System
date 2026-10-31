@@ -1,6 +1,5 @@
 import { toDateInput, formatAppointmentDate, formatTime12 } from './date';
 import { formatCurrency } from './currency';
-import { issuesReports } from './categories';
 
 /**
  * What the patient portal's Home says, worked out from what its tabs already hold. [1.81.0]
@@ -66,8 +65,9 @@ const releasedTime = (r) => {
 export function latestResults(history = [], limit = 3) {
   return history
     .filter((r) => r.test_status === 'Completed')
-    // An X-ray exam marked done has no report here [1.129.0]: there is nothing to open.
-    .filter((r) => issuesReports(r.category_name) || r.file_path)
+    // An exam marked done has no report here, so there is nothing to open: an X-ray from
+    // [1.129.0] until [1.143.0], when X-ray gave its results through its own system.
+    .filter((r) => r.result_id || r.file_path)
     .sort((a, b) => releasedTime(b) - releasedTime(a))
     .slice(0, limit);
 }

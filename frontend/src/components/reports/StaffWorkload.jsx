@@ -63,7 +63,7 @@ const StaffWorkload = () => {
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-surface p-5 rounded-xl border border-line">
         <div className="space-y-1">
           <h3 className="text-sm font-bold text-slate-900 m-0">Per-Staff Workload</h3>
-          <p className="text-xs text-gray-500 m-0">Reception check-ins, and diagnostic work by staff member: reports released, and X-ray exams marked done.</p>
+          <p className="text-xs text-gray-500 m-0">Reception check-ins and diagnostic results released (or exams marked done), by staff member.</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
           {/* One item, so a phone keeps both dates and their "to" on one row and wraps the buttons below. */}
@@ -131,13 +131,13 @@ const StaffWorkload = () => {
         <Card className="border-line rounded-xl bg-surface overflow-hidden">
           <CardHeader className="flex flex-row items-center gap-2.5 border-b border-line px-5 py-3.5">
             <FlaskConical className="w-4 h-4 text-brand-600" />
-            <CardTitle className="text-note font-semibold text-slate-900">Diagnostic — Reports Released and X-rays Done</CardTitle>
+            <CardTitle className="text-note font-semibold text-slate-900">Diagnostic — Results Released by Staff</CardTitle>
           </CardHeader>
           <CardContent className="p-5 space-y-3">
             {loading ? (
               <div className="h-44 animate-pulse rounded-lg bg-skeleton" />
             ) : diagnosticRows.length === 0 ? (
-              <p className="py-10 text-center text-fine text-slate-500">No report released and no X-ray done in this range.</p>
+              <p className="py-10 text-center text-fine text-slate-500">No results released in this range.</p>
             ) : (
               diagnosticRows.map(row => (
                 <div key={row.staff_id} className="space-y-1">

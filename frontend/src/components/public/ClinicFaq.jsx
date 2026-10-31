@@ -58,10 +58,9 @@ export default function ClinicFaq() {
       question: 'How will I get my results?',
       answer: (
         <p className="m-0">
-          If you have an account, a released laboratory or ultrasound result appears in your patient
-          portal, where you can read a digital copy at any time, and the clinic can email it to you on
-          request. The original, with the official seal, is given to you at the clinic. X-ray results
-          are given to you by the X-ray department.
+          If you have an account, a released result appears in your patient portal, where you can read
+          a digital copy at any time, and the clinic can email it to you on request. The original, with
+          the official seal, is given to you at the clinic.
         </p>
       ),
     },

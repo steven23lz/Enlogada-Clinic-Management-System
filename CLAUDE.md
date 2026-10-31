@@ -105,7 +105,7 @@ node src/scripts/migrateRemoveResultForms.js  # [1.109.0] drop the five typed re
 node src/scripts/migrateAuthorisedIndex.js      # [1.110.0] index authorised_at, which every report now reads as "released" (--rollback reverses it)
 node src/scripts/migrateVisitFeedback.js        # [1.112.0] patient feedback: 2 tables, 6 visit columns, 2 permissions, the paper form's 4 questions (--rollback reverses it)
 node src/scripts/migrateReportVerification.js   # [1.126.0] a verification code per released report version; backfills released ones (--rollback reverses it)
-node src/scripts/migrateExamPerformed.js        # [1.129.0] visit_tests.performed_at/_by: an X-ray exam marked done (--rollback reverses it)
+node src/scripts/migrateExamPerformed.js        # [1.129.0] visit_tests.performed_at/_by: an X-ray exam marked done (--rollback reverses it; KEEP it: [1.143.0] brought X-ray reports back, and the exams marked done meanwhile live in these columns)
 node src/scripts/migrateUnpaidIsTemporary.js    # [1.131.0] removes never-paid Cancelled / No Show visits (Activity Log line each), drops [1.130.0]'s closed_reason/_at, retires appointments:cancel
 node src/scripts/migrateHmoApprovalFirst.js      # [1.132.0] HMO bookings wait for their claim until their start; a refused one gets the payment window (data only; --rollback reverses it)
 node src/scripts/migratePatientInvitations.js    # [1.136.0] portal invitations, unlink, users.email_verified_at, visits.booked_online (--rollback reverses it); then setupRbac.js
@@ -748,8 +748,8 @@ typed. They now count a test once, at its FIRST authorised version (`FIRST_RELEA
 holder of `results:read` opens a patient's name and gets their authorised results, newest visit
 first, each with View and Print (`GET /results/history/:id?released=true`; a department sees its
 own). `[1.130.0]` The final record is every FINISHED test: a released report, or an X-ray marked
-done (`result_id` null, `performed_at` set, "Result given by the X-Ray department", no buttons),
-which had dropped out once X-ray stopped issuing reports. Nothing pending. The roster counts them
+done while X-ray reported elsewhere (`result_id` null, `performed_at` set, "Result given by the
+X-Ray department", no buttons; [1.129.0] to [1.143.0]). Nothing pending. The roster counts them
 apart: `released_count` is still reports, `done_count` / `last_done_at` are X-rays done. The front desk and the till see who the patient is and when they were here; the roster sends
 them no result columns (`patientRepository.findPatients({ includeResults })`), and the screen
 shows no Results column. `[1.116.0]` Their name opens the patient's FILE instead
@@ -1416,19 +1416,23 @@ Services Catalogue.
   their three historical rows stay: removing a feature is not a reason to erase the record that
   a clinician judged a value dangerous and somebody telephoned a patient about it. Nothing
   writes or displays them.
-- **X-ray issues no report here; its exams are marked done.** `[1.129.0]` The clinic's X-ray
-  department gives its results through its own system. `NO_REPORT_CATEGORIES` / `issuesReports`
-  (`constants/modality.js`, mirrored in `lib/categories.js`; change both) name such departments,
-  and it is `['Xray']`. Upload, release and email are refused on the server (409). The worklist's
-  one action is Mark done: `PATCH /results/test-status/:id` with `Completed` stamps
-  `visit_tests.performed_at` / `performed_by`, completes the test, and the visit if nothing else is
-  outstanding. A department that issues reports is refused there (403), because its tests finish
-  by releasing: that endpoint used to let anyone complete a test with no report at all. Every
-  report that counts released work counts an exam done the same way (Departments throughput and
-  turnaround, Today's department table, Staff Workload; `reportRepository` UNIONs the two). X-Ray
-  History shows "Done" and who, with no delivery column or Email; the portal says the result comes
-  from the X-Ray department and leaves it out of "Latest results". X-ray still queues and bills.
-  `xray-no-report.spec.js` holds it.
+- **X-ray reports here again; its exams marked done meanwhile stay Done.** `[1.143.0]` Steven:
+  "i want the x-ray results uploading to be back". From `[1.129.0]` X-ray gave its results through
+  its own system and its worklist only marked an exam done. Now it attaches, releases and emails a
+  report like Laboratory and Ultrasound, and finishes by releasing it. `NO_REPORT_CATEGORIES` /
+  `issuesReports` (`constants/modality.js`, mirrored in `lib/categories.js`; change both) is the
+  switch, and it is EMPTY. A department named there goes back to the [1.129.0] rule: upload,
+  release and email refused (409), and its worklist's one action is Mark done (`PATCH
+  /results/test-status/:id` with `Completed` stamps `visit_tests.performed_at` / `performed_by`).
+  With none named, that endpoint answers 403 to every department: a test finishes by its report.
+  **An exam marked done has no report, and every screen judges that ROW by ROW, never by its
+  department**: `result_id` null and `performed_at` set. History shows "Marked done" and "No report
+  here" with no View, Email or Edit, and keeps it out of "Not sent"; Patient Records and the
+  Desk's file say Done and "Result given by the X-Ray department"; the portal says so and leaves it
+  out of "Latest results" (`portalSummary.latestResults` keeps rows with a `result_id`). The reports
+  still count those exams by `performed_at` (`reportRepository` UNIONs them with released reports).
+  `xray-reports.spec.js` holds both halves; `e2eMarkExamDone.js` makes a done exam for it, since no
+  API can.
 - **A result is its attached report document.** `[1.94.0]` Findings, remarks, the structured
   measurement grid and the quick-fill templates were all removed: the clinic already produces a
   report file for every diagnosis, and asking a technologist to re-enter it was work done twice.

@@ -3,9 +3,10 @@ import api from '../config/api';
 import { toastSuccess } from '../lib/toast';
 
 /**
- * Mark an exam done, in a department that issues no report here (X-ray). [1.129.0]
+ * Mark an exam done, in a department that issues no report here. [1.129.0] X-ray was one until
+ * [1.143.0], and none is now (`NO_REPORT_CATEGORIES`), so nothing reaches this; it stays for the switch.
  *
- * The X-ray department gives its results through its own system, so its worklist does not attach
+ * Such a department gives its results through its own system, so its worklist does not attach
  * or release a report: the technologist marks the exam done once it has been taken, and the ticket
  * leaves the worklist. The server records when and by whom (visit_tests.performed_at / _by), which
  * is what the reports count, and completes the visit when nothing else on it is outstanding.

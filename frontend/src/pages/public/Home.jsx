@@ -70,8 +70,8 @@ const DEPARTMENTS = [
     id: 'xray',
     icon: Scan,
     name: 'Digital X-Ray',
-    // [1.129.0] X-ray results are given by the X-ray department's own system, not through this one.
-    body: 'Chest and other views on digital X-ray. The X-ray department gives you your result.',
+    // [1.143.0] Released here again, like the other departments' ([1.129.0] had sent it elsewhere).
+    body: 'Chest and other views on digital X-ray, released together with the rest of your results.',
   },
 ];
 
@@ -86,8 +86,8 @@ const STEPS = [
   },
   {
     title: 'Receive your results',
-    // [1.113.0] [1.129.0] Emailed on request, not automatically; X-ray results come from the X-ray department.
-    body: 'Laboratory and ultrasound results appear in your patient portal if you have an account, and the clinic emails a copy on request.',
+    // [1.113.0] Emailed on request, not automatically. [1.143.0] Every department's, X-ray included.
+    body: 'Your results appear in your patient portal if you have an account, and the clinic emails a copy on request.',
   },
 ];
 
@@ -138,8 +138,8 @@ const Home = ({ onNavigate, section = null }) => {
               </h1>
             </Reveal>
             <Reveal as="p" index={2} className="m-0 mt-5 max-w-2xl text-sm leading-relaxed text-aurora-soft sm:text-lg">
-              Ultrasound, laboratory and digital X-ray in Bugo, Cagayan de Oro — with your laboratory and
-              ultrasound results in your patient portal.
+              Ultrasound, laboratory and digital X-ray in Bugo, Cagayan de Oro — with your results in your
+              patient portal.
             </Reveal>
             <Reveal index={3} className="mt-8 flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row">
               <Button variant="brand" size="lg" onClick={() => go('login')} className="rounded-full px-8">
@@ -175,8 +175,8 @@ const Home = ({ onNavigate, section = null }) => {
               names are on your report.
             </FeatureCard>
             <FeatureCard index={1} icon={Clock} title="Fast, Digital Results">
-              Laboratory and ultrasound results appear in your patient portal as soon as they are released,
-              and a copy is emailed on request.
+              Your results appear in your patient portal as soon as they are released, and a copy is
+              emailed on request.
             </FeatureCard>
             <FeatureCard index={2} icon={Award} title="HMO & Private Support">
               Accredited HMO providers, private and self-pay billing, and the Senior Citizen and PWD discount

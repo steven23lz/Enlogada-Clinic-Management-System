@@ -146,9 +146,10 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
                         </div>
                       </div>
 
-                      {!issuesReports(item.category_name) && !item.file_path ? (
-                        // X-ray [1.129.0]: its results come from the X-ray department's own system,
-                        // so there is nothing here to open, and "not released yet" would wait forever.
+                      {(!issuesReports(item.category_name) || (item.test_status === 'Completed' && !item.result_id)) && !item.file_path ? (
+                        // An exam marked done with no report here: X-ray from [1.129.0] until
+                        // [1.143.0] gave its results through its own system, so there is nothing
+                        // here to open, and "not released yet" would wait forever.
                         <p className="m-0 flex max-w-xs items-start gap-1.5 text-fine text-slate-500">
                           <CheckCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
                           <span>

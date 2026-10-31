@@ -33,9 +33,6 @@ Enlogada is a diagnostic clinic in Bugo, Cagayan de Oro. It offers three service
                                        Report released  ->  Patient portal / email  ->  Anyone can verify it
 ```
 
-X-ray is the exception: the X-ray department gives its results through its own system, so its
-worklist only marks an exam **done**. It still queues, bills and counts here.
-
 It also keeps the money records (receipts, discounts, HMO claims), reports for the owner, patient
 feedback, and an activity log of who did what.
 
@@ -45,8 +42,7 @@ feedback, and an activity log of who did what.
 |---|---|---|
 | Receptionist | Registers walk-ins, checks in bookings | Desk, Visit History |
 | Cashier | Takes payments, checks online payment proofs | Billing Queue, Online Payments, Transaction History |
-| Laboratory / Ultrasound Staff | Does the test, attaches and releases the report | Worklist, History |
-| X-ray Staff | Does the exam and marks it done (no report here) | X-Ray Worklist, X-Ray History |
+| Laboratory / Ultrasound / X-ray Staff | Does the test, attaches and releases the report | Worklist, History |
 | Admin | Manages the clinic: staff, services, reports | Reports, Staff Accounts, Services Catalog, and more |
 | SuperAdmin | Everything Admin can, plus who-can-do-what | Super Admin |
 | Client (patient) | Books, pays, reads their own results | The patient portal |

@@ -1,5 +1,40 @@
 # Database Migration & Schema History
 
+## [1.143.0] - 2026-10-31 (X-ray reports here again)
+
+No migration, no schema change. Steven: "i want the x-ray results uploading to be back". This
+reverses [1.129.0]'s "X-ray issues no report here", and keeps everything that rule left behind.
+
+- **The switch is emptied, not removed.** `NO_REPORT_CATEGORIES` (`constants/modality.js`, mirrored
+  in `lib/categories.js`) is `[]`. X-ray attaches, releases and emails a report like Laboratory and
+  Ultrasound, the patient views it in the portal (marked DIGITAL COPY, with a verification code),
+  and the test and the visit finish when it is released. `PATCH /results/test-status/:id` now
+  answers 403 to every department ("finished by releasing their report"). Naming a department in
+  the list again restores [1.129.0] for it, Mark done included; nothing else needs to change.
+- **An exam marked done meanwhile keeps reading Done.** Such a test has `performed_at` and no
+  `result_id`. With X-ray reporting again, its department no longer tells a screen that a row has no
+  report, so every reader now asks the ROW:
+  - X-Ray History: "Marked done by …", and "No report here; the result was given by the X-Ray
+    department" in Sent to patient, with no View Report, Email or Edit. The "Not sent" filter adds
+    `tr.id IS NOT NULL`, or every done exam would sit in the pile of reports nobody was sent.
+  - The portal: a Completed test with no `result_id` says "Done. Your X-Ray result is given by the
+    X-Ray department, not in this portal", with no View report, and `latestResults` keeps only rows
+    with a `result_id` (it filtered by department).
+  - Patient Records, the Desk's patient file and the reports were already per row
+    (`result_id`, `done_at`, `performed_at`) and are unchanged.
+- **Copy:** Home, About and the FAQ say results (not "laboratory and ultrasound results") reach the
+  portal, as before [1.129.0]. The Reports wording names "an exam marked done" rather than X-ray.
+- **Demo seed:** X-ray is reported and released again, and today's scenario 2 is back to the AMENDED
+  chest X-ray report (two versions). The development database held no X-ray marked done (it was last
+  seeded before [1.129.0]: 35 X-ray reports, 0 done), so nothing there needed moving.
+- **Tests:** `xray-no-report.spec.js` became `xray-reports.spec.js`: an X-ray report attached and
+  released, counted in Departments, Today and Staff Workload, on the patient's file as Released, and
+  opened in the portal; status-by-hand refused for X-ray and laboratory alike; and an exam marked
+  done before this still reading Done on History, Patient Records and the portal.
+  `e2eMarkExamDone.js` (fixtures only, refuses production) makes that exam, since no API can.
+  `result-delivery.spec.js` checks X-ray among the departments that send reports. Unit tests for
+  `departmentNeeds` (X-ray has both halves again), `latestResults` and `testProgress` follow.
+
 ## [1.142.0] - 2026-10-22 (The whole app at phone width)
 
 No migration. Front end only, plus one functional fix found on the way.

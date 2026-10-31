@@ -69,23 +69,24 @@ describe('owing', () => {
 
 describe('latestResults and isNewResult', () => {
   const history = [
-    { visit_test_id: 1, test_status: 'Completed', released_at: at(9, 1).toISOString() },
-    { visit_test_id: 2, test_status: 'Processing', released_at: null },
-    { visit_test_id: 3, test_status: 'Completed', released_at: at(9, 12).toISOString() },
-    { visit_test_id: 4, test_status: 'Completed', released_at: at(8, 20).toISOString() },
+    { visit_test_id: 1, result_id: 11, test_status: 'Completed', released_at: at(9, 1).toISOString() },
+    { visit_test_id: 2, result_id: null, test_status: 'Processing', released_at: null },
+    { visit_test_id: 3, result_id: 13, test_status: 'Completed', released_at: at(9, 12).toISOString() },
+    { visit_test_id: 4, result_id: 14, test_status: 'Completed', released_at: at(8, 20).toISOString() },
   ];
 
   it('lists released results only, newest first', () => {
     expect(latestResults(history, 2).map((r) => r.visit_test_id)).toEqual([3, 1]);
   });
 
-  it('leaves out an X-ray exam marked done: its result is not in the portal [1.129.0]', () => {
+  it('leaves out an exam marked done with no report here, and lists an X-ray report [1.143.0]', () => {
     const withXray = [
       ...history,
-      { visit_test_id: 5, test_status: 'Completed', category_name: 'Xray', released_at: null, visit_date: at(9, 13).toISOString() },
-      { visit_test_id: 6, test_status: 'Completed', category_name: 'Xray', file_path: 'r.pdf', released_at: at(9, 10).toISOString() },
+      { visit_test_id: 5, result_id: null, test_status: 'Completed', category_name: 'Xray', released_at: null, visit_date: at(9, 13).toISOString() },
+      { visit_test_id: 6, result_id: 16, test_status: 'Completed', category_name: 'Xray', file_path: 'r.pdf', released_at: at(9, 10).toISOString() },
     ];
-    // 5 has no report here; 6 is an X-ray report released before the change, and still opens.
+    // 5 was marked done while X-ray gave results through its own system [1.129.0]: nothing to
+    // open. 6 is an X-ray report, which is in the portal like any other.
     expect(latestResults(withXray, 5).map((r) => r.visit_test_id)).toEqual([3, 6, 1, 4]);
   });
 

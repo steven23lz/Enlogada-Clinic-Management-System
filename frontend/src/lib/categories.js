@@ -54,12 +54,14 @@ export const CATEGORY_ORDER = ['Laboratory', 'Ultrasound', 'Xray', 'ECG'];
 export const OFFERED_CATEGORIES = ['Laboratory', 'Ultrasound', 'Xray'];
 
 /**
- * Departments whose results are NOT issued through this system. [1.129.0] The X-ray department
- * gives its results through its own system: its worklist marks an exam done instead of attaching
- * and releasing a report, and the portal says where the result comes from. Mirrors
- * NO_REPORT_CATEGORIES in backend/src/constants/modality.js; change both together.
+ * Departments whose results are NOT issued through this system. EMPTY since [1.143.0], when X-ray
+ * began uploading and releasing its reports here again; [1.129.0] had named it. A department named
+ * here has its worklist mark an exam done instead of attaching and releasing a report, and the
+ * portal says where the result comes from. An exam marked done while X-ray was named keeps reading
+ * Done, row by row (it has `performed_at` and no result). Mirrors NO_REPORT_CATEGORIES in
+ * backend/src/constants/modality.js; change both together.
  */
-export const NO_REPORT_CATEGORIES = ['Xray'];
+export const NO_REPORT_CATEGORIES = [];
 
 /** Whether this department's results are uploaded and released in this system. */
 export const issuesReports = (categoryName) => !NO_REPORT_CATEGORIES.includes(categoryName);

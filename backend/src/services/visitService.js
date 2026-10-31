@@ -405,7 +405,7 @@ class VisitService {
     if (status === 'Completed' || status === 'Pending') {
       const error = new Error(
         status === 'Completed'
-          ? 'A visit is completed when its last test is finished (its report released, or an X-ray marked done); it cannot be set by hand.'
+          ? 'A visit is completed when its last test is finished (its report released); it cannot be set by hand.'
           : 'A visit cannot be put back to waiting. Start a new visit for the patient.'
       );
       error.statusCode = 409;

@@ -1,13 +1,20 @@
 # Handoff: open threads
 
-Last updated 2026-10-22, after [1.136.0]. For the next Claude Code agent working in this repo.
+Last updated 2026-10-31, after [1.143.0]. For the next Claude Code agent working in this repo.
 CLAUDE.md and the project memory load on their own; this file holds what they do not.
 
 The diagram update this file used to brief is done: [1.133.0] made it and [1.134.0] checked it
-against the code and corrected it (see `database/migrations.md`). The diagrams match the system as
-of [1.132.0]. After the next change to a process, re-run the check [1.134.0] describes.
+against the code and corrected it (see `database/migrations.md`). [1.143.0] drew X-ray as a
+reporting department again (flowchart, use case, DFD 0 and 1; process 21.0 is now Manage Patient
+Feedback). After the next change to a process, re-run the check [1.134.0] describes.
 
 ## Open threads
+
+- **[1.143.0] X-ray reports here again.** `NO_REPORT_CATEGORIES` is empty; X-ray exams marked done
+  from [1.129.0] until then stay Done, judged row by row (`result_id` null). Nothing to run on
+  another database. The demo seed draws X-ray reports again; re-seed before a demo.
+- **The ERD leaves out `patient_invitations`** ([1.136.0]): `buildDiagrams.cjs` reports it missing
+  from its sheets. The diagrams also have no invitation flow yet. Offered to Steven, not answered.
 
 - **[1.136.0] Portal invitations for walk-ins are built** (see `docs/PORTAL_ACCESS_GUIDE.md` for the
   staff how-to, migrations.md for the design). On another database run

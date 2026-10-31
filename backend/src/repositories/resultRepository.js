@@ -115,7 +115,8 @@ class ResultRepository {
      * pile someone needs to work through.
      */
     const deliveryClause =
-      delivery === 'unsent' ? 'AND tr.emailed_at IS NULL'
+      // `tr.id`: an exam marked done has no report to send [1.129.0], so it is never "not sent".
+      delivery === 'unsent' ? 'AND tr.id IS NOT NULL AND tr.emailed_at IS NULL'
         : delivery === 'sent' ? 'AND tr.emailed_at IS NOT NULL'
           : '';
     const params = [categoryName];
@@ -163,7 +164,8 @@ class ResultRepository {
              -- uses another.
              COALESCE(NULLIF(p.email, ''), pu.email) as patient_email,
              u.first_name as released_by_first_name, u.last_name as released_by_last_name,
-             -- An exam marked done in a department that issues no report here (X-ray). [1.129.0]
+             -- An exam marked done in a department that issued no report here: X-ray from
+             -- [1.129.0] until [1.143.0]. Those rows have no result_id.
              vt.performed_at,
              perf.first_name as performed_by_first_name, perf.last_name as performed_by_last_name,
              -- Every row that matched, before LIMIT, so a paged screen can say how many there are.

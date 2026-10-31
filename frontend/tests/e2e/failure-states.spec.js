@@ -225,7 +225,8 @@ const FILTERED_QUEUES = [
     says: /no visits match/i, mustNotSay: /nobody is waiting/i },
   { email: 'lab@enlogada.com', nav: 'Laboratory Worklist', placeholder: /search patient, test, queue/i,
     says: /nothing matches/i, mustNotSay: /nothing waiting in/i },
-  { email: 'admin@enlogada.com', nav: 'Staff Accounts', placeholder: /search name, email, or role/i,
+  // [1.142.0] shortened the placeholder to fit a phone; the box is still named in full for a reader.
+  { email: 'admin@enlogada.com', nav: 'Staff Accounts', placeholder: /^search staff/i,
     says: /no staff match/i, mustNotSay: /no staff accounts yet/i },
 ];
 

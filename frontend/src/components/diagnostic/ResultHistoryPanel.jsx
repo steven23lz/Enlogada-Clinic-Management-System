@@ -40,8 +40,9 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
   // last 90 days in hand; a department's released reports are not a handful of tickets.
   const paged = worklist.released;
   const totalPages = worklist.releasedPages;
-  // X-ray [1.129.0]: exams marked done, with no report here to view, email or amend. An X-ray
-  // report released before that change still opens.
+  // A department that issues no report here lists exams marked done (`NO_REPORT_CATEGORIES`).
+  // None does since [1.143.0], but an X-ray marked done while X-ray did [1.129.0] is still on its
+  // History: a row with `performed_at` and no `result_id`, so each row is judged by what it holds.
   const reportsHere = issuesReports(worklist.category);
   const columns = reportsHere ? 6 : 5;
 
@@ -140,9 +141,10 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                       {test.performed_at ? (
                         <>
                           <DateTime value={test.performed_at} />
-                          {test.performed_by_first_name && (
-                            <span className="block text-meta text-slate-500">by {test.performed_by_first_name} {test.performed_by_last_name}</span>
-                          )}
+                          <span className="block text-meta text-slate-500">
+                            {reportsHere ? 'Marked done' : ''}
+                            {test.performed_by_first_name && `${reportsHere ? ' by' : 'by'} ${test.performed_by_first_name} ${test.performed_by_last_name}`}
+                          </span>
                         </>
                       ) : (
                         <>
@@ -156,7 +158,11 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
 
                     {reportsHere && (
                     <TableCell label="Sent to patient" className="py-3.5 text-fine">
-                      {test.emailed_at ? (
+                      {!test.result_id ? (
+                        // An X-ray marked done while its department gave results through its own
+                        // system [1.129.0]: there is no report here to send.
+                        <span className="text-slate-500">No report here; the result was given by the {categoryLabel} department</span>
+                      ) : test.emailed_at ? (
                         <span className="inline-flex items-center gap-1.5 font-semibold text-brand-700">
                           <MailCheck className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
                           <span>
@@ -189,13 +195,13 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
 
                     <TableCell className="py-3.5 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {(reportsHere || test.result_id) && (
+                        {test.result_id && (
                           <Button onClick={() => onViewResult(test)} variant="outline" size="xs">
                             <Eye className="h-3 w-3" />
                             <span>View Report</span>
                           </Button>
                         )}
-                        {canSend && reportsHere && (
+                        {canSend && reportsHere && test.result_id && (
                           <Button
                             onClick={() => delivery.requestSend(test)}
                             variant="outline"
@@ -210,7 +216,7 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                             <span>{test.emailed_at ? 'Send again' : 'Email'}</span>
                           </Button>
                         )}
-                        {canAmend && reportsHere && (
+                        {canAmend && reportsHere && test.result_id && (
                           <Button
                             onClick={() => entry.openForEdit(test)}
                             variant="outline"

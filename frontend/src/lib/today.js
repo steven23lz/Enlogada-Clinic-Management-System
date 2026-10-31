@@ -205,7 +205,7 @@ export function departmentNeeds({
   const rows = [];
 
   if (pending.length) {
-    // [1.129.0] A department that issues no report here (X-ray) has one half, the exam, so a test
+    // [1.129.0] A department that issues no report here (none since [1.143.0]) has one half, the exam, so a test
     // left 'Waiting for Release' from before is an exam still to mark done, not a report to release.
     const reports = issuesReports(category);
     const exam = pending.filter((t) => t.test_status === 'Processing'

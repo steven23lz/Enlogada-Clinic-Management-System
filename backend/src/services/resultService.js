@@ -120,7 +120,8 @@ async function assertStaffOwnsVisitTest(requestingUser, visitTestId) {
 
 /**
  * Refuses report work on a department whose results are given outside this system. [1.129.0]
- * Upload, release and email all ask; X-ray's exam is marked done on its worklist instead.
+ * Upload, release and email all ask; such a department's exam is marked done on its worklist
+ * instead. No department is named since [1.143.0] (`NO_REPORT_CATEGORIES`).
  */
 async function assertDepartmentIssuesReports(visitTestId) {
   const row = await resultRepository.findVisitReleaseStateByVisitTestId(visitTestId);
@@ -204,11 +205,13 @@ class ResultService {
 
   /**
    * Mark an exam DONE, in a department whose results are given outside this system. [1.129.0]
+   * No department is named since [1.143.0], when X-ray began issuing reports again, so every test
+   * now finishes by releasing its report and this answers 403; it stays for the switch.
    *
    * This route used to let a department set its ticket to 'Waiting for Release' or 'Completed',
    * and Admin/SuperAdmin to set ANY status. No screen used it, and it was a way round the whole
    * process: a laboratory test "Completed" with no report released, or an unpaid test pushed to
-   * 'Processing' onto a worklist. Now it does one thing: a paid X-ray exam ('Processing') becomes
+   * 'Processing' onto a worklist. Now it does one thing: a paid exam ('Processing') becomes
    * 'Completed', recording when and by whom, and the visit completes when nothing else is left —
    * as releasing a report does in the other departments. A test whose department issues reports
    * here is finished by releasing its report, and nothing else.
