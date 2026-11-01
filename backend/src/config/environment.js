@@ -1,5 +1,22 @@
 require('dotenv').config();
 
+// The clinic's clock, for Node and for every database session. [1.145.0]
+//
+// "Today", a booking's hour's notice, an unpaid walk-in's day, a lockout and a hold all read the
+// clock, some in JavaScript and some in SQL (CURRENT_DATE, CURRENT_TIMESTAMP into TIMESTAMP
+// columns). Both took the HOST's time zone, which on the development PC is UTC+8 and on most
+// hosting is UTC. There, "today" would turn over at 08:00 in Bugo, the hour's notice would compare
+// UTC hours with the clinic's slot times, and a JavaScript clock read against a stored timestamp
+// would be eight hours out. Pinned here, before anything reads a Date; database.js passes the same
+// zone to each connection. CLINIC_TIMEZONE overrides it (an IANA name).
+const CLINIC_TIMEZONE = process.env.CLINIC_TIMEZONE || 'Asia/Manila';
+try {
+  new Intl.DateTimeFormat('en-US', { timeZone: CLINIC_TIMEZONE });
+} catch {
+  throw new Error(`CRITICAL CONFIG ERROR: CLINIC_TIMEZONE "${CLINIC_TIMEZONE}" is not a time zone. Use an IANA name such as Asia/Manila.`);
+}
+process.env.TZ = CLINIC_TIMEZONE;
+
 const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'];
 
 for (const envVar of requiredEnvVars) {
@@ -41,6 +58,7 @@ if (process.env.JWT_SECRET.length < 32) {
 }
 
 module.exports = {
+  CLINIC_TIMEZONE,
   PORT: parseInt(process.env.PORT || '5000', 10),
   NODE_ENV: process.env.NODE_ENV || 'development',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',

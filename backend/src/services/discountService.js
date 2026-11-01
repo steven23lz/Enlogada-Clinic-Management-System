@@ -14,6 +14,7 @@ const {
   toCentavos,
 } = require('./discount');
 const { NotFoundError, ValidationError, ConflictError } = require('../errors');
+const { localDateStr } = require('../utils/csvExport');
 
 class DiscountService {
   /**
@@ -218,7 +219,8 @@ class DiscountService {
    * files rather than a raw row dump.
    */
   async getStatutoryRegister({ startDate, endDate }) {
-    const today = new Date().toISOString().slice(0, 10);
+    // The clinic's date, not the UTC one, which is yesterday until 08:00 in Bugo. [1.145.0]
+    const today = localDateStr();
     const rows = await discountRepository.findStatutoryRegister({
       startDate: startDate || today,
       endDate: endDate || today,

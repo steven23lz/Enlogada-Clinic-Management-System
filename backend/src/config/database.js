@@ -20,6 +20,9 @@ const pool = new Pool({
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 10_000,
   statement_timeout: Number(process.env.PG_STATEMENT_TIMEOUT_MS || 15_000),
+  // The clinic's time zone for CURRENT_DATE and CURRENT_TIMESTAMP, whatever the database server's
+  // own setting is: the same zone environment.js gives Node. [1.145.0]
+  options: `-c timezone=${env.CLINIC_TIMEZONE}`,
 });
 
 // A connection can die between checkout and use (network blip, Postgres restart, idle reaper on a

@@ -84,6 +84,11 @@ function normaliseCapacity(value, { required }) {
   return n;
 }
 
+/** The bookings still ahead on a weekday that a row of weekly hours leaves without a slot. [1.145.0] */
+const strandedOnWeekday = (day, hours) => (hours.is_open
+  ? scheduleRepository.findBookingsOnWeekday(day, { openTime: hours.open_time, closeTime: hours.close_time })
+  : scheduleRepository.findBookingsOnWeekday(day));
+
 class ScheduleService {
   /** The whole week, as the admin screen edits it. */
   async getWeek() {
@@ -109,6 +114,8 @@ class ScheduleService {
       error.statusCode = 404;
       throw error;
     }
+    // Who the hours ALREADY left out, so a save that changes nothing emails nobody again.
+    const strandedBefore = await strandedOnWeekday(day, before);
 
     const updated = await scheduleRepository.updateOperatingHours(day, {
       isOpen,
@@ -118,17 +125,44 @@ class ScheduleService {
       maxConcurrentBookings: isOpen ? maxConcurrentBookings : before.max_concurrent_bookings,
     });
 
+    // Who the new hours leave without a slot. [1.145.0] A date override has named and emailed
+    // them since [1.123.0]; the weekly pattern did neither, so closing Saturdays, or ending a
+    // weekday at 15:00, left every booking already made for those times standing, with nobody
+    // told. Everyone stranded is returned to be moved; only the newly stranded are emailed.
+    const bookings = await strandedOnWeekday(day, updated);
+    const already = new Set(strandedBefore.map((b) => b.id));
+    const newly = bookings.filter((b) => !already.has(b.id));
+    for (const b of newly) {
+      appointmentEmailService.sendScheduleChangeNotice({
+        to: b.email,
+        patientName: `${b.first_name} ${b.last_name}`,
+        reference: b.appointment_reference,
+        date: b.scheduled_date,
+        time: b.scheduled_time,
+        closed: !isOpen,
+      }).catch(() => {});
+    }
+
     await auditService.log({
       actorId: actor?.userId,
       action: 'schedule.week_updated',
       entityType: 'clinic_operating_hours',
       entityId: day,
-      description: isOpen
+      description: (isOpen
         ? `${DAY_NAMES[day]}: open ${openTime}–${closeTime}, ${slotIntervalMinutes}-minute slots, ${maxConcurrentBookings} per slot`
-        : `${DAY_NAMES[day]}: closed`,
+        : `${DAY_NAMES[day]}: closed`)
+        + (newly.length ? ` (${newly.length} booking(s) left without a slot)` : ''),
     });
 
-    return { ...updated, day_name: DAY_NAMES[day] };
+    return { ...updated, day_name: DAY_NAMES[day], affectedBookings: bookings.length, newlyAffected: newly.length, bookings };
+  }
+
+  /** The bookings a weekday's current hours leave without a slot, to move one by one. [1.145.0] */
+  async listWeekdayBookings(dayOfWeek) {
+    const day = parseInt(dayOfWeek, 10);
+    if (!Number.isInteger(day) || day < 0 || day > 6) bad('Day must be 0 (Sunday) to 6 (Saturday).');
+    const row = await scheduleRepository.findOperatingHoursForDay(day);
+    return row ? strandedOnWeekday(day, row) : [];
   }
 
   /**

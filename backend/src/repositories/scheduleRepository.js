@@ -154,6 +154,41 @@ class ScheduleRepository {
     return rows;
   }
 
+  /**
+   * The bookings still ahead on one WEEKDAY that its weekly hours leave without a slot: all of them
+   * when the day is closed, or those outside `openTime`-`closeTime`. [1.145.0] A date whose override
+   * closes it or sets its own hours is left out, as the override decides that date, not the week.
+   */
+  async findBookingsOnWeekday(dayOfWeek, { openTime = null, closeTime = null } = {}, client = db) {
+    const params = [dayOfWeek];
+    let outside = '';
+    if (openTime && closeTime) {
+      params.push(openTime, closeTime);
+      outside = 'AND (a.scheduled_time < $2::time OR a.scheduled_time >= $3::time)';
+    }
+    const { rows } = await client.query(
+      `SELECT a.id, a.appointment_reference, a.scheduled_date, a.scheduled_time, a.status,
+              p.first_name, p.last_name,
+              COALESCE(NULLIF(p.email, ''), u.email) AS email,
+              EXISTS (SELECT 1 FROM payments pay
+                       WHERE pay.patient_visit_id = a.patient_visit_id AND pay.payment_status = 'Paid') AS is_paid
+         FROM appointments a
+         JOIN patient_visits pv ON pv.id = a.patient_visit_id
+         JOIN patients p ON p.id = pv.patient_id
+         LEFT JOIN users u ON u.id = p.user_id
+        WHERE EXTRACT(DOW FROM a.scheduled_date) = $1::int
+          AND a.scheduled_date + a.scheduled_time > CURRENT_TIMESTAMP
+          AND a.status IN ('Pending', 'Confirmed') AND ${OCCUPIES_SLOT('a')}
+          AND NOT EXISTS (SELECT 1 FROM clinic_schedule_overrides o
+                           WHERE o.override_date = a.scheduled_date
+                             AND (NOT o.is_open OR o.open_time IS NOT NULL))
+              ${outside}
+        ORDER BY a.scheduled_date, a.scheduled_time`,
+      params
+    );
+    return rows;
+  }
+
   async countBookingsByTimeForDate(date, client = db) {
     const queryText = `
       SELECT scheduled_time, COUNT(*)::int AS cnt

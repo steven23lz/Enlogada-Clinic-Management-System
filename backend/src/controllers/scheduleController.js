@@ -21,14 +21,27 @@ class ScheduleController {
 
   async updateDay(req, res, next) {
     try {
-      const day = await scheduleService.updateDay(req.params.dayOfWeek, req.body, req.user);
+      const { bookings, affectedBookings, newlyAffected, ...day } = await scheduleService.updateDay(req.params.dayOfWeek, req.body, req.user);
+      const base = day.is_open
+        ? `${day.day_name} open ${String(day.open_time).slice(0, 5)}–${String(day.close_time).slice(0, 5)}.`
+        : `${day.day_name} is now closed.`;
+      // [1.145.0] Bookings the new hours leave out are said in the message, as an override's are.
       return res.status(200).json({
         status: 'success',
-        message: day.is_open
-          ? `${day.day_name} open ${String(day.open_time).slice(0, 5)}–${String(day.close_time).slice(0, 5)}.`
-          : `${day.day_name} is now closed.`,
-        data: { day },
+        message: affectedBookings
+          ? `${base} ${affectedBookings} booking(s) on ${day.day_name}s are now outside the hours.`
+          : base,
+        data: { day, affectedBookings, newlyAffected },
       });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async listWeekdayBookings(req, res, next) {
+    try {
+      const bookings = await scheduleService.listWeekdayBookings(req.params.dayOfWeek);
+      return res.status(200).json({ status: 'success', data: { bookings } });
     } catch (err) {
       next(err);
     }

@@ -21,6 +21,7 @@ router.get('/public', scheduleController.getPublic);
 
 router.get('/week', verifyToken, authorizeStaff, scheduleController.getWeek);
 router.put('/week/:dayOfWeek', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), scheduleController.updateDay);
+router.get('/week/:dayOfWeek/bookings', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), scheduleController.listWeekdayBookings);
 
 router.get('/overrides', verifyToken, authorizeStaff, scheduleController.listOverrides);
 router.put('/overrides', verifyToken, authorizeRoles('SuperAdmin', 'Admin'), scheduleController.setOverride);

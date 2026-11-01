@@ -282,6 +282,9 @@ accepted by booking or rescheduling (409 naming the earliest time left, or none)
 starts. Arithmetic in `utils/bookingNotice.js` (unit-tested). `SlotPicker` re-reads today's grid
 every minute and says why the earlier times are missing. `booking-notice.spec.js` opens today
 around the clock with a date override to check it at any hour, and removes it after.
+`[1.145.0]` **Every hold ends by the booking's start**, not only a new one's: a rejected proof, an
+HMO's refusal, the gateway's extension and a move each started the window again from "now", so a
+proof rejected at 10:50 for 11:00 gave until 11:50. Write any new hold through `UNTIL_START_SQL`.
 
 **Payment first: an unpaid online booking holds its slot only for the payment window.** `[1.123.0]`
 Whenever the clinic publishes a payment account, a self-pay booking a patient makes is provisional
@@ -677,6 +680,9 @@ the patient ticks "These are the tests I want" (bookings carry `booked_tests`).
 - **A date override names who it leaves without a slot.** Closing a day, or new hours, returns
   `affectedBookings`, emails each patient (`sendScheduleChangeNotice`), and Clinic Schedule lists
   them for moving (`GET /schedule/overrides/:date/bookings`). A lower capacity moves nobody.
+  `[1.145.0]` New WEEKLY hours do the same for every coming date of that weekday without its own
+  override (`GET /schedule/week/:day/bookings`), and email only the newly stranded, so saving the
+  same hours twice tells nobody twice.
 - **Archiving waits for open work** (`patientRepository.findOpenWork`): refused while the patient
   has a visit in progress, an unpaid walk-in today, or a booking from today on. Archived records
   leave the Desk's search, which hid patients from the people about to look for them.
@@ -958,6 +964,13 @@ failed on a correct 409. Measured on 2026-08-27: `DAY_A` and `DAY_B` both resolv
 `nthWorkingDay(n)` and `nthWorkingDay(n + 1)` are different days on every calendar, which is the
 property those specs were assuming all along and never actually had. Both failures share a shape
 worth naming: nothing in the application had changed, the calendar had.
+
+**The clinic's clock is pinned.** `[1.145.0]` `environment.js` sets `process.env.TZ` to
+`CLINIC_TIMEZONE` (default Asia/Manila) before anything reads a Date, and `database.js` passes the
+same zone to every connection (`-c timezone=…`). Both used to follow the host, which is UTC+8 on
+the development PC and UTC on most hosting: there, "today" would turn over at 08:00 in Bugo and a
+JavaScript clock read against a stored timestamp would be eight hours out. Never set a time zone
+anywhere else.
 
 **Dates: never use `toISOString()` for "today".** It returns the **UTC** date, which in Philippine time (UTC+8) is *yesterday* between midnight and 08:00 — silently, with no error. Postgres `CURRENT_DATE` is the server's local date, so the two disagree every morning. Frontend code uses `frontend/src/lib/date.js` (`todayStr` / `daysAgoStr`, built from local getters); backend code derives date strings **in SQL** rather than in JavaScript. This bug shipped twice: in four dashboard `todayStr` helpers, and in the receipt-number generator.
 

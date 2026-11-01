@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { OCCUPIES_SLOT, HOLD_EXPIRY_SQL, PAY_WINDOW_EXPIRY_SQL, HMO_HOLD_SQL } = require('../constants/slotHold');
+const { OCCUPIES_SLOT, HOLD_EXPIRY_SQL, PAY_WINDOW_EXPIRY_SQL, HMO_HOLD_SQL, UNTIL_START_SQL } = require('../constants/slotHold');
 const { hmoEffectiveStatus } = require('../constants/hmoEffectiveStatus');
 const { inTodaysQueue } = require('../constants/queueMembership');
 const { CAME_IN_AS } = require('../constants/visits');
@@ -21,7 +21,8 @@ class AppointmentRepository {
     const queryText = `
       INSERT INTO appointments (patient_visit_id, appointment_reference, scheduled_date, scheduled_time, notes, held_until)
       VALUES ($1, $2, $3, $4, $5, ${provisional === 'hmo' ? HMO_HOLD_SQL('$3', '$4')
-        : provisional === 'manual' ? PAY_WINDOW_EXPIRY_SQL : provisional ? HOLD_EXPIRY_SQL : 'NULL'})
+        : provisional === 'manual' ? UNTIL_START_SQL(PAY_WINDOW_EXPIRY_SQL, '$3', '$4')
+          : provisional ? UNTIL_START_SQL(HOLD_EXPIRY_SQL, '$3', '$4') : 'NULL'})
       RETURNING *
     `;
     const result = await client.query(queryText, [patientVisitId, appointmentReference, scheduledDate, scheduledTime, notes]);
@@ -64,7 +65,8 @@ class AppointmentRepository {
    */
   async reholdForPayment(patientVisitId, client = db) {
     const { rows } = await client.query(
-      `UPDATE appointments a SET held_until = ${PAY_WINDOW_EXPIRY_SQL}, updated_at = CURRENT_TIMESTAMP
+      `UPDATE appointments a SET held_until = ${UNTIL_START_SQL(PAY_WINDOW_EXPIRY_SQL, 'a.scheduled_date', 'a.scheduled_time')},
+              updated_at = CURRENT_TIMESTAMP
         WHERE a.patient_visit_id = $1 AND a.status IN ('Pending', 'Confirmed')
           AND EXISTS (
             SELECT 1 FROM patient_visits pv
@@ -114,7 +116,8 @@ class AppointmentRepository {
    */
   async holdForPaymentAfterHmo(patientVisitId) {
     const { rows } = await db.query(
-      `UPDATE appointments SET held_until = ${PAY_WINDOW_EXPIRY_SQL}, updated_at = CURRENT_TIMESTAMP
+      `UPDATE appointments SET held_until = ${UNTIL_START_SQL(PAY_WINDOW_EXPIRY_SQL, 'scheduled_date', 'scheduled_time')},
+              updated_at = CURRENT_TIMESTAMP
         WHERE patient_visit_id = $1 AND status = 'Pending' AND held_until IS NOT NULL
         RETURNING *`,
       [patientVisitId]
@@ -132,7 +135,9 @@ class AppointmentRepository {
    */
   async restartLapsedHold(appointmentId, { gateway = false } = {}) {
     const { rows } = await db.query(
-      `UPDATE appointments SET held_until = ${gateway ? HOLD_EXPIRY_SQL : PAY_WINDOW_EXPIRY_SQL}, updated_at = CURRENT_TIMESTAMP
+      `UPDATE appointments
+          SET held_until = ${UNTIL_START_SQL(gateway ? HOLD_EXPIRY_SQL : PAY_WINDOW_EXPIRY_SQL, 'scheduled_date', 'scheduled_time')},
+              updated_at = CURRENT_TIMESTAMP
         WHERE id = $1 AND held_until IS NOT NULL AND held_until <= CURRENT_TIMESTAMP
         RETURNING *`,
       [appointmentId]
@@ -150,7 +155,8 @@ class AppointmentRepository {
    */
   async extendHold(patientVisitId, client = db) {
     const { rows } = await client.query(
-      `UPDATE appointments SET held_until = ${HOLD_EXPIRY_SQL}, updated_at = CURRENT_TIMESTAMP
+      `UPDATE appointments SET held_until = ${UNTIL_START_SQL(HOLD_EXPIRY_SQL, 'scheduled_date', 'scheduled_time')},
+              updated_at = CURRENT_TIMESTAMP
         WHERE patient_visit_id = $1 AND held_until IS NOT NULL
         RETURNING *`,
       [patientVisitId]

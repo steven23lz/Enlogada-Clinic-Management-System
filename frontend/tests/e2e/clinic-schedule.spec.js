@@ -193,6 +193,25 @@ test.describe('Clinic schedule', () => {
       .not.toMatch(/maxConcurrent|max_concurrent/);
   });
 
+  // [1.145.0] New weekly hours name the coming bookings they leave out, as a date's override does.
+  // Read-only here: saving a weekday would email any real patient booked outside the new hours.
+  // The rule itself (named, emailed once, gone again when the hours return) was checked against
+  // the service in a rolled-back transaction with email stubbed out.
+  test("a weekday's stranded bookings are listed for an admin, and only an admin", async ({ page }) => {
+    const rec = await login(ctx, 'receptionist@enlogada.com');
+    const res = await ctx.get(`${API}/schedule/week/1/bookings`, { headers: auth(sup) });
+    expect(res.status()).toBe(200);
+    expect(Array.isArray((await res.json()).data.bookings)).toBeTruthy();
+    expect((await ctx.get(`${API}/schedule/week/1/bookings`, { headers: auth(rec) })).status()).toBe(403);
+    expect((await ctx.get(`${API}/schedule/week/9/bookings`, { headers: auth(sup) })).status()).toBe(400);
+
+    await signIn(page, 'admin@enlogada.com');
+    await page.getByRole('button', { name: 'Clinic Schedule' }).first().click();
+    await page.getByRole('button', { name: 'Bookings to move on Mondays' }).click();
+    const dialog = page.getByTestId('affected-bookings');
+    await expect(dialog.getByRole('heading', { name: 'Bookings to move: Mondays' })).toBeVisible({ timeout: 15000 });
+  });
+
   test('the screen edits the week and sets a date aside', async ({ page }) => {
     const date = DATES.ui;
     await signIn(page, 'admin@enlogada.com');

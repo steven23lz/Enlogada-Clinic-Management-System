@@ -89,7 +89,23 @@ const HMO_HOLD_SQL = (date, time) => `(${date})::date + (${time})::time`;
  */
 const BOOKING_NOTICE_MINUTES = PAY_WINDOW_MINUTES;
 
+/**
+ * A hold that ends at the earlier of its window and the booking's own start. [1.145.0]
+ *
+ * The notice keeps a NEW booking's time to pay before its start, but three other writers started
+ * the window again from "now": a rejected proof (reholdForPayment), an HMO's refusal
+ * (holdForPaymentAfterHmo) and the gateway reopening checkout (extendHold). A proof rejected at
+ * 10:50 for an 11:00 booking gave the patient until 11:50, so a slot could start, and pass, while
+ * its booking was still unpaid and still held. Every hold goes through this now; one whose start
+ * has already come lapses at once, and the patient who is at the clinic is seen as a walk-in.
+ *
+ * @param {string} expirySql  the window, e.g. PAY_WINDOW_EXPIRY_SQL
+ * @param {string} date SQL yielding the booking's date
+ * @param {string} time SQL yielding the booking's time
+ */
+const UNTIL_START_SQL = (expirySql, date, time) => `LEAST(${expirySql}, ${HMO_HOLD_SQL(date, time)})`;
+
 module.exports = {
   OCCUPIES_SLOT, HOLD_MINUTES, HOLD_EXPIRY_SQL, PAY_WINDOW_MINUTES, PAY_WINDOW_EXPIRY_SQL, HMO_HOLD_SQL,
-  BOOKING_NOTICE_MINUTES,
+  BOOKING_NOTICE_MINUTES, UNTIL_START_SQL,
 };

@@ -7,7 +7,7 @@ import EmptyState from '../ui/empty-state';
 import { SkeletonList } from '../ui/skeleton';
 import RescheduleDialog from '../booking/RescheduleDialog';
 import api from '../../config/api';
-import { formatTime12 } from '../../lib/date';
+import { formatTime12, formatAppointmentDate } from '../../lib/date';
 
 /**
  * The bookings a closed or shortened day leaves without a slot, each with Move. [1.123.0]
@@ -16,32 +16,37 @@ import { formatTime12 } from '../../lib/date';
  * no way to reach them, and paid bookings that cannot be cancelled. Each patient is now emailed
  * when the date is saved, and this lists them so whoever closed the day can move each booking
  * through the same dialog the Desk and the patient use. A moved booking leaves the list.
+ *
+ * [1.145.0] Or a WEEKDAY's (`weekday: { day, name }`): new weekly hours strand bookings on every
+ * coming date of that day, so each row then names its date as well.
  */
-export default function AffectedBookingsDialog({ date, onOpenChange }) {
+export default function AffectedBookingsDialog({ date, weekday = null, onOpenChange }) {
   const [state, setState] = useState({ status: 'idle', bookings: [], error: '' });
   const [moving, setMoving] = useState(null);
 
   const load = useCallback(async () => {
-    if (!date) return;
+    if (!date && !weekday) return;
     setState((s) => ({ ...s, status: 'loading', error: '' }));
     try {
-      const res = await api.get(`/schedule/overrides/${date}/bookings`);
+      const res = await api.get(weekday ? `/schedule/week/${weekday.day}/bookings` : `/schedule/overrides/${date}/bookings`);
       setState({ status: 'ready', bookings: res.data.data.bookings || [], error: '' });
     } catch (err) {
       setState({ status: 'error', bookings: [], error: err.response?.data?.message || 'The bookings could not be loaded.' });
     }
-  }, [date]);
+  }, [date, weekday]);
 
   useEffect(() => { load(); }, [load]);
 
   // A plain YYYY-MM-DD, read at local noon so no time zone can move it to a neighbouring day.
-  const readable = date
-    ? new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-    : '';
+  const readable = weekday
+    ? `${weekday.name}s`
+    : date
+      ? new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+      : '';
 
   return (
     <>
-      <Dialog open={Boolean(date)} onOpenChange={onOpenChange}>
+      <Dialog open={Boolean(date || weekday)} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg" data-testid="affected-bookings">
           <DialogHeader>
             <DialogTitle>Bookings to move: {readable}</DialogTitle>
@@ -58,13 +63,14 @@ export default function AffectedBookingsDialog({ date, onOpenChange }) {
               action={<Button size="sm" variant="outline" onClick={load}>Try again</Button>} />
           ) : state.bookings.length === 0 ? (
             <EmptyState compact icon={CalendarClock} title="Nothing to move"
-              description="No booking on this date is left without a slot." />
+              description={weekday ? `No coming booking on a ${weekday.name} is left without a slot.` : 'No booking on this date is left without a slot.'} />
           ) : (
             <ul className="m-0 list-none divide-y divide-line rounded-lg border border-line p-0">
               {state.bookings.map((b) => (
                 <li key={b.id} data-testid="affected-booking" className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="m-0 text-note font-semibold text-ink">
+                      {weekday && `${formatAppointmentDate(b.scheduled_date)} · `}
                       {formatTime12(String(b.scheduled_time).slice(0, 5))} · {b.first_name} {b.last_name}
                     </p>
                     <p className="m-0 flex flex-wrap items-center gap-1.5 text-fine text-slate-500">

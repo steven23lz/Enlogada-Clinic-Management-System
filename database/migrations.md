@@ -1,5 +1,49 @@
 # Database Migration & Schema History
 
+## [1.145.0] - 2026-11-01 (Rules that bent at a boundary)
+
+No migration. Steven, after [1.144.0]: check the whole system for hidden rules like that one. The
+audit read every clock in the backend (each `new Date()`, every comparison with `CURRENT_DATE` /
+`CURRENT_TIMESTAMP`, every expiry) and every place a rule is enforced at one moment and not at a
+later one. Four things bent; each is fixed.
+
+- **The clinic's clock was whatever the host's was.** Node and each database session took the
+  host's time zone. On the development PC both are UTC+8 (the database says Asia/Kuala_Lumpur), so
+  nothing showed. On a UTC host or a UTC managed database, "today" would turn over at 08:00 in Bugo
+  (unpaid walk-ins removed mid-morning, the till's "Collected Today" split across two days), the
+  hour's notice would compare UTC hours with the clinic's slot times and stop working, and a
+  JavaScript clock read against a stored timestamp (the lockout, the check-in of a lapsed booking)
+  would be eight hours out. `environment.js` now sets `process.env.TZ` before anything reads a
+  Date, and `database.js` passes `-c timezone=…` to every connection. `CLINIC_TIMEZONE` overrides
+  Asia/Manila; an unknown name refuses to start. Checked with the host set to UTC: both read Manila.
+- **A time to pay could outlast the appointment.** [1.144.0] made a new booking's time to pay end
+  before its start, but three writers started the window again from "now": a rejected proof
+  (`reholdForPayment`), an HMO's refusal (`holdForPaymentAfterHmo`) and the gateway reopening
+  checkout (`extendHold`), plus `restartLapsedHold` after a move. A proof rejected at 10:50 for
+  11:00 gave until 11:50, so a slot could start and pass while its booking was unpaid and held.
+  Every hold is now `UNTIL_START_SQL` (`constants/slotHold.js`): the earlier of its window and the
+  booking's start. One whose start has come lapses at once; the patient at the clinic is a walk-in.
+- **New weekly hours stranded bookings silently.** A date override has named, emailed and listed
+  the bookings it leaves without a slot since [1.123.0]; the weekly pattern did none of it, so
+  closing Saturdays or ending a weekday at 15:00 left every booking already made for those times
+  standing, with nobody told. `PUT /schedule/week/:day` now returns `affectedBookings` (coming
+  bookings on that weekday outside the new hours, dates with their own override left out) and
+  emails only the NEWLY stranded, so saving the same hours twice tells nobody twice. Clinic Schedule
+  opens them to move (`GET /schedule/week/:day/bookings`, Admin/SuperAdmin; `AffectedBookingsDialog`
+  takes `weekday` and names each date), and each weekday row has the same button an override row has.
+- **The statutory register's default range was the UTC date** (`toISOString`), yesterday until
+  08:00. Only an API call without dates reached it; it reads the local date now.
+- **Checked and sound:** session revocation (`iat` seconds against `password_changed_at`
+  milliseconds has its one-second allowance), sign-up codes, invitations and lockouts (expiry
+  compared in SQL), every report range (half-open on the raw column), the queue and receipt
+  counters, the proof and check-in refusals of a lapsed hold, the reminder windows. Left as it is:
+  `migrateRemoveResultForms.js` wrote archived dates with `toISOString` (one day early in that
+  archive), but it ran once and its rows are history.
+- **Verified:** the hold and weekly rules against the real service and database in one
+  transaction that was rolled back, with the schedule email stubbed (named, emailed once, not again
+  on a second save, gone when the hours return; holds end at the start). `clinic-schedule.spec.js`
+  checks the new list read-only, since saving a weekday would email real patients.
+
 ## [1.144.0] - 2026-10-31 (A booking needs an hour's notice)
 
 No migration. Steven: a patient booked 11:00 when it was 11:00, and it went through.

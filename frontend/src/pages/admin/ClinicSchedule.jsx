@@ -43,7 +43,7 @@ const draftFrom = (day) => ({
 });
 
 /** One weekday, edited in place. Saved per row, so a half-finished Friday cannot ruin Monday. */
-function DayRow({ day, onSave, saving }) {
+function DayRow({ day, onSave, onShowBookings, saving }) {
   const [draft, setDraft] = useState(() => draftFrom(day));
 
   // Follow the server after a save or a reload, so the row shows what was actually stored rather
@@ -133,15 +133,25 @@ function DayRow({ day, onSave, saving }) {
         {draft.isOpen ? dailyCapacity + ' bookings/day' : '—'}
       </TableCell>
       <TableCell className="text-right">
-        <Button
-          size="sm"
-          variant={dirty ? 'default' : 'outline'}
-          disabled={!dirty}
-          loading={saving}
-          onClick={() => onSave(day.day_of_week, draft)}
-        >
-          Save
-        </Button>
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          {/* Coming bookings these hours leave without a slot, to move one by one. [1.145.0] */}
+          <Button
+            variant="ghost" size="sm"
+            onClick={() => onShowBookings({ day: day.day_of_week, name: day.day_name })}
+            aria-label={'Bookings to move on ' + day.day_name + 's'}
+          >
+            <Users className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant={dirty ? 'default' : 'outline'}
+            disabled={!dirty}
+            loading={saving}
+            onClick={() => onSave(day.day_of_week, draft)}
+          >
+            Save
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -163,6 +173,8 @@ export default function ClinicSchedule() {
   const [pendingRemoval, setPendingRemoval] = useState(null);
   // The date whose stranded bookings are open for moving. [1.123.0]
   const [bookingsFor, setBookingsFor] = useState(null);
+  // The weekday whose stranded bookings are open, after its hours changed. [1.145.0]
+  const [weekdayBookings, setWeekdayBookings] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -189,7 +201,17 @@ export default function ClinicSchedule() {
     setSavingDay(dayOfWeek);
     try {
       const res = await api.put('/schedule/week/' + dayOfWeek, draft);
-      toastSuccess(res.data.message);
+      const { day, affectedBookings: affected, newlyAffected } = res.data.data;
+      // [1.145.0] As with a date: new hours that leave coming bookings without a slot are not a
+      // silent success. The newly stranded patients were emailed; the list opens to move them.
+      if (affected) {
+        toastError(res.data.message, newlyAffected
+          ? `${newlyAffected} patient${newlyAffected > 1 ? 's' : ''} with an email on file ${newlyAffected > 1 ? 'were' : 'was'} told.`
+          : 'They were outside the hours already.');
+        setWeekdayBookings({ day: day.day_of_week, name: day.day_name });
+      } else {
+        toastSuccess(res.data.message);
+      }
       await load();
     } catch (err) {
       toastError(err.response?.data?.message || 'Could not save that day.');
@@ -300,6 +322,7 @@ export default function ClinicSchedule() {
                         day={day}
                         saving={savingDay === day.day_of_week}
                         onSave={saveDay}
+                        onShowBookings={setWeekdayBookings}
                       />
                     ))}
                   </TableBody>
@@ -493,6 +516,7 @@ export default function ClinicSchedule() {
       )}
 
       <AffectedBookingsDialog date={bookingsFor} onOpenChange={(open) => { if (!open) setBookingsFor(null); }} />
+      <AffectedBookingsDialog weekday={weekdayBookings} onOpenChange={(open) => { if (!open) setWeekdayBookings(null); }} />
 
       <ConfirmDialog
         open={Boolean(pendingRemoval)}
