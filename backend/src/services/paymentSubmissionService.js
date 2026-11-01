@@ -4,6 +4,7 @@ const paymentSubmissionRepository = require('../repositories/paymentSubmissionRe
 const paymentMethodRepository = require('../repositories/paymentMethodRepository');
 const paymentRepository = require('../repositories/paymentRepository');
 const paymentService = require('./paymentService');
+const discountService = require('./discountService');
 const visitRepository = require('../repositories/visitRepository');
 const patientRepository = require('../repositories/patientRepository');
 const auditService = require('./auditService');
@@ -13,6 +14,7 @@ const { PAYMENT_UPLOAD_ROOT, discardPaymentFile } = require('../config/upload');
 const { formatCurrency } = require('../utils/money');
 const appointmentEmailService = require('./appointmentEmailService');
 const appointmentRepository = require('../repositories/appointmentRepository');
+const unpaidExpiryService = require('./unpaidExpiryService');
 
 /**
  * Manual proof of payment: the patient pays into the clinic's own account and a cashier checks it.
@@ -126,9 +128,10 @@ class PaymentSubmissionService {
       // claim that names no amount is a claim to have sent what was asked, so it records that
       // figure. An explicit amount is still accepted, and still only evidence.
       const stated = amountClaimed !== undefined && amountClaimed !== null && String(amountClaimed).trim() !== '';
+      // [1.146.0] The bill approval will record, discount included, not the gross of the tests.
       const claimed = stated
         ? Number(amountClaimed) || 0
-        : await paymentSubmissionRepository.findAmountDue(patientVisitId);
+        : Number((await paymentService.getBillingSummary(patientVisitId)).totalAmount);
 
       const submission = await paymentSubmissionRepository.create({
         patientVisitId,
@@ -167,7 +170,13 @@ class PaymentSubmissionService {
   }
 
   async listPending() {
-    return await paymentSubmissionRepository.findPending();
+    const rows = await paymentSubmissionRepository.findPending();
+    // "Visit owes" is the bill approval records, from the same function. [1.146.0] The query's
+    // sum of the tests left out a discount and HMO cover, so a senior's proof read as short.
+    return Promise.all(rows.map(async (row) => ({
+      ...row,
+      amount_due: (await paymentService.getBillingSummary(row.patient_visit_id)).totalAmount,
+    })));
   }
 
   async listRecentlyReviewed() {
@@ -196,7 +205,7 @@ class PaymentSubmissionService {
    * visit release and the cash-up entry, and there is never a parallel money writer. The amount is
    * the recomputed bill, NOT `amount_claimed`.
    */
-  async verify(id, actor) {
+  async verify(id, actor, { discountIdChecked = false } = {}) {
     const submission = await paymentSubmissionRepository.findById(id);
     if (!submission) {
       const error = new Error('Payment submission not found.');
@@ -265,6 +274,7 @@ class PaymentSubmissionService {
       referenceNumber: submission.reference_number,
       amount: bill.totalAmount,
       fromSubmissionId: submission.id,
+      discountIdChecked,
     });
 
     const settled = await paymentSubmissionRepository.settle(id, {
@@ -302,7 +312,7 @@ class PaymentSubmissionService {
   }
 
   /** Turn a claim down. A reason is required — the patient will ask. */
-  async reject(id, reviewNote, actor) {
+  async reject(id, reviewNote, actor, { removeDiscount = false } = {}) {
     if (!reviewNote?.trim()) {
       const error = new Error('Say why it was rejected — the patient is told this, and will ask.');
       error.statusCode = 400;
@@ -341,14 +351,35 @@ class PaymentSubmissionService {
       description: `Ref ${settled.reference_number} rejected — ${settled.review_note}`,
     });
 
+    // [1.146.0] A Senior Citizen / PWD discount declared online whose ID was not valid comes off
+    // with the rejection, so the patient's next payment is for the full amount the portal states.
+    if (removeDiscount) {
+      await discountService.clearFromVisit(settled.patient_visit_id, actor, { afterRejectingProof: true })
+        .catch((err) => logger.error(`Could not remove the declared discount: ${err.message}`));
+    }
+
     // The reason is the whole point of requiring one. Sending it is what stops the patient
     // refreshing the portal, guessing, and eventually ringing the clinic.
     // The patient gets the payment window again to send a proof that can be accepted. [1.123.0]
-    await appointmentRepository.reholdForPayment(settled.patient_visit_id).catch(() => {});
+    // [1.145.0] That window ends at the appointment, so a proof turned down after it leaves no time.
+    const held = await appointmentRepository.reholdForPayment(settled.patient_visit_id).catch(() => null);
+    // Read before anything is removed: the email needs the patient's address and reference.
+    const contact = await paymentSubmissionRepository.findByIdWithContact(settled.id).catch(() => null);
+    const released = Boolean(held?.held_until) && new Date(held.held_until) <= new Date();
 
-    await this.notifyPatient(settled.id, { verified: false }).catch(() => {});
+    // [1.146.0] Its time has passed, so the booking is released now rather than at the next sweep,
+    // which would email the patient a second time. The proof stays on record (Activity Log).
+    if (released) {
+      const booking = await visitRepository.findUnpaidBooking({ visitId: settled.patient_visit_id });
+      if (booking && !booking.paid) {
+        await unpaidExpiryService.removeNow(booking, { why: 'proof_rejected_late', actorId: actor.userId })
+          .catch((err) => logger.error(`Could not release booking after a late rejection: ${err.message}`));
+      }
+    }
 
-    return settled;
+    await this.notifyPatient(settled.id, { verified: false, contact, payBy: held?.held_until || null, released }).catch(() => {});
+
+    return { ...settled, released, payBy: held?.held_until || null };
   }
 
   /**
@@ -359,9 +390,9 @@ class PaymentSubmissionService {
    * — `sendEmail` already swallows transport errors, and this adds the same guarantee around the
    * lookup.
    */
-  async notifyPatient(submissionId, { verified, payment }) {
+  async notifyPatient(submissionId, { verified, payment, contact = null, payBy = null, released = false }) {
     try {
-      const s = await paymentSubmissionRepository.findByIdWithContact(submissionId);
+      const s = contact || await paymentSubmissionRepository.findByIdWithContact(submissionId);
       if (!s || !s.patient_email) return { skipped: true };
 
       const patientName = `${s.first_name} ${s.last_name}`;
@@ -379,6 +410,8 @@ class PaymentSubmissionService {
         patientName,
         reference: s.appointment_reference,
         reason: s.review_note,
+        payBy,
+        released,
       });
     } catch (err) {
       // Logged rather than raised: the decision stands either way, and losing the email must not

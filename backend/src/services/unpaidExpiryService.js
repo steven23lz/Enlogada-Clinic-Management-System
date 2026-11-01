@@ -19,7 +19,29 @@ const WHY = {
   day_passed: (v) => `nobody came on ${day(v.scheduled_date)}, and it was not paid`,
   payment_window: () => 'not paid within its time to pay',
   hmo_undecided: () => 'its HMO had not approved it by the time it was booked for',
+  // [1.146.0]
+  proof_rejected_late: () => 'its payment proof was turned down after its appointment time',
+  released_by_patient: () => 'the patient released it before paying',
 };
+
+const peso = (n) => `₱${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * Keeps each payment proof of a removed visit on record. [1.146.0] Removing an unpaid visit deletes
+ * its proofs with it, and a proof turned down for a blurry screenshot may still stand for money that
+ * reached the clinic's account: the reference number is what a cashier matches it by.
+ */
+async function recordRemovedProofs(proofs, visits, actor) {
+  for (const p of proofs) {
+    const v = visits.find((x) => x.id === p.patient_visit_id) || {};
+    await auditService.log({
+      ...actor, action: 'payment_submission.kept_on_removal', entityType: 'visit', entityId: p.patient_visit_id,
+      description: `Online payment ref ${p.reference_number} (${p.method || 'online'}, ${peso(p.amount_claimed)}, ${String(p.status).toLowerCase()}`
+        + `${p.review_note ? `: "${p.review_note}"` : ''}) from ${v.first_name || ''} ${v.last_name || ''}`.trimEnd()
+        + `, kept on record when the unpaid ${v.appointment_reference ? `booking ${v.appointment_reference}` : 'visit'} was removed. If this money arrived, take it at the till with this reference.`,
+    });
+  }
+}
 
 /**
  * Unpaid is temporary. [1.131.0]
@@ -39,6 +61,7 @@ class UnpaidExpiryService {
       // delete, which rolls back and leaves it for the next sweep, by which time it is paid.
       const rows = await visitRepository.findExpiredUnpaid();
       const removed = await visitRepository.removeVisits(rows.map((r) => r.id));
+      await recordRemovedProofs(removed.proofs, rows, { actorName: ACTOR });
       return { due: rows, files: removed.files };
     });
     if (!due.length) return { removed: 0, walkIns: 0, bookings: 0 };
@@ -69,6 +92,30 @@ class UnpaidExpiryService {
     }
     const bookings = due.filter((v) => v.appointment_id).length;
     return { removed: due.length, walkIns: due.length - bookings, bookings };
+  }
+
+  /**
+   * Removes ONE unpaid booking now, with its Activity Log line and its proofs kept on record, and
+   * no email: the caller has already told the patient, in the same words. [1.146.0] For a proof
+   * turned down after the appointment time, and a booking the patient released themselves.
+   *
+   * @param {object} booking  a row with id, appointment_reference, scheduled_date, first_name, last_name, test_names
+   * @param {{why: string, actorId?: number, actorName?: string}} how
+   */
+  async removeNow(booking, { why, actorId = null, actorName = null }) {
+    const files = await db.withTransaction(async () => {
+      const removed = await visitRepository.removeVisits([booking.id]);
+      const actor = actorId ? { actorId } : { actorName: actorName || ACTOR };
+      await recordRemovedProofs(removed.proofs, [booking], actor);
+      await auditService.log({
+        ...actor, action: 'visit.removed_unpaid', entityType: 'visit', entityId: booking.id,
+        description: `Removed the booking ${booking.appointment_reference} for ${day(booking.scheduled_date)} (${booking.first_name} ${booking.last_name}: ${(booking.test_names || []).join(', ') || 'no tests'}): ${WHY[why](booking)}.`,
+      });
+      return removed.files;
+    });
+    for (const f of files) {
+      try { fs.unlinkSync(path.join(UPLOADS, f.dir, path.basename(f.p))); } catch { /* already gone */ }
+    }
   }
 }
 

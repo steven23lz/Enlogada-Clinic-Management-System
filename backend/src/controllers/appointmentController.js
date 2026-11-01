@@ -17,9 +17,9 @@ class AppointmentController {
       // so every rejection below has to drop them — otherwise a refused booking leaves an
       // unreferenced image on disk. Absent on a JSON (staff) booking, where multer finds no
       // multipart body.
-      const { card = null, doctorRequest = null } = req.bookingFiles || {};
+      const { card = null, doctorRequest = null, discountId = null } = req.bookingFiles || {};
       const reject = (message) => {
-        discardHmoCard(card, doctorRequest);
+        discardHmoCard(card, doctorRequest, discountId);
         return res.status(400).json({ status: 'error', message });
       };
 
@@ -133,10 +133,13 @@ class AppointmentController {
         hmoCardFile: card,
         doctorRequestFile: doctorRequest,
         referral,
-        payNow
+        payNow,
+        // [1.146.0] A Senior Citizen or PWD discount declared with the booking ('senior' | 'pwd').
+        discountClaim: req.body.discountKind ? { kind: String(req.body.discountKind), idNumber: req.body.discountIdNumber } : null,
+        discountIdFile: discountId,
       });
 
-      const { appointment, visitTests, hmoRequest, payment, alreadyBooked } = result;
+      const { appointment, visitTests, hmoRequest, payment, alreadyBooked, amountDue = null } = result;
 
       // 200 rather than 201 when the booking already existed: the request was a retry, nothing
       // new was created, and the caller gets the original reference back so it can show the real
@@ -146,7 +149,7 @@ class AppointmentController {
         message: alreadyBooked
           ? `You already have this booking. Reference: ${appointment.appointment_reference}`
           : `Appointment created. Reference: ${appointment.appointment_reference}`,
-        data: { appointment, visitTests, hmoRequest, payment: payment || null, alreadyBooked }
+        data: { appointment, visitTests, hmoRequest, payment: payment || null, alreadyBooked, amountDue }
       });
     } catch (err) {
       // Deliberately NOT unlinking here. Once createAppointment has been entered it owns the
@@ -201,6 +204,19 @@ class AppointmentController {
         data: Array.isArray(result)
           ? { appointments: result, total: result.total ?? result.length }
           : result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async release(req, res, next) {
+    try {
+      const released = await appointmentService.releaseUnpaid(req.params.id, req.user);
+      return res.status(200).json({
+        status: 'success',
+        message: `Booking ${released.reference} released. Its time is free for someone else.`,
+        data: released,
       });
     } catch (err) {
       next(err);

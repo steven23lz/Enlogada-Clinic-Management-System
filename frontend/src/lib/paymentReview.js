@@ -61,3 +61,26 @@ export function reviewConcerns(submission) {
     concerning: mismatch || duplicates > 0,
   };
 }
+
+/** Within this many minutes of its appointment, a payment is checked first. [1.146.0] */
+export const URGENT_MINUTES = 60;
+
+/**
+ * How soon the appointment behind a payment starts, for the cashier. [1.146.0]
+ *
+ * A booking's time to pay ends at its appointment [1.145.0], so a proof checked after it can only
+ * be turned down, and the booking goes with it. The queue puts the soonest first; this says why.
+ * Read from `minutes_to_start`, worked out by the server when the queue was fetched.
+ *
+ * @param {object} submission A row from the pending queue.
+ * @returns {{state: 'none'|'later'|'soon'|'passed', minutes: number|null}}
+ */
+export function appointmentUrgency(submission) {
+  const raw = submission?.minutes_to_start;
+  if (raw === null || raw === undefined || raw === '') return { state: 'none', minutes: null };
+  const minutes = Number(raw);
+  if (!Number.isFinite(minutes)) return { state: 'none', minutes: null };
+  if (minutes < 0) return { state: 'passed', minutes };
+  if (minutes <= URGENT_MINUTES) return { state: 'soon', minutes };
+  return { state: 'later', minutes };
+}

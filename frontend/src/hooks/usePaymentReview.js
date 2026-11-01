@@ -29,6 +29,10 @@ export function usePaymentReview({ enabled = true } = {}) {
   const [verifyAck, setVerifyAck] = useState(false);
   const [rejecting, setRejecting] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  // [1.146.0] A Senior Citizen / PWD discount the patient declared online: its ID is checked before
+  // the payment is recorded, and an ID that is not valid comes off with the rejection.
+  const [discountChecked, setDiscountChecked] = useState(false);
+  const [removeDiscount, setRemoveDiscount] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -75,7 +79,7 @@ export function usePaymentReview({ enabled = true } = {}) {
   // The queue makes that easy to do by accident: rows are stacked, every row carries the same
   // three buttons in the same places, and "Verify & issue receipt" sits between "Review" and
   // "Reject". A slip of one row books somebody else's money.
-  const askVerify = (submission) => { setVerifyAck(false); setVerifying(submission); };
+  const askVerify = (submission) => { setVerifyAck(false); setDiscountChecked(false); setVerifying(submission); };
   const dismissVerify = () => { if (!acting) setVerifying(null); };
 
   const confirmVerify = async () => {
@@ -90,9 +94,16 @@ export function usePaymentReview({ enabled = true } = {}) {
       return;
     }
 
+    if (verifying.discount_declared && !discountChecked) {
+      toastError('Check the ID photo first, and tick that it matches.');
+      return;
+    }
+
     setActing(verifying.id);
     try {
-      const res = await api.post(`/payment-submissions/${verifying.id}/verify`);
+      const res = await api.post(`/payment-submissions/${verifying.id}/verify`, {
+        discountIdChecked: Boolean(verifying.discount_declared) && discountChecked,
+      });
       const receipt = res.data.data?.payment?.receipt_number;
       const name = `${verifying.first_name} ${verifying.last_name}`;
       // Closed before the reload, matching confirmReject — the row this dialog describes is about
@@ -109,7 +120,7 @@ export function usePaymentReview({ enabled = true } = {}) {
     }
   };
 
-  const askReject = (submission) => { setRejectReason(''); setRejecting(submission); };
+  const askReject = (submission) => { setRejectReason(''); setRemoveDiscount(false); setRejecting(submission); };
   const dismissReject = () => { if (!acting) setRejecting(null); };
 
   const confirmReject = async () => {
@@ -120,11 +131,17 @@ export function usePaymentReview({ enabled = true } = {}) {
     }
     setActing(rejecting.id);
     try {
-      await api.post(`/payment-submissions/${rejecting.id}/reject`, { reviewNote: rejectReason.trim() });
+      const res = await api.post(`/payment-submissions/${rejecting.id}/reject`, {
+        reviewNote: rejectReason.trim(),
+        removeDiscount: Boolean(rejecting.discount_declared) && removeDiscount,
+      });
       const name = `${rejecting.first_name} ${rejecting.last_name}`;
       setRejecting(null);
       await load();
-      toastSuccess(`${name}'s payment rejected, with your reason sent to them.`);
+      // [1.146.0] Said when the booking went with it: its appointment time had passed.
+      toastSuccess(res.data.data?.submission?.released
+        ? `${name}'s payment rejected. Their appointment time had passed, so the booking was released.`
+        : `${name}'s payment rejected, with your reason sent to them.`);
     } catch (err) {
       toastError(err.response?.data?.message || 'The payment could not be rejected.');
     } finally {
@@ -140,5 +157,6 @@ export function usePaymentReview({ enabled = true } = {}) {
     acting,
     verifying, verifyAck, setVerifyAck, askVerify, dismissVerify, confirmVerify,
     rejecting, rejectReason, setRejectReason, askReject, dismissReject, confirmReject,
+    discountChecked, setDiscountChecked, removeDiscount, setRemoveDiscount,
   };
 }

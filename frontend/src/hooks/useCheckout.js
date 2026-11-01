@@ -226,7 +226,7 @@ export function useCheckout({ isAlreadyPaid, onPaid } = {}) {
     setConfirming(false);
   };
 
-  const confirm = async ({ withdrawPendingClaims = false } = {}) => {
+  const confirm = async ({ withdrawPendingClaims = false, discountIdChecked = false } = {}) => {
     const totalDue = parseFloat(bill.totalAmount);
     const tender = paymentMethod === 'Cash'
       ? { tendered: parseFloat(amountTendered || 0), change: changeDue() }
@@ -247,6 +247,8 @@ export function useCheckout({ isAlreadyPaid, onPaid } = {}) {
         amount: totalDue,
         // [1.123.0] Charging a test still waiting on the HMO in full withdraws its claim.
         withdrawPendingClaims,
+        // [1.146.0] The cashier has seen the ID behind a discount the patient declared online.
+        discountIdChecked,
       });
       payment = response.data.data.payment;
     } catch (err) {

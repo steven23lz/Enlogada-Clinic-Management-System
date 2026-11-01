@@ -181,14 +181,15 @@ test.describe('Editing a visit\'s tests', () => {
   // [1.129.0] A visit is for something. Taking its last test off left a ticket in the queue that
   // the till could not bill and no department would see; cancelling the visit is the way to drop
   // everything, and it is what the refusal says.
-  test('the last thing on a visit stays: cancelling the visit is how to drop it', async () => {
+  test('the last thing on a visit stays: left unpaid, the visit goes on its own', async () => {
     const tests = await activeTests();
     const visit = await newVisit({ testIds: [tests[0].id] });
     const [only] = await linesOf(visit);
 
     const res = await ctx.delete(`${API}/tests/visit-tests/${only.id}`, { headers: auth(rec) });
     expect(res.status(), 'the last test on a visit').toBe(409);
-    expect((await res.json()).message).toMatch(/cancel the visit/i);
+    // [1.146.0] There is no cancel [1.131.0]: the message says an unpaid visit goes on its own.
+    expect((await res.json()).message).toMatch(/needs at least one test.*leave it unpaid/i);
     expect(await linesOf(visit)).toHaveLength(1);
 
     // A package that is everything on the visit counts as one thing, and stays the same way.

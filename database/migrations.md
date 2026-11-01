@@ -1,5 +1,74 @@
 # Database Migration & Schema History
 
+## [1.146.0] - 2026-11-01 (What-ifs, mitigated)
+
+Run on an existing database: `node src/scripts/migrateDiscountDeclaration.js` (two columns,
+`--rollback` reverses it). Steven kept [1.145.0]'s rule (a booking never outlives its own time),
+asked for the cashier to be warned so it never reads as a bug, asked what happens when an HMO
+refuses and the patient does not want to go on, and asked for more what-ifs, mitigated. Each was
+checked against the code first. Two needed his decision, and he chose both.
+
+**His decisions**
+
+- **A Senior Citizen or PWD who books online declares the discount when booking.** Before, they
+  could never get it: an online booking is paid within its time to pay, and once paid a discount
+  cannot change. The booking dialog's step 2 asks "Senior Citizen or PWD?" (Senior only for a
+  profile 60 or over, checked again by the server with the till's own rule, now
+  `discountService.assertEligible`), the ID number and a photo of the ID (`discountId`, stored in
+  `uploads/discount-ids`, served by `GET /visits/:id/discount-id`). The bill is discounted at once:
+  the booking reply carries `amountDue` from the bill, and my-bookings and the review queue state the
+  discounted figure. `discount_granted_by` stays NULL ("declared") until money is taken: the till and
+  proof verification both refuse (409, `details.discountDeclared`) until the cashier ticks that the ID
+  was checked (`discountIdChecked`), and the discount is then granted in that cashier's name. An ID
+  that is not valid: at the till, choose "No discount"; on Online Payments, reject with "remove the
+  discount" (`removeDiscount`), so the patient's next payment is for the full amount. The Desk's
+  booking card says a discount was declared and asks to see the ID.
+- **A patient may release their own UNPAID booking** (`POST /appointments/:id/release`, Client, own
+  booking): their HMO said no, or they changed their mind. Removed as the sweep removes one, with an
+  Activity Log line. Refused for a paid booking (moved instead), one checked in, and one whose
+  payment is waiting to be checked (the money may already be in the clinic's account). The portal's
+  booking card offers "Release booking" and asks first. Nothing paid is ever cancelled.
+
+**Fixed within the existing rules**
+
+- **The cashier is warned before a booking's time runs out.** Online Payments lists proofs by
+  appointment time, soonest first (`minutes_to_start`, `starts_at`), shows each one's appointment and
+  the minutes left, and a banner counts those within the hour or past it (`proofs-urgent`). Today's
+  till row says how many there are. Rule: `lib/paymentReview.js` `appointmentUrgency`, unit-tested.
+- **A proof turned down after the appointment time releases the booking at once**, rather than at
+  the next sweep (which would email the patient twice), and the reject dialog, toast and email say
+  so. Before its time, the dialog and email name the real deadline (the appointment time) instead of
+  promising "you can submit again" and "your time is still reserved" with no limit.
+- **A removed unpaid visit keeps its payment proofs on record.** The removal deleted the reference
+  number with the screenshot, so a transfer that did arrive behind a rejected (blurry) proof could no
+  longer be matched. Each proof now leaves a `payment_submission.kept_on_removal` Activity Log line
+  with its reference, method, amount and the reason it was turned down.
+- **The bill cannot change while a payment the patient sent waits to be checked**
+  (`services/billLock.js`): applying or removing a discount, and adding or removing a test, answer
+  409. Before, a senior discount applied after a full-price transfer recorded less than the patient
+  sent, and with no refunds neither could be put right.
+- **"Visit owes" and the patient's amount to pay are the bill** (discount and HMO cover included),
+  from the same function the till uses; both summed the tests. A proof that names no amount records
+  the bill.
+- **The HMO-refusal email** says not going ahead needs nothing (or release it from the portal), and,
+  when the decision came at the appointment time, that the desk can see them as a walk-in.
+- **The Desk says why an HMO booking cannot be checked in** when its claim was not decided by its
+  appointment time, instead of "not paid in time".
+- **A date override cannot "open" a normally-closed day without hours.** It read as open with no
+  times, and a booking was refused "from NaN:NaN".
+- **Messages pointing at removed features:** "cancel the visit instead" (no cancel since [1.131.0]),
+  "Cancel it there", and "a mistake has to be reversed at cash-up" (no refunds since [1.121.0]).
+- **"plus ₱0.00 VAT exempted"** on Departments is shown only when VAT was exempted (the clinic is not
+  VAT-registered).
+
+**Checked and sound:** a paid booking for a closed date (named, emailed, moved); a price or package
+changed after booking (`price_at_time`); a retired HMO provider with pending claims; deactivating
+your own SuperAdmin account (refused); a test on an unpaid visit already with its department
+(cannot be removed); approval of a proof after its appointment (the booking is kept and checked in).
+
+**Tests:** `what-ifs.spec.js` (6), with `e2eMoveBookingStart.js` to put a test booking's start in the
+past (fixtures only, refuses production); unit tests for `appointmentUrgency` and Today's till row.
+
 ## [1.145.0] - 2026-11-01 (Rules that bent at a boundary)
 
 No migration. Steven, after [1.144.0]: check the whole system for hidden rules like that one. The

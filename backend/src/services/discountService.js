@@ -15,6 +15,10 @@ const {
 } = require('./discount');
 const { NotFoundError, ValidationError, ConflictError } = require('../errors');
 const { localDateStr } = require('../utils/csvExport');
+const { assertNoProofWaiting } = require('./billLock');
+const fs = require('fs');
+const path = require('path');
+const { DISCOUNT_ID_UPLOAD_ROOT } = require('../config/upload');
 
 class DiscountService {
   /**
@@ -131,6 +135,7 @@ class DiscountService {
         'This visit has already been paid, so its discount can no longer change.'
       );
     }
+    await assertNoProofWaiting(visitId, 'its discount');
 
     const discount = await discountRepository.findById(discountTypeId);
     if (!discount) {
@@ -149,23 +154,7 @@ class DiscountService {
       );
     }
 
-    // [1.124.0] The Senior Citizen discount is for patients 60 and over (RA 9994), and the
-    // record says how old this one is. A probe granted it to an 11-year-old: an ID number was
-    // typed, and nothing compared it with the birthdate on file. PWD carries no age rule.
-    if (/senior/i.test(discount.name)) {
-      const patient = await patientRepository.findPatientById(visit.patient_id);
-      const born = patient?.birthdate ? new Date(patient.birthdate) : null;
-      if (born) {
-        const now = new Date();
-        let age = now.getFullYear() - born.getFullYear();
-        if (now.getMonth() < born.getMonth() || (now.getMonth() === born.getMonth() && now.getDate() < born.getDate())) age -= 1;
-        if (age < 60) {
-          throw new ValidationError(
-            `The ${discount.name} discount is for patients 60 and over, and this patient's record says ${age}. If the birthdate is wrong, correct it on the patient's record first.`
-          );
-        }
-      }
-    }
+    this.assertEligible(discount, await patientRepository.findPatientById(visit.patient_id));
 
     const applied = await discountRepository.applyToVisit(visitId, {
       discountTypeId,
@@ -188,7 +177,54 @@ class DiscountService {
     return applied;
   }
 
-  async clearFromVisit(visitId, requestingUser) {
+  /**
+   * [1.124.0] The Senior Citizen discount is for patients 60 and over (RA 9994), and the record
+   * says how old this one is. A probe granted it to an 11-year-old: an ID number was typed, and
+   * nothing compared it with the birthdate on file. PWD carries no age rule. [1.146.0] One rule for
+   * the till and for a discount the patient declares when booking.
+   */
+  // eslint-disable-next-line class-methods-use-this
+  assertEligible(discount, patient) {
+    if (!/senior/i.test(discount.name)) return;
+    const born = patient?.birthdate ? new Date(patient.birthdate) : null;
+    if (!born) return;
+    const now = new Date();
+    let age = now.getFullYear() - born.getFullYear();
+    if (now.getMonth() < born.getMonth() || (now.getMonth() === born.getMonth() && now.getDate() < born.getDate())) age -= 1;
+    if (age < 60) {
+      throw new ValidationError(
+        `The ${discount.name} discount is for patients 60 and over, and this patient's record says ${age}. If the birthdate is wrong, correct it on the patient's record first.`
+      );
+    }
+  }
+
+  /**
+   * A Senior Citizen or PWD discount the patient declares when booking online. [1.146.0]
+   * Validated here, before the booking's transaction; `declareOnVisit` writes it inside it.
+   *
+   * @returns {Promise<object>} the discount type
+   */
+  async assertDeclarable({ kind, idNumber, idFile, patient }) {
+    if (!['senior', 'pwd'].includes(kind)) {
+      throw new ValidationError('Choose Senior Citizen or PWD, or no discount.');
+    }
+    const discount = await discountRepository.findStatutoryByKind(kind);
+    if (!discount) throw new ValidationError('That discount is not offered at the moment. Please ask the clinic.');
+    if (!String(idNumber || '').trim()) {
+      throw new ValidationError(`Give your ${kind === 'senior' ? 'OSCA (Senior Citizen)' : 'PWD'} ID number.`);
+    }
+    if (String(idNumber).trim().length > 50) throw new ValidationError('That ID number is too long.');
+    if (!idFile) {
+      throw new ValidationError('Attach a photo of your ID: the clinic checks it before the discount is given.');
+    }
+    if (!/^image\//.test(idFile.mimetype || '') && idFile.mimetype !== 'application/pdf') {
+      throw new ValidationError('The photo of the ID must be a picture or a PDF.');
+    }
+    this.assertEligible(discount, patient);
+    return discount;
+  }
+
+  async clearFromVisit(visitId, requestingUser, options = {}) {
     const visit = await visitRepository.findVisitById(visitId);
     if (!visit) {
       throw new NotFoundError('Visit not found');
@@ -200,8 +236,13 @@ class DiscountService {
         'This visit has already been paid, so its discount can no longer change.'
       );
     }
+    if (!options.afterRejectingProof) await assertNoProofWaiting(visitId, 'its discount');
 
     const cleared = await discountRepository.clearFromVisit(visitId);
+    // A declared discount's ID photo goes with it. [1.146.0]
+    if (cleared?.old_id_file_path) {
+      fs.unlink(path.join(DISCOUNT_ID_UPLOAD_ROOT, path.basename(cleared.old_id_file_path)), () => {});
+    }
 
     await auditService.log({
       actorId: requestingUser?.userId,

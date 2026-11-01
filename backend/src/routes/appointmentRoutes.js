@@ -28,6 +28,10 @@ router.get('/verify/:reference', verifyToken, authorizeStaff, authorizePermissio
 
 // [1.131.0] No cancel route: an unpaid booking is released on its own when its time is up, and a
 // paid one is moved, never cancelled (no refunds). appointmentService.updateStatus says the same.
+//
+// [1.146.0] Except that a patient may let go of their OWN unpaid booking sooner: their HMO said no,
+// or they changed their mind. Paid ones still cannot be (appointmentService.releaseUnpaid decides).
+router.post('/:id/release', verifyToken, authorizeRoles('Client'), appointmentController.release);
 
 // Move a booking to a different slot. Patient-reachable, so it keeps an explicit role list rather
 // than authorizeStaff: a patient moves their own booking, staff move one on a patient's behalf.

@@ -1,4 +1,5 @@
 const paymentRepository = require('../repositories/paymentRepository');
+const discountRepository = require('../repositories/discountRepository');
 const { formatCurrency } = require('../utils/money');
 const discountService = require('./discountService');
 const db = require('../config/database');
@@ -122,6 +123,9 @@ class PaymentService {
             percentage: parseFloat(visitInfo.discount_percentage).toFixed(2),
             isStatutory: visitInfo.discount_is_statutory,
             idNumber: visitInfo.discount_id_number,
+            // [1.146.0] Declared by the patient when booking, with a photo of the ID, and not yet
+            // checked: whoever takes the payment checks it, and is then the one who granted it.
+            declared: Boolean(visitInfo.discount_id_file_path) && !visitInfo.discount_granted_by,
           }
         : null,
       totalAmount: totalAmount.toFixed(2)
@@ -165,6 +169,8 @@ class PaymentService {
   async processPayment({
     patientVisitId, processedBy, paymentMethod, referenceNumber, amount,
     fromSubmissionId = null, withdrawPendingClaims = false,
+    // [1.146.0] The cashier has looked at the ID behind a discount the patient declared online.
+    discountIdChecked = false,
     // false when the caller announces it after its own transaction commits (a booking paid as it
     // is made [1.132.0]); a notice written inside someone else's transaction could abort it.
     announce = true,
@@ -200,6 +206,17 @@ class PaymentService {
         `This patient has already sent an online payment (reference ${proof.reference_number}) that has not been checked. Check it in Online Payments first: taking money here as well would charge them twice.`
       );
       error.statusCode = 409;
+      throw error;
+    }
+
+    // [1.146.0] A Senior Citizen / PWD discount declared online is granted by whoever takes the
+    // money, once they have seen the ID: a receipt is final, so it is checked first, not after.
+    if (bill.discount?.declared && !discountIdChecked) {
+      const error = new Error(
+        `This visit has a ${bill.discount.name} discount the patient declared online (ID ${bill.discount.idNumber}). Check the ID first: if it is not valid, remove the discount, and the patient pays the full amount.`
+      );
+      error.statusCode = 409;
+      error.details = { discountDeclared: true };
       throw error;
     }
 
@@ -263,6 +280,11 @@ class PaymentService {
       // for this visit — otherwise an abandoned GCash/Maya session would linger as a 'Pending'
       // payment row against an already-settled visit.
       await paymentRepository.cancelPendingGatewayPayments(patientVisitId);
+
+      // The declared discount is granted in the cashier's name, now that the ID was checked. [1.146.0]
+      if (bill.discount?.declared) {
+        await discountRepository.markGranted(patientVisitId, processedBy);
+      }
 
       // Paid, so a booking that was holding its slot takes it for good. [1.123.0] Counter and proof
       // payments never cleared the hold before: only the gateway did, so a booking paid at the desk

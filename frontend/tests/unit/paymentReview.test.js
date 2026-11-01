@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reviewConcerns, AMOUNT_TOLERANCE } from '../../src/lib/paymentReview';
+import { reviewConcerns, AMOUNT_TOLERANCE, appointmentUrgency } from '../../src/lib/paymentReview';
 
 /**
  * What makes a payment submission worth a second look. [1.72.0]
@@ -112,5 +112,20 @@ describe('a submission that is not there at all', () => {
     expect(() => reviewConcerns(null)).not.toThrow();
     expect(reviewConcerns(null).concerning).toBe(false);
     expect(reviewConcerns(undefined).concerning).toBe(false);
+  });
+});
+
+describe('appointmentUrgency [1.146.0]', () => {
+  it('has nothing to say about a payment with no appointment (a walk-in visit)', () => {
+    expect(appointmentUrgency({ minutes_to_start: null })).toEqual({ state: 'none', minutes: null });
+    expect(appointmentUrgency({})).toEqual({ state: 'none', minutes: null });
+  });
+
+  it('puts a payment within the hour of its appointment first, and one past it apart', () => {
+    expect(appointmentUrgency({ minutes_to_start: 25 }).state).toBe('soon');
+    expect(appointmentUrgency({ minutes_to_start: 60 }).state).toBe('soon');
+    expect(appointmentUrgency({ minutes_to_start: 0 }).state).toBe('soon');
+    expect(appointmentUrgency({ minutes_to_start: -1 }).state).toBe('passed');
+    expect(appointmentUrgency({ minutes_to_start: 61 }).state).toBe('later');
   });
 });

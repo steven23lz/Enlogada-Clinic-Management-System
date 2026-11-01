@@ -3,7 +3,7 @@ const path = require('path');
 const visitRepository = require('../repositories/visitRepository');
 const paymentRepository = require('../repositories/paymentRepository');
 const { VISIT_TYPES, VISIT_STATUSES } = require('../constants/visits');
-const { DOCTOR_REQUEST_UPLOAD_ROOT } = require('../config/upload');
+const { DOCTOR_REQUEST_UPLOAD_ROOT, DISCOUNT_ID_UPLOAD_ROOT } = require('../config/upload');
 const { CLIENT_ROLE } = require('../constants/roles');
 const notificationService = require('./notificationService');
 const patientRepository = require('../repositories/patientRepository');
@@ -265,6 +265,29 @@ class VisitService {
    * profile because one account owns several. Not theirs reads as 404, not 403, so the answer does
    * not confirm the visit exists — the same choice payment proofs make.
    */
+  /**
+   * The photo of the Senior Citizen / PWD ID a patient declared with a booking, for the cashier who
+   * checks it before the discount is granted. [1.146.0] An identity document: served through this
+   * authenticated, ownership-checked route, never statically, like the doctor's request.
+   */
+  async getDiscountIdFile(visitId, requestingUser) {
+    const notFound = (message) => {
+      const error = new Error(message);
+      error.statusCode = 404;
+      return error;
+    };
+    const visit = await visitRepository.findDiscountIdByVisitId(visitId);
+    if (!visit) throw notFound('Visit not found.');
+    if (requestingUser?.roles?.includes(CLIENT_ROLE)) {
+      const profiles = await patientRepository.findPatientsByUserId(requestingUser.userId);
+      if (!profiles.some((p) => p.id === visit.patient_id)) throw notFound('Visit not found.');
+    }
+    if (!visit.discount_id_file_path) throw notFound('No ID photo was sent with this visit.');
+    const absolutePath = path.join(DISCOUNT_ID_UPLOAD_ROOT, path.basename(visit.discount_id_file_path));
+    if (!fs.existsSync(absolutePath)) throw notFound('The ID photo could not be found on the server.');
+    return { absolutePath, mimeType: visit.discount_id_mime_type || 'application/octet-stream' };
+  }
+
   async getDoctorRequestFile(visitId, requestingUser) {
     const notFound = (message) => {
       const error = new Error(message);

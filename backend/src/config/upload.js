@@ -212,11 +212,18 @@ const MAX_HMO_CARD_SIZE_BYTES = 8 * 1024 * 1024; // 8MB
 const DOCTOR_REQUEST_UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads', 'doctor-requests');
 fs.mkdirSync(DOCTOR_REQUEST_UPLOAD_ROOT, { recursive: true });
 
-// The two files a booking may carry, by multipart field: where each is stored, its filename
-// prefix, and how a refusal names it. Same mime allowlist and size ceiling for both.
+// A photo of the Senior Citizen or PWD ID a patient declares when booking online. [1.146.0] On the
+// VISIT, like the doctor's request, and checked by the cashier before the discount is granted. Its
+// own folder: it is an identity document, and nothing that prunes HMO cards may reach it.
+const DISCOUNT_ID_UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads', 'discount-ids');
+fs.mkdirSync(DISCOUNT_ID_UPLOAD_ROOT, { recursive: true });
+
+// The files a booking may carry, by multipart field: where each is stored, its filename prefix,
+// and how a refusal names it. Same mime allowlist and size ceiling for all.
 const BOOKING_FILE_FIELDS = {
   hmoCard: { root: HMO_CARD_UPLOAD_ROOT, prefix: 'hmo', label: 'The HMO card' },
   doctorRequest: { root: DOCTOR_REQUEST_UPLOAD_ROOT, prefix: 'docreq', label: "The doctor's request" },
+  discountId: { root: DISCOUNT_ID_UPLOAD_ROOT, prefix: 'scid', label: 'The photo of the ID' },
 };
 
 const hmoCardStorage = multer.diskStorage({
@@ -243,7 +250,7 @@ const uploadHmoCard = multer({
   fileFilter: hmoCardFileFilter,
   // files/fields bounds so a multipart body cannot be used to hold the connection open. The
   // booking body carries at most a handful of fields plus one testIds[] entry per test.
-  limits: { fileSize: MAX_HMO_CARD_SIZE_BYTES, files: 2, fields: 40, fieldNameSize: 200 }
+  limits: { fileSize: MAX_HMO_CARD_SIZE_BYTES, files: 3, fields: 40, fieldNameSize: 200 }
 });
 
 const sizeRefusal = (err) => {
@@ -275,6 +282,7 @@ const uploadBookingFilesMiddleware = (req, res, next) => {
     req.bookingFiles = {
       card: req.files?.hmoCard?.[0] || null,
       doctorRequest: req.files?.doctorRequest?.[0] || null,
+      discountId: req.files?.discountId?.[0] || null,
     };
     next();
   });
@@ -441,6 +449,7 @@ module.exports = {
   uploadHmoCardMiddleware,
   uploadBookingFilesMiddleware,
   DOCTOR_REQUEST_UPLOAD_ROOT,
+  DISCOUNT_ID_UPLOAD_ROOT,
   HMO_CARD_UPLOAD_ROOT,
   discardHmoCard,
   uploadPaymentProofMiddleware,

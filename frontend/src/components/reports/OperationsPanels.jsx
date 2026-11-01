@@ -159,7 +159,8 @@ export const BillingTotalsPanel = ({ billing, loading, error, onRetry }) => {
             />
             {/* Statutory deductions are a cost the clinic reclaims, so they are reported, not
                 hidden inside the net figure. */}
-            <Stat label="Discounts given" value={formatCurrency(t.discounts)} hint={`plus ${formatCurrency(t.vat_exempted)} VAT exempted`} />
+            {/* [1.146.0] The VAT line only where VAT was exempted: Enlogada is not VAT-registered. */}
+            <Stat label="Discounts given" value={formatCurrency(t.discounts)} hint={parseFloat(t.vat_exempted) > 0 ? `plus ${formatCurrency(t.vat_exempted)} VAT exempted` : undefined} />
             {parseFloat(t.refunded) > 0 && (
               <Stat label="Refunded" value={formatCurrency(t.refunded)} hint={`${t.refunds} reversal${t.refunds === 1 ? '' : 's'}`} tone="warn" />
             )}

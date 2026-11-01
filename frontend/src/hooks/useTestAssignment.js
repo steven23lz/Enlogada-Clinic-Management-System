@@ -44,7 +44,8 @@ export function useTestAssignment({ onAssigned } = {}) {
     // comes off whole, so it counts as one thing.
     const others = existing.filter((l) => l.status !== 'Cancelled'
       && (line.package_id ? l.package_id !== line.package_id : l.id !== line.id));
-    if (others.length === 0) return 'The only thing on this visit. To drop it, cancel the visit instead';
+    // [1.146.0] Nothing is cancelled [1.131.0]; an unpaid visit goes on its own.
+    if (others.length === 0) return 'The only thing on this visit, and a visit needs at least one test. Left unpaid, the visit is removed on its own';
     return null;
   };
 

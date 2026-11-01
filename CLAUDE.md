@@ -109,6 +109,7 @@ node src/scripts/migrateExamPerformed.js        # [1.129.0] visit_tests.performe
 node src/scripts/migrateUnpaidIsTemporary.js    # [1.131.0] removes never-paid Cancelled / No Show visits (Activity Log line each), drops [1.130.0]'s closed_reason/_at, retires appointments:cancel
 node src/scripts/migrateHmoApprovalFirst.js      # [1.132.0] HMO bookings wait for their claim until their start; a refused one gets the payment window (data only; --rollback reverses it)
 node src/scripts/migratePatientInvitations.js    # [1.136.0] portal invitations, unlink, users.email_verified_at, visits.booked_online (--rollback reverses it); then setupRbac.js
+node src/scripts/migrateDiscountDeclaration.js   # [1.146.0] patient_visits.discount_id_*: a Senior Citizen / PWD discount declared online with an ID photo (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -293,6 +294,14 @@ same `held_until` / `OCCUPIES_SLOT` machinery as the gateway's 15 minutes. A pro
 clears the hold (`confirmHold`); one sent after it is refused 409; a rejected proof starts the
 window again (`reholdForPayment`). Before this, only the switched-off gateway ever released a slot,
 so an unpaid booking held one for good.
+`[1.146.0]` That window ends by the appointment ([1.145.0]), so the cashier is warned: Online
+Payments lists proofs soonest appointment first (`minutes_to_start`), counts down to each, and a
+banner (`proofs-urgent`) and Today's till row count those within the hour or past it
+(`lib/paymentReview.js` `appointmentUrgency`). A proof turned down after its appointment time
+releases the booking at once (`unpaidExpiryService.removeNow`, one email, not two), and the dialog,
+toast and email say so. Whenever an unpaid visit is removed, each payment proof on it leaves a
+`payment_submission.kept_on_removal` Activity Log line with its reference, so a transfer that did
+arrive behind a turned-down screenshot can still be matched at the till.
 
 **Payment first, for every booking.** `[1.132.0]` Steven: "our rule is payment first remember".
 Two kinds of booking still took their slot for good unpaid, and no longer do:
@@ -621,6 +630,10 @@ version of this treated such a visit as waiting for good. A PAID visit still wit
 to be moved. A booking whose time to pay ran out cannot be checked in (409, "start a walk-in
 visit") and, moved by the patient first, gets a fresh time to pay (`restartLapsedHold`).
 `unpaid-expiry.spec.js`; `e2eBackdateVisit.js` moves a fixture's visit to an earlier day.
+`[1.146.0]` **A patient may release their own UNPAID booking** sooner (`POST /appointments/:id/
+release`, the portal's "Release booking"): their HMO said no, or they changed their mind. Never a
+paid one (it is moved), one checked in, or one whose payment waits to be checked. It is removed as
+the sweep removes one. Nothing PAID is ever cancelled.
 
 **Appointment reminders are sent by the server itself.** `[1.130.0]` Steven: automatic, the day
 before, and halfway to the appointment when it is booked later than that. `utils/reminderTiming.js`
@@ -677,6 +690,11 @@ the patient ticks "These are the tests I want" (bookings carry `booked_tests`).
 - **No counter payment over an unchecked online proof.** The bill carries `pendingProof`, and the
   till sends the cashier to Online Payments: a second payment has nowhere to go and no refund.
   Verifying a proof passes `fromSubmissionId`, which is what lets that payment through.
+- **The bill cannot change under a payment the patient sent.** `[1.146.0]` While a proof waits,
+  a discount cannot be applied or removed and a test cannot be added or removed
+  (`services/billLock.js`, 409): a discount applied after a full-price transfer recorded less than
+  the patient sent. Reject the proof first. "Visit owes" and the portal's amount to pay are the
+  bill itself (`getBillingSummary`), discount and HMO cover included.
 - **A date override names who it leaves without a slot.** Closing a day, or new hours, returns
   `affectedBookings`, emails each patient (`sendScheduleChangeNotice`), and Clinic Schedule lists
   them for moving (`GET /schedule/overrides/:date/bookings`). A lower capacity moves nobody.
@@ -938,6 +956,16 @@ is what the visit subtotal, the discount base, the drawer and the per-department
 read. Packages attach BEFORE loose tests: both writes are `ON CONFLICT DO NOTHING`, and for a test
 that is in a bundle *and* picked individually the package's allocated share must be the one that
 survives.
+
+**A Senior Citizen or PWD who books online declares it when booking.** `[1.146.0]` Steven's pick.
+An online booking is paid before the visit and a receipt is final, so the discount could never be
+added. The booking dialog asks for it (Senior only for a profile 60 or over;
+`discountService.assertDeclarable` / `assertEligible`), with the ID number and a photo of the ID
+(`patient_visits.discount_id_file_path`, `uploads/discount-ids`, `GET /visits/:id/discount-id`).
+The bill is discounted at once; `discount_granted_by` stays NULL ("declared") until money is taken,
+and the till and proof verification both refuse until the cashier ticks that the ID was checked
+(`discountIdChecked`), granting it in their name. An ID that is not valid: "No discount" at the
+till, or reject the proof with `removeDiscount`. The Desk's booking card asks to see the ID.
 
 **Statutory discounts: whether VAT comes off first depends on the clinic, and Enlogada's answer is no.** The order only exists for a VAT-REGISTERED establishment, where a Senior Citizen / PWD sale has the 12% VAT stripped **first** and the 20% applied to the VAT-exempt base (RA 9994 / RA 10754) — 714.29 on a 1,000.00 service. Enlogada is not VAT-registered (see above), so nothing is stripped and the 20% comes off the full price: **800.00**. `discountService.computeBreakdown` branches on `CLINIC_VAT_REGISTERED` at one line and that is the only place the two treatments differ. Only `is_statutory` discounts get the VAT step at all; a promo rate is an ordinary discount either way. `tests.price` is stored VAT-inclusive, so where VAT does apply it is extracted rather than added.
 

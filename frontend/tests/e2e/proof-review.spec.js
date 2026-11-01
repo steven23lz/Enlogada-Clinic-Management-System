@@ -191,7 +191,8 @@ test.describe('Proof of payment review', () => {
     //    gets recorded is the visit's total, not necessarily the one on the screenshot.
     const confirm = page.getByRole('dialog');
     await expect(confirm.getByRole('heading', { name: /Record this payment\?/i })).toBeVisible();
-    await expect(confirm.getByText(/cannot be undone here/i)).toBeVisible();
+    // [1.146.0] Says why: a receipt is final, there are no refunds (no "reversed at cash-up").
+    await expect(confirm.getByText(/cannot be undone: a receipt is final/i)).toBeVisible();
 
     // 2. And nothing has happened yet. This is the actual claim: the POST has not been sent while
     //    the dialog is merely open.

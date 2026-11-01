@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import api from '../config/api';
+import { toastSuccess } from '../lib/toast';
 
 /**
  * A patient's own bookings: seeing them, moving one, and paying for one. Nothing is cancelled:
  * an unpaid booking is released on its own when its time is up, and a paid one is moved. [1.131.0]
+ * [1.146.0] The patient may also release an UNPAID booking themselves, sooner (`release`).
  *
  * Paying is here rather than with the payment history because it acts on an appointment — the
  * button sits on the booking card and the checkout is opened for that visit. The history is the
@@ -62,6 +64,28 @@ export function useMyAppointments() {
   const openReschedule = (appointment) => setRescheduling(appointment);
   const closeReschedule = () => setRescheduling(null);
 
+  // Letting go of an unpaid booking. [1.146.0] Asked first: it cannot be undone, only booked again.
+  const [releasing, setReleasing] = useState(null);
+  const [releaseBusy, setReleaseBusy] = useState(false);
+  const [releaseError, setReleaseError] = useState('');
+  const askRelease = (appointment) => { setReleaseError(''); setReleasing(appointment); };
+  const cancelRelease = () => { if (!releaseBusy) setReleasing(null); };
+  const confirmRelease = async () => {
+    if (!releasing) return;
+    setReleaseBusy(true);
+    setReleaseError('');
+    try {
+      const res = await api.post(`/appointments/${releasing.id}/release`);
+      toastSuccess(res.data.message);
+      setReleasing(null);
+      await load();
+    } catch (err) {
+      setReleaseError(err.response?.data?.message || 'The booking could not be released. Please try again.');
+    } finally {
+      setReleaseBusy(false);
+    }
+  };
+
   /** Hands the browser to the provider's hosted page. Nothing here decides whether it was paid. */
   const payOnline = async (appointment, method) => {
     setPayError('');
@@ -87,6 +111,7 @@ export function useMyAppointments() {
   return {
     appointments, loading, error, page, setPage,
     rescheduling, openReschedule, closeReschedule,
+    releasing, askRelease, cancelRelease, confirmRelease, releaseBusy, releaseError,
     gateway, payingId, payError, payOnline, notePaymentCancelled, clearPayError,
     reload: load,
   };

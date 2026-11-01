@@ -318,6 +318,10 @@ CREATE TABLE patient_visits (
     discount_id_number VARCHAR(50),   -- OSCA / PWD ID presented
     discount_granted_by INT,
     discount_granted_at TIMESTAMP,
+    -- A Senior Citizen / PWD discount the patient declared when booking online: a photo of the ID.
+    -- [1.146.0] discount_granted_by stays NULL until whoever takes the payment checks it.
+    discount_id_file_path VARCHAR(255),
+    discount_id_mime_type VARCHAR(100),
     created_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

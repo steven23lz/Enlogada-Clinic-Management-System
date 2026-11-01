@@ -10,6 +10,8 @@ const appointmentRepository = require('../repositories/appointmentRepository');
 const patientRepository = require('../repositories/patientRepository');
 const visitRepository = require('../repositories/visitRepository');
 const scheduleRepository = require('../repositories/scheduleRepository');
+const hmoRepository = require('../repositories/hmoRepository');
+const discountRepository = require('../repositories/discountRepository');
 const testRepository = require('../repositories/testRepository');
 const patientService = require('./patientService');
 const notificationService = require('./notificationService');
@@ -20,6 +22,8 @@ const hmoService = require('./hmoService');
 const { discardHmoCard } = require('../config/upload');
 const visitService = require('./visitService');
 const paymentService = require('./paymentService');
+const discountService = require('./discountService');
+const unpaidExpiryService = require('./unpaidExpiryService');
 const { formatCurrency } = require('../utils/money');
 const auditService = require('./auditService');
 const appointmentEmailService = require('./appointmentEmailService');
@@ -364,7 +368,7 @@ class AppointmentService {
   async createAppointment({
     patientId, scheduledDate, scheduledTime, notes, createdBy, requestingUser,
     testIds = [], packageIds = [], hmo = null, hmoCardFile = null, doctorRequestFile = null, referral = null,
-    payNow = null
+    payNow = null, discountClaim = null, discountIdFile = null
   }) {
     // db.withTransaction rather than a hand-managed db.pool.connect(). Everything underneath —
     // testService.attachTests, hmoService.createRequest and the auditService.log inside it — runs
@@ -375,6 +379,7 @@ class AppointmentService {
     // is now structurally outside the transaction rather than inside its try.
     let outcome;
     let payerName = 'a patient';
+    let declaredDiscount = null;
     try {
       // Inside the try, though it runs before the transaction: multer has already written the card
       // by the time this method is entered, so a 403 here would otherwise leave it on disk forever.
@@ -496,6 +501,18 @@ class AppointmentService {
           throw error;
         }
 
+        // 3b. [1.146.0] Checked before anything is written: a senior's age, the ID number, the photo.
+        if (discountClaim) {
+          if (isStaffUser(requestingUser)) {
+            const error = new Error('Staff give a discount at the till, after seeing the ID.');
+            error.statusCode = 400;
+            throw error;
+          }
+          declaredDiscount = await discountService.assertDeclarable({
+            kind: discountClaim.kind, idNumber: discountClaim.idNumber, idFile: discountIdFile, patient: bookingPatient,
+          });
+        }
+
         // 4. Create the patient_visit record first (visit_type = 'Appointment')
         //
         // The referring physician goes on at creation rather than being written back afterwards
@@ -553,6 +570,21 @@ class AppointmentService {
           provisional: hmo ? 'hmo' : payingOnline
         });
 
+        // [1.146.0] A Senior Citizen or PWD discount declared with the booking: the bill is
+        // discounted now, and granted when whoever takes the payment has checked the ID.
+        if (declaredDiscount) {
+          await discountRepository.declareOnVisit(visit.id, {
+            discountTypeId: declaredDiscount.id,
+            idNumber: String(discountClaim.idNumber).trim(),
+            idFilePath: discountIdFile.filename,
+            idMimeType: discountIdFile.mimetype,
+          });
+          await auditService.log({
+            actorId: requestingUser?.userId, action: 'discount.declared', entityType: 'patient_visit', entityId: visit.id,
+            description: `Declared ${declaredDiscount.name} (${declaredDiscount.percentage}%) when booking, ID ${String(discountClaim.idNumber).trim()}: to be checked when paid`,
+          });
+        }
+
         // 6. Attach the chosen tests, and the HMO claim if one was made. Order matters:
         //    hmo_request_tests references visit_tests.
         // Packages first: both writes are ON CONFLICT DO NOTHING against
@@ -594,7 +626,7 @@ class AppointmentService {
       // multer wrote are unreachable. This is the ONLY place they are discarded on failure: past
       // this catch the transaction has committed, and deleting them would break a booking that
       // exists.
-      discardHmoCard(hmoCardFile, doctorRequestFile);
+      discardHmoCard(hmoCardFile, doctorRequestFile, discountIdFile);
       throw err;
     }
 
@@ -604,7 +636,7 @@ class AppointmentService {
       // A retry re-sends the evidence the original booking already carries, and this path files
       // no new claim for it to attach to. Drop the bytes rather than letting a re-submission swap
       // the evidence under a claim an Admin may already have reviewed.
-      discardHmoCard(hmoCardFile, doctorRequestFile);
+      discardHmoCard(hmoCardFile, doctorRequestFile, discountIdFile);
       // No notification either: staff were already told about this booking when it was made.
       return outcome;
     }
@@ -634,7 +666,10 @@ class AppointmentService {
     // server.js shuts down on an unhandled rejection. Cancel and reschedule do the same.
     this.emailBookingConfirmation(outcome.appointment.id).catch(() => {});
 
-    return outcome;
+    // [1.146.0] The amount to pay, as the bill states it: a declared discount makes it less than
+    // the sum of the tests, which is what the confirmation screen used to add up for itself.
+    const bill = await paymentService.getBillingSummary(outcome.appointment.patient_visit_id).catch(() => null);
+    return { ...outcome, amountDue: bill ? bill.totalAmount : null };
   }
 
   /**
@@ -664,9 +699,50 @@ class AppointmentService {
    * seen" would disagree within a minute of each other, and the patient would be looking at one
    * while the receptionist read the other — which is worse than neither screen having a number.
    */
+  /**
+   * A patient lets go of their own UNPAID booking. [1.146.0] Steven: when their HMO says no, or
+   * they change their mind, waiting for the time to pay to run out kept a slot from somebody else
+   * for nothing. Removed as the sweep removes an unpaid booking, with its Activity Log line and any
+   * payment proof kept on record. Never a paid one (no refunds [1.121.0]: it is moved instead), one
+   * already checked in (the desk has it), or one whose payment is waiting to be checked.
+   */
+  async releaseUnpaid(appointmentId, requestingUser) {
+    const id = parseInt(appointmentId, 10);
+    const refuse = (status, message) => {
+      const error = new Error(message);
+      error.statusCode = status;
+      throw error;
+    };
+    if (!Number.isInteger(id) || id <= 0) refuse(400, 'Invalid booking.');
+    const booking = await visitRepository.findUnpaidBooking({ appointmentId: id });
+    if (!booking) refuse(404, 'Booking not found.');
+    if (booking.user_id !== requestingUser?.userId) {
+      refuse(403, 'Access forbidden. This booking does not belong to your account.');
+    }
+    if (booking.paid) {
+      refuse(409, 'This booking is paid, so it stays yours. It can be moved to another time, but a payment is final.');
+    }
+    if (booking.appointment_status !== 'Pending') {
+      refuse(409, 'You have already checked in for this booking. Please speak to the front desk.');
+    }
+    if (booking.proof_waiting) {
+      refuse(409, 'Your payment for this booking is waiting to be checked by the clinic. If you do not want to go ahead, please call the clinic before it is confirmed.');
+    }
+    await unpaidExpiryService.removeNow(booking, { why: 'released_by_patient', actorId: requestingUser.userId });
+    return { reference: booking.appointment_reference, released: true };
+  }
+
   async getClientBookings(userId) {
-    const bookings = await appointmentRepository.findByPatientUserId(userId);
-    if (!bookings.length) return bookings;
+    const rows = await appointmentRepository.findByPatientUserId(userId);
+    if (!rows.length) return rows;
+    // The amount to pay is the bill the cashier will record, discount included. [1.146.0] It was
+    // the sum of the tests, so a senior who declared the discount was asked for the full price.
+    const bookings = rows.map((b) => (b.discount_percentage == null ? b : {
+      ...b,
+      amount_due: discountService.computeBreakdown({
+        subtotal: b.amount_due, hmoCoverage: 0, percentage: b.discount_percentage, isStatutory: b.discount_is_statutory,
+      }).netDue.toFixed(2),
+    }));
 
     // One rate for the whole list. Rows with a null `patients_ahead` are not in today's queue and
     // are returned untouched, without an estimate.
@@ -914,7 +990,12 @@ class AppointmentService {
     // comes anyway is a walk-in.
     if (status === 'Confirmed' && appointment.status === 'Pending' && appointment.held_until
       && new Date(appointment.held_until) < new Date()) {
-      refuse('This booking was not paid in time, so its slot was released. Start a walk-in visit for the patient instead.');
+      // [1.146.0] Said for what actually happened: an HMO booking whose claim nobody decided by
+      // its start was told it "was not paid in time", which sends the desk looking for a payment.
+      const hmo = await hmoRepository.findDecisionForVisit(appointment.patient_visit_id);
+      refuse(hmo?.pending > 0
+        ? "This booking's HMO claim was not decided by its appointment time, so its slot was released. Start a walk-in visit for the patient, and raise the HMO claim on it."
+        : 'This booking was not paid in time, so its slot was released. Start a walk-in visit for the patient instead.');
     }
 
     // Checking a patient in is only meaningful against the booking the receptionist just looked

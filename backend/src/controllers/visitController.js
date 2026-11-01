@@ -122,6 +122,18 @@ class VisitController {
     }
   }
 
+  // [1.146.0] The photo of a Senior Citizen / PWD ID declared with a booking.
+  async downloadDiscountId(req, res, next) {
+    try {
+      const { absolutePath, mimeType } = await visitService.getDiscountIdFile(Number(req.params.id), req.user);
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', 'inline; filename="discount-id"');
+      return res.sendFile(absolutePath);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   // [1.106.0] The doctor's signed request, served the way an HMO card is.
   async downloadDoctorRequest(req, res, next) {
     try {

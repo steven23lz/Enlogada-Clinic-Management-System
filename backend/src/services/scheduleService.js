@@ -232,6 +232,15 @@ class ScheduleService {
     const isOpen = payload.isOpen !== false;
     const { openTime, closeTime } = normaliseTimes(payload.openTime, payload.closeTime, { required: false });
 
+    // [1.146.0] Opening a day the week keeps closed (a special Sunday) needs its hours: with none,
+    // the day read as open with no times to book, and a booking was refused "from NaN:NaN".
+    if (isOpen && !openTime) {
+      const weekday = await scheduleRepository.findOperatingHoursForDay(new Date(`${date}T12:00:00Z`).getUTCDay());
+      if (!weekday?.is_open || !weekday.open_time) {
+        bad(`${DAY_NAMES[new Date(`${date}T12:00:00Z`).getUTCDay()]}s are normally closed, so give the hours the clinic opens on ${date}.`);
+      }
+    }
+
     const override = await scheduleRepository.upsertOverride({
       date,
       isOpen,

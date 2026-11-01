@@ -319,6 +319,13 @@ function BookingCard({ booking, checkIn, disposition, can }) {
           today and frees that day&apos;s slot.
         </p>
       )}
+      {/* [1.146.0] Declared online with a photo of the ID: the desk sees the ID itself on arrival. */}
+      {!over && booking.discount_declared_online && booking.discount_name && (
+        <p role="note" data-testid="booking-declared-discount" className="m-0 rounded-lg border border-amber-200 bg-amber-50 p-2 text-fine text-amber-800">
+          <strong>{booking.discount_name} discount declared online</strong>, ID{' '}
+          <span className="font-mono">{booking.discount_id_number}</span>. Ask to see the ID.
+        </p>
+      )}
       {!over && !booking.is_paid && (
         <p className="m-0 rounded-lg border border-amber-200 bg-amber-50 p-2 text-fine text-amber-800">
           This booking has no confirmed payment yet. You can still check the patient in, but the

@@ -267,13 +267,21 @@ class AppointmentEmailService {
       });
     }
 
+    // [1.146.0] Paying it yourself is one choice; not going ahead is the other, and it was never
+    // said. And a decision made at the last minute leaves only minutes: the desk can still help.
+    const lapsed = payBy && new Date(payBy) <= new Date();
     return sendEmail({
       to,
       subject: `Your HMO did not approve your booking for ${readableDate(date)}`,
       html: shell(`Hello ${patientName},`, `
         <p>Your HMO did not approve your booking for ${when} (reference ${esc(reference)}).${why}</p>
-        <p>You can still keep it by paying for it yourself${payClock ? ` by <strong>${payClock}</strong>` : ''},
-           from your patient portal. If it is not paid by then, its slot is released.</p>
+        ${lapsed
+          ? `<p>Its appointment time has come, so the booking has been released. If you are at the
+               clinic, the front desk can see you as a walk-in, paid at the counter.</p>`
+          : `<p>You can still keep it by paying for it yourself${payClock ? ` by <strong>${payClock}</strong>` : ''},
+               from your patient portal. If you reach the clinic before then, you can pay at the counter.</p>
+             <p style="font-size:14px;">Not going ahead? You can release the booking from your
+               portal, or do nothing: if it is not paid by then, its slot is released.</p>`}
       `),
     });
   }
@@ -323,25 +331,38 @@ class AppointmentEmailService {
    * answers has to go and look it up — which is the same failure [1.27.0] fixed for HMO refusals.
    * The service refuses to record a rejection without one, so there is always something to say.
    */
-  async sendPaymentRejected({ to, patientName, reference, reason }) {
+  async sendPaymentRejected({ to, patientName, reference, reason, payBy = null, released = false }) {
     if (!to) {
       logger.debug('Payment rejected email skipped: no email address on the patient.');
       return { skipped: true };
     }
+    // [1.146.0] What happens next, as it actually will. This promised "your appointment time is
+    // still reserved" and "you can settle at the counter" with no limit, after [1.123.0] made the
+    // time to pay end, and [1.145.0] made it end at the appointment itself.
+    const payClock = payBy ? esc(readableTime(new Date(payBy).toTimeString().slice(0, 5))) : null;
+    const next = released
+      ? `<p style="font-size:14px;">Your appointment time has passed, so this booking has been
+           released. If you did send the money, bring this reference to the clinic: the front desk
+           can see you as a walk-in, and the cashier will match your payment to it.</p>`
+      : payClock
+        ? `<p style="font-size:14px;">You can send the payment again from your account by
+             <strong>${payClock}</strong>, your appointment time at the latest. If you reach the
+             clinic before then, you can pay at the counter instead. If it is not confirmed by then,
+             the booking is released.</p>`
+        : `<p style="font-size:14px;">You can send the payment again from your account: sign in
+             and open the booking to upload a new confirmation.</p>`;
 
     return sendEmail({
       to,
       subject: `We could not confirm your payment — ${CLINIC_NAME}`,
       html: shell(`Hello ${patientName},`, `
         <p>We were not able to confirm the payment you sent for your booking
-           ${reference ? `<strong>${esc(reference)}</strong>` : ''}. Nothing has been charged.</p>
+           ${reference ? `<strong>${esc(reference)}</strong>` : ''}, so no payment has been recorded.</p>
         <table style="border-collapse:collapse;margin:16px 0;font-size:14px;">
           <tr><td style="padding:4px 16px 4px 0;color:#64748b;vertical-align:top;">Reason</td>
               <td style="padding:4px 0;"><strong>${esc(reason)}</strong></td></tr>
         </table>
-        <p style="font-size:14px;">You can send the payment again from your account — sign in and
-           open the booking to upload a new confirmation. Your appointment time is still reserved
-           in the meantime, and you can also settle at the counter when you arrive.</p>
+        ${next}
       `),
     });
   }

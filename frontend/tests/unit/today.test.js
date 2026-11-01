@@ -119,6 +119,20 @@ describe('tillNeeds', () => {
     expect(rows[1].action).toBeUndefined();
     expect(tillNeeds({ waiting: [], online: [], now: at(10) })).toEqual([]);
   });
+
+  // [1.146.0] A booking's time to pay ends at its appointment.
+  it('says how many online payments are for an appointment within the hour', () => {
+    const [row] = tillNeeds({
+      online: [
+        { first_name: 'Ana', last_name: 'Reyes', submitted_at: iso(8, 45), minutes_to_start: 20 },
+        { first_name: 'Lia', last_name: 'Tan', submitted_at: iso(9, 0), minutes_to_start: 2000 },
+        { first_name: 'Ken', last_name: 'Uy', submitted_at: iso(9, 5), minutes_to_start: null },
+      ],
+      canCheck: true,
+      now: at(10, 5),
+    });
+    expect(row.title).toBe('3 online payments to check, 1 for an appointment within the hour');
+  });
 });
 
 describe('departmentNeeds', () => {

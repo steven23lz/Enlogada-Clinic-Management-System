@@ -66,7 +66,10 @@ class PaymentSubmissionController {
 
   async verify(req, res, next) {
     try {
-      const { submission, payment } = await paymentSubmissionService.verify(req.params.id, req.user);
+      const { submission, payment } = await paymentSubmissionService.verify(req.params.id, req.user, {
+        // [1.146.0] The cashier looked at the photo of a Senior Citizen / PWD ID declared online.
+        discountIdChecked: req.body?.discountIdChecked === true,
+      });
       return res.status(200).json({
         status: 'success',
         message: `Payment verified — receipt ${payment.receipt_number} issued.`,
@@ -80,11 +83,15 @@ class PaymentSubmissionController {
   async reject(req, res, next) {
     try {
       const submission = await paymentSubmissionService.reject(
-        req.params.id, req.body.reviewNote, req.user
+        req.params.id, req.body.reviewNote, req.user,
+        // [1.146.0] The declared discount's ID was not valid: the patient pays the full amount.
+        { removeDiscount: req.body?.removeDiscount === true }
       );
       return res.status(200).json({
         status: 'success',
-        message: 'Payment rejected, with your reason recorded.',
+        message: submission.released
+          ? 'Payment rejected. The appointment time had passed, so the booking was released.'
+          : 'Payment rejected, with your reason recorded.',
         data: { submission }
       });
     } catch (err) {

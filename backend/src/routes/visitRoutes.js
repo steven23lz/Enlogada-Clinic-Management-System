@@ -36,6 +36,8 @@ router.get('/:id', verifyToken, authorizeStaff, authorizePermissions('visits:rea
 // The doctor's signed request a patient uploaded with their booking. [1.106.0] Client is named so
 // a patient can see their own; the service checks that the visit is theirs.
 router.get('/:id/doctor-request', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier', 'Client'), authorizePermissions('visits:read'), visitController.downloadDoctorRequest);
+// [1.146.0] The photo of a Senior Citizen / PWD ID declared with a booking: the cashier checks it.
+router.get('/:id/discount-id', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Cashier', 'Client'), authorizePermissions('visits:read'), visitController.downloadDiscountId);
 
 // Update visit status (Receptionist, Admin, Cashier)
 router.put('/:id/status', verifyToken, authorizeStaff, authorizePermissions('visits:update'), visitController.updateStatus);

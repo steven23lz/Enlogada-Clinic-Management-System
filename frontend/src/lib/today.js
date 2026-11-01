@@ -2,6 +2,7 @@ import { formatDuration } from './duration';
 import { formatTime12, toDateInput } from './date';
 import { paidVisitIds } from './collections';
 import { categoryLabel, issuesReports } from './categories';
+import { appointmentUrgency } from './paymentReview';
 import { hoursOn } from './clinicStatus';
 
 /**
@@ -175,11 +176,13 @@ export function tillNeeds({ waiting = [], online = [], canCheck = false, now = n
   if (online.length) {
     const sorted = [...online].sort(oldestFirst('submitted_at'));
     const since = waitedFor(sorted[0].submitted_at, now);
+    // [1.146.0] A booking's time to pay ends at its appointment, so these are the ones to do first.
+    const urgent = online.filter((s) => ['soon', 'passed'].includes(appointmentUrgency(s).state)).length;
     rows.push({
       id: 'online',
       tone: 'amber',
       icon: 'wallet',
-      title: `${count(online.length, 'online payment')} to check`,
+      title: `${count(online.length, 'online payment')} to check${urgent ? `, ${urgent} for an appointment within the hour` : ''}`,
       detail: [someNames(sorted.map(personName), 3), since && `the oldest was sent ${since} ago`]
         .filter(Boolean).join(' · '),
       action: canCheck ? { label: 'Check them', go: 'cashier-payments' } : undefined,

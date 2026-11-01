@@ -452,10 +452,16 @@ function useCase(spec) {
     placed[label] = cell;
     p.edge({ id: p.cells[0].match(/id="(n\d+)"/)[1] }, cell, '', S.edgeStraight);
   });
+  // Each extension takes its base case's row, or the next free row below it: two extending one
+  // case (Book Appointment, [1.146.0]) were drawn one on top of the other.
+  const taken = new Set();
   (spec.relations || []).forEach((rel) => {
     const from = placed[rel.from];
     if (!from) return;
-    const cell = p.node(rel.to, 680, from.y, w, h, S.ellipse);
+    let y = from.y;
+    while (taken.has(y)) y += h + gap;
+    taken.add(y);
+    const cell = p.node(rel.to, 680, y, w, h, S.ellipse);
     p.edge(from, cell, rel.kind === 'include' ? '«include»' : '«extend»', S.edgeDashed);
   });
   return p;
@@ -473,7 +479,8 @@ const USE_CASES = [
     relations: [{ from: 'Check In Patient', to: 'Issue Queue Ticket', kind: 'include' }, { from: 'Register Walk-In', to: 'Create Patient Record', kind: 'include' }, { from: 'View Patient Records', to: 'Link Walk-In to Account', kind: 'extend' }, { from: 'View Visit History', to: 'Record Paper Feedback', kind: 'extend' }] },
   { name: 'Cashier', actor: 'Cashier',
     cases: ['Login', 'View Today', 'Confirm Final Tests', 'Process Billing and Payment', 'Apply Statutory Discount', 'Withdraw HMO Claim', 'Review Online Payment Proof', 'View Transaction History', 'Logout'],
-    relations: [{ from: 'Process Billing and Payment', to: 'Issue Receipt', kind: 'include' }, { from: 'View Transaction History', to: 'Print Receipt Copy', kind: 'extend' }] },
+    // [1.146.0] A Senior Citizen / PWD discount declared online is granted once its ID is checked.
+    relations: [{ from: 'Process Billing and Payment', to: 'Issue Receipt', kind: 'include' }, { from: 'View Transaction History', to: 'Print Receipt Copy', kind: 'extend' }, { from: 'Review Online Payment Proof', to: 'Check Declared Senior/PWD ID', kind: 'extend' }] },
   { name: 'Laboratory Staff', actor: 'Laboratory Staff',
     cases: ['Login', 'View Today', 'View Laboratory Worklist', 'Upload Laboratory Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
     relations: [{ from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: 'Print Laboratory Result', kind: 'extend' }] },
@@ -485,8 +492,9 @@ const USE_CASES = [
     cases: ['Login', 'View Today', 'View X-Ray Worklist', 'Upload X-Ray Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
     relations: [{ from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: 'Print X-Ray Result', kind: 'extend' }] },
   { name: 'Client Patient', actor: 'Client / Patient',
-    cases: ['Register Account', 'Login', 'View Available Services', 'Manage Patient Profiles', 'Book Appointment', "Upload Doctor's Request", 'Reschedule Booking', 'Pay Online and Upload Proof', 'View Digital Copy of Results', 'View Receipt', 'Answer Visit Feedback', 'Manage Account Profile', 'Logout'],
-    relations: [{ from: 'Register Account', to: 'Verify Emailed Code', kind: 'include' }, { from: 'Login', to: 'Sign In with Google', kind: 'extend' }, { from: 'Book Appointment', to: 'Generate QR Booking Pass', kind: 'extend' }, { from: 'Pay Online and Upload Proof', to: 'Confirm Final Tests', kind: 'include' }] },
+    // [1.146.0] An unpaid booking can be released by the patient, and a Senior / PWD discount declared.
+    cases: ['Register Account', 'Login', 'View Available Services', 'Manage Patient Profiles', 'Book Appointment', "Upload Doctor's Request", 'Reschedule Booking', 'Release Unpaid Booking', 'Pay Online and Upload Proof', 'View Digital Copy of Results', 'View Receipt', 'Answer Visit Feedback', 'Manage Account Profile', 'Logout'],
+    relations: [{ from: 'Register Account', to: 'Verify Emailed Code', kind: 'include' }, { from: 'Login', to: 'Sign In with Google', kind: 'extend' }, { from: 'Book Appointment', to: 'Generate QR Booking Pass', kind: 'extend' }, { from: 'Book Appointment', to: 'Declare Senior/PWD Discount', kind: 'extend' }, { from: 'Pay Online and Upload Proof', to: 'Confirm Final Tests', kind: 'include' }] },
 ];
 
 // ── 3. DFD level 0 ──────────────────────────────────────────────────────────────────────────────

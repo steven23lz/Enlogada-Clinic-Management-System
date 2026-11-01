@@ -10,6 +10,10 @@ Feedback). After the next change to a process, re-run the check [1.134.0] descri
 
 ## Open threads
 
+- **[1.146.0] What-ifs.** On another database run `node src/scripts/migrateDiscountDeclaration.js`
+  (patients declaring a Senior/PWD discount online with an ID photo). Patients can now release their
+  own unpaid booking. Steven chose both; the reasoning is in migrations.md [1.146.0]. The DPO should
+  know ID photos are now stored (`uploads/discount-ids`), kept with the visit like the doctor's request.
 - **[1.143.0] X-ray reports here again.** `NO_REPORT_CATEGORIES` is empty; X-ray exams marked done
   from [1.129.0] until then stay Done, judged row by row (`result_id` null). Nothing to run on
   another database. The demo seed draws X-ray reports again; re-seed before a demo.

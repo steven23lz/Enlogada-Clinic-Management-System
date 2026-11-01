@@ -39,6 +39,17 @@ class VisitRepository {
   }
 
   /** The doctor's request on a visit, for the authorised read-back route. [1.106.0] */
+  /** The photo of a Senior Citizen / PWD ID declared online with a booking. [1.146.0] */
+  async findDiscountIdByVisitId(id) {
+    const result = await db.query(
+      `SELECT id, patient_id, discount_id_file_path, discount_id_mime_type
+         FROM patient_visits
+        WHERE id = $1`,
+      [id]
+    );
+    return result.rows[0];
+  }
+
   async findDoctorRequestByVisitId(id) {
     const result = await db.query(
       `SELECT id, patient_id, doctor_request_file_path, doctor_request_original_name,
@@ -138,12 +149,51 @@ class VisitRepository {
    * For unpaid visits only: callers decide which. Returns the uploaded files the rows pointed at,
    * to be removed from disk once the transaction has committed. [1.131.0]
    */
+  /**
+   * One booking, as removing it needs it, if it was never paid. [1.146.0] By its visit or its
+   * appointment. `paid` is any receipt ever issued; `proof_waiting` an online payment not yet checked.
+   */
+  async findUnpaidBooking({ visitId = null, appointmentId = null }) {
+    const { rows } = await db.query(
+      `SELECT pv.id, pv.patient_id, a.id AS appointment_id, a.status AS appointment_status,
+              a.appointment_reference, a.scheduled_date, a.scheduled_time, a.held_until,
+              p.first_name, p.last_name, p.user_id, COALESCE(u.email, NULLIF(p.email, '')) AS email,
+              ARRAY(SELECT t.name FROM visit_tests vt JOIN tests t ON t.id = vt.test_id
+                     WHERE vt.patient_visit_id = pv.id ORDER BY vt.id) AS test_names,
+              EXISTS (SELECT 1 FROM payments pay WHERE pay.patient_visit_id = pv.id
+                        AND (pay.payment_status = 'Paid' OR pay.receipt_number IS NOT NULL)) AS paid,
+              EXISTS (SELECT 1 FROM payment_submissions s WHERE s.patient_visit_id = pv.id
+                        AND s.status = 'Pending') AS proof_waiting
+         FROM appointments a
+         JOIN patient_visits pv ON pv.id = a.patient_visit_id
+         JOIN patients p ON p.id = pv.patient_id
+         LEFT JOIN users u ON u.id = p.user_id
+        WHERE ($1::int IS NOT NULL AND pv.id = $1) OR ($2::int IS NOT NULL AND a.id = $2)`,
+      [visitId, appointmentId]
+    );
+    return rows[0] || null;
+  }
+
   async removeVisits(visitIds) {
-    if (!visitIds.length) return { files: [] };
+    if (!visitIds.length) return { files: [], proofs: [] };
     const v = [visitIds];
+    // The payment proofs about to go, so the caller can keep their reference numbers on record.
+    // [1.146.0] A proof turned down for a bad screenshot may still stand for money that arrived.
+    const { rows: proofs } = await db.query(
+      `SELECT ps.patient_visit_id, ps.reference_number, ps.amount_claimed, ps.status, ps.review_note,
+              COALESCE(pm.label, pm.kind) AS method
+         FROM payment_submissions ps
+         LEFT JOIN payment_methods pm ON pm.id = ps.payment_method_id
+        WHERE ps.patient_visit_id = ANY($1)
+        ORDER BY ps.submitted_at`,
+      v
+    );
     const { rows: files } = await db.query(
       `SELECT 'doctor-requests' AS dir, doctor_request_file_path AS p FROM patient_visits
         WHERE id = ANY($1) AND doctor_request_file_path IS NOT NULL
+       UNION ALL
+       SELECT 'discount-ids', discount_id_file_path FROM patient_visits
+        WHERE id = ANY($1) AND discount_id_file_path IS NOT NULL
        UNION ALL
        SELECT 'payments', proof_file_path FROM payment_submissions
         WHERE patient_visit_id = ANY($1) AND proof_file_path IS NOT NULL
@@ -176,7 +226,7 @@ class VisitRepository {
     await db.query('DELETE FROM visit_tests WHERE patient_visit_id = ANY($1)', v);
     await db.query('DELETE FROM appointments WHERE patient_visit_id = ANY($1)', v);
     await db.query('DELETE FROM patient_visits WHERE id = ANY($1)', v);
-    return { files };
+    return { files, proofs };
   }
 
   /**

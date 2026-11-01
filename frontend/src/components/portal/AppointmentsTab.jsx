@@ -3,6 +3,7 @@ import React from 'react';
 const LIST_PAGE_SIZE = 8;
 import { AlertTriangle, CalendarClock, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
+import { ConfirmDialog } from '../ui/confirm-dialog';
 import { Panel, PanelBody } from '../ui/panel';
 import { SkeletonList } from '../ui/skeleton';
 import { StatusBadge } from '../ui/status-badge';
@@ -290,18 +291,30 @@ export default function AppointmentsTab({ bookings, visits = null }) {
 
         {/* Reschedule only while the booking is still Pending: once reception has checked
             the patient in, the date is not the thing anyone is changing. No Cancel [1.131.0]:
-            an unpaid booking is released on its own when its time is up, and a paid one moves. */}
+            an unpaid booking is released on its own when its time is up, and a paid one moves.
+            [1.146.0] An unpaid one may also be released by the patient, sooner, unless a payment
+            for it is waiting to be checked. */}
         {appt.status === 'Pending' && (
-          <div className="flex gap-2 pt-0.5">
-            {appt.status === 'Pending' && (
+          <div className="flex flex-wrap gap-2 pt-0.5">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => bookings.openReschedule(appt)}
+              className="flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-fine font-bold"
+            >
+              <CalendarClock className="h-3.5 w-3.5" />
+              <span>Reschedule</span>
+            </Button>
+            {!appt.is_paid && !appt.has_pending_proof && (
               <Button
                 type="button"
-                variant="outline"
-                onClick={() => bookings.openReschedule(appt)}
-                className="flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-fine font-bold"
+                variant="ghost"
+                data-testid="booking-release"
+                onClick={() => bookings.askRelease(appt)}
+                className="flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-fine font-bold text-slate-600"
               >
-                <CalendarClock className="h-3.5 w-3.5" />
-                <span>Reschedule</span>
+                <XCircle className="h-3.5 w-3.5" />
+                <span>Release booking</span>
               </Button>
             )}
           </div>
@@ -390,6 +403,19 @@ export default function AppointmentsTab({ bookings, visits = null }) {
                 pageSize={LIST_PAGE_SIZE}
               />
             )}
+            {/* [1.146.0] Asked first, with what it means: it frees the time and cannot be undone. */}
+            <ConfirmDialog
+              open={Boolean(bookings.releasing)}
+              onOpenChange={(open) => { if (!open) bookings.cancelRelease(); }}
+              title="Release this booking?"
+              description={bookings.releasing
+                ? `${formatAppointmentDate(bookings.releasing.scheduled_date)} at ${formatTime12(String(bookings.releasing.scheduled_time).slice(0, 5))} (${bookings.releasing.appointment_reference}). You won't go ahead with it, and its time is freed for someone else. This can't be undone: to come later, book again.`
+                : ''}
+              confirmLabel="Release booking"
+              onConfirm={bookings.confirmRelease}
+              loading={bookings.releaseBusy}
+              error={bookings.releaseError}
+            />
           </Panel>
   );
 }

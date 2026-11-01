@@ -180,6 +180,11 @@ class AppointmentRepository {
              -- [1.106.0] The patient uploaded the doctor's signed request instead of typing the
              -- doctor's name, so the desk needs to know there is one to open at check-in.
              (pv.doctor_request_file_path IS NOT NULL) AS has_doctor_request,
+             -- [1.146.0] A Senior Citizen / PWD discount the patient declared online: the desk asks
+             -- to see the ID on arrival. The name is read in the SELECT below the GROUP BY.
+             (SELECT dt.name FROM discount_types dt WHERE dt.id = pv.discount_type_id) AS discount_name,
+             pv.discount_id_number,
+             (pv.discount_id_file_path IS NOT NULL) AS discount_declared_online,
              EXISTS (
                SELECT 1 FROM payments pay
                WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
@@ -372,10 +377,14 @@ class AppointmentRepository {
                     AND (ahead.created_at, ahead.id) < (pv.created_at, pv.id)
                )
                ELSE NULL
-             END AS patients_ahead
+             END AS patients_ahead,
+             -- The visit's discount, so amount_due can be the bill the cashier will record. [1.146.0]
+             dt.name AS discount_name, dt.percentage AS discount_percentage,
+             dt.is_statutory AS discount_is_statutory, pv.discount_id_number
       FROM appointments a
       JOIN patient_visits pv ON a.patient_visit_id = pv.id
       JOIN patients p ON pv.patient_id = p.id
+      LEFT JOIN discount_types dt ON dt.id = pv.discount_type_id
       WHERE p.user_id = $1
       ORDER BY a.scheduled_date DESC, a.scheduled_time DESC
     `;

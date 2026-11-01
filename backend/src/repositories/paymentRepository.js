@@ -324,6 +324,8 @@ class PaymentRepository {
              pv.queue_number,
              pv.status AS visit_status,
              pv.discount_id_number,
+             -- [1.146.0] A discount the patient declared online is not granted until its ID is checked.
+             pv.discount_granted_by, pv.discount_id_file_path,
              dt.id   as discount_type_id,
              dt.name as discount_name,
              dt.percentage as discount_percentage,

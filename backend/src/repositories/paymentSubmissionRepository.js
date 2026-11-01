@@ -139,14 +139,25 @@ class PaymentSubmissionRepository {
               pm.label AS method_label, pm.kind AS method_kind,
               p.first_name, p.last_name,
               pv.queue_number, pv.visit_type,
-              a.appointment_reference, a.scheduled_date, a.scheduled_time
+              a.appointment_reference, a.scheduled_date, a.scheduled_time,
+              -- When the appointment starts, and how long until then. [1.146.0] A booking's time
+              -- to pay ends at its start, so a proof checked after it can only be turned down:
+              -- the queue puts the soonest first and the screen counts down to each.
+              (a.scheduled_date + a.scheduled_time) AS starts_at,
+              FLOOR(EXTRACT(EPOCH FROM ((a.scheduled_date + a.scheduled_time) - CURRENT_TIMESTAMP)) / 60)::int AS minutes_to_start,
+              -- The discount on the bill, so "Visit owes" is what approving records. [1.146.0]
+              dt.name AS discount_name, dt.percentage AS discount_percentage,
+              dt.is_statutory AS discount_is_statutory, pv.discount_id_number,
+              -- Declared by the patient with a photo of the ID, not yet checked. [1.146.0]
+              (pv.discount_id_file_path IS NOT NULL AND pv.discount_granted_by IS NULL) AS discount_declared
          FROM payment_submissions ps
          JOIN patient_visits pv ON pv.id = ps.patient_visit_id
          JOIN patients p        ON p.id = pv.patient_id
          LEFT JOIN payment_methods pm ON pm.id = ps.payment_method_id
          LEFT JOIN appointments a     ON a.patient_visit_id = pv.id
+         LEFT JOIN discount_types dt  ON dt.id = pv.discount_type_id
         WHERE ps.status = 'Pending'
-        ORDER BY ps.submitted_at ASC`
+        ORDER BY (a.scheduled_date + a.scheduled_time) ASC NULLS LAST, ps.submitted_at ASC`
     );
     return result.rows;
   }

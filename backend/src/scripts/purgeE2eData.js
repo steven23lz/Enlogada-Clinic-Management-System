@@ -60,6 +60,11 @@ async function purgeOrphanedUploads(since, dryRun) {
       dir: 'doctor-requests',
       sql: 'SELECT doctor_request_file_path AS p FROM patient_visits WHERE doctor_request_file_path IS NOT NULL',
     },
+    // [1.146.0] A Senior Citizen / PWD discount declared with a booking carries a photo of the ID.
+    {
+      dir: 'discount-ids',
+      sql: 'SELECT discount_id_file_path AS p FROM patient_visits WHERE discount_id_file_path IS NOT NULL',
+    },
     { dir: 'results', sql: 'SELECT file_path AS p FROM test_results WHERE file_path IS NOT NULL' },
     // Proofs of payment, which share their folder with the clinic's own QR images. [1.86.0] The
     // QRs have to be in the referenced set: one published during a run is still in use afterwards,

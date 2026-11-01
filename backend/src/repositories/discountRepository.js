@@ -49,19 +49,69 @@ class DiscountRepository {
     return result.rows[0];
   }
 
+  /**
+   * Clears a visit's discount, and a declared one's ID photo with it. [1.146.0] Returns the photo's
+   * stored path (`old_id_file_path`), for the caller to remove once the change has committed.
+   */
   async clearFromVisit(visitId) {
     const result = await db.query(
-      `UPDATE patient_visits
+      `UPDATE patient_visits pv
        SET discount_type_id = NULL,
            discount_id_number = NULL,
            discount_granted_by = NULL,
            discount_granted_at = NULL,
+           discount_id_file_path = NULL,
+           discount_id_mime_type = NULL,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1
-       RETURNING id`,
+       FROM (SELECT id, discount_id_file_path FROM patient_visits WHERE id = $1) old
+       WHERE pv.id = old.id
+       RETURNING pv.id, old.discount_id_file_path AS old_id_file_path`,
       [visitId]
     );
     return result.rows[0];
+  }
+
+  /**
+   * A discount the PATIENT declared when booking online, with a photo of the ID. [1.146.0] Not
+   * granted yet: `discount_granted_by` stays NULL until whoever takes the payment checks the ID.
+   */
+  async declareOnVisit(visitId, { discountTypeId, idNumber, idFilePath, idMimeType }) {
+    const result = await db.query(
+      `UPDATE patient_visits
+       SET discount_type_id = $2, discount_id_number = $3,
+           discount_granted_by = NULL, discount_granted_at = NULL,
+           discount_id_file_path = $4, discount_id_mime_type = $5,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+       RETURNING id, discount_type_id, discount_id_number`,
+      [visitId, discountTypeId, idNumber, idFilePath, idMimeType]
+    );
+    return result.rows[0];
+  }
+
+  /** The cashier checked a declared discount's ID: it is granted in their name. [1.146.0] */
+  async markGranted(visitId, grantedBy) {
+    const result = await db.query(
+      `UPDATE patient_visits
+       SET discount_granted_by = $2, discount_granted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND discount_type_id IS NOT NULL AND discount_granted_by IS NULL
+       RETURNING id`,
+      [visitId, grantedBy]
+    );
+    return result.rows[0] || null;
+  }
+
+  /** The active statutory discount for a kind a patient may declare: 'senior' or 'pwd'. [1.146.0] */
+  async findStatutoryByKind(kind) {
+    const pattern = kind === 'senior' ? '%senior%' : '%pwd%';
+    const result = await db.query(
+      `SELECT id, name, percentage, is_statutory, requires_id, is_active
+         FROM discount_types
+        WHERE is_active AND is_statutory AND name ILIKE $1
+        ORDER BY id LIMIT 1`,
+      [pattern]
+    );
+    return result.rows[0] || null;
   }
 
   /**

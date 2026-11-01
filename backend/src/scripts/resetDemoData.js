@@ -133,6 +133,12 @@ const BOOKING_UPLOADS = [
     label: "doctor's requests",
     sql: 'SELECT doctor_request_file_path AS p FROM patient_visits WHERE doctor_request_file_path IS NOT NULL',
   },
+  // [1.146.0] The photo of a Senior Citizen / PWD ID declared with a booking, written the same way.
+  {
+    dir: 'discount-ids',
+    label: 'ID photos',
+    sql: 'SELECT discount_id_file_path AS p FROM patient_visits WHERE discount_id_file_path IS NOT NULL',
+  },
 ];
 
 async function pruneOrphanedHmoCards() {

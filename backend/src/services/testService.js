@@ -5,6 +5,7 @@ const visitRepository = require('../repositories/visitRepository');
 const patientService = require('./patientService');
 const auditService = require('./auditService');
 const paymentRepository = require('../repositories/paymentRepository');
+const { assertNoProofWaiting } = require('./billLock');
 const { DIAGNOSTIC_CATEGORIES } = require('../constants/modality');
 
 // Mirrors appointmentService.js's assertClientOwnsPatient exactly. POST /tests/visit-tests
@@ -270,11 +271,12 @@ class TestService {
     if (line.visit_paid) {
       refuse('This visit has already been paid, so its tests can no longer change: the patient holds a receipt for this bill.');
     }
+    await assertNoProofWaiting(line.patient_visit_id, 'its tests');
     if (line.has_result) {
       refuse(`${line.test_name} already has a result recorded. A result is a clinical record and cannot be removed by taking the test off the visit.`);
     }
     if (line.status !== 'Pending') {
-      refuse(`${line.test_name} is already with the department (${line.status}). Cancel it there rather than removing it here.`);
+      refuse(`${line.test_name} is already with the department (${line.status}), so it can no longer be taken off the visit.`);
     }
 
     // A bundle is removed whole. Every line in it must pass the same tests, or none moves.
@@ -295,7 +297,8 @@ class TestService {
     const removing = new Set(ids.map(Number));
     const onVisit = await testRepository.findTestsByVisitId(line.patient_visit_id);
     if (onVisit.filter((t) => !removing.has(Number(t.id)) && t.status !== 'Cancelled').length === 0) {
-      refuse(`${removedPackage || line.test_name} is the only thing on this visit, and a visit needs at least one test. To drop everything, cancel the visit (or the booking) instead.`);
+      // [1.146.0] There is no cancel [1.131.0]: the old advice named a button that is gone.
+      refuse(`${removedPackage || line.test_name} is the only thing on this visit, and a visit needs at least one test. If the patient wants none of it, leave it unpaid: an unpaid walk-in is removed at the end of its day, and an unpaid booking when its time to pay runs out (the patient can also release it from their portal).`);
     }
 
     const removed = await testRepository.deleteVisitTests(ids);
@@ -337,6 +340,7 @@ class TestService {
       error.statusCode = 409;
       throw error;
     }
+    await assertNoProofWaiting(patientVisitId, 'its tests');
 
     // [1.124.0] Nor does a visit that is over. A probe added tests to a CANCELLED visit: they sat
     // on a ticket nobody would call, billed to a visit the till no longer lists.

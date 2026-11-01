@@ -16,7 +16,7 @@ class PaymentController {
 
   async processPayment(req, res, next) {
     try {
-      const { patientVisitId, paymentMethod, referenceNumber, amount, withdrawPendingClaims } = req.body;
+      const { patientVisitId, paymentMethod, referenceNumber, amount, withdrawPendingClaims, discountIdChecked } = req.body;
       const processedBy = req.user.userId;
 
       if (!patientVisitId || !paymentMethod || amount === undefined) {
@@ -33,6 +33,7 @@ class PaymentController {
         referenceNumber,
         amount,
         withdrawPendingClaims: withdrawPendingClaims === true,
+        discountIdChecked: discountIdChecked === true,
       });
 
       return res.status(201).json({

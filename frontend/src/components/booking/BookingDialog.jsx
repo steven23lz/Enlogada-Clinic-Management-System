@@ -8,12 +8,13 @@ import TestPicker from './TestPicker';
 import EvidenceUpload from './EvidenceUpload';
 import BookingConfirmation from '../BookingConfirmation';
 import api from '../../config/api';
-import { formatAppointmentDate } from '../../lib/date';
+import { ageFromBirthdate, formatAppointmentDate } from '../../lib/date';
 import { DOCUMENT_MAX_EDGE } from '../../lib/cardImage';
 import { useEvidenceFile } from '../../hooks/useEvidenceFile';
 import { PlusCircle, AlertCircle } from 'lucide-react';
 
 const DOCTOR_REQUEST_IMAGE = { name: 'doctor-request.jpg', maxEdge: DOCUMENT_MAX_EDGE };
+const DISCOUNT_ID_IMAGE = { name: 'discount-id.jpg', maxEdge: DOCUMENT_MAX_EDGE };
 
 const EMPTY_BOOKING = {
   scheduledDate: '',
@@ -22,6 +23,9 @@ const EMPTY_BOOKING = {
   packageIds: [],
   hmoProviderId: '',
   hmoApprovalCode: '',
+  // [1.146.0] A Senior Citizen or PWD discount, declared with the ID number and a photo of the ID.
+  discountKind: 'none',
+  discountIdNumber: '',
 };
 
 /**
@@ -47,6 +51,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
   // HMO claim needs it and the card; self-pay may attach it and does not have to [1.107.0].
   const cardPhoto = useEvidenceFile();
   const doctorRequest = useEvidenceFile(DOCTOR_REQUEST_IMAGE);
+  const discountId = useEvidenceFile(DISCOUNT_ID_IMAGE);
   const [bookingData, setBookingData] = useState(EMPTY_BOOKING);
 
   // UI/UX Modernization Phase 10: holds the full confirmation payload (not just a success
@@ -67,10 +72,12 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
   // doctor's request names the patient too, so it goes with it.
   const clearCard = cardPhoto.clear;
   const clearDoctorRequest = doctorRequest.clear;
+  const clearDiscountId = discountId.clear;
   const clearEvidence = useCallback(() => {
     clearCard();
     clearDoctorRequest();
-  }, [clearCard, clearDoctorRequest]);
+    clearDiscountId();
+  }, [clearCard, clearDoctorRequest, clearDiscountId]);
 
   // Switching patient invalidates any evidence already chosen, for the same reason.
   useEffect(() => {
@@ -85,6 +92,11 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
   // Private patient is one a physician referred, whoever pays.
   const isReferred = selectedProfile?.patient_type_name === 'Private';
   const needsDoctorRequest = isHmo || isReferred;
+  // [1.146.0] Senior Citizen is offered to a profile 60 or over (the server checks it again); PWD to
+  // anyone. An online booking is paid before the visit, so the discount is claimed here or never.
+  const profileAge = ageFromBirthdate(selectedProfile?.birthdate);
+  const canDeclareSenior = profileAge === null || profileAge >= 60;
+  const declaring = bookingData.discountKind === 'senior' || bookingData.discountKind === 'pwd';
 
   const handleBookAppointment = async (e) => {
     e.preventDefault();
@@ -114,6 +126,14 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
       setBookingError('Please attach a photo of your HMO card to claim HMO coverage.');
       return;
     }
+    if (declaring && !bookingData.discountIdNumber.trim()) {
+      setBookingError(`Please give your ${bookingData.discountKind === 'senior' ? 'OSCA (Senior Citizen)' : 'PWD'} ID number.`);
+      return;
+    }
+    if (declaring && !discountId.file) {
+      setBookingError('Please attach a photo of your ID: the clinic checks it before the discount is given.');
+      return;
+    }
 
     setIsBooking(true);
     try {
@@ -133,6 +153,11 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
       testIds.forEach((id) => fd.append('testIds[]', String(parseInt(id, 10))));
       packageIds.forEach((id) => fd.append('packageIds[]', String(parseInt(id, 10))));
       if (doctorRequest.file) fd.append('doctorRequest', doctorRequest.file, doctorRequest.file.name);
+      if (declaring) {
+        fd.append('discountKind', bookingData.discountKind);
+        fd.append('discountIdNumber', bookingData.discountIdNumber.trim());
+        fd.append('discountId', discountId.file, discountId.file.name);
+      }
       if (hmo) {
         fd.append('hmo[providerId]', String(hmo.providerId));
         if (hmo.approvalCode) fd.append('hmo[approvalCode]', hmo.approvalCode);
@@ -153,7 +178,12 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
       // package expands into one visit_test per component with its allocated share of the fixed
       // price [1.45.0], so the picker's own figure would be the list total of the parts — higher
       // than the bill, on the one screen telling a patient what to send to a bank.
-      const amountDue = visitTests.reduce((sum, t) => sum + Number(t.price_at_time || 0), 0);
+      //
+      // [1.146.0] And the server's own bill when it sends one: a declared Senior Citizen / PWD
+      // discount makes the amount to pay less than the sum of the tests.
+      const amountDue = response.data.data.amountDue != null
+        ? Number(response.data.data.amountDue)
+        : visitTests.reduce((sum, t) => sum + Number(t.price_at_time || 0), 0);
 
       setBookingConfirmation({
         // Carried through so the confirmation can take the payment itself rather than sending the
@@ -401,6 +431,60 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                               required={needsDoctorRequest}
                               disabled={isBooking}
                             />
+
+                            {/* [1.146.0] A Senior Citizen or PWD discount. An online booking is paid
+                                before the visit and a receipt is final, so it is claimed here, with
+                                the ID; whoever takes the payment checks the ID before it is given. */}
+                            <div className="space-y-1.5" data-testid="booking-discount">
+                              <label className="field-label">
+                                Senior Citizen or PWD?
+                                <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">(optional)</span>
+                              </label>
+                              <p className="m-0 text-fine text-slate-500">
+                                Senior citizens and persons with disability get 20% off. Give your ID number and a
+                                photo of the ID: the clinic checks it before your payment is confirmed, and the front
+                                desk asks to see it when you arrive.
+                              </p>
+                              <Select
+                                value={bookingData.discountKind}
+                                onValueChange={(val) => setBookingData({ ...bookingData, discountKind: val })}
+                              >
+                                <SelectTrigger className="rounded-xl" aria-label="Senior Citizen or PWD discount">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">No discount</SelectItem>
+                                  {canDeclareSenior && <SelectItem value="senior">Senior Citizen (OSCA ID)</SelectItem>}
+                                  <SelectItem value="pwd">Person with disability (PWD ID)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {declaring && (
+                              <>
+                                <div className="space-y-1.5">
+                                  <label htmlFor="booking-discount-id-number" className="field-label">
+                                    {bookingData.discountKind === 'senior' ? 'OSCA ID number' : 'PWD ID number'}
+                                  </label>
+                                  <Input id="booking-discount-id-number"
+                                    value={bookingData.discountIdNumber}
+                                    maxLength={50}
+                                    onChange={(e) => setBookingData({ ...bookingData, discountIdNumber: e.target.value })}
+                                  />
+                                </div>
+                                <EvidenceUpload
+                                  id="booking-discount-id"
+                                  label="Photo of your ID"
+                                  hint="The front of the ID, with your name and ID number readable."
+                                  previewAlt="The ID photo you attached"
+                                  readCheck="Can you read your name and ID number in this photo? If not, take another."
+                                  pdfCheck="Check it shows your name and ID number."
+                                  evidence={discountId}
+                                  required
+                                  disabled={isBooking}
+                                />
+                              </>
+                            )}
 
                             <div className="flex justify-between pt-2 border-t border-line">
                               <Button type="button" variant="outline" onClick={() => setBookingStep(1)}>
