@@ -84,6 +84,30 @@ class AuthController {
     }
   }
 
+  // [1.147.0] A patient moving their sign-in to a new address: password, then a code to it.
+  async startEmailChange(req, res, next) {
+    try {
+      const { newEmail, password } = req.body || {};
+      const data = await authService.startEmailChange(req.user.userId, { newEmail, password });
+      return res.status(200).json({ status: 'success', message: `We sent a 6-digit code to ${data.email}.`, data });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async confirmEmailChange(req, res, next) {
+    try {
+      const { ticket, code } = req.body || {};
+      const data = await authService.confirmEmailChange(req.user.userId, {
+        ticket: String(ticket ?? ''),
+        code: String(code ?? '').trim(),
+      });
+      return res.status(200).json({ status: 'success', message: `You now sign in with ${data.user?.email}.`, data });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   /** Sends a fresh code for a sign-up or a reset already under way. */
   async resendCode(req, res, next) {
     try {

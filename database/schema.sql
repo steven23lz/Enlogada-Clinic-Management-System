@@ -162,9 +162,10 @@ CREATE TABLE auth_codes (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_auth_codes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     -- 'email_verify' [1.136.0]: an existing account proving its address before it accepts a record.
-    CONSTRAINT chk_auth_codes_purpose CHECK (purpose IN ('signup', 'password_reset', 'email_verify')),
+    -- 'email_change' [1.147.0]: a patient moving their sign-in to a NEW address, proven by this code.
+    CONSTRAINT chk_auth_codes_purpose CHECK (purpose IN ('signup', 'password_reset', 'email_verify', 'email_change')),
     CONSTRAINT chk_auth_codes_shape CHECK (
-      (purpose IN ('password_reset', 'email_verify') AND user_id IS NOT NULL AND password_hash IS NULL)
+      (purpose IN ('password_reset', 'email_verify', 'email_change') AND user_id IS NOT NULL AND password_hash IS NULL)
       OR (purpose = 'signup' AND user_id IS NULL AND password_hash IS NOT NULL
           AND first_name IS NOT NULL AND last_name IS NOT NULL)
     )

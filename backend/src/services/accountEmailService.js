@@ -110,6 +110,39 @@ class AccountEmailService {
     });
   }
 
+  /** The code that proves a NEW sign-in address belongs to the patient changing to it. [1.147.0] */
+  sendEmailChangeCode({ to, firstName, code }) {
+    return sendEmail({
+      to,
+      subject: `Confirm your new email for ${clinicName()}`,
+      html: frame(`
+        ${greeting(firstName)}
+        <p style="margin:0;">You asked to sign in to the ${escapeHtml(clinicName())} patient portal with this email from now on. Enter this code in My Account to confirm it.</p>
+        ${codeBlock(code)}
+        <p style="margin:0;color:#475569;">
+          If you did not ask for this, ignore this email. Nothing changes without the code.
+        </p>`),
+    });
+  }
+
+  /**
+   * Told at the OLD address once the sign-in email has changed. [1.147.0] The new address is only
+   * hinted at (j***@yahoo.com): this inbox may no longer be the patient's, and if the change was not
+   * theirs, what they need is to know it happened and to call the clinic.
+   */
+  sendEmailChanged({ to, firstName, newEmailHint }) {
+    return sendEmail({
+      to,
+      subject: `Your ${clinicName()} sign-in email was changed`,
+      html: frame(`
+        ${greeting(firstName)}
+        <p style="margin:0;">The sign-in email for your ${escapeHtml(clinicName())} patient portal account was changed to <strong>${escapeHtml(newEmailHint)}</strong>. You will no longer sign in with this address.</p>
+        <p style="margin:0;color:#475569;">
+          If you did not make this change, please contact the clinic right away.
+        </p>`),
+    });
+  }
+
   /**
    * An invitation to the portal. [1.136.0]
    *

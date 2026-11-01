@@ -50,6 +50,21 @@ function releasedColumns(deptRef) {
 }
 
 class PatientRepository {
+  /**
+   * The account's own profiles that carried its OLD sign-in address follow it to the new one.
+   * [1.147.0] Released results and booking emails go to a record's own address first, so leaving
+   * it would keep sending them to an inbox the patient has just said they no longer use.
+   */
+  async moveAccountEmail(userId, oldEmail, newEmail) {
+    const { rows } = await db.query(
+      `UPDATE patients SET email = $3, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = $1 AND LOWER(TRIM(email)) = LOWER(TRIM($2))
+        RETURNING id`,
+      [userId, oldEmail, newEmail]
+    );
+    return rows.length;
+  }
+
   async createPatient({ userId, patientTypeId, firstName, lastName, birthdate, sex, address, contactNumber, emergencyContact, email = null }) {
     const queryText = `
       INSERT INTO patients (user_id, patient_type_id, first_name, last_name, birthdate, sex, address, contact_number, emergency_contact, email)

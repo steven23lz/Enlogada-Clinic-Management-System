@@ -21,6 +21,9 @@ router.put('/change-password', verifyToken, authController.changePassword);
 // [1.136.0] An existing account proving its address before it accepts a patient record.
 router.post('/email-check', verifyToken, authController.startEmailCheck);
 router.post('/email-check/confirm', verifyToken, authController.confirmEmailCheck);
+// [1.147.0] A patient changes their sign-in email: password, then a code sent to the new address.
+router.post('/email-change', verifyToken, authController.startEmailChange);
+router.post('/email-change/confirm', verifyToken, authController.confirmEmailChange);
 router.post('/me/avatar', verifyToken, uploadAvatarMiddleware, authController.uploadAvatar);
 router.delete('/me/avatar', verifyToken, authController.deleteAvatar);
 router.get('/me/avatar', verifyToken, authController.getAvatarFile);

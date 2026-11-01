@@ -5,6 +5,7 @@ import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { useAuth } from '../../contexts/AuthContext';
 import { toastSuccess } from '../../lib/toast';
+import ChangeEmailDialog from './ChangeEmailDialog';
 
 const fromUser = (user) => ({
   firstName: user?.firstName || '',
@@ -20,7 +21,10 @@ const fromUser = (user) => ({
  * what it is, a fact about the account, not a greyed-out box that looks broken.
  */
 export default function PersonalDetailsPanel() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, hasRole } = useAuth();
+  // [1.147.0] A patient changes their own sign-in email; a staff address is the clinic's to change.
+  const isPatient = hasRole?.('Client');
+  const [changingEmail, setChangingEmail] = useState(false);
   const [form, setForm] = useState(() => fromUser(user));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -103,9 +107,18 @@ export default function PersonalDetailsPanel() {
                 className="m-0 flex h-9 items-center gap-2 rounded-lg border border-line bg-slate-50 px-3 text-note text-ink"
               >
                 <span className="min-w-0 flex-1 truncate" title={user?.email}>{user?.email}</span>
-                <Lock className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                {!isPatient && <Lock className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" aria-hidden="true" />}
               </p>
-              <p className="m-0 mt-1 text-fine text-slate-500">This is how you sign in, so it can't be changed here.</p>
+              {isPatient ? (
+                <p className="m-0 mt-1 flex flex-wrap items-center gap-x-2 text-fine text-slate-500">
+                  <span>This is how you sign in.</span>
+                  <Button type="button" variant="link" size="sm" className="h-auto p-0 text-fine" onClick={() => setChangingEmail(true)}>
+                    Change email
+                  </Button>
+                </p>
+              ) : (
+                <p className="m-0 mt-1 text-fine text-slate-500">This is how you sign in. An administrator changes it on Staff Accounts.</p>
+              )}
             </div>
           </div>
         </PanelBody>
@@ -114,6 +127,9 @@ export default function PersonalDetailsPanel() {
           <Button type="submit" loading={saving} disabled={!dirty}>Save Changes</Button>
         </PanelFooter>
       </form>
+      {/* Outside the form on purpose: React carries a submit through a portal to the form around
+          it, so a code confirmed in the dialog would also have saved these details. */}
+      {isPatient && <ChangeEmailDialog open={changingEmail} onOpenChange={setChangingEmail} />}
     </Panel>
   );
 }

@@ -171,6 +171,28 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // [1.147.0] A patient moves their sign-in to a new address: a code goes to it, then confirm.
+  const startEmailChange = async (newEmail, password) => {
+    try {
+      const response = await api.post('/auth/email-change', { newEmail, password });
+      return response.data.data;
+    } catch (err) {
+      throw err.response?.data?.message || 'The code could not be sent. Please try again.';
+    }
+  };
+
+  const confirmEmailChange = async (ticket, code) => {
+    try {
+      const response = await api.post('/auth/email-change/confirm', { ticket, code });
+      const { token, user: changed } = response.data.data || {};
+      if (token) localStorage.setItem('token', token);
+      if (changed?.email) setUser((prev) => ({ ...prev, email: changed.email }));
+      return changed;
+    } catch (err) {
+      throw err.response?.data?.message || 'That code did not work. Please try again.';
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     // The revalidation cache holds response bodies — queues, result histories, notifications
@@ -212,7 +234,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, verifySignup, resendCode, googleLogin, forgotPassword, resetPassword, updateProfile, changePassword, updateAvatarFlag, logout, hasPermission, hasRole }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifySignup, resendCode, googleLogin, forgotPassword, resetPassword, updateProfile, changePassword, startEmailChange, confirmEmailChange, updateAvatarFlag, logout, hasPermission, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

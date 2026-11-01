@@ -110,6 +110,7 @@ node src/scripts/migrateUnpaidIsTemporary.js    # [1.131.0] removes never-paid C
 node src/scripts/migrateHmoApprovalFirst.js      # [1.132.0] HMO bookings wait for their claim until their start; a refused one gets the payment window (data only; --rollback reverses it)
 node src/scripts/migratePatientInvitations.js    # [1.136.0] portal invitations, unlink, users.email_verified_at, visits.booked_online (--rollback reverses it); then setupRbac.js
 node src/scripts/migrateDiscountDeclaration.js   # [1.146.0] patient_visits.discount_id_*: a Senior Citizen / PWD discount declared online with an ID photo (--rollback reverses it)
+node src/scripts/migrateEmailChange.js           # [1.147.0] auth_codes accepts 'email_change': a patient moving their sign-in to a new address (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -451,6 +452,11 @@ This layering is enforced convention in this codebase (checked by the "Project A
   address. Specs cannot read email, so `helpers/accounts.js` `registerClient()` signs up through the
   real endpoints and sets a known code with `e2eAuthCode.js` (test addresses only). Use it for any
   throwaway client; a bare `POST /auth/register` no longer makes an account.
+- **A patient changes their sign-in email in My Account.** `[1.147.0]` Current password, then a code
+  to the NEW address (purpose `email_change`); nothing changes until it is entered. Their own records
+  that used the old address follow it, the old address is told (a hint of the new one only), and a
+  staff address is refused (403: Staff Accounts changes it). A Google-only account sets a password
+  first with "Forgot password".
 - Frontend session handling: `frontend/src/config/api.js` (Axios) fires a global `auth:unauthorized` window event on HTTP 401; `AuthContext.jsx` listens for it to clear user state without breaking SPA navigation — follow this pattern rather than throwing/catching 401s locally in components.
 
 ### Where a file goes

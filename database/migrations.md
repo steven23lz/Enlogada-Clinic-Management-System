@@ -1,5 +1,37 @@
 # Database Migration & Schema History
 
+## [1.147.0] - 2026-11-01 (A patient changes their sign-in email)
+
+Run on an existing database: `node src/scripts/migrateEmailChange.js` (widens `auth_codes`' two
+CHECK constraints for the purpose 'email_change'; `--rollback` reverses it).
+
+Steven asked what happens when a patient uses another email. Checked against the code:
+
+- **Already right:** any provider (Gmail, Yahoo, Outlook, iCloud, a school or work address), proved
+  by the 6-digit code; Google sign-in for any Google account; capitals and spaces are one account
+  (`uq_users_email_lower`); an address with an account is told to sign in; a mistyped address never
+  becomes an account; one address holds a whole family's profiles; a walk-in invited at one address
+  who signs up with another is sent a new invitation by the desk (it replaces the first).
+- **Gaps:** the sign-in email could never change (My Account said so, and nothing else did it);
+  losing the inbox meant losing the account (password reset sends its code there); a walk-in who
+  signs up and adds their own profile gets a second record; Google sign-in with another address makes
+  a second account. Steven chose the first.
+
+**What changed.** My Account's "Change email" (patients only; a staff address stays with Staff
+Accounts, 403) asks for the new address and the current password (`POST /auth/email-change`), sends
+a 6-digit code to the NEW address (`auth_codes`, purpose `email_change`, user-bound, resendable with
+the existing `/auth/codes/resend`), and changes nothing until it is entered
+(`POST /auth/email-change/confirm`). Then: the address is set and marked verified, the account's own
+patient records that used the old address move to the new one (`patientRepository.moveAccountEmail`,
+so results and booking emails follow), the old address is told with only a hint of the new one
+(`sendEmailChanged`, "j***@yahoo.com"), it is audited (`auth.email_changed`), and a fresh session is
+returned. An address another account has is refused at both steps; the unique index has the last
+word. A Google-only account has no password anyone knows, so the dialog says to set one first with
+"Forgot password". The dialog is outside My Account's details form: React carries a submit through a
+portal to the form around it, which would also have saved the details.
+
+**Tests:** `email-change.spec.js` (API and screen; `e2eAuthCode.js` now accepts the purpose).
+
 ## [1.146.0] - 2026-11-01 (What-ifs, mitigated)
 
 Run on an existing database: `node src/scripts/migrateDiscountDeclaration.js` (two columns,

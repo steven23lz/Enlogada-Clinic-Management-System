@@ -31,7 +31,7 @@ const env = require('../config/environment');
 const { createCodeHasher, isWellFormedCode } = require('../utils/authCodes');
 
 const E2E_DOMAIN = '@enlogada-e2e.test';
-const PURPOSES = ['signup', 'password_reset', 'email_verify'];
+const PURPOSES = ['signup', 'password_reset', 'email_verify', 'email_change'];
 
 const arg = (name) => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));

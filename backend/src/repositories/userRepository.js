@@ -247,6 +247,19 @@ class UserRepository {
     );
   }
 
+  /**
+   * A new sign-in address, proven by a code sent to it, so it is verified as it is set. [1.147.0]
+   * uq_users_email_lower refuses an address another account took in the meantime (409).
+   */
+  async updateEmail(userId, email) {
+    const { rows } = await db.query(
+      `UPDATE users SET email = $2, email_verified_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 RETURNING id, email`,
+      [userId, email]
+    );
+    return rows[0] || null;
+  }
+
   async findPasswordHashById(userId) {
     const result = await db.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
     return result.rows[0]?.password_hash;

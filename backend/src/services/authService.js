@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const userRepository = require('../repositories/userRepository');
 const authCodeRepository = require('../repositories/authCodeRepository');
+const patientRepository = require('../repositories/patientRepository');
 const db = require('../config/database');
 const env = require('../config/environment');
 const logger = require('../config/logger');
@@ -60,6 +61,12 @@ const RESET_CODE_REFUSED =
   'That code is wrong or has expired. Check the newest email from us, or send a new code.';
 
 const SIGNUP_GONE = 'This sign-up has expired or is already finished. Start again, or sign in.';
+
+/** "j***@yahoo.com": enough for the owner to recognise, not enough to hand someone the address. [1.147.0] */
+const hintEmail = (email) => {
+  const [local, domain] = String(email).split('@');
+  return `${local.slice(0, 1)}***@${domain}`;
+};
 
 const CODE_TIMING = {
   expiresInSeconds: CODE_TTL_MINUTES * 60,
@@ -350,6 +357,10 @@ class AuthService {
     } else if (row.purpose === 'email_verify') {
       const account = await userRepository.findById(row.user_id);
       assertDelivered(await accountEmailService.sendEmailCheckCode({ to: row.email, firstName: account?.first_name, code }));
+    } else if (row.purpose === 'email_change') {
+      // [1.147.0] To the NEW address the change is proving.
+      const account = await userRepository.findById(row.user_id);
+      assertDelivered(await accountEmailService.sendEmailChangeCode({ to: row.email, firstName: account?.first_name, code }));
     } else {
       sendResetCodeInBackground({ userId: row.user_id, email: row.email, code });
     }
@@ -573,6 +584,112 @@ class AuthService {
       description: `Confirmed the address ${account.email} with an emailed code`,
     });
     return { verified: true };
+  }
+
+  /**
+   * A patient moves their sign-in to a new address. [1.147.0] Step one: the current password (an
+   * unlocked phone is not enough), then a code to the NEW address, which is what proves it is theirs.
+   * Nothing changes until step two. A staff account's address is the clinic's to change (Staff
+   * Accounts), so it is refused here. One account per address: a taken one is refused now, and again
+   * at confirm, where the unique index has the last word.
+   *
+   * @returns {Promise<{ticket: string, email: string}>}
+   */
+  async startEmailChange(userId, { newEmail, password }) {
+    const account = await userRepository.findById(userId);
+    if (!account) throw new ValidationError('Account not found.');
+    if ((account.roles || []).some((r) => r && r !== 'Client')) {
+      throw new AppError('A staff sign-in email is changed by an administrator, on Staff Accounts.', 403);
+    }
+    const passwordHash = await userRepository.findPasswordHashById(userId);
+    if (!password || !passwordHash || !(await bcrypt.compare(String(password), passwordHash))) {
+      // 400, never 401: api.js treats a 401 as a sign-out.
+      throw new ValidationError('That password is not right. If you signed up with Google, set a password first with "Forgot password".');
+    }
+    const address = normaliseAccountEmail(newEmail);
+    if (address === canonicalEmail(account.email)) {
+      throw new ValidationError('That is already your sign-in email.');
+    }
+    const taken = await userRepository.findByEmail(address);
+    if (taken) {
+      throw new ConflictError('That email already has an account. Use another address, or sign in to that account.');
+    }
+    if ((await authCodeRepository.countIssuedSince('email_change', address, 60)) >= MAX_CODES_PER_EMAIL_PER_HOUR) {
+      throw new AppError('Several codes were sent to this address in the last hour. Please wait a while, then try again.', 429);
+    }
+
+    // One change at a time: an earlier unfinished one is closed.
+    await authCodeRepository.consumeOpenForUser('email_change', userId);
+    const ticket = generateTicket();
+    const code = generateCode();
+    const pending = await authCodeRepository.create({
+      purpose: 'email_change',
+      email: address,
+      userId: account.id,
+      ticketHash: hashTicket(ticket),
+      codeHash: hashCode(code),
+      ttlMinutes: CODE_TTL_MINUTES,
+    });
+    const sent = await accountEmailService.sendEmailChangeCode({ to: address, firstName: account.first_name, code });
+    try {
+      assertDelivered(sent);
+    } catch (err) {
+      await authCodeRepository.deleteById(pending.id);
+      throw err;
+    }
+    return { ticket, email: address, ...CODE_TIMING };
+  }
+
+  /**
+   * Step two: the code from the new address. [1.147.0] The account's own profiles that used the old
+   * address move with it, the old address is told (in the background), and a fresh session is
+   * returned because the one in hand still names the old address.
+   */
+  async confirmEmailChange(userId, { ticket, code }) {
+    if (!isWellFormedCode(code)) throw new ValidationError('Enter the 6-digit code from the email.');
+    const account = await userRepository.findById(userId);
+    if (!account) throw new ValidationError('Account not found.');
+
+    const claimed = isWellFormedTicket(ticket)
+      ? await authCodeRepository.claimAttempt(hashTicket(ticket), 'email_change', MAX_ATTEMPTS)
+      : null;
+    if (!claimed || String(claimed.user_id) !== String(userId)) {
+      throw new ValidationError('That code has expired or is not for this account. Send a new one.');
+    }
+    if (!codeMatches(code, claimed.code_hash)) throw new ValidationError(triesLeft(claimed));
+
+    const oldEmail = account.email;
+    const newEmail = claimed.email;
+    const movedRecords = await db.withTransaction(async () => {
+      if (!(await authCodeRepository.consume(claimed.id))) {
+        throw new ValidationError('That code has already been used.');
+      }
+      const taken = await userRepository.findByEmail(newEmail);
+      if (taken && taken.id !== account.id) {
+        throw new ConflictError('That email has just been used for another account. Choose another address.');
+      }
+      await userRepository.updateEmail(userId, newEmail);
+      const moved = await patientRepository.moveAccountEmail(userId, oldEmail, newEmail);
+      await authCodeRepository.consumeOpenForUser('email_change', userId);
+      return moved;
+    });
+
+    await auditService.log({
+      actorId: userId,
+      action: 'auth.email_changed',
+      entityType: 'user',
+      entityId: userId,
+      description: `Changed the sign-in email from ${oldEmail} to ${newEmail} with a code sent to the new address`
+        + (movedRecords ? ` (${movedRecords} of their own record${movedRecords === 1 ? '' : 's'} now use it too)` : ''),
+    });
+
+    // Told at the old address, after the commit and not awaited: the change stands either way, and
+    // server.js shuts down on an unhandled rejection.
+    accountEmailService.sendEmailChanged({ to: oldEmail, firstName: account.first_name, newEmailHint: hintEmail(newEmail) })
+      .catch((err) => logger.error(`Email-changed notice failed: ${err.message}`));
+
+    const user = await userRepository.findById(userId);
+    return { ...sessionFor(user), movedRecords };
   }
 
   async updateProfile(userId, { firstName, lastName, contactNumber }) {
