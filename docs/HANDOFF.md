@@ -8,6 +8,29 @@ against the code and corrected it (see `database/migrations.md`). [1.143.0] drew
 reporting department again (flowchart, use case, DFD 0 and 1; process 21.0 is now Manage Patient
 Feedback). After the next change to a process, re-run the check [1.134.0] describes.
 
+## Unfinished tasks
+
+Steven's own name for work he has parked, to come back to (2026-11-01, after [1.147.0]). Nothing is
+built; each fix below is what was agreed. If built, in this order: 3, then 2, then 1.
+
+1. **Lost inbox.** A patient who can no longer open their sign-in email cannot get back in: reset
+   codes go to that inbox. Fix: an assisted email change at the clinic. The patient shows an ID; an
+   Admin (a new permission, perhaps with unlink's two-person rule) checks it against the record's
+   name and birthdate and types the new email; a code goes to the new address and the patient enters
+   it there and then; sessions end, a new password is set, the old address is told, and it is
+   audited. In person only, never by phone. Needs a clinic procedure agreed with the DPO.
+2. **Duplicate profiles.** A walk-in who adds their own profile in the portal gets a second record.
+   Fix: (a) the add-profile form always says "Visited the clinic before? Ask the front desk to invite
+   this email" (no lookup, so nothing is revealed); (b) a portal profile with the same name and
+   birthdate as a walk-in record that has no account is flagged to the desk only (Today, or "possible
+   duplicate" in Patient Records), never to the patient, who could otherwise test who has visited.
+   The desk invites; on accept, a portal profile with no visits is replaced by the walk-in record. A
+   staff "merge records" tool only if that is not enough: it can mix two people's medical records.
+3. **Google with another address.** Google sign-in matches accounts by email, so a Google address
+   with no account silently creates a new one. Fix: keep Google's own account id on the account
+   (`users.google_sub`) and look it up first; with no match, ask "create a new account, or sign in to
+   your existing one and connect Google?"; My Account shows Google connected, with disconnect.
+
 ## Open threads
 
 - **[1.146.0] What-ifs.** On another database run `node src/scripts/migrateDiscountDeclaration.js`
