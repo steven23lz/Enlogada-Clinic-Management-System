@@ -1,6 +1,7 @@
 /**
- * Retention pass for HMO card images. Schedule this wherever the system runs for longer than a
- * demo.
+ * Retention pass for HMO card images. [1.148.0] The server runs it itself once a day
+ * (jobs/retentionScheduler.js, through services/retentionService.js), at the 365 days below; this
+ * shows what is due, and with --confirm removes it now.
  *
  * An HMO card carries a member number, a name and often a photo. Unlike a diagnostic result it is
  * not a medical record — it is evidence for one claim, and once that claim is long settled the
@@ -22,16 +23,13 @@
  *   node src/scripts/pruneHmoCards.js --days=180      # different window, still a dry run
  *   node src/scripts/pruneHmoCards.js --confirm       # actually delete
  *
- * Changing the policy is a one-line edit here or a flag at the call site; turning it off entirely
- * means not scheduling it. Nothing about the retention period is baked into the application.
+ * Changing the policy is one line in services/retentionService.js (RETENTION.hmoCardDays), or a
+ * flag here for one run; RETENTION=off stops the server's daily pass.
  */
-const fs = require('fs');
-const path = require('path');
-const db = require('../config/database');
+const retentionService = require('../services/retentionService');
 const logger = require('../config/logger');
-const { HMO_CARD_UPLOAD_ROOT } = require('../config/upload');
 
-const DEFAULT_RETENTION_DAYS = 365;
+const DEFAULT_RETENTION_DAYS = retentionService.RETENTION.hmoCardDays;
 
 function numericArg(name, fallback) {
   const raw = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -44,15 +42,7 @@ async function main() {
   const retentionDays = numericArg('days', DEFAULT_RETENTION_DAYS);
   const confirmed = process.argv.includes('--confirm');
 
-  const { rows } = await db.query(
-    `SELECT id, card_file_path, request_date
-     FROM hmo_requests
-     WHERE card_file_path IS NOT NULL
-       AND card_purged_at IS NULL
-       AND request_date < NOW() - ($1 || ' days')::interval
-     ORDER BY request_date`,
-    [retentionDays]
-  );
+  const rows = await retentionService.hmoCardsPastRetention({ days: retentionDays });
 
   logger.info(`Retention: ${retentionDays} days${confirmed ? '' : ' (DRY RUN)'}`);
   logger.info(`${rows.length} card image(s) past the retention window.`);
@@ -70,29 +60,7 @@ async function main() {
     process.exit(0);
   }
 
-  let removed = 0;
-  for (const row of rows) {
-    // The row is updated first: it is the source of truth for whether a card is still on file,
-    // and a stamped row pointing at a file that happens to survive is recoverable, whereas a
-    // deleted file with a row still claiming it exists produces a broken link for Admin.
-    await db.query(
-      `UPDATE hmo_requests
-       SET card_file_path = NULL, card_original_name = NULL, card_mime_type = NULL,
-           card_size_bytes = NULL, card_purged_at = CURRENT_TIMESTAMP
-       WHERE id = $1`,
-      [row.id]
-    );
-
-    // Best-effort, matching every other file deletion in this codebase: losing the row is what
-    // matters, and a stray file is picked up by the orphan sweep.
-    try {
-      fs.unlinkSync(path.join(HMO_CARD_UPLOAD_ROOT, row.card_file_path));
-    } catch (err) {
-      logger.warn(`  could not remove file for request #${row.id}: ${err.message}`);
-    }
-    removed += 1;
-  }
-
+  const removed = await retentionService.pruneHmoCards({ days: retentionDays });
   logger.info(`Done. ${removed} card image(s) removed; their claims and approvals are untouched.`);
   process.exit(0);
 }

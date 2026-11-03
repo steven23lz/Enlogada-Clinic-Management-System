@@ -4,6 +4,7 @@ import { paidVisitIds } from './collections';
 import { categoryLabel, issuesReports } from './categories';
 import { appointmentUrgency } from './paymentReview';
 import { hoursOn } from './clinicStatus';
+import { overTarget } from './turnaroundTarget';
 
 /**
  * The rules behind the Today screens. [1.77.0]
@@ -216,30 +217,101 @@ export function departmentNeeds({
     const ready = reports ? pending.filter((t) => t.test_status === 'Waiting for Release').length : 0;
     const oldest = [...pending].sort(oldestFirst('visit_created_at'))[0];
     const since = waitedFor(oldest.visit_created_at, now);
+    // [1.148.0] Past the department's turnaround target, when the clinic has set one.
+    const late = overTarget(pending, now);
     rows.push({
       id: `worklist-${category}`,
-      tone: 'amber',
-      icon: 'clock',
+      tone: late.length ? 'rose' : 'amber',
+      icon: late.length ? 'alert' : 'clock',
       title: prefix + [exam && `${exam} waiting for exam`, ready && `${ready} ready to release`].filter(Boolean).join(' · '),
-      detail: `Oldest: ${personName(oldest)}, ${oldest.test_name}${since ? `, waiting ${since}` : ''}`,
+      detail: (late.length ? `${count(late.length, 'test')} past the ${late[0].target_minutes}-minute target. ` : '')
+        + `Oldest: ${personName(oldest)}, ${oldest.test_name}${since ? `, waiting ${since}` : ''}`,
       action: { label: 'Open worklist', ariaLabel: `Open the ${label} worklist`, go: nav },
     });
   }
   return rows;
 }
 
-/** An Admin's decisions: HMO claims the front desk raised and only an Admin can settle. */
-export function decisionNeed(requests = []) {
+/** How soon an HMO claim must be decided, read like a payment proof's appointment. [1.148.0] */
+export const decideUrgency = (request) => appointmentUrgency({ minutes_to_start: request?.minutes_to_decide });
+
+/** "11:00 AM", or "Thu 9:00 AM" for another day: when a claim's booking stops waiting for it. */
+export function deadlineLabel(iso, now = new Date()) {
+  const d = new Date(iso);
+  if (!iso || Number.isNaN(d.getTime())) return null;
+  const time = formatTime12(`${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`);
+  if (d.toDateString() === now.toDateString()) return time;
+  return `${d.toLocaleDateString('en-PH', { weekday: 'short' })} ${time}`;
+}
+
+/** "40m left", or "time is up" once it has passed. */
+export function timeLeft(minutes) {
+  const n = Number(minutes);
+  if (minutes === null || minutes === undefined || !Number.isFinite(n)) return null;
+  return n < 0 ? 'time is up' : `${formatDuration(n)} left`;
+}
+
+/**
+ * An Admin's decisions: HMO claims the front desk raised and only an Admin can settle.
+ *
+ * [1.148.0] A booking waits for its claim only until its own start ([1.132.0]), and is released if
+ * still undecided then, so the soonest deadline is named and the ones within the hour counted, as
+ * the till does for online payments ([1.146.0]).
+ */
+export function decisionNeed(requests = [], now = new Date()) {
   if (!requests.length) return [];
-  const who = requests.map((r) => [r.patient_first_name, r.patient_last_name].filter(Boolean).join(' '));
+  const name = (r) => [r.patient_first_name, r.patient_last_name].filter(Boolean).join(' ');
+  const timed = requests
+    .filter((r) => decideUrgency(r).state !== 'none')
+    .sort((a, b) => Number(a.minutes_to_decide) - Number(b.minutes_to_decide));
+  const urgent = timed.filter((r) => ['soon', 'passed'].includes(decideUrgency(r).state)).length;
+  const [soonest] = timed;
   return [{
     id: 'hmo-decisions',
-    tone: 'blue',
+    tone: urgent ? 'amber' : 'blue',
     icon: 'shield',
-    title: `${count(requests.length, 'HMO request')} waiting for your decision`,
-    detail: someNames(who),
+    title: `${count(requests.length, 'HMO request')} waiting for your decision${urgent ? `, ${urgent} due within the hour` : ''}`,
+    detail: soonest
+      ? `Soonest: ${name(soonest)}, decide by ${deadlineLabel(soonest.decide_by, now)} (${timeLeft(soonest.minutes_to_decide)})`
+      : someNames(requests.map(name)),
     action: { label: 'Review', go: 'service-requests' },
   }];
+}
+
+/** A backup older than this reads as missed: a day, and half a day's grace for a late start. */
+export const BACKUP_STALE_HOURS = 36;
+
+/**
+ * Whether the clinic's records are being backed up. [1.148.0] Nothing to say while they are: a
+ * working backup is not something to do. Said when it is off, failing, never made, or old.
+ *
+ * @param {{enabled: boolean, lastSuccessAt?: string, lastFailureAt?: string, lastFailure?: string}} status
+ */
+export function backupNeed(status, now = new Date()) {
+  // BACKUPS=host: the hosting company backs the database up, and that is not this server's to watch.
+  if (!status || (!status.enabled && status.byHost)) return [];
+  const action = { label: 'Open the Activity Log', go: 'activity' };
+  const success = status.lastSuccessAt ? new Date(status.lastSuccessAt) : null;
+  const failure = status.lastFailureAt ? new Date(status.lastFailureAt) : null;
+  const ago = success ? formatDuration(minutesBetween(success, now)) : null;
+  const need = (tone, title, detail, withAction = true) => [{
+    id: 'backup', tone, icon: 'backup', title, detail, ...(withAction ? { action } : {}),
+  }];
+
+  if (!status.enabled) {
+    return need('amber', 'Backups are turned off', "Nothing is copying the clinic's records. Whoever runs the server turns them on (BACKUPS).", false);
+  }
+  if (failure && (!success || failure > success)) {
+    const why = String(status.lastFailure || '').replace(/^Backup failed:\s*/, '');
+    return need('rose', 'The backup is failing', `${why ? `${why} ` : ''}Last good backup: ${ago ? `${ago} ago` : 'none yet'}.`);
+  }
+  if (!success) {
+    return need('amber', 'No backup has been made yet', 'The first is made a minute after the server starts.', false);
+  }
+  if (minutesBetween(success, now) > BACKUP_STALE_HOURS * 60) {
+    return need('amber', `The last backup was ${ago} ago`, 'One is made every day. Is the server running in the evening?');
+  }
+  return [];
 }
 
 /**

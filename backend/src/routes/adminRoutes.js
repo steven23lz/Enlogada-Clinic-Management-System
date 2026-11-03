@@ -25,4 +25,7 @@ router.patch('/staff/:id/password', verifyToken, authorizeStaff, authorizePermis
 // added logging for (payments, staff accounts, HMO providers, result corrections).
 router.get('/activity', verifyToken, authorizeStaff, authorizePermissions('audit:view'), adminController.getActivity);
 
+// [1.148.0] The nightly backup's last outcome, read from the Activity Log beside it.
+router.get('/backups', verifyToken, authorizeStaff, authorizePermissions('audit:view'), adminController.getBackupStatus);
+
 module.exports = router;

@@ -17,15 +17,15 @@
  *   node src/scripts/pruneNotifications.js --read-days=14 --unread-days=60
  *   node src/scripts/pruneNotifications.js --dry-run
  *
- * Suggested schedule: daily, off-peak. Windows Task Scheduler or cron both work; there is no
- * in-process scheduler in this app and adding one for a single periodic job would be heavier
- * than the job itself.
+ * [1.148.0] The server runs this itself once a day (jobs/retentionScheduler.js, through
+ * services/retentionService.js), so nothing needs scheduling; this runs it now, by hand.
  */
 const notificationRepository = require('../repositories/notificationRepository');
+const retentionService = require('../services/retentionService');
 const logger = require('../config/logger');
 
-const DEFAULT_READ_DAYS = 30;
-const DEFAULT_UNREAD_DAYS = 90;
+const DEFAULT_READ_DAYS = retentionService.RETENTION.notificationsReadDays;
+const DEFAULT_UNREAD_DAYS = retentionService.RETENTION.notificationsUnreadDays;
 
 function numericArg(name, fallback) {
   const raw = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -48,10 +48,10 @@ async function main() {
     process.exit(0);
   }
 
-  const result = await notificationRepository.pruneOlderThan({ readAfterDays, unreadAfterDays });
+  const result = await retentionService.pruneNotifications({ readDays: readAfterDays, unreadDays: unreadAfterDays });
   const after = await notificationRepository.countAll();
 
-  logger.info(`Deleted ${result.readRowsDeleted} read row(s), ${result.staleRowsDeleted} stale row(s), ${result.eventsDeleted} orphaned event(s)`);
+  logger.info(`Deleted ${result.readRows} read row(s), ${result.staleRows} stale row(s), ${result.events} orphaned event(s)`);
   logger.info(`After:  ${after.events} events, ${after.reads} recipient rows`);
   process.exit(0);
 }

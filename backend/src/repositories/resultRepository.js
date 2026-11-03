@@ -21,6 +21,11 @@ class ResultRepository {
              -- waiting time at all, so a ticket could sit in a department indefinitely with
              -- nothing on screen saying so; the billing queue had this and the modalities did not.
              pv.created_at as visit_created_at,
+             -- [1.148.0] When the test reached this department: paid and here, whichever came last.
+             -- Payment alone would make a booking paid from home last week overdue the moment the
+             -- patient walks in; arrival alone would count the wait at the till. What a turnaround
+             -- target is judged against on the worklist.
+             GREATEST(pv.created_at, pay.paid_at) AS ready_at,
              -- Who asked for the test. A diagnostic report goes back to this doctor, so the
              -- worklist and the report both need to be able to name them. [1.23.0]
              pv.referring_physician, pv.referring_physician_prc,
@@ -48,6 +53,11 @@ class ResultRepository {
       -- At most one row: uq_test_results_current_per_test is a partial unique index on
       -- visit_test_id WHERE is_current, so this cannot multiply the worklist.
       LEFT JOIN test_results tr ON tr.visit_test_id = vt.id AND tr.is_current
+      LEFT JOIN LATERAL (
+        SELECT MIN(p2.paid_at) AS paid_at
+          FROM payments p2
+         WHERE p2.patient_visit_id = pv.id AND p2.payment_status = 'Paid'
+      ) pay ON TRUE
       WHERE tc.name = $1
         AND pv.status = 'Processing'
         AND vt.status IN ('Processing', 'Waiting for Release')

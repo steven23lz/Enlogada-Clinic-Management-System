@@ -15,11 +15,20 @@ import { StatusBadge } from '../ui/status-badge';
 import Pagination from '../ui/pagination';
 import { ageFromBirthdate } from '../../lib/date';
 import WaitBadge from '../ui/wait-badge';
+import { overTarget } from '../../lib/turnaroundTarget';
 import { SkeletonRows } from '../ui/skeleton';
 import { useAuth } from '../../contexts/AuthContext';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 
 const PAGE_SIZE = 10;
+
+/**
+ * The department's target, when one of these tests has waited past it [1.148.0]: said inside the
+ * wait badge (see WaitBadge's `overTarget`), only when the clinic has set one (TURNAROUND_TARGETS),
+ * counted from when the test was paid for and the patient was here.
+ */
+const pastTarget = (tests) => overTarget(tests, new Date())[0]?.target_minutes ?? null;
+
 const WORKLIST_STATUS_FILTERS = ['All', 'Processing', 'Waiting for Release'];
 
 /** PT number, age and sex: the line under a patient's name. */
@@ -245,7 +254,7 @@ export default function WorklistPanel({ worklist, entry, examDone }) {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span>{name}</span>
                             {/* The oldest ticket is usually the one to pick up next. */}
-                            <WaitBadge since={first.visit_created_at} />
+                            <WaitBadge since={first.visit_created_at} overTarget={pastTarget(tests)} />
                           </div>
                           <PatientDetails test={first} />
                         </TableCell>
@@ -274,7 +283,7 @@ export default function WorklistPanel({ worklist, entry, examDone }) {
                               />
                               {name}
                             </button>
-                            <WaitBadge since={first.visit_created_at} />
+                            <WaitBadge since={first.visit_created_at} overTarget={pastTarget(tests)} />
                           </div>
                           <PatientDetails test={first} className="pl-4" />
                         </TableCell>

@@ -111,6 +111,7 @@ node src/scripts/migrateHmoApprovalFirst.js      # [1.132.0] HMO bookings wait f
 node src/scripts/migratePatientInvitations.js    # [1.136.0] portal invitations, unlink, users.email_verified_at, visits.booked_online (--rollback reverses it); then setupRbac.js
 node src/scripts/migrateDiscountDeclaration.js   # [1.146.0] patient_visits.discount_id_*: a Senior Citizen / PWD discount declared online with an ID photo (--rollback reverses it)
 node src/scripts/migrateEmailChange.js           # [1.147.0] auth_codes accepts 'email_change': a patient moving their sign-in to a new address (--rollback reverses it)
+node src/scripts/migratePatientMessages.js       # [1.148.0] the stamps behind three automatic patient emails: results ready, missed paid booking, feedback (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -135,13 +136,19 @@ node src/scripts/repairMissingDemoFiles.js
 node src/scripts/redrawDemoReports.js --confirm --values=../../db-backups/report-files-before-redraw-2026-10-22/lab-values-by-result-id.json
 node src/scripts/repairMissingDemoFiles.js --confirm --image="C:\path\to\report.jpeg"
 
-# Retention passes. Schedule both in any long-lived environment — notifications daily, audit
-# monthly. audit_log now records PHI reads, so it grows with staff activity rather than with
-# sensitive writes only.
+# Retention passes. AUTOMATIC since [1.148.0]: the server runs all three once a day
+# (jobs/retentionScheduler.js, services/retentionService.js; RETENTION=off stops it). These run
+# them now, by hand, through the same service. Migration archives are never deleted.
 node src/scripts/pruneNotifications.js --dry-run
 node src/scripts/pruneNotifications.js
 node src/scripts/pruneAuditLog.js --dry-run
 node src/scripts/pruneAuditLog.js            # PHI reads 2y, everything else 7y
+
+# The nightly BACKUP is automatic [1.148.0] (database + uploaded files, after 18:00 or at start-up
+# when the newest is a day old; BACKUPS=off|host). The clinic's guide: docs/BACKUP_AND_RESTORE.md.
+node src/scripts/backupNow.js                                   # one now
+node src/scripts/restoreBackup.js                               # list; --file=… --into=newdb --confirm checks one safely
+node src/scripts/sendPatientMessages.js                         # who is owed an automatic patient email (--json, --confirm)
 
 # Appointment reminders are AUTOMATIC [1.130.0]: the server sweeps every minute and sends each
 # when it falls due (see "Appointment reminders" under Database). Nothing to schedule. This script
@@ -193,9 +200,9 @@ The worst of it is `notification_reads`, which is a **fan-out** table: `notifyRo
 **There are now two test tiers, and they answer different questions.** `[1.63.0]`
 
 ```bash
-cd backend  && npm test        # 154 unit tests, node:test, ZERO dependencies, ~0.7s
-cd frontend && npm run test:unit # 145 unit tests, vitest, ~1.5s
-cd frontend && npm test        # 553 Playwright E2E, ~12m, needs both dev servers
+cd backend  && npm test        # 181 unit tests, node:test, ZERO dependencies, ~1s
+cd frontend && npm run test:unit # 160 unit tests, vitest, ~1.5s
+cd frontend && npm test        # 571 Playwright E2E, ~13m, needs both dev servers
 ```
 
 The unit tier covers the pure, deterministic rules where the *arithmetic* is the thing at risk:
@@ -214,7 +221,7 @@ each other's files.
 it is a function you could call from a REPL, it is a unit test — and it belongs there, because a
 7-minute suite is not where you want to discover that a rounding rule changed.
 
-There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 92 Playwright specs (553 tests, ~12m) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. See the tiers above.
+There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 96 Playwright specs (571 tests, ~13m) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. See the tiers above.
 
 The suite is a deliberately small demo-and-regression net, not exhaustive coverage: smoke, security boundaries (`api-authorization.spec.js` — Admin-vs-SuperAdmin separation of duties, combined-role access, and the cross-role PHI boundaries), ticket-release gating, payments, laboratory results, statutory discounts (`discounts.spec.js`), result amendment history (`result-versioning.spec.js`), password-change session revocation (`session-revocation.spec.js`), account lockout and PHI read auditing (`login-protection.spec.js`), permission-matrix enforcement (`rbac-enforcement.spec.js`), department-scoped patient records (`department-scoping.spec.js`), the per-department operations report (`operations-report.spec.js`), atomic online booking with its HMO card evidence rule (`booking-atomicity.spec.js`), the two dialogs that feature added (`hmo-card-review.spec.js` — because a card that uploads correctly and then renders as a broken image on the approval screen is a working feature failing at its job), moving a booking rather than cancelling it (`appointment-reschedule.spec.js`, plus `reschedule-ui.spec.js` for the dialog), when a visit must name the doctor who requested the test (`referring-physician.spec.js`), correcting a patient record (`patient-edit.spec.js` / `patient-edit-ui.spec.js`), what the patient is told about their own booking (`booking-communication.spec.js`), that the ETag revalidation cache never hides a change (`revalidation.spec.js`), that each role can see what it needs on the screen where it acts (`workflow-context.spec.js`), registering a walk-in in one pass (`walkin-registration.spec.js`), the patient journey at phone width (`mobile-patient.spec.js`), what an HMO decision has to record before it counts as one (`hmo-decision-trail.spec.js` — a refusal that names no reason leaves the cashier explaining a charge nobody wrote down), the three-step claim workflow itself (`hmo-claim-handoff.spec.js` — reception raises it, an Admin decides it, and the cashier has to be TOLD), and that a failed request never renders as an empty one (`failure-states.spec.js` — six screens shipped without an error branch, so a 500 fell through to the empty state and the app stated "Today's Revenue ₱0.00" over a day that took ₱8,344; `[1.74.0]` added the screens each role lands on, whose counters start at zero and stayed there on a failure), that Transaction History's takings answer for the dates its receipt list shows (`takings-range.spec.js`), that the front desk finds a booking, a record or nobody from one box and never offers a second visit to someone already in the queue (`front-desk.spec.js`), that each sidebar count is the number its screen shows and an action is on screen once (`sidebar.spec.js`), that every member of staff lands on Today, where each item has the button that deals with it and a button that opens another screen arrives already doing it (`today.spec.js`), that SuperAdmin assigns access on the "Who sees what" grid, where every switch says in words what it will change and nothing is saved until Save (`access-grid.spec.js`), that every screen's heading and breadcrumb are its sidebar name (`screen-names.spec.js`), that the patient portal's Home says what is owed and what it could not check, and its phone tab bar covers nothing (`portal-home.spec.js`), and that there are no refunds: no route, no permission, no button, and a paid visit points to a new visit (`refunds-removed.spec.js`, `[1.121.0]`), and that what a final receipt rules out stays ruled out: a payment over a pending HMO decision or an unchecked online proof, a paid no-show, an unpaid booking holding its slot past its payment window (`process-fixes.spec.js`, `[1.123.0]`), and that the server refuses what the screens refuse, whoever skips the screen (`process-rules.spec.js`, `[1.124.0]`), and that the reader's chosen text size scales the whole interface without inverting its own type ramp (`text-scale.spec.js` — a pixel-pinned font size looks perfect at the default and misbehaves only for the people who changed it), and that a patient can pay into the clinic's own account and only a cashier can turn that into money (`manual-payment.spec.js` — publishing an account number is SuperAdmin alone, and the amount a patient CLAIMS never becomes the amount they are charged), and that a package deal bills its own fixed price rather than the sum of its parts, with every component reaching its own department (`packages.spec.js` — a bundle that costs more than buying the parts separately is a surcharge wearing the word "package"), and that updating a service does not delete the fields the caller did not mention (`catalogue-partial-update.spec.js` — the status toggle used to wipe a test's patient preparation, which is the sentence the day-before reminder carries). It was cut down from ~200 tests once the module-by-module build-out finished; the rest asserted UI copy that legitimately keeps changing. Prefer adding a focused spec over reviving deleted ones from git history.
 
@@ -640,6 +647,26 @@ visit") and, moved by the patient first, gets a fresh time to pay (`restartLapse
 release`, the portal's "Release booking"): their HMO said no, or they changed their mind. Never a
 paid one (it is moved), one checked in, or one whose payment waits to be checked. It is removed as
 the sweep removes one. Nothing PAID is ever cancelled.
+
+**Five more things the server does by itself.** `[1.148.0]` Steven's "everything", from the list of
+work that happened only if somebody remembered. Each is a job in `jobs/` built on `jobs/periodic.js`
+(never overlaps, never throws), with its rules pure and unit-tested:
+- **The nightly backup** (`backupService`, `utils/backupPlan.js`): database and uploads, encrypted
+  with `BACKUP_PASSPHRASE`, a second copy in `BACKUP_COPY_DIR`, 30 days. Once across servers (advisory
+  lock; "due" read from the Activity Log). An Admin's Today warns only when it is failing, off,
+  never made or old (`backupNeed`, `GET /admin/backups`, `audit:view`). Restore with
+  `restoreBackup.js`; check a backup by restoring `--into` a new database, never by trusting it.
+- **Three patient emails** (`patientMessageService`, `utils/patientMessageTiming.js`), each once,
+  claimed by its stamp: "results ready" when a visit's last report is released (portal accounts
+  only; no report, no test name: [1.113.0] still holds), a PAID booking nobody came for the morning
+  after (also on the portal: `missed-<id>`, `booking-missed`), and "how was your visit?" the morning
+  after it finished. A visit finished at each test's FIRST authorised report, so an amendment never
+  re-sends. Moving a booking clears its missed stamp.
+- **Retention** (`retentionService`), daily.
+- And on screen: HMO claims a booking waits on come first with `minutes_to_decide` (Today and
+  Service Requests count down), and a worklist test past `TURNAROUND_TARGETS` says so inside its
+  wait badge (`ready_at`: paid and here, whichever came last; `lib/turnaroundTarget.js`).
+`automations.spec.js` holds them.
 
 **Appointment reminders are sent by the server itself.** `[1.130.0]` Steven: automatic, the day
 before, and halfway to the appointment when it is booked later than that. `utils/reminderTiming.js`

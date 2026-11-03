@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   bookingDay, upcomingBookings, nextVisit, owing, latestResults, isNewResult, attentionItems, figure,
-  RECENT_RESULT_DAYS,
+  missedBookings, RECENT_RESULT_DAYS,
 } from '../../src/lib/portalSummary.js';
 
 // 14 September 2026 is a Monday. Built from local parts so the tests hold in any time zone.
@@ -161,6 +161,34 @@ describe('attentionItems', () => {
 
   it('is empty when nothing needs doing', () => {
     expect(attentionItems({ appointments: [booking({ is_paid: true })], patientId: 7, today: TODAY })).toEqual([]);
+  });
+});
+
+// [1.148.0] A paid booking whose day passed: the payment stands, and it needs a new time.
+describe('missedBookings', () => {
+  const list = [
+    booking({ id: 1, is_paid: true, scheduled_date: dateOf(9, 11) }),
+    booking({ id: 2, is_paid: true, scheduled_date: dateOf(9, 12) }),
+    booking({ id: 3, is_paid: false, scheduled_date: dateOf(9, 12) }), // unpaid: removed, never "missed"
+    booking({ id: 4, is_paid: true, scheduled_date: dateOf(9, 14) }), // today: not missed yet
+    booking({ id: 5, is_paid: true, status: 'Confirmed', scheduled_date: dateOf(9, 12) }), // came
+    booking({ id: 6, is_paid: true, patient_id: 8, scheduled_date: dateOf(9, 12) }),
+  ];
+
+  it('is a paid, unchecked-in booking from before today, newest first, for the profile on screen', () => {
+    expect(missedBookings(list, { patientId: 7, today: TODAY }).map((a) => a.id)).toEqual([2, 1]);
+    expect(missedBookings(list, { patientId: null, today: TODAY }).map((a) => a.id)).toEqual([2, 6, 1]);
+  });
+
+  it('asks the patient to choose a new time, before anything to pay', () => {
+    const items = attentionItems({
+      appointments: [booking({ id: 9, scheduled_date: dateOf(9, 16) }), booking({ id: 2, is_paid: true, scheduled_date: dateOf(9, 12) })],
+      patientId: 7, today: TODAY,
+    });
+    expect(items.map((i) => i.id)).toEqual(['missed-2', 'pay-9']);
+    expect(items[0].title).toMatch(/^You missed your visit on /);
+    expect(items[0].detail).toBe('Your payment still stands. Choose a new time for it.');
+    expect(items[0].tab).toBe('appointments');
   });
 });
 

@@ -617,6 +617,7 @@ class AppointmentRepository {
       SET scheduled_date = $1,
           scheduled_time = $2,
           reminder_sent_at = NULL,
+          missed_notice_sent_at = NULL,
           reschedule_reason = $4,
           rescheduled_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP

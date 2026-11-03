@@ -2,6 +2,7 @@ const { sendEmail } = require('../config/email');
 const { formatTime12 } = require('../constants/clockFormat');
 const { ARRIVAL_LEAD_MINUTES, arrivalTimeFor } = require('../constants/scheduling');
 const logger = require('../config/logger');
+const env = require('../config/environment');
 
 /**
  * What the patient receives about their own booking. [1.24.0]
@@ -363,6 +364,71 @@ class AppointmentEmailService {
               <td style="padding:4px 0;"><strong>${esc(reason)}</strong></td></tr>
         </table>
         ${next}
+      `),
+    });
+  }
+
+  // ── Sent by the server on its own, once each [1.148.0] ────────────────────────────────────────
+  //
+  // services/patientMessageService.js decides who and when. None carries a report, a test name or
+  // a finding: the portal holds those behind a sign-in, and an inbox is read by whoever has it open.
+
+  /**
+   * The results of a visit are ready to view. A notice, not the report: [1.113.0] still holds,
+   * reports are emailed only when the patient asks the clinic.
+   */
+  async sendResultsReady({ to, accountName, patientName, visitDate, forSelf }) {
+    if (!to) return { skipped: true };
+    const whose = forSelf ? 'your visit' : `${esc(patientName)}'s visit`;
+    return sendEmail({
+      to,
+      subject: `Results are ready in your patient portal — ${CLINIC_NAME}`,
+      html: shell(`Hello ${accountName},`, `
+        <p>The results from ${whose} on <strong>${esc(readableDate(visitDate))}</strong> are ready.</p>
+        <p>Sign in to your patient portal to view them: <a href="${esc(env.FRONTEND_URL)}">${esc(env.FRONTEND_URL)}</a>,
+           then open <strong>Results</strong>.</p>
+        <p style="font-size:14px;color:#64748b;">The original report, with the clinic's seal, is kept
+           at the clinic for you to collect. We send this email once for each visit.</p>
+      `),
+    });
+  }
+
+  /**
+   * A PAID booking nobody came for. Paid is final ([1.121.0]: no refunds), so the money is not
+   * lost: the booking is moved. The patient was otherwise never told, and the Desk's list of paid
+   * bookings nobody came for waited on staff to ring them.
+   */
+  async sendMissedBooking({ to, patientName, reference, date, time, hasAccount }) {
+    if (!to) return { skipped: true };
+    const how = hasAccount
+      ? `<p>Choose a new time in your patient portal: <a href="${esc(env.FRONTEND_URL)}">${esc(env.FRONTEND_URL)}</a>,
+           then <strong>Visits</strong> and <strong>Reschedule</strong>.</p>`
+      : `<p>To choose a new time, call the clinic on <strong>${esc(env.CLINIC_PHONE)}</strong> or ask at the front desk.</p>`;
+    return sendEmail({
+      to,
+      subject: `You missed your appointment on ${readableDate(date)}`,
+      html: shell(`Hello ${patientName},`, `
+        <p>We did not see you at your appointment on <strong>${esc(readableDate(date))}</strong> at
+           <strong>${esc(readableTime(time))}</strong> (reference <strong>${esc(reference)}</strong>).</p>
+        <p><strong>Your payment still stands</strong>: nothing is lost, and the booking only needs a new time.</p>
+        ${how}
+      `),
+    });
+  }
+
+  /** "How was your visit?": the clinic's paper feedback form, in the portal. [1.112.0] */
+  async sendFeedbackInvite({ to, accountName, patientName, visitDate, forSelf }) {
+    if (!to) return { skipped: true };
+    const whose = forSelf ? 'your visit' : `${esc(patientName)}'s visit`;
+    return sendEmail({
+      to,
+      subject: `How was your visit? — ${CLINIC_NAME}`,
+      html: shell(`Hello ${accountName},`, `
+        <p>Thank you for ${whose} on <strong>${esc(readableDate(visitDate))}</strong>. Would you tell
+           us how it went? A few short questions, in Cebuano, Tagalog or English: it takes a minute.</p>
+        <p>Sign in to your patient portal, <a href="${esc(env.FRONTEND_URL)}">${esc(env.FRONTEND_URL)}</a>,
+           and choose <strong>Rate visit</strong> on Home. You can choose not to show your name.</p>
+        <p style="font-size:14px;color:#64748b;">We ask once for each visit.</p>
       `),
     });
   }

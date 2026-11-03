@@ -1,6 +1,6 @@
 # Handoff: open threads
 
-Last updated 2026-10-31, after [1.143.0]. For the next Claude Code agent working in this repo.
+Last updated 2026-11-04, after [1.148.0]. For the next Claude Code agent working in this repo.
 CLAUDE.md and the project memory load on their own; this file holds what they do not.
 
 The diagram update this file used to brief is done: [1.133.0] made it and [1.134.0] checked it
@@ -32,6 +32,20 @@ built; each fix below is what was agreed. If built, in this order: 3, then 2, th
    your existing one and connect Google?"; My Account shows Google connected, with disconnect.
 
 ## Open threads
+
+- **[1.148.0] Seven automations** (backups, three patient emails, retention, HMO countdown,
+  worklist target). On another database run `node src/scripts/migratePatientMessages.js`. Left for
+  Steven:
+  - **Where the system will be deployed** (asked, not answered). On the clinic PC or a server with its
+    own disk, backups work as built; set `BACKUP_COPY_DIR` (USB or a cloud-synced folder) and
+    `BACKUP_PASSPHRASE` there, and write the passphrase down. On a cloud host with a managed
+    database, `BACKUPS=host` and the host's backups; the uploaded reports then need a persistent disk,
+    which the app does not have yet. See docs/BACKUP_AND_RESTORE.md.
+  - `TURNAROUND_TARGETS` is still unset, so no worklist test is flagged. Setting it is the clinic
+    agreeing a promise ([1.63.0]), so it is theirs to choose.
+  - The DPO should know two things: backups hold every record (encrypt any copy that leaves the PC),
+    and the server now emails patients by itself (no report or test name in any of the three).
+  - The diagrams do not show the automatic jobs yet.
 
 - **[1.146.0] What-ifs.** On another database run `node src/scripts/migrateDiscountDeclaration.js`
   (patients declaring a Senior/PWD discount online with an ID photo). Patients can now release their

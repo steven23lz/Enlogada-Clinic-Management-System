@@ -348,6 +348,10 @@ CREATE TABLE patient_visits (
     -- Booked by the patient (or their family) in the portal, rather than by staff. [1.136.0] Stored
     -- when the booking is made, so the label the patient reads never changes afterwards.
     booked_online BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Emails the server sends the patient by itself, once each. [1.148.0] The sweep claims a visit
+    -- by stamping it before sending, and gives the stamp back if the send fails.
+    results_ready_emailed_at TIMESTAMP,    -- "Your results are ready": no report, no test name
+    feedback_invited_at TIMESTAMP,         -- "How was your visit?", the day after it finished
     CONSTRAINT chk_visits_booked_online CHECK (NOT booked_online OR visit_type = 'Appointment'),
     CONSTRAINT fk_visits_patient FOREIGN KEY (patient_id) REFERENCES patients(id),
     CONSTRAINT fk_visits_created_by FOREIGN KEY (created_by) REFERENCES users(id),
@@ -416,6 +420,9 @@ CREATE TABLE appointments (
     -- reason, is also in audit_log. See migrations.md [1.105.0].
     reschedule_reason VARCHAR(500),
     rescheduled_at TIMESTAMP,
+    -- A PAID booking nobody came for: the patient is emailed the morning after, once. [1.148.0]
+    -- Cleared when the booking is moved, so a moved booking missed again is told again.
+    missed_notice_sent_at TIMESTAMP,
     CONSTRAINT fk_appointments_visit FOREIGN KEY (patient_visit_id) REFERENCES patient_visits(id),
     CONSTRAINT chk_appointments_status CHECK (status IN ('Pending', 'Confirmed', 'Completed', 'Cancelled', 'No Show'))
 );

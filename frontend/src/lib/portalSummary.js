@@ -56,6 +56,22 @@ export function owing(appointments = [], options) {
   return { rows, total: rows.reduce((sum, a) => sum + Number(a.amount_due), 0) };
 }
 
+/**
+ * PAID bookings whose day has passed with nobody checked in, newest first. [1.148.0] A receipt is
+ * final ([1.121.0]), so the money is not lost: the booking is moved. The server emails the patient
+ * the morning after; Home says it too, with the button that moves it.
+ */
+export function missedBookings(appointments = [], { patientId = null, today }) {
+  return appointments
+    .filter((a) => a.status === 'Pending' && a.is_paid)
+    .filter(forPatient(patientId))
+    .filter((a) => {
+      const day = bookingDay(a);
+      return day !== null && day < today;
+    })
+    .sort((a, b) => bookingDay(b).localeCompare(bookingDay(a)));
+}
+
 const releasedTime = (r) => {
   const t = new Date(r.released_at || r.visit_date || 0).getTime();
   return Number.isNaN(t) ? 0 : t;
@@ -150,7 +166,16 @@ export function attentionItems({
     }];
   }
 
-  const items = [...waiting, ...invitesError, ...owing(appointments, { patientId, today }).rows.map((a) => ({
+  const missed = missedBookings(appointments, { patientId, today }).map((a) => ({
+    id: `missed-${a.id}`,
+    tone: 'amber',
+    title: `You missed your visit on ${formatAppointmentDate(a.scheduled_date)}`,
+    detail: 'Your payment still stands. Choose a new time for it.',
+    action: 'Choose a new time',
+    tab: 'appointments',
+  }));
+
+  const items = [...waiting, ...invitesError, ...missed, ...owing(appointments, { patientId, today }).rows.map((a) => ({
     id: `pay-${a.id}`,
     tone: 'amber',
     title: `Pay for your visit on ${formatAppointmentDate(a.scheduled_date)}`,

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   greeting, minutesBetween, listWords, waitingToPay, bookingState, todaysBookings,
-  deskNeeds, NO_TESTS_SHOWN, tillNeeds, departmentNeeds, decisionNeed, failedNeed,
+  deskNeeds, NO_TESTS_SHOWN, tillNeeds, departmentNeeds, decisionNeed, failedNeed, backupNeed, timeLeft,
   topServices, hoursSoFar, departmentRows, nextSevenDays,
 } from '../../src/lib/today.js';
 import { formatTime12 } from '../../src/lib/date.js';
@@ -156,6 +156,17 @@ describe('departmentNeeds', () => {
     expect(row.title).toBe('2 waiting for exam · 1 ready to release');
   });
 
+  // [1.148.0] Past the department's target, when the clinic has set one, from when it was ready.
+  it('says how many are past the target, and turns red', () => {
+    const timed = pending.map((t) => ({ ...t, target_minutes: 60, ready_at: t.visit_created_at }));
+    const [row] = departmentNeeds({ category: 'Laboratory', pending: timed, nav: 'lab-ops', now: at(10, 5) });
+    expect(row.detail).toBe('2 tests past the 60-minute target. Oldest: Ana Reyes, CBC, waiting 1h 25m');
+    expect(row.tone).toBe('rose');
+    // No target set: measured, not judged.
+    const [plain] = departmentNeeds({ category: 'Laboratory', pending, nav: 'lab-ops', now: at(10, 5) });
+    expect(plain.tone).toBe('amber');
+  });
+
   // [1.113.0] Emailing a released report is the patient's choice, so an unemailed one is not work.
   it('asks nothing of a department with an empty worklist', () => {
     expect(departmentNeeds({ category: 'Xray', pending: [], nav: 'xray-ops', now: at(10) })).toEqual([]);
@@ -173,6 +184,63 @@ describe('decisionNeed and failedNeed', () => {
     expect(decision.detail).toBe('Carla Mendoza, Mark Ong and 1 more');
     expect(failedNeed(['the queue', 'online payments'])[0].title).toBe("Couldn't check the queue and online payments");
     expect(failedNeed([])).toEqual([]);
+  });
+});
+
+// [1.148.0] A booking waits for its HMO claim only until its start: the soonest deadline first.
+describe('decisionNeed deadlines', () => {
+  it('names the soonest deadline and counts those within the hour', () => {
+    const [decision] = decisionNeed([
+      { patient_first_name: 'Mark', patient_last_name: 'Ong', decide_by: at(15).toISOString(), minutes_to_decide: 300 },
+      { patient_first_name: 'Carla', patient_last_name: 'Mendoza', decide_by: at(10, 40).toISOString(), minutes_to_decide: 40 },
+      { patient_first_name: 'Rosa', patient_last_name: 'Lim' },
+    ], at(10));
+    expect(decision.title).toBe('3 HMO requests waiting for your decision, 1 due within the hour');
+    expect(decision.detail).toBe(`Soonest: Carla Mendoza, decide by ${formatTime12('10:40')} (40m left)`);
+    expect(decision.tone).toBe('amber');
+  });
+
+  it('names another day by its weekday, and a passed deadline as time up', () => {
+    const [later] = decisionNeed([
+      { patient_first_name: 'Mark', patient_last_name: 'Ong', decide_by: at(9, 0, 15).toISOString(), minutes_to_decide: 1380 },
+    ], at(10));
+    expect(later.detail).toMatch(/^Soonest: Mark Ong, decide by \S+ 9:00 AM \(23h left\)$/);
+    expect(later.tone).toBe('blue');
+    expect(timeLeft(-3)).toBe('time is up');
+    expect(timeLeft(null)).toBeNull();
+  });
+});
+
+// [1.148.0] Said only when something is wrong: a working backup is not something to do.
+describe('backupNeed', () => {
+  const now = at(10);
+  const hoursAgo = (h) => new Date(now.getTime() - h * 3600000).toISOString();
+
+  it('says nothing while backups are working', () => {
+    expect(backupNeed({ enabled: true, lastSuccessAt: hoursAgo(16) }, now)).toEqual([]);
+    expect(backupNeed(undefined, now)).toEqual([]);
+  });
+
+  it('says when the newest is failing, why, and when the last good one was', () => {
+    const [need] = backupNeed({
+      enabled: true, lastSuccessAt: hoursAgo(40), lastFailureAt: hoursAgo(1),
+      lastFailure: 'Backup failed: pg_dump was not found.',
+    }, now);
+    expect(need.id).toBe('backup');
+    expect(need.tone).toBe('rose');
+    expect(need.title).toBe('The backup is failing');
+    expect(need.detail).toBe('pg_dump was not found. Last good backup: 1d 16h ago.');
+    expect(need.action.go).toBe('activity');
+  });
+
+  it('says when it is off, never made, or more than a day and a half old', () => {
+    expect(backupNeed({ enabled: false }, now)[0].title).toBe('Backups are turned off');
+    // Left to the hosting company on purpose: not this server's to watch.
+    expect(backupNeed({ enabled: false, byHost: true }, now)).toEqual([]);
+    expect(backupNeed({ enabled: true }, now)[0].title).toBe('No backup has been made yet');
+    expect(backupNeed({ enabled: true, lastSuccessAt: hoursAgo(50) }, now)[0].title).toBe('The last backup was 2d 2h ago');
+    // A failure since put right is not a failure.
+    expect(backupNeed({ enabled: true, lastSuccessAt: hoursAgo(1), lastFailureAt: hoursAgo(2) }, now)).toEqual([]);
   });
 });
 

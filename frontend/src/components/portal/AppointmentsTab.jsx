@@ -15,7 +15,8 @@ import { formatAppointmentDate, formatTime12 } from '../../lib/date';
 import AppointmentTime from '../ui/appointment-time';
 import DataBadge from '../ui/data-badge';
 import OriginBadge from './OriginBadge';
-import { formatDate } from '../../lib/date';
+import { formatDate, todayStr } from '../../lib/date';
+import { bookingDay } from '../../lib/portalSummary';
 
 /**
  * Bookings this patient has, and the pass they present.
@@ -287,6 +288,14 @@ export default function AppointmentsTab({ bookings, visits = null }) {
               onSettled={bookings.reload}
             />
           </>
+        )}
+
+        {/* [1.148.0] Paid, and its day passed with nobody checked in. The payment stands; the
+            booking only needs a new time, which the button below gives it. */}
+        {appt.status === 'Pending' && appt.is_paid && bookingDay(appt) !== null && bookingDay(appt) < todayStr() && (
+          <p data-testid="booking-missed" className="m-0 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-fine text-amber-800">
+            <strong>You missed this visit.</strong> Your payment still stands: reschedule it to choose a new time.
+          </p>
         )}
 
         {/* Reschedule only while the booking is still Pending: once reception has checked

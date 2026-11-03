@@ -27,16 +27,22 @@ const THRESHOLDS = [
 // the same formatting. Re-exported here so existing importers are unaffected.
 export { minutesSince };
 export const formatWaitDuration = formatDuration;
-const WaitBadge = ({ since, className }) => {
+// [1.148.0] `overTarget` is the department's turnaround target in minutes when a test has waited
+// past it (worklists only, lib/turnaroundTarget.js). Said in this badge rather than a second one:
+// two red badges side by side read as two problems, and it is one, the wait.
+const WaitBadge = ({ since, overTarget = null, className }) => {
   const minutes = minutesSince(since);
   // An unparseable or absent timestamp renders nothing rather than "NaNm" or a misleading 0m.
   if (minutes === null) return null;
 
-  const level = THRESHOLDS.find((t) => minutes >= t.minAge) ?? THRESHOLDS[THRESHOLDS.length - 1];
+  const level = overTarget
+    ? { ...THRESHOLDS[0], label: `Past the department's ${overTarget}-minute target` }
+    : THRESHOLDS.find((t) => minutes >= t.minAge) ?? THRESHOLDS[THRESHOLDS.length - 1];
   const Icon = level.icon;
 
   return (
     <span
+      data-testid={overTarget ? 'worklist-over-target' : undefined}
       title={level.label}
       className={cn(
         // Squared to match StatusBadge — the two sit side by side in every queue row, and one
@@ -47,7 +53,7 @@ const WaitBadge = ({ since, className }) => {
       )}
     >
       <Icon aria-hidden="true" className="w-3 h-3 flex-shrink-0" />
-      {formatWaitDuration(minutes)} waiting
+      {formatWaitDuration(minutes)} waiting{overTarget ? `, over the ${overTarget}-min target` : ''}
     </span>
   );
 };

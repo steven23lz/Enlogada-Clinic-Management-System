@@ -8,6 +8,10 @@
  * held_until is left as it is, as a booking whose time came would have it.
  *
  *   node src/scripts/e2eMoveBookingStart.js --appointment=123 --minutes-ago=5
+ *   node src/scripts/e2eMoveBookingStart.js --appointment=123 --days-ago=1   # same time, N days back
+ *
+ * [1.148.0] --days-ago makes a booking whose DAY has passed (a missed paid booking), which
+ * --minutes-ago cannot do during the day: ten hours before 14:00 is still today.
  */
 require('dotenv').config();
 const db = require('../config/database');
@@ -24,12 +28,17 @@ async function main() {
     process.exit(1);
   }
   const appointmentId = Number(arg('appointment'));
-  const minutesAgo = Number(arg('minutes-ago') || 5);
+  const daysAgo = arg('days-ago') === null ? null : Number(arg('days-ago'));
+  const minutesAgo = daysAgo === null ? Number(arg('minutes-ago') || 5) : daysAgo * 24 * 60;
   if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
     console.error('move-booking-start refused: --appointment=<id> is required');
     process.exit(1);
   }
-  if (!Number.isInteger(minutesAgo) || minutesAgo < 1 || minutesAgo > 600) {
+  if (daysAgo !== null && (!Number.isInteger(daysAgo) || daysAgo < 1 || daysAgo > 7)) {
+    console.error('move-booking-start refused: --days-ago must be a whole number from 1 to 7');
+    process.exit(1);
+  }
+  if (daysAgo === null && (!Number.isInteger(minutesAgo) || minutesAgo < 1 || minutesAgo > 600)) {
     console.error('move-booking-start refused: --minutes-ago must be a whole number from 1 to 600');
     process.exit(1);
   }
@@ -51,7 +60,7 @@ async function main() {
     console.error(`move-booking-start refused: appointment ${appointmentId} is not a test fixture's`);
     process.exit(1);
   }
-  console.log(`moved appointment ${rows[0].id} to ${rows[0].scheduled_time} today`);
+  console.log(`moved appointment ${rows[0].id} to ${rows[0].scheduled_time}${daysAgo ? `, ${daysAgo} day(s) ago` : ' today'}`);
   process.exit(0);
 }
 

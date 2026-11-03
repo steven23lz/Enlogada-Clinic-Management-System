@@ -14,7 +14,7 @@ import api from '../config/api';
 import { daysAgoStr, todayStr } from '../lib/date';
 import { categoryLabel } from '../lib/categories';
 import {
-  decisionNeed, departmentNeeds, deskNeeds, failedNeed, greeting, tillNeeds, waitingToPay,
+  backupNeed, decisionNeed, departmentNeeds, deskNeeds, failedNeed, greeting, tillNeeds, waitingToPay,
 } from '../lib/today';
 
 /** The department worklists, and the History each one's sent-or-not lives on. */
@@ -75,6 +75,8 @@ const Today = ({ onSelectNav }) => {
     results: hasPermission('results:read'),
     checkIn: hasPermission('appointments:read') && hasPermission('appointments:update'),
     takeMoney: hasPermission('billing:process'),
+    // [1.148.0] Whoever reads the Activity Log is told when the backups behind it are not working.
+    backups: hasPermission('audit:view'),
   };
 
   const today = todayStr();
@@ -100,6 +102,7 @@ const Today = ({ onSelectNav }) => {
       params: { status: 'Pending' },
     }).then((r) => body(r).requests || [])),
     hours: desk && (() => api.get('/schedule/public').then(body)),
+    backup: can.backups && (() => api.get('/admin/backups').then(body)),
     // One request for every section's figures: the server returns only the slices this account holds.
     ops: (desk || till || worklists.length > 0 || clinic) && (() => api.get('/reports/operations', { params: range }).then((r) => body(r).report)),
     analytics: (worklists.length > 0 || clinic) && (can.results || can.visits)
@@ -126,6 +129,7 @@ const Today = ({ onSelectNav }) => {
   const ops = reads.read('ops');
   const analytics = reads.read('analytics');
   const before = reads.read('yesterday');
+  const backup = reads.read('backup');
 
   const needs = [];
   const couldNot = [];
@@ -157,7 +161,11 @@ const Today = ({ onSelectNav }) => {
   });
   if (clinic && can.decide) {
     if (hmo.failed) couldNot.push('HMO requests');
-    needs.push(...decisionNeed(hmo.data || []));
+    needs.push(...decisionNeed(hmo.data || [], now));
+  }
+  if (can.backups) {
+    if (backup.failed) couldNot.push('the backups');
+    needs.push(...backupNeed(backup.data, now));
   }
   // What could not be checked goes first: until it loads, the rest of the list is not the whole truth.
   const allNeeds = [...failedNeed(couldNot), ...needs];

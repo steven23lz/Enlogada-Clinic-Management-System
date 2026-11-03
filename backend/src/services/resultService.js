@@ -12,6 +12,7 @@ const logger = require('../config/logger');
 const { digitalCopy, digitalCopyName, isMarkable } = require('../utils/digitalCopy');
 const { generateCode, formatCode, stampFor } = require('../utils/verificationCode');
 const env = require('../config/environment');
+const { TURNAROUND_TARGET_MINUTES } = require('../config/turnaroundTargets');
 const {
   escapeHtml, wrapEmail, reportTable, findingsBlock, resolveReportAttachment,
 } = require('./resultEmailTemplate');
@@ -155,7 +156,11 @@ class ResultService {
       throw error;
     }
     assertStaffAllowedCategory(requestingUser, categoryName);
-    return await resultRepository.findPendingByCategory(categoryName);
+    // [1.148.0] Each row carries its department's turnaround target (TURNAROUND_TARGETS), or null
+    // when the clinic has set none, so the worklist can flag a test that has waited past it.
+    const target = TURNAROUND_TARGET_MINUTES[categoryName] ?? null;
+    const rows = await resultRepository.findPendingByCategory(categoryName);
+    return rows.map((row) => ({ ...row, target_minutes: target }));
   }
 
   /**

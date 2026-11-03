@@ -22,6 +22,57 @@ class AuditRepository {
     return result.rows[0];
   }
 
+  /**
+   * The newest entry of each action about one kind of thing with no id of its own: the backups.
+   * [1.148.0] `entity_id IS NULL` keeps it on idx_audit_log_entity_created.
+   */
+  async findLatestForEntityType(entityType, actions) {
+    const { rows } = await db.query(
+      `SELECT DISTINCT ON (action) action, created_at, description
+         FROM audit_log
+        WHERE entity_type = $1 AND entity_id IS NULL AND action = ANY($2::text[])
+        ORDER BY action, created_at DESC`,
+      [entityType, actions]
+    );
+    return Object.fromEntries(rows.map((r) => [r.action, r]));
+  }
+
+  /**
+   * Retention, in two windows: PHI reads after `phiDays`, everything else after `otherDays`, and
+   * never a migration archive (ARCHIVE_ACTIONS: the only copy of what a dropped table held).
+   * [1.148.0] Moved here from scripts/pruneAuditLog.js so the server's own retention pass and the
+   * script delete exactly the same rows.
+   */
+  async countPastRetention({ phiDays, otherDays }) {
+    const { rows } = await db.query(
+      `SELECT COUNT(*) FILTER (WHERE action LIKE 'phi.read.%' AND created_at < NOW() - ($1 || ' days')::interval)::int AS phi,
+              COUNT(*) FILTER (WHERE action NOT LIKE 'phi.read.%' AND created_at < NOW() - ($2 || ' days')::interval)::int AS other
+         FROM audit_log
+        WHERE created_at < NOW() - (LEAST($1::int, $2::int) || ' days')::interval
+          AND action <> ALL($3::text[])`,
+      [String(phiDays), String(otherDays), ARCHIVE_ACTIONS]
+    );
+    return rows[0];
+  }
+
+  async deletePastRetention({ phiDays, otherDays }) {
+    const { rowCount } = await db.query(
+      `DELETE FROM audit_log
+        WHERE action <> ALL($3::text[])
+          AND ((action LIKE 'phi.read.%' AND created_at < NOW() - ($1 || ' days')::interval)
+            OR (action NOT LIKE 'phi.read.%' AND created_at < NOW() - ($2 || ' days')::interval))`,
+      [String(phiDays), String(otherDays), ARCHIVE_ACTIONS]
+    );
+    return rowCount;
+  }
+
+  async countAll() {
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE action LIKE 'phi.read.%')::int AS phi FROM audit_log`
+    );
+    return rows[0];
+  }
+
   async findRecent({ limit, offset, includeArchives = false }) {
     // The same filter on the list and the count, so the pages add up to the total shown.
     const where = includeArchives ? '' : 'WHERE action <> ALL($1::text[])';

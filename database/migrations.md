@@ -1,5 +1,76 @@
 # Database Migration & Schema History
 
+## [1.148.0] - 2026-11-04 (What only happened if somebody remembered, automated)
+
+Run on an existing database: `node src/scripts/migratePatientMessages.js` (three nullable
+timestamps, `--rollback` reverses it). Steven asked whether the main processes had a bug, a rule, or
+anything to improve or automate. The walk-through found no new broken rule; it found work that
+happened only when a person remembered it. He chose all seven.
+
+1. **A nightly backup, which nothing made before.** `services/backupService.js`, swept every five
+   minutes by `jobs/backupScheduler.js`: due after `BACKUP_AT` (18:00), and at once whenever the
+   newest is a day old, because a clinic PC switched off at night never reaches 18:00
+   (`utils/backupPlan.js`, unit-tested). pg_dump in custom format (found on PATH or in
+   `C:\Program Files\PostgreSQL\<n>\bin`; the password goes in its environment, never on argv),
+   checked for its `PGDMP` header, then the uploads MIRRORED beside it: new files copied, files the
+   app deleted moved to `uploads-removed/<day>` and kept 30 days, so a deletion can be undone for a
+   month and HMO card retention still holds. 30 days kept (`BACKUP_KEEP_DAYS`), never fewer than the
+   newest 7. `BACKUP_COPY_DIR` makes a second copy; `BACKUP_PASSPHRASE` encrypts every file
+   (AES-256-GCM, scrypt key, `utils/backupCrypto.js`; GCM also refuses a damaged file). Two servers
+   make one backup: an advisory lock, and "due" read from the Activity Log. Every outcome is an
+   Activity Log line (`system.backup_made` / `system.backup_failed`, entity `backup`; a repeated
+   failure is logged once, retried hourly). `GET /admin/backups` (`audit:view`) feeds an Admin's
+   Today, which says nothing while backups work and warns when one is failing, off, never made, or
+   more than 36 hours old (`backupNeed`). `BACKUPS=host` leaves a managed cloud database to its host
+   and Today quiet. `scripts/backupNow.js` makes one by hand; `scripts/restoreBackup.js` lists,
+   restores into a NEW database (`--into`, the safe check), replaces the live one after backing it up
+   first, and copies back missing uploads without overwriting any. Verified by restoring an
+   encrypted backup into a separate database: every table's row count matched.
+   `docs/BACKUP_AND_RESTORE.md` is the clinic's guide, including where the system runs: on a cloud
+   host the disk is wiped on deploy, so the host's own backups apply.
+2. **"Your results are ready".** The portal has no bell, so a patient learned their results were out
+   only by signing in. When a visit's last result is released, a patient with a portal account is
+   emailed that results are ready: no report, no test name, nothing attached, once per visit
+   ([1.113.0] holds: a report is emailed only when asked for). A visit FINISHED at each test's first
+   authorised report (or an X-ray's "marked done"), so an amendment weeks later never sends it.
+3. **A paid booking nobody came for.** It sat on the Desk's list until staff rang. The morning after
+   (08:00), the patient is emailed that the payment stands and how to choose a new time: the portal
+   for an account, the clinic's number otherwise. The portal's Home lists it (`missed-<id>`) and its
+   card says so (`booking-missed`). Moving the booking clears `missed_notice_sent_at`, so a booking
+   missed again is told again.
+4. **The retention scripts run themselves.** `services/retentionService.js` holds the three passes
+   the scripts did (notifications 30/90 days, Activity Log 2 years for PHI reads and 7 for the rest,
+   HMO card photos a year), and `jobs/retentionScheduler.js` runs them daily; the scripts call the
+   same service. Found on the way: the audit pass would have deleted migration archives after seven
+   years, which CLAUDE.md says are never deleted (the only copy of what a dropped table held). They
+   are excluded now. One `system.retention_pass` Activity Log line when anything was removed.
+5. **HMO deadlines count down.** `GET /hmo/requests` carries `minutes_to_decide` on the server's
+   clock and lists claims a booking waits on first, soonest deadline on top. Today's HMO row names
+   the soonest ("decide by 11:00 AM (40m left)") and counts those within the hour; Service Requests
+   adds the time left and turns red within the hour (`data-urgency`).
+6. **Tests waiting past the target.** Worklist rows carry `ready_at` (paid and here, whichever came
+   last: a booking paid from home last week is not overdue on arrival) and `target_minutes`
+   (TURNAROUND_TARGETS, parsed once in `config/turnaroundTargets.js` for the reports and the
+   worklists). Past it, the wait badge itself says "…waiting, over the 60-min target": a second red
+   badge beside it read as two problems. Today's department row counts them. With no target set,
+   nothing is judged, as the reports do.
+7. **"How was your visit?" by email.** The portal's feedback form was seen only by patients who
+   signed in within 30 days. The morning after a visit finished (10:00), an account is asked once,
+   while the form is still open and only while questions are switched on.
+
+The three emails are `services/patientMessageService.js` (when: `utils/patientMessageTiming.js`,
+unit-tested; never 21:00-07:00, never long after the fact), swept every five minutes by
+`jobs/patientMessageScheduler.js`. Each is claimed by its stamp before sending
+(`results_ready_emailed_at`, `feedback_invited_at`, `missed_notice_sent_at`), so two servers send
+it once, and a failed send gives the stamp back. `scripts/sendPatientMessages.js` shows the plan.
+Switches: `PATIENT_EMAILS=off`, `RETENTION=off`, `BACKUPS=off|host`.
+
+**Tests:** backend `patientMessageTiming.test.js`, `backupPlan.test.js` (with an encrypt/decrypt
+round trip); frontend `turnaroundTarget.test.js` and additions to `today.test.js` and
+`portalSummary.test.js`; `automations.spec.js` (the plan for a real missed booking and a real
+release, the portal's note, the HMO order and countdown, the worklist flag, the backup status's
+permission). `e2eMoveBookingStart.js` takes `--days-ago`.
+
 ## [1.147.0] - 2026-11-01 (A patient changes their sign-in email)
 
 Run on an existing database: `node src/scripts/migrateEmailChange.js` (widens `auth_codes`' two

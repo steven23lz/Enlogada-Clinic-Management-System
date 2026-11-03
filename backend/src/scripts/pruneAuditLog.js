@@ -1,5 +1,7 @@
 /**
- * Retention pass for `audit_log`. Schedule this monthly in any long-lived environment.
+ * Retention pass for `audit_log`. [1.148.0] The server runs it itself once a day
+ * (jobs/retentionScheduler.js, through services/retentionService.js); this runs it now, by hand.
+ * Migration archives (auditRepository ARCHIVE_ACTIONS) are never deleted, at any age.
  *
  * The audit log has never had retention, and PHI read-auditing ([1.19.0]) changes its growth
  * profile completely: it used to record only sensitive *writes* — refunds, staff account changes,
@@ -30,7 +32,8 @@
  *
  * Dry-run reports what it would delete and changes nothing.
  */
-const db = require('../config/database');
+const retentionService = require('../services/retentionService');
+const auditRepository = require('../repositories/auditRepository');
 const logger = require('../config/logger');
 
 const arg = (name, fallback) => {
@@ -40,8 +43,8 @@ const arg = (name, fallback) => {
 
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
-  const phiDays = arg('phi-days', 730); // 2 years
-  const otherDays = arg('other-days', 2555); // ~7 years
+  const phiDays = arg('phi-days', retentionService.RETENTION.auditPhiReadDays);
+  const otherDays = arg('other-days', retentionService.RETENTION.auditOtherDays);
 
   if (!Number.isFinite(phiDays) || !Number.isFinite(otherDays) || phiDays < 1 || otherDays < 1) {
     logger.error('Retention windows must be positive whole numbers of days.');
@@ -54,40 +57,15 @@ async function main() {
       : `Pruning audit_log (PHI reads older than ${phiDays}d, everything else older than ${otherDays}d)…`
   );
 
-  const buckets = [
-    {
-      label: `PHI read entries older than ${phiDays} days`,
-      where: `action LIKE 'phi.read.%' AND created_at < NOW() - ($1 || ' days')::interval`,
-      params: [String(phiDays)],
-    },
-    {
-      label: `other entries older than ${otherDays} days`,
-      where: `action NOT LIKE 'phi.read.%' AND created_at < NOW() - ($1 || ' days')::interval`,
-      params: [String(otherDays)],
-    },
-  ];
+  const due = await retentionService.auditLogPastRetention({ phiDays, otherDays });
+  logger.info(`  PHI read entries older than ${phiDays} days: ${due.phi}`);
+  logger.info(`  other entries older than ${otherDays} days: ${due.other}`);
+  const removed = dryRun ? 0 : await retentionService.pruneAuditLog({ phiDays, otherDays });
 
-  let removed = 0;
-  for (const bucket of buckets) {
-    const counted = await db.query(
-      `SELECT COUNT(*)::int AS c FROM audit_log WHERE ${bucket.where}`,
-      bucket.params
-    );
-    const n = counted.rows[0].c;
-    logger.info(`  ${bucket.label}: ${n}`);
-    if (!dryRun && n > 0) {
-      await db.query(`DELETE FROM audit_log WHERE ${bucket.where}`, bucket.params);
-      removed += n;
-    }
-  }
-
-  const total = await db.query('SELECT COUNT(*)::int AS c FROM audit_log');
-  const phi = await db.query(
-    `SELECT COUNT(*)::int AS c FROM audit_log WHERE action LIKE 'phi.read.%'`
-  );
+  const total = await auditRepository.countAll();
   logger.info(
     `${dryRun ? 'DRY RUN finished' : `Done — ${removed} row(s) removed`}. ` +
-      `audit_log now holds ${total.rows[0].c} row(s), ${phi.rows[0].c} of them PHI reads.`
+      `audit_log now holds ${total.total} row(s), ${total.phi} of them PHI reads.`
   );
   process.exit(0);
 }

@@ -15,6 +15,8 @@ import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { formatCurrency } from '../../lib/currency';
 import { toastSuccess } from '../../lib/toast';
+import { decideUrgency, timeLeft } from '../../lib/today';
+import { cn } from '../../lib/utils';
 import AttachedFile from '../../components/AttachedFile';
 import { ShieldCheck, AlertCircle, Check, X } from 'lucide-react';
 
@@ -242,9 +244,19 @@ const ServiceRequests = () => {
                         )}
                         {/* [1.132.0] A booking holds its slot for this claim until its own start, and
                             is released if it is still undecided then. */}
+                        {/* [1.148.0] And how long that leaves, on the server's clock, soonest listed first:
+                            within the hour it turns red, as an online payment for a booking does. */}
                         {r.status === 'Pending' && r.decide_by && (
-                          <span data-testid="claim-decide-by" className="block text-fine font-semibold text-amber-700">
+                          <span
+                            data-testid="claim-decide-by"
+                            data-urgency={decideUrgency(r).state}
+                            className={cn(
+                              'block text-fine font-semibold',
+                              ['soon', 'passed'].includes(decideUrgency(r).state) ? 'text-rose-700' : 'text-amber-700',
+                            )}
+                          >
                             Booking: decide by {new Date(r.decide_by).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                            {timeLeft(r.minutes_to_decide) && ` · ${timeLeft(r.minutes_to_decide)}`}
                           </span>
                         )}
                       </TableCell>

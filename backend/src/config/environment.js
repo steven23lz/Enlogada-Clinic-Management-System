@@ -109,6 +109,23 @@ module.exports = {
   // [1.131.0] Unpaid is temporary: unpaid walk-ins and bookings whose time is up are removed
   // (jobs/unpaidExpiryScheduler.js). Off with UNPAID_EXPIRY=off.
   UNPAID_EXPIRY: process.env.UNPAID_EXPIRY !== 'off',
+  // [1.148.0] The server sends three emails by itself: results ready, a missed paid booking, and
+  // "how was your visit?" (jobs/patientMessageScheduler.js). Off with PATIENT_EMAILS=off.
+  PATIENT_EMAILS: process.env.PATIENT_EMAILS !== 'off',
+  // [1.148.0] Old notifications, Activity Log entries and HMO card photos are removed on a schedule
+  // (jobs/retentionScheduler.js), as the prune scripts do by hand. Off with RETENTION=off.
+  RETENTION: process.env.RETENTION !== 'off',
+  // [1.148.0] A nightly backup of the database and the uploaded files (services/backupService.js,
+  // docs/BACKUP_AND_RESTORE.md). Off with BACKUPS=off, which Today warns about; BACKUPS=host says
+  // the hosting company backs the database up instead (a managed cloud database), and Today is quiet.
+  BACKUPS: !['off', 'host'].includes(process.env.BACKUPS),
+  BACKUPS_BY_HOST: process.env.BACKUPS === 'host',
+  BACKUP_DIR: process.env.BACKUP_DIR || '',          // default: a folder beside the app, see backupService
+  BACKUP_COPY_DIR: process.env.BACKUP_COPY_DIR || '', // a second drive, or a cloud-synced folder
+  BACKUP_AT: process.env.BACKUP_AT || '18:00',
+  BACKUP_KEEP_DAYS: Math.max(1, parseInt(process.env.BACKUP_KEEP_DAYS || '30', 10) || 30),
+  BACKUP_PASSPHRASE: process.env.BACKUP_PASSPHRASE || '', // encrypts every backup file when set
+  PG_DUMP_PATH: process.env.PG_DUMP_PATH || '',       // found on its own when blank
   VAT_RATE: parseFloat(process.env.VAT_RATE || '0.12'),
 
   /**

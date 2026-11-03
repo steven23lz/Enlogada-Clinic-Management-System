@@ -1,7 +1,17 @@
 const adminService = require('../services/adminService');
 const auditService = require('../services/auditService');
+const backupService = require('../services/backupService');
 
 class AdminController {
+  // [1.148.0] Whether the nightly backup is working: Today warns an Admin when it is not.
+  async getBackupStatus(req, res, next) {
+    try {
+      return res.status(200).json({ status: 'success', data: await backupService.status() });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getActivity(req, res, next) {
     try {
       const page = parseInt(req.query.page, 10) || 1;

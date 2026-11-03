@@ -360,7 +360,12 @@ class HmoRepository {
              MIN(pv.id) AS patient_visit_id,
              -- [1.132.0] A booking waiting on this claim holds its slot until its own start, and is
              -- released if the claim is still undecided then: the decision's deadline.
-             MIN(a.held_until) FILTER (WHERE hr.status = 'Pending' AND a.status = 'Pending') AS decide_by
+             MIN(a.held_until) FILTER (WHERE hr.status = 'Pending' AND a.status = 'Pending') AS decide_by,
+             -- [1.148.0] Minutes left to decide it, on the server's clock (negative once passed),
+             -- so Today and Service Requests count down alike, whatever the PC's clock says.
+             FLOOR(EXTRACT(EPOCH FROM (
+               MIN(a.held_until) FILTER (WHERE hr.status = 'Pending' AND a.status = 'Pending') - CURRENT_TIMESTAMP
+             )) / 60)::int AS minutes_to_decide
       FROM hmo_requests hr
       JOIN hmo_providers hp ON hr.hmo_provider_id = hp.id
       LEFT JOIN hmo_request_tests hrt ON hrt.hmo_request_id = hr.id
@@ -370,7 +375,9 @@ class HmoRepository {
       LEFT JOIN appointments a ON a.patient_visit_id = pv.id
       ${whereClause}
       GROUP BY hr.id, hp.name
-      ORDER BY hr.request_date DESC
+      -- [1.148.0] A claim a booking is waiting on comes first, soonest deadline on top: that is the
+      -- order they have to be decided in. Everything else newest first, as before.
+      ORDER BY decide_by ASC NULLS LAST, hr.request_date DESC
     `;
 
     // COUNT over hmo_requests alone: the list GROUPs BY hr.id, so one row out is one claim, and
@@ -392,6 +399,34 @@ class HmoRepository {
     }
     const result = await db.query(listQuery, listParams);
     return Object.assign(result.rows, { total });
+  }
+
+  /**
+   * HMO card images past their retention window, by when the claim was filed. [1.148.0] Moved from
+   * scripts/pruneHmoCards.js, which keeps its reasoning; the server's own retention pass reads it.
+   */
+  async findCardsPastRetention(days) {
+    const { rows } = await db.query(
+      `SELECT id, card_file_path, request_date
+         FROM hmo_requests
+        WHERE card_file_path IS NOT NULL
+          AND card_purged_at IS NULL
+          AND request_date < NOW() - ($1 || ' days')::interval
+        ORDER BY request_date`,
+      [String(days)]
+    );
+    return rows;
+  }
+
+  /** Forgets a card image: its file goes next, and card_purged_at says it existed. */
+  async markCardPurged(id) {
+    await db.query(
+      `UPDATE hmo_requests
+          SET card_file_path = NULL, card_original_name = NULL, card_mime_type = NULL,
+              card_size_bytes = NULL, card_purged_at = CURRENT_TIMESTAMP
+        WHERE id = $1`,
+      [id]
+    );
   }
 
   async findAllProviders() {
