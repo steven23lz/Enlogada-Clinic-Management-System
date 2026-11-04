@@ -125,11 +125,28 @@ test.describe('Appointment reschedule (API)', () => {
     // The capacity check has to exclude the appointment being moved. Without that exclusion, a
     // patient changing only the date — keeping the same time of day — is refused at capacity 1,
     // and the thing standing in their way is their own booking.
+    //
+    // [1.151.0] It moved to the same date AND time, which is no move at all: that went through,
+    // recorded a reason and emailed the patient. The date alone changes now, as this says, and the
+    // same slot has a test of its own below.
+    const onB = new Set((await slots(DAY_B)).map((s) => s.time));
+    const from = (await slots(DAY_A)).find((s) => onB.has(s.time)
+      && !claimed.has(`${DAY_A} ${s.time}`) && !claimed.has(`${DAY_B} ${s.time}`)).time;
+    claimed.add(`${DAY_A} ${from}`);
+    claimed.add(`${DAY_B} ${from}`);
+    const appt = await book(DAY_A, from);
+
+    const res = await move(appt.id, DAY_B, from);
+    expect(res.status()).toBe(200);
+  });
+
+  test('the time it already has is nothing to move', async () => {
     const from = await claimSlot(DAY_A);
     const appt = await book(DAY_A, from);
 
     const res = await move(appt.id, DAY_A, from);
-    expect(res.status()).toBe(200);
+    expect(res.status()).toBe(409);
+    expect((await res.json()).message).toMatch(/already at that time/i);
   });
 
   test('a slot the patient already holds is refused rather than merged', async () => {

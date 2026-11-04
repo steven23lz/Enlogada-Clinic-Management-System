@@ -41,6 +41,9 @@ const BookingConfirmation = ({
   heldUntil = null,
   isHmo = false,
   onClose,
+  // [1.151.0] The page behind this dialog holds its own copy of the booking, and went on saying "Pay
+  // by 1:49 AM" and offering Release after the proof had gone in from here.
+  onPaymentChanged,
 }) => {
   // Set once proof has been uploaded from this screen. The panel switches itself to "sent for
   // checking", but the Status field further down would still read "Awaiting payment" — and to a
@@ -125,7 +128,11 @@ const BookingConfirmation = ({
                 <>
                   Pay {formatCurrency(owed)} below and upload your confirmation — a cashier checks
                   it and your scannable pass appears. You can also do this later from{' '}
-                  <strong>Visits</strong>, or pay at the counter on the day.
+                  <strong>Visits</strong>
+                  {/* [1.151.0] Only when nothing is timing it. This said "or pay at the counter on
+                      the day" right under "Pay by 1:49 AM to keep this slot", and a patient who
+                      took it at its word arrived to find the booking gone. */}
+                  {heldUntil ? ', before the time above.' : ', or pay at the counter on the day.'}
                 </>
               )}
             </p>
@@ -145,7 +152,8 @@ const BookingConfirmation = ({
               visitId={visitId}
               amountDue={owed}
               tests={tests}
-              onSettled={() => setProofSent(true)}
+              onSettled={() => { setProofSent(true); onPaymentChanged?.(); }}
+              onRefused={onPaymentChanged}
             />
           </div>
         )}

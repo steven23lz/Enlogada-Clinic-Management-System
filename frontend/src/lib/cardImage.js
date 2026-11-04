@@ -30,6 +30,13 @@ async function prepareCardImage(file, { name = 'hmo-card.jpg', maxEdge = CARD_MA
   if (file.size > CARD_MAX_INPUT_BYTES) {
     throw new Error('That photo is too large for this device to process. Take a new photo with your camera instead.');
   }
+  // [1.151.0] Said for what it is: a text file was told about iPhones and image formats.
+  if (file.size === 0) {
+    throw new Error('That file is empty. Choose another, or take a new photo.');
+  }
+  if (file.type && file.type !== 'application/pdf' && !file.type.startsWith('image/')) {
+    throw new Error('That file is not a photo or a PDF. Attach a JPG, PNG or PDF.');
+  }
 
   // PDFs are accepted by the server but cannot be drawn to a canvas, so they bypass the
   // downscale entirely — check them against the server's own ceiling here rather than letting

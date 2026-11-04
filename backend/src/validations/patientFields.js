@@ -30,6 +30,8 @@ const isRealDate = (value) => {
  * @param {string} today  'YYYY-MM-DD', the clinic's local date
  * @returns {object} the same fields, trimmed
  */
+const ADDRESS_MAX = 300;
+
 function normalisePatientFields(data, today) {
   const out = { ...data };
 
@@ -63,6 +65,11 @@ function normalisePatientFields(data, today) {
 
   if (data.emergencyContact !== undefined && data.emergencyContact !== null) {
     if (String(data.emergencyContact).length > 100) throw new ValidationError('Emergency contact is too long (100 characters at most).');
+  }
+
+  // [1.151.0] The one free-text field with no limit, printed on the patient's header.
+  if (data.address !== undefined && data.address !== null && String(data.address).length > ADDRESS_MAX) {
+    throw new ValidationError(`Address is too long (${ADDRESS_MAX} characters at most).`);
   }
 
   return out;

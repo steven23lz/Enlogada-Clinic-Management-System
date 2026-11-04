@@ -123,15 +123,34 @@ class PaymentSubmissionService {
         throw error;
       }
 
+      // [1.151.0] Nothing to pay yet, or nothing to pay at all. A proof sent while the HMO decides
+      // cleared the booking's hold for good and could never be approved (the till's own rule
+      // refuses a payment over a pending decision), so a rejection left the slot taken, unpaid and
+      // undecided, past the reach of the sweep. The portal offers no form here; the server says so too.
+      const bill = await paymentService.getBillingSummary(patientVisitId);
+      if (Number(bill.hmoPendingCount) > 0) {
+        const error = new Error('Your HMO is still deciding on this booking, so there is nothing to pay yet. We email you their answer.');
+        error.statusCode = 409;
+        throw error;
+      }
+      if (Number(bill.totalAmount) <= 0) {
+        const error = new Error('Your HMO covers this booking in full, so there is nothing to pay.');
+        error.statusCode = 409;
+        throw error;
+      }
+
       // The portal no longer asks the patient to type an amount. [1.105.0] The booking already
       // states the figure, and an editable box beside it invited them to send something else. A
       // claim that names no amount is a claim to have sent what was asked, so it records that
       // figure. An explicit amount is still accepted, and still only evidence.
       const stated = amountClaimed !== undefined && amountClaimed !== null && String(amountClaimed).trim() !== '';
+      if (stated && !Number.isFinite(Number(amountClaimed))) {
+        const error = new Error('The amount must be a number.');
+        error.statusCode = 400;
+        throw error;
+      }
       // [1.146.0] The bill approval will record, discount included, not the gross of the tests.
-      const claimed = stated
-        ? Number(amountClaimed) || 0
-        : Number((await paymentService.getBillingSummary(patientVisitId)).totalAmount);
+      const claimed = stated ? Number(amountClaimed) : Number(bill.totalAmount);
 
       const submission = await paymentSubmissionRepository.create({
         patientVisitId,

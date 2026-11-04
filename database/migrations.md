@@ -1,5 +1,75 @@
 # Database Migration & Schema History
 
+## [1.151.0] - 2026-11-05 (What a patient found, walking the whole system)
+
+No migration. Steven: "simulate like ur the patient ... run any what ifs ... not finishing the form?
+transaction what if scenario?" About 300 what-ifs through the API and the real screens, on throwaway
+accounts: sign-up, profiles, the booking wizard, proofs, the till, HMO decisions, check-in, results,
+feedback, moving, releasing, the sweep, a phone at 360px. Most held. These did not, and are fixed:
+
+**The server let through what it should have refused**
+
+- **A proof while the HMO decides.** It cleared the booking's hold for good, could never be approved
+  (the till's own rule refuses a payment over a pending decision), and a rejection left the slot taken,
+  unpaid and undecided, out of the sweep's reach. Refused 409, as is a proof on a bill the HMO covers
+  in full. The portal never offered the form; the server now agrees.
+- **The till took money on a booking whose time to pay had run out**, after a proof and a check-in had
+  both refused it, and with the slot already gone to someone else: two patients in a capacity-1 slot.
+  Refused 409. A booking checked in during its time still pays: the patient is at the clinic.
+- **Re-sending a booking changed the bill under a payment already sent.** Same patient, date and time
+  with another test went round `billLock`: 190 sent, 890 recorded. Refused 409 while a proof waits. It
+  still adds the test otherwise, and now says so. Its reply states the bill (`amountDue`), so a declared
+  discount is not lost, and `hmoPending`, so an HMO booking is not asked to pay.
+- **A lapsed booking read as "you already have this booking"**, then "not paid in time, book again",
+  round and round until the sweep came. `findActiveByPatientAndSlot` no longer finds a lapsed hold, so
+  the patient simply books the time again.
+- **An empty file or renamed text passed as a photo** on a proof (which then kept the slot with no time
+  limit until a cashier got to it), a doctor's request, an HMO card, an ID, a QR or an avatar.
+  `utils/fileSignature.js` reads the bytes (`verifyEvidence` in `config/upload.js`).
+- **GCash or Bank at the till with no reference**: the form required one, the service did not. A
+  rule a screen enforces, the service enforces too. The demo seed's payments carry one now.
+- **Moving a booking to the time it already has** went through, recorded a reason and emailed the
+  patient. 409, unless its hold lapsed and it is asking for its own time back.
+- **Small ones:** a bare POST was a 500 (Express 5 leaves `req.body` undefined; `app.js` now sets it),
+  as was a sign-in with a non-string password; a password of only spaces; an address with no length
+  limit (300 now); a claimed amount in words, stored as 0.
+
+**The screens said the wrong thing**
+
+- **"Pay at the counter on the day"**, directly under "Pay by 1:49 AM to keep this slot". A patient who
+  believed it arrived to find the booking gone. It appears now only when nothing is timing the booking.
+- **The Visits card stayed stale after a proof sent from the confirmation screen**: still "Pay by" and
+  "Release booking". `BookingConfirmation` tells the page (`onPaymentChanged`), and a refused proof or
+  release reloads the list.
+- **One patient's booking carried over to another.** Reopened for a child: the parent's date, tests,
+  HMO, and Senior discount with the OSCA number, in a box gone blank because the child may not choose
+  it. Changing patient clears all of it; closing and reopening for the same patient keeps it.
+- **The account paid into was never recorded.** The panel shows the first account until the patient
+  taps another, and sent nothing then, so a transfer to a bank was filed under GCash in the cash book.
+- **Why a proof was rejected was hidden** behind the "these are the tests I want" tick, on a form
+  asking them to pay again. It sits above the tick (`proof-rejected`).
+- **A slot refused on submit:** the booking dialog stayed on step 2, which has no times; it returns to
+  step 1. Reschedule went on offering the refused time as chosen; it re-reads the grid.
+- **A booking removed while its Reschedule dialog was open** said "Appointment not found".
+- **A session that ended** turned the form into the sign-in page with no word why (a toast now).
+- **A text file** as a doctor's request was told about iPhones and image formats.
+- **Wording out of date:** the Terms said to cancel through your account and threatened no-shows
+  (neither exists since [1.131.0]), and that payment is due at the time of service; the FAQ said a
+  discount is only given at the counter ([1.146.0]). The Terms now state that a paid receipt is final
+  and not refunded: the clinic should read that sentence, since it is theirs to stand behind.
+
+**Left for Steven, each a rule rather than a bug** (in `docs/HANDOFF.md`): a limit on unpaid bookings
+per account (one account held all 18 slots of a day); booking when no payment account is published;
+a patient rewriting name, birthdate and sex on a record with released reports; one reference across
+bookings; booking on an archived record; the phone's Back button leaving the portal.
+
+**Held up:** other patients' records, cards, proofs, receipts and results (403/404 throughout); drafts
+never reached a patient; prices and accounts stayed staff-only; five clicks at once made one booking;
+three till clicks one receipt; two cashiers and a rejection one outcome; the waiting-room screen
+carries nothing identifying; no sideways scroll at 360px.
+
+**Tests:** `patient-what-ifs.spec.js` (17); `fileSignature.test.js`; `appointment-reschedule.spec.js` asserted the same-time move as a success under a comment describing a date change, and now tests each.
+
 ## [1.150.0] - 2026-11-04 (The end-of-day cash count)
 
 Run on an existing database: `node src/scripts/migrateCashCounts.js` (one table, `--rollback`

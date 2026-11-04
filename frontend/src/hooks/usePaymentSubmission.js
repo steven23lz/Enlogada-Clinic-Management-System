@@ -21,7 +21,7 @@ import { toastSuccess } from '../lib/toast';
  * nothing assumes it failed and pays twice; a patient whose proof was rejected without a reason
  * rings the clinic, and whoever answers cannot help them.
  */
-export function usePaymentSubmission(visitId, { onSettled } = {}) {
+export function usePaymentSubmission(visitId, { onSettled, onRefused } = {}) {
   const [methods, setMethods] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -137,7 +137,11 @@ export function usePaymentSubmission(visitId, { onSettled } = {}) {
     try {
       const fd = new FormData();
       fd.append('patientVisitId', String(visitId));
-      if (methodId) fd.append('paymentMethodId', String(methodId));
+      // [1.151.0] The account on screen, even if the patient never tapped it. The panel shows the
+      // first one until they do, and this sent nothing then, so approving the proof filed a transfer
+      // into a bank account under GCash in the cash book.
+      const chosen = methodId || methods[0]?.id;
+      if (chosen) fd.append('paymentMethodId', String(chosen));
       fd.append('referenceNumber', reference.trim());
       fd.append('proof', proof);
 
@@ -163,7 +167,10 @@ export function usePaymentSubmission(visitId, { onSettled } = {}) {
       // Only on 409. `reload()` sets `loading`, which flashes the skeleton — worth it when the
       // answer actually changes, wasteful for a 400 like a missing reference number, where the
       // patient should stay on the form with what they typed still in it.
-      if (err.response?.status === 409) await reload();
+      if (err.response?.status === 409) {
+        await reload();
+        onRefused?.();
+      }
     } finally {
       setSubmitting(false);
     }

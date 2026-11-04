@@ -15,7 +15,7 @@ const paymentSubmissionRepository = require('../repositories/paymentSubmissionRe
 // receipts from before then carry; nothing sets them now. A paid receipt is final.
 
 // The methods this clinic records, for validating a filter against. [1.33.0]
-const { COUNTER_METHODS } = require('../constants/paymentMethods');
+const { COUNTER_METHODS, CASH_METHOD } = require('../constants/paymentMethods');
 
 class PaymentService {
   /**
@@ -200,6 +200,17 @@ class PaymentService {
       throw error;
     }
 
+    // [1.151.0] A booking whose time to pay ran out has released its slot, and someone else may hold
+    // that slot now. A proof and a check-in already refused it; a payment here took the money and
+    // made the old booking permanent on top of theirs. Checked in (Confirmed), the patient is at
+    // the clinic and has no slot left to lose, so that one still pays.
+    const hold = await appointmentRepository.findHoldByVisitId(patientVisitId);
+    if (hold?.lapsed && hold.status === 'Pending') {
+      const error = new Error('This booking was not paid in time, so its slot was released. Start a walk-in visit for the patient instead.');
+      error.statusCode = 409;
+      throw error;
+    }
+
     const proof = await paymentSubmissionRepository.findPendingForVisit(patientVisitId);
     if (proof && String(proof.id) !== String(fromSubmissionId)) {
       const error = new Error(
@@ -233,6 +244,14 @@ class PaymentService {
     const submittedAmount = parseFloat(amount);
     if (isNaN(submittedAmount) || Math.abs(submittedAmount - authoritativeTotal) > 0.01) {
       const error = new Error(`Submitted amount (₱${amount}) does not match the billed total (₱${authoritativeTotal.toFixed(2)}).`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // [1.151.0] The till's form requires it, and without one the cash-up has no way to match the
+    // payment to a transfer. A proof always carries its own.
+    if (paymentMethod !== CASH_METHOD && !String(referenceNumber ?? '').trim()) {
+      const error = new Error(`Enter the ${paymentMethod} reference number.`);
       error.statusCode = 400;
       throw error;
     }

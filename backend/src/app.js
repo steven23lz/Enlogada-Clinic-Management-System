@@ -77,6 +77,12 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: true }));
+// [1.151.0] Express 5 leaves req.body undefined when nothing was sent, so every controller that
+// destructures it answered a bare POST with a 500. Multipart routes fill it in themselves, later.
+app.use((req, res, next) => {
+  if (req.body === undefined) req.body = {};
+  next();
+});
 
 // 3. HTTP Request Logging (using Morgan redirected to Winston logger)
 const morganFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';

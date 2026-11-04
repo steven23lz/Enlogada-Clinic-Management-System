@@ -80,8 +80,15 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
   }, [clearCard, clearDoctorRequest, clearDiscountId]);
 
   // Switching patient invalidates any evidence already chosen, for the same reason.
+  //
+  // [1.151.0] And everything else typed for the last one. Only the files used to go, so a booking
+  // started for a parent reopened for a child with the parent's date, tests, HMO, and the Senior
+  // discount with their OSCA number, the box blank because the child may not choose it.
   useEffect(() => {
     clearEvidence();
+    setBookingData(EMPTY_BOOKING);
+    setBookingStep(1);
+    setBookingError('');
   }, [selectedProfileId, clearEvidence]);
 
   // The Self-Pay option carries the string 'none' rather than an empty value, so a bare
@@ -204,15 +211,23 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
           name: (testCatalog || []).find((t) => String(t.id) === String(vt.test_id))?.name || 'Test',
           price: vt.price_at_time,
         })),
-        isHmo: !!hmoRequest
+        // [1.151.0] A re-sent booking files no new claim, but may be waiting on the first one.
+        isHmo: !!hmoRequest || Boolean(response.data.data.hmoPending)
       });
       setBookingData(EMPTY_BOOKING);
       clearEvidence();
       onBooked?.();
     } catch (err) {
-      setBookingError(err.response?.data?.message || 'Failed to book appointment');
+      // [1.151.0] No answer at all is a connection, not a refusal, and pressing Submit again is
+      // safe: the same patient, date and time finds the booking if it did go through.
+      setBookingError(err.response?.data?.message || (err.response
+        ? 'Failed to book appointment'
+        : "We couldn't reach the clinic. Check your connection and press Submit again."));
       if (err.response?.status === 409 && bookingData.scheduledDate) {
         setSlotsRefreshKey((k) => k + 1);
+        // [1.151.0] To the step with the time on it: this one says "select a different time" and
+        // has none to select.
+        setBookingStep(1);
       }
       // The booking either happened completely or not at all, but a request that failed after
       // the server committed (dropped connection) still leaves the client unaware of it —
@@ -263,6 +278,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                         <BookingConfirmation
                           {...bookingConfirmation}
                           onClose={() => setShowBooking(false)}
+                          onPaymentChanged={onBooked}
                         />
                       ) : (
                         <>

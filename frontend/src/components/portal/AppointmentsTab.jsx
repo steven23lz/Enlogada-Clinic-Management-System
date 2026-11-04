@@ -237,7 +237,7 @@ export default function AppointmentsTab({ bookings, visits = null }) {
               <p className="text-fine text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
                 <strong>Your slot is held until {formatTime12(heldUntilClock)}.</strong>{' '}
                 Pay before then to confirm it — after that the time goes back on offer
-                to other patients, and your booking stays here unpaid.
+                to other patients, and this booking is removed.
               </p>
             ) : (
               <p className="text-fine text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
@@ -286,6 +286,7 @@ export default function AppointmentsTab({ bookings, visits = null }) {
               amountDue={appt.amount_due}
               tests={appt.booked_tests || []}
               onSettled={bookings.reload}
+              onRefused={bookings.reload}
             />
           </>
         )}

@@ -1,12 +1,17 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import api from '../config/api';
 import { clearRevalidationCache } from '../config/revalidationCache';
+import { toastInfo } from '../lib/toast';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Whether someone is signed in, for the listener below, which is set up once and would otherwise
+  // always read the first render's null.
+  const signedIn = useRef(false);
+  useEffect(() => { signedIn.current = Boolean(user); }, [user]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -50,6 +55,12 @@ export const AuthProvider = ({ children }) => {
     document.addEventListener('visibilitychange', refreshUser);
 
     const handleUnauthorized = () => {
+      // [1.151.0] Said once, and only to someone who was signed in: a wrong password is also a 401.
+      // Without it, a form being filled in simply became the sign-in page.
+      if (signedIn.current) {
+        signedIn.current = false;
+        toastInfo('You have been signed out. Please sign in again.');
+      }
       setUser(null);
     };
     window.addEventListener('auth:unauthorized', handleUnauthorized);

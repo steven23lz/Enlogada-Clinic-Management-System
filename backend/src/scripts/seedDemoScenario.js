@@ -579,7 +579,10 @@ async function main() {
     const bill = (await call(`/payments/bill/${v.visit.id}`, { token: tok.cashier })).data.bill;
     return (await call('/payments', {
       method: 'POST', token: tok.cashier,
-      body: { patientVisitId: v.visit.id, paymentMethod: method, amount: parseFloat(bill.totalAmount) },
+      body: {
+        patientVisitId: v.visit.id, paymentMethod: method, amount: parseFloat(bill.totalAmount),
+        referenceNumber: method === CASH_METHOD ? undefined : transferReference(v.visit.id),
+      },
     })).data.payment;
   };
 
@@ -1147,7 +1150,10 @@ async function main() {
           const bill = (await call(`/payments/bill/${booking.patient_visit_id}`, { token: tok.cashier })).data.bill;
           await call('/payments', {
             method: 'POST', token: tok.cashier,
-            body: { patientVisitId: booking.patient_visit_id, paymentMethod: 'GCash', amount: parseFloat(bill.totalAmount) },
+            body: {
+              patientVisitId: booking.patient_visit_id, paymentMethod: 'GCash', amount: parseFloat(bill.totalAmount),
+              referenceNumber: transferReference(booking.patient_visit_id),
+            },
           });
         }
         stages.push(`${profiles[0].first_name} ${profiles[0].last_name} — online appointment ${dateStr(slotDate)}, ${plan.label} (QR booking pass)`);
@@ -1188,7 +1194,9 @@ async function main() {
         body: {
           patientId: patient.id, scheduledDate: dateStr(date), scheduledTime: time, notes: b.notes,
           testIds: booked.map((t) => t.id),
-          payment: { paymentMethod: i % 3 === 2 ? 'GCash' : 'Cash', amount },
+          payment: i % 3 === 2
+            ? { paymentMethod: 'GCash', amount, referenceNumber: transferReference(1000 + i) }
+            : { paymentMethod: 'Cash', amount },
         },
       });
       stages.push(`${b.person[0]} ${b.person[1]} — booked for ${dateStr(date)} ${time.slice(0, 5)} at the front desk, paid`);
@@ -1437,6 +1445,11 @@ async function seedCalls(visitIds) {
       [found.rows[0].id, station, String((stations.length - i) * 3)]
     );
   }
+}
+
+/** A GCash or bank reference: thirteen digits, as the app shows one, different for each visit. */
+function transferReference(seed) {
+  return String(1000000000000 + (Number(seed) * 7919) % 8999999999999);
 }
 
 /** Notes and coins for an amount, largest first, with any centavos as other coins. */

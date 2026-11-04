@@ -208,6 +208,7 @@ const ClientDashboard = ({ onNavigate, tab = 'home', onTabChange }) => {
         onOpenChange={(open) => { if (!open) bookings.openReschedule(null); }}
         appointment={bookings.rescheduling}
         onRescheduled={() => bookings.reload()}
+        onGone={() => bookings.reload()}
       />
 
       <ResultDocument

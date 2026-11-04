@@ -50,7 +50,7 @@ const toDateInput = (value) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const RescheduleDialog = ({ open, onOpenChange, appointment, onRescheduled }) => {
+const RescheduleDialog = ({ open, onOpenChange, appointment, onRescheduled, onGone }) => {
   const currentDate = toDateInput(appointment?.scheduled_date);
   const currentTime = appointment?.scheduled_time?.slice(0, 5) || '';
 
@@ -60,6 +60,9 @@ const RescheduleDialog = ({ open, onOpenChange, appointment, onRescheduled }) =>
   const [otherReason, setOtherReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // [1.151.0] As in the booking dialog: after a 409 the grid is out of date. Without this it went on
+  // offering, and showing as chosen, the time just refused.
+  const [slotsRefreshKey, setSlotsRefreshKey] = useState(0);
 
   // Reset whenever a different booking is opened, so the dialog never shows the previous
   // appointment's slot as the one being moved — or the previous move's reason.
@@ -96,7 +99,15 @@ const RescheduleDialog = ({ open, onOpenChange, appointment, onRescheduled }) =>
     } catch (err) {
       // 409 is the interesting one and always means something the patient can act on — the slot
       // went while they were deciding, or the booking has since been checked in.
-      setError(err.response?.data?.message || 'Could not move this appointment. Please try again.');
+      if (err.response?.status === 409) setSlotsRefreshKey((k) => k + 1);
+      // [1.151.0] Removed while the dialog was open: its time to pay ran out. "Appointment not
+      // found" read as a fault, and the card stayed behind the dialog.
+      if (err.response?.status === 404) {
+        setError('This booking is no longer on file. If it was not paid in time it has been released, and you can book again.');
+        onGone?.();
+      } else {
+        setError(err.response?.data?.message || 'Could not move this appointment. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -149,6 +160,7 @@ const RescheduleDialog = ({ open, onOpenChange, appointment, onRescheduled }) =>
             currentTime={currentTime}
             disabled={submitting}
             label="New date"
+            refreshKey={slotsRefreshKey}
           />
 
           <fieldset className="m-0 min-w-0 space-y-2 border-0 p-0" disabled={submitting}>

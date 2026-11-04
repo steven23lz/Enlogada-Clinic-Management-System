@@ -132,7 +132,8 @@ class AuthController {
     try {
       const { email, password } = req.body;
 
-      if (!email || !password) {
+      // A string each: bcrypt throws on anything else, which answered an odd request with a 500.
+      if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
         return res.status(400).json({
           status: 'error',
           message: 'Email and password are required fields.'

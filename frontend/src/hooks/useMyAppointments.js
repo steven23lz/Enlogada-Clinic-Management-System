@@ -81,6 +81,9 @@ export function useMyAppointments() {
       await load();
     } catch (err) {
       setReleaseError(err.response?.data?.message || 'The booking could not be released. Please try again.');
+      // [1.151.0] Refused because something changed (a payment went in from another tab), so the
+      // card behind this dialog is out of date too.
+      await load();
     } finally {
       setReleaseBusy(false);
     }

@@ -87,7 +87,9 @@ export default function ClinicFaq() {
       question: 'Do senior citizens and PWDs get a discount?',
       answer: (
         <p className="m-0">
-          Yes. The 20% Senior Citizen and PWD discount is applied at the counter when you present your ID.
+          Yes, 20%. At the clinic, present your ID at the counter. If you book online, declare it when
+          you book, with a photo of your ID: an online booking is paid before the visit, so it cannot be
+          added afterwards.
         </p>
       ),
     },

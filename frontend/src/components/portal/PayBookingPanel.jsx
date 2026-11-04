@@ -349,8 +349,8 @@ function FinalTestsCheck({ tests, amountDue, confirmed, onChange }) {
   );
 }
 
-export default function PayBookingPanel({ visitId, amountDue, tests = [], onSettled }) {
-  const pay = usePaymentSubmission(visitId, { onSettled });
+export default function PayBookingPanel({ visitId, amountDue, tests = [], onSettled, onRefused }) {
+  const pay = usePaymentSubmission(visitId, { onSettled, onRefused });
   const [confirmed, setConfirmed] = useState(false);
   const selected = pay.methods.find((m) => String(m.id) === String(pay.methodId)) || pay.methods[0];
   // What goes into the banking app's amount box: digits, no peso sign or thousands separator.
@@ -430,25 +430,26 @@ export default function PayBookingPanel({ visitId, amountDue, tests = [], onSett
         </p>
       </div>
 
+      {/* A rejection has to say why, and offer another go. [1.151.0] Above the tick: it sat behind
+          it, so a patient coming back to find out why saw a form asking them to pay again, and no
+          reason unless they agreed to that first. */}
+      {pay.rejected && (
+        <div role="alert" data-testid="proof-rejected" className="rounded-lg border border-rose-200 bg-rose-50 p-2.5">
+          <p className="m-0 flex items-center gap-1.5 text-fine font-semibold text-rose-800">
+            <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+            Your last payment could not be confirmed
+          </p>
+          <p className="m-0 mt-0.5 text-fine leading-relaxed text-rose-700">
+            {pay.rejected.review_note} — you can submit again below.
+          </p>
+        </div>
+      )}
+
       <FinalTestsCheck tests={tests} amountDue={amountDue} confirmed={confirmed} onChange={setConfirmed} />
 
       {/* The account and the upload only once the tests are confirmed. [1.122.0] */}
       {confirmed && (
         <>
-
-          {/* A rejection has to say why, and offer another go. */}
-          {pay.rejected && (
-            <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-2.5">
-              <p className="m-0 flex items-center gap-1.5 text-fine font-semibold text-rose-800">
-                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
-                Your last payment could not be confirmed
-              </p>
-              <p className="m-0 mt-0.5 text-fine leading-relaxed text-rose-700">
-                {pay.rejected.review_note} — you can submit again below.
-              </p>
-            </div>
-          )}
-
           {pay.methods.length > 1 && (
             <div className="flex flex-wrap gap-1.5">
               {pay.methods.map((m) => {

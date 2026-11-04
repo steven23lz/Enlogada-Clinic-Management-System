@@ -1,5 +1,6 @@
 const paymentMethodRepository = require('../repositories/paymentMethodRepository');
 const paymentRepository = require('../repositories/paymentRepository');
+const paymentSubmissionRepository = require('../repositories/paymentSubmissionRepository');
 const db = require('../config/database');
 const { formatTime12 } = require('../constants/clockFormat');
 const { isStaffUser } = require('../constants/roles');
@@ -462,14 +463,19 @@ class AppointmentService {
           // [1.124.0] A re-sent booking ADDS its tests to the one already made, and that one may
           // be paid: the tests went on a settled visit nobody would charge for, which [1.55.0]
           // closed at the Desk and this path still allowed.
-          if (await paymentRepository.hasPaidPayment(existing.patient_visit_id)) {
-            const onIt = new Set((await testRepository.findTestsByVisitId(existing.patient_visit_id)).map((t) => t.test_id));
-            const adding = packageIds.length > 0 || testIds.some((id) => !onIt.has(parseInt(id, 10)));
-            if (adding) {
-              const error = new Error('This booking has already been paid, so its tests are final. Book another day for the extra tests.');
-              error.statusCode = 409;
-              throw error;
-            }
+          const onIt = new Set((await testRepository.findTestsByVisitId(existing.patient_visit_id)).map((t) => t.test_id));
+          const adding = packageIds.length > 0 || testIds.some((id) => !onIt.has(parseInt(id, 10)));
+          if (adding && await paymentRepository.hasPaidPayment(existing.patient_visit_id)) {
+            const error = new Error('This booking has already been paid, so its tests are final. Book another day for the extra tests.');
+            error.statusCode = 409;
+            throw error;
+          }
+          // [1.151.0] Nor under a payment already sent: the bill is locked while a proof waits
+          // (services/billLock.js), and this path went round it. 190 sent, 890 recorded.
+          if (adding && await paymentSubmissionRepository.findPendingForVisit(existing.patient_visit_id)) {
+            const error = new Error('Your payment for this booking is waiting to be checked, so its tests cannot change. Book another time for the extra tests.');
+            error.statusCode = 409;
+            throw error;
           }
           let visitTests;
           if (packageIds.length) {
@@ -487,7 +493,7 @@ class AppointmentService {
             ? await payOnTheSpot(existing.patient_visit_id, payNow, createdBy)
             : null;
 
-          return { appointment: existing, visitTests, hmoRequest: null, payment, alreadyBooked: true };
+          return { appointment: existing, visitTests, hmoRequest: null, payment, alreadyBooked: true, testsAdded: adding };
         }
 
         const { rows } = await db.query(
@@ -638,7 +644,11 @@ class AppointmentService {
       // the evidence under a claim an Admin may already have reviewed.
       discardHmoCard(hmoCardFile, doctorRequestFile, discountIdFile);
       // No notification either: staff were already told about this booking when it was made.
-      return outcome;
+      //
+      // [1.151.0] With the bill, as a new booking has: without it the confirmation added up the
+      // tests for itself and left out a declared discount, and read an HMO booking as one to pay.
+      const again = await paymentService.getBillingSummary(outcome.appointment.patient_visit_id).catch(() => null);
+      return { ...outcome, amountDue: again ? again.totalAmount : null, hmoPending: Number(again?.hmoPendingCount) > 0 };
     }
 
     if (outcome.payment) await announcePayment(outcome.payment, payerName);
@@ -856,6 +866,16 @@ class AppointmentService {
       date: formatDateOnly(appointment.scheduled_date),
       time: String(appointment.scheduled_time).slice(0, 5),
     };
+
+    // [1.151.0] Nothing to move. It went through, recorded a "reason" and emailed the patient that
+    // their appointment had moved to the time it was already at. A booking whose hold ran out may
+    // ask for its own time again, since it no longer holds it (restartLapsedHold, below).
+    const holdLapsed = appointment.held_until && new Date(appointment.held_until) <= new Date();
+    if (!holdLapsed && previous.date === scheduledDate && previous.time === String(scheduledTime).slice(0, 5)) {
+      const error = new Error('This booking is already at that time. Choose a different date or time.');
+      error.statusCode = 409;
+      throw error;
+    }
 
     const updated = await db.withTransaction(async () => {
       const hours = await assertSlotWithinOperatingHours(scheduledDate, scheduledTime);

@@ -18,6 +18,10 @@ function validatePassword(password) {
   if (password.length < MIN_PASSWORD_LENGTH) {
     return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
   }
+  // [1.151.0] Eight spaces met the rule above.
+  if (!password.trim()) {
+    return 'A password cannot be only spaces.';
+  }
   return null;
 }
 

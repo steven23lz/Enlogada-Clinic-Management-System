@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const multer = require('multer');
 const { resolveReportType, contentMatches, MESSAGE: REPORT_TYPE_MESSAGE } = require('../constants/reportFileTypes');
+const { matchesSignature, SIGNATURE_BYTES } = require('../utils/fileSignature');
 
 // Feature Gap Plan Phase B: diagnostic result files.
 //
@@ -114,6 +115,35 @@ const verifyReportContents = (file) => {
   file.mimetype = file.reportType.mime;
 };
 
+/**
+ * A photo or PDF someone will have to read must be one. [1.151.0] Same reasoning as
+ * verifyReportContents above, for the uploads that only had their label checked: an empty file or
+ * renamed text passed as "image/png". Refuses the whole request and deletes everything it wrote, so
+ * a booking never half-keeps its evidence.
+ *
+ * @param {Array<object|null>} files  multer files
+ * @param {(file: object) => string} labelOf  how a refusal names the file, e.g. "The HMO card"
+ */
+const verifyEvidence = (files, labelOf) => {
+  const present = files.filter(Boolean);
+  for (const file of present) {
+    const head = Buffer.alloc(SIGNATURE_BYTES);
+    const fd = fs.openSync(file.path, 'r');
+    let read = 0;
+    try {
+      read = fs.readSync(fd, head, 0, SIGNATURE_BYTES, 0);
+    } finally {
+      fs.closeSync(fd);
+    }
+    if (!matchesSignature(file.mimetype, head.subarray(0, read))) {
+      present.forEach((f) => fs.unlink(f.path, () => {}));
+      const error = new Error(`${labelOf(file)} is empty or damaged. Check that it opens on your device, then attach it again.`);
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+};
+
 const uploadResultFileMiddleware = (req, res, next) => {
   uploadResultFile.single('file')(req, res, (err) => {
     if (err) {
@@ -171,6 +201,11 @@ const uploadAvatarMiddleware = (req, res, next) => {
   uploadAvatar.single('avatar')(req, res, (err) => {
     if (err) {
       return next(classifyUploadError(err));
+    }
+    try {
+      verifyEvidence([req.file], () => 'That photo');
+    } catch (e) {
+      return next(e);
     }
     next();
   });
@@ -265,6 +300,11 @@ const sizeRefusal = (err) => {
 const uploadHmoCardMiddleware = (req, res, next) => {
   uploadHmoCard.single('hmoCard')(req, res, (err) => {
     if (err) return next(sizeRefusal(err));
+    try {
+      verifyEvidence([req.file], () => 'The HMO card');
+    } catch (e) {
+      return next(e);
+    }
     next();
   });
 };
@@ -284,6 +324,11 @@ const uploadBookingFilesMiddleware = (req, res, next) => {
       doctorRequest: req.files?.doctorRequest?.[0] || null,
       discountId: req.files?.discountId?.[0] || null,
     };
+    try {
+      verifyEvidence(Object.values(req.bookingFiles), (file) => BOOKING_FILE_FIELDS[file.fieldname]?.label || 'The file');
+    } catch (e) {
+      return next(e);
+    }
     next();
   });
 };
@@ -361,7 +406,7 @@ const uploadPaymentQr = paymentUpload(
   'The QR image must be a JPEG, PNG or WebP file.'
 );
 
-const paymentUploadMiddleware = (upload, field, sizeMessage) => (req, res, next) => {
+const paymentUploadMiddleware = (upload, field, sizeMessage, label) => (req, res, next) => {
   upload.single(field)(req, res, (err) => {
     if (err) {
       if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
@@ -369,15 +414,20 @@ const paymentUploadMiddleware = (upload, field, sizeMessage) => (req, res, next)
       }
       return next(classifyUploadError(err));
     }
+    try {
+      verifyEvidence([req.file], () => label);
+    } catch (e) {
+      return next(e);
+    }
     next();
   });
 };
 
 const uploadPaymentProofMiddleware = paymentUploadMiddleware(
-  uploadPaymentProof, 'proof', 'The proof of payment must be 8MB or smaller.'
+  uploadPaymentProof, 'proof', 'The proof of payment must be 8MB or smaller.', 'The proof of payment'
 );
 const uploadPaymentQrMiddleware = paymentUploadMiddleware(
-  uploadPaymentQr, 'qr', 'The QR image must be 8MB or smaller.'
+  uploadPaymentQr, 'qr', 'The QR image must be 8MB or smaller.', 'The QR image'
 );
 
 /** Best-effort cleanup, same contract and same reasoning as discardHmoCard. */

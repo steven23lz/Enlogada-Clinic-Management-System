@@ -5,16 +5,17 @@ import PageHero from '../../components/public/PageHero';
 import LegalDocument from '../../components/public/LegalDocument';
 import { Calendar, CreditCard, FileCheck, AlertCircle } from 'lucide-react';
 
-// The terms' words are unchanged by the [1.72.0] restyle; only the page around them is new.
+// The terms' words were unchanged by the [1.72.0] restyle. [1.151.0] Two sections brought into line
+// with how the clinic works: nothing is cancelled since [1.131.0], and a booking is paid first.
 const SECTIONS = [
   {
     id: 'appointments',
     icon: Calendar,
-    title: 'Appointments & Cancellations',
-    body: `Appointments booked through this system reserve a specific date, time, and diagnostic service.
-      Please cancel through your account or contact the clinic as early as possible if you cannot make it,
-      so the slot can be offered to another patient. Repeated no-shows may affect your ability to book
-      online.`,
+    title: 'Appointments & Changes',
+    body: `An appointment booked through this system is kept once it is paid, or once your HMO approves
+      it. Until then it holds its date and time only for the time to pay shown when you book, and is then
+      released so the slot can be offered to another patient. You may release an unpaid booking yourself.
+      A paid booking can be moved to another time through your account or by contacting the clinic.`,
   },
   {
     id: 'billing',
@@ -22,8 +23,9 @@ const SECTIONS = [
     title: 'Billing & Payment',
     body: `Prices shown for each test reflect the rate at the time of your visit and may change for future
       visits. HMO coverage is applied per test based on an approved pre-authorization on file; any portion
-      not covered is payable at the clinic. Payment is due at the time of service unless other
-      arrangements have been made with billing staff.`,
+      not covered is payable at the clinic. A booking made online is paid within the time shown when you
+      book, and a walk-in visit is paid before its tests go ahead. A paid receipt is final: the tests on
+      it cannot be changed and the payment is not refunded, so please check your tests before you pay.`,
   },
   {
     id: 'results',

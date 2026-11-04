@@ -235,6 +235,10 @@ class AppointmentRepository {
         AND a.scheduled_date = $2
         AND a.scheduled_time = $3
         AND a.status IN ('Pending', 'Confirmed')
+        -- [1.151.0] Not one whose hold ran out: it no longer holds the slot, the sweep is about to
+        -- remove it, and "you already have this booking" was followed by "not paid in time, book
+        -- again", which led straight back here until the sweep came.
+        AND (a.status = 'Confirmed' OR a.held_until IS NULL OR a.held_until > CURRENT_TIMESTAMP)
       LIMIT 1
     `;
     const result = await client.query(queryText, [patientId, scheduledDate, scheduledTime]);

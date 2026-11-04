@@ -139,7 +139,7 @@ class AppointmentController {
         discountIdFile: discountId,
       });
 
-      const { appointment, visitTests, hmoRequest, payment, alreadyBooked, amountDue = null } = result;
+      const { appointment, visitTests, hmoRequest, payment, alreadyBooked, amountDue = null, hmoPending = false, testsAdded = false } = result;
 
       // 200 rather than 201 when the booking already existed: the request was a retry, nothing
       // new was created, and the caller gets the original reference back so it can show the real
@@ -147,9 +147,10 @@ class AppointmentController {
       return res.status(alreadyBooked ? 200 : 201).json({
         status: 'success',
         message: alreadyBooked
-          ? `You already have this booking. Reference: ${appointment.appointment_reference}`
+          // [1.151.0] Says so when the bill just grew: it read as if nothing had happened.
+          ? `You already have this booking${testsAdded ? ', so the new tests were added to it' : ''}. Reference: ${appointment.appointment_reference}`
           : `Appointment created. Reference: ${appointment.appointment_reference}`,
-        data: { appointment, visitTests, hmoRequest, payment: payment || null, alreadyBooked, amountDue }
+        data: { appointment, visitTests, hmoRequest, payment: payment || null, alreadyBooked, amountDue, hmoPending }
       });
     } catch (err) {
       // Deliberately NOT unlinking here. Once createAppointment has been entered it owns the
