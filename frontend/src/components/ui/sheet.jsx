@@ -2,7 +2,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { DialogOverlay } from './dialog';
+import { Dialog, DialogOverlay } from './dialog';
 
 /**
  * A panel that slides in from the side, over the screen it belongs to. [1.75.0]
@@ -13,7 +13,7 @@ import { DialogOverlay } from './dialog';
  * stays in view. On the front desk that is the point — registering a walk-in no longer takes the
  * receptionist off the queue they are watching.
  */
-const Sheet = DialogPrimitive.Root;
+const Sheet = Dialog;
 const SheetClose = DialogPrimitive.Close;
 
 const SheetContent = React.forwardRef(({ className, children, onEscapeKeyDown, ...props }, ref) => (

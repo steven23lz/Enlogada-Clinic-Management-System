@@ -225,14 +225,9 @@ function ProofPreview({ file, onClear }) {
  *
  * ── Why the duplicate warning does not block ────────────────────────────────────────────────
  *
- * It warns and lets the patient continue, deliberately. A repeated reference is USUALLY a genuine
- * mistake — the same screenshot sent twice — but not always: references are not globally unique
- * across providers, and a patient correcting a rejected submission is re-sending the same one on
- * purpose, which is exactly right. Blocking would strand that person with no way forward and no
- * one to ask.
- *
- * The cashier is the one who decides, as they already do for the amount. This tells the patient
- * what the clinic is about to notice, which is usually enough for them to check before sending.
+ * It warns and lets the patient continue, deliberately: a patient correcting a rejected submission is
+ * re-sending the same reference on purpose, which is exactly right. A reference already used on another
+ * booking is refused when they send it. [1.152.0] This is only the first sight of that.
  *
  * Nothing here is rendered when the scan found nothing at all: a silent failure is the correct
  * behaviour for an assistant nobody asked for, and "we could not read your image" invites a

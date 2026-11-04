@@ -246,7 +246,7 @@ test.describe('Client-side payment visibility (API)', () => {
     const bill = (await billRes.json()).data.bill;
     await apiContext.post(`${API}/payments`, {
       headers: { Authorization: `Bearer ${cashToken}` },
-      data: { patientVisitId: visit.id, paymentMethod: 'GCash', referenceNumber: 'GC-123', amount: bill.totalAmount },
+      data: { patientVisitId: visit.id, paymentMethod: 'GCash', referenceNumber: `GC-${Date.now()}`, amount: bill.totalAmount },
     });
 
     const myPaymentsRes = await apiContext.get(`${API}/payments/my-payments`, { headers: { Authorization: `Bearer ${token}` } });

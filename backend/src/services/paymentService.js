@@ -256,6 +256,26 @@ class PaymentService {
       throw error;
     }
 
+    // [1.152.0] One transfer pays for one visit. Steven's call: a reference already on another
+    // receipt, or waiting on another patient's proof, is refused rather than warned about. A receipt
+    // is final, so a second one on the same money could not be taken back.
+    const reference = String(referenceNumber ?? '').trim();
+    const assertReferenceFree = async () => {
+      if (!reference) return;
+      const used = await paymentRepository.findReferenceUse({
+        reference, method: paymentMethod, visitId: patientVisitId, paymentsOnly: Boolean(fromSubmissionId),
+      });
+      if (used) {
+        const error = new Error(used.receipt_number
+          ? `Reference ${reference} is already on receipt ${used.receipt_number}. One transfer pays for one visit: check the number, or ask for the transfer behind this one.`
+          : `Reference ${reference} is on another patient's online payment, waiting to be checked. One transfer pays for one visit: check the number.`);
+        error.statusCode = 409;
+        throw error;
+      }
+    };
+    // Before a receipt number is drawn, so a refusal does not use one up.
+    await assertReferenceFree();
+
     // Taking the money and releasing the visit is one event, so it commits as one.
     //
     // These were four independent auto-committed writes. Dying anywhere in the middle — deploy,
@@ -277,6 +297,12 @@ class PaymentService {
     const receiptNumber = await paymentRepository.getNextReceiptNumber();
 
     const payment = await db.withTransaction(async () => {
+      // Again under a lock on the reference, so two cashiers approving the same one in the same
+      // instant cannot both pass the check above.
+      if (reference) {
+        await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`payment-reference|${paymentMethod}|${reference.toUpperCase()}`]);
+        await assertReferenceFree();
+      }
       const created = await paymentRepository.createPayment({
         patientVisitId,
         processedBy,

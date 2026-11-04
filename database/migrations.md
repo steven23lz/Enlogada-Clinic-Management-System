@@ -1,5 +1,40 @@
 # Database Migration & Schema History
 
+## [1.152.0] - 2026-11-05 (Steven's calls on what the patient walk found)
+
+No migration. Of the six rules [1.151.0] left open: a limit on unpaid bookings per account was
+declined ("not necessarily need"), so one account may still hold every slot of a day for its time to
+pay. Booking with no payment account published, and booking on an archived record, await an answer.
+The other three:
+
+- **A patient cannot rewrite the identity on a record with a released report.** Name, birthdate and sex
+  answer 403 once any report on the record has an `authorised_at` (`hasReleasedReport`). A report went
+  out under them, and every screen and the verification page read them from the record. The desk can
+  still correct them, logged as before; contact details stay the patient's. Unchanged values pass, so
+  the form still saves. `identity_locked` on my-profiles disables the fields and says why
+  (`identity-locked`).
+- **One transfer pays for one booking.** A reference already on another visit's paid receipt, or on
+  another visit's proof that is waiting or verified, is refused: at the proof (409, saying nothing of
+  whose), at the till (409, naming the receipt) and at approval. Spacing and capitals are the same
+  number. Allowed: the same reference again on the SAME booking (a patient correcting a rejected proof),
+  a reference whose only earlier use was rejected (that money was never accepted), and the same digits
+  under another method (a bank's numbers are not GCash's). `paymentRepository.findReferenceUse`; the
+  till and approval go through `processPayment`, which checks before drawing a receipt number and
+  again inside the transaction under an advisory lock on the reference, so two cashiers at the same
+  moment make one receipt. A parent paying for two children sends two transfers. It replaces the
+  warn-only rule from [1.62.0] and [1.72.0]; "Reference reused" stays, for the corrected proof.
+- **The browser's Back button** (`lib/backStack.js`). Each screen is a history entry and so is each open
+  dialog, so Back closes the dialog, keeping what was typed as closing it does, then returns to the
+  screen before. No router and no change of address. `recordScreen` / `onScreenChange` in App cover the
+  public pages, portal tabs, My Account and staff screens; `useBackCloses` is inside `Dialog` and `Sheet`,
+  so every dialog has it. All history changes go through one queue, because a dialog closed by its own
+  button steps back asynchronously and a push during that lands in the wrong place. A reload stays on
+  the screen (`history.state`), a change of account goes to Home, and a saved screen still answers to
+  the session and role checks, so Back after signing out shows the public site.
+  `history.replaceState` must keep `window.history.state`, or the entry forgets its screen.
+
+**Tests:** `record-and-reference.spec.js` (8), `back-button.spec.js` (9).
+
 ## [1.151.0] - 2026-11-05 (What a patient found, walking the whole system)
 
 No migration. Steven: "simulate like ur the patient ... run any what ifs ... not finishing the form?

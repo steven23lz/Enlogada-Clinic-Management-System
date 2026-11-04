@@ -448,6 +448,40 @@ class PaymentRepository {
     return result.rows[0];
   }
 
+  /**
+   * Where a transfer's reference has already been used on another visit, if anywhere. [1.152.0]
+   * Same method only: a GCash reference and a bank's are different number spaces. A rejected proof
+   * does not count, because the money behind it was never accepted, and the patient may send it again.
+   *
+   * @param {{reference: string, method: string, visitId: number, paymentsOnly?: boolean}} params
+   *   `paymentsOnly` leaves out proofs still waiting: approving one asks only whether the money has
+   *   already been taken, so two old proofs cannot each block the other.
+   * @returns {Promise<{receipt_number: string|null}|undefined>}
+   */
+  async findReferenceUse({ reference, method, visitId, paymentsOnly = false }) {
+    const { rows } = await db.query(
+      `SELECT pay.receipt_number
+         FROM payments pay
+        WHERE pay.patient_visit_id <> $1
+          AND pay.payment_status = 'Paid'
+          AND pay.payment_method = $2
+          AND UPPER(TRIM(pay.reference_number)) = UPPER(TRIM($3))
+       UNION ALL
+       SELECT NULL
+         FROM payment_submissions s
+         LEFT JOIN payment_methods m ON m.id = s.payment_method_id
+        WHERE NOT $4::boolean
+          AND s.patient_visit_id <> $1
+          AND s.status IN ('Pending', 'Verified')
+          AND COALESCE(m.kind, 'GCash') = $2
+          AND UPPER(TRIM(s.reference_number)) = UPPER(TRIM($3))
+       ORDER BY 1 NULLS LAST
+       LIMIT 1`,
+      [visitId, method, reference, paymentsOnly]
+    );
+    return rows[0];
+  }
+
   async hasPaidPayment(patientVisitId) {
     const queryText = `
       SELECT 1 FROM payments

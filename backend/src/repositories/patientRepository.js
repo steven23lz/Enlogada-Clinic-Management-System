@@ -115,6 +115,19 @@ class PatientRepository {
     return rows[0]?.name || null;
   }
 
+  /** Has a report ever been released for this patient? [1.152.0] */
+  async hasReleasedReport(patientId) {
+    const { rows } = await db.query(
+      `SELECT 1 FROM test_results tr
+         JOIN visit_tests vt ON vt.id = tr.visit_test_id
+         JOIN patient_visits pv ON pv.id = vt.patient_visit_id
+        WHERE pv.patient_id = $1 AND tr.authorised_at IS NOT NULL
+        LIMIT 1`,
+      [patientId]
+    );
+    return rows.length > 0;
+  }
+
   async findPatientsByUserId(userId) {
     const queryText = `
       SELECT p.*, pt.name as patient_type_name,
@@ -123,7 +136,12 @@ class PatientRepository {
              -- accepted by another account is "from the clinic" only for the one holding it now.
              EXISTS (SELECT 1 FROM patient_invitations i
                       WHERE i.patient_id = p.id AND i.accepted_at IS NOT NULL
-                        AND i.accepted_by = p.user_id) AS from_clinic
+                        AND i.accepted_by = p.user_id) AS from_clinic,
+             -- [1.152.0] A report has gone out under this name, birthdate and sex.
+             EXISTS (SELECT 1 FROM test_results tr
+                       JOIN visit_tests vt ON vt.id = tr.visit_test_id
+                       JOIN patient_visits pv ON pv.id = vt.patient_visit_id
+                      WHERE pv.patient_id = p.id AND tr.authorised_at IS NOT NULL) AS identity_locked
       FROM patients p
       JOIN patient_types pt ON p.patient_type_id = pt.id
       WHERE p.user_id = $1

@@ -1195,7 +1195,7 @@ async function main() {
           patientId: patient.id, scheduledDate: dateStr(date), scheduledTime: time, notes: b.notes,
           testIds: booked.map((t) => t.id),
           payment: i % 3 === 2
-            ? { paymentMethod: 'GCash', amount, referenceNumber: transferReference(1000 + i) }
+            ? { paymentMethod: 'GCash', amount, referenceNumber: transferReference(5000000 + i) }
             : { paymentMethod: 'Cash', amount },
         },
       });

@@ -31,14 +31,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
  * screen taken at an angle. `object-contain` in a 70vh box makes that unreadable and the cashier's
  * only recourse was to guess or reject. Zoom and drag-to-pan, with a reset.
  *
- * ── The duplicate warning is a warning, not a block ─────────────────────────────────────────
+ * ── The duplicate warning ───────────────────────────────────────────────────────────────────
  *
- * The same screenshot submitted twice — forwarded to a second visit, or re-sent because the
- * patient was unsure it went through — is indistinguishable from two genuine payments unless
- * something looks. But a repeated reference is not always a mistake: a patient correcting a
- * rejected submission re-sends the same one on purpose, and references are not globally unique
- * across providers. So it is surfaced loudly and the cashier still decides, exactly as they do
- * for the amount.
+ * [1.152.0] One transfer pays for one booking, and the server refuses a reference already used on
+ * another visit, at the proof and at approval. What still reaches this warning is a patient correcting
+ * a rejected submission, who re-sends the same reference on purpose, so it is surfaced and the cashier
+ * still decides.
  */
 
 const ZOOM_STEP = 0.25;

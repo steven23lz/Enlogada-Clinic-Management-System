@@ -3,8 +3,22 @@ import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
 
 import { cn } from "../../lib/utils"
+import { useBackCloses } from "../../lib/backStack"
 
-const Dialog = DialogPrimitive.Root
+/**
+ * The Radix root, with the browser's Back closing it. [1.152.0] Every dialog and sheet in the app comes
+ * through here, so none has to wire it up, and each closes as its own Close button would.
+ */
+const Dialog = ({ open, defaultOpen = false, onOpenChange, ...props }) => {
+  const [inner, setInner] = React.useState(defaultOpen)
+  const isOpen = open ?? inner
+  const change = (next) => {
+    if (open === undefined) setInner(next)
+    onOpenChange?.(next)
+  }
+  useBackCloses(isOpen, () => change(false))
+  return <DialogPrimitive.Root open={isOpen} onOpenChange={change} {...props} />
+}
 
 const DialogTrigger = DialogPrimitive.Trigger
 

@@ -3,6 +3,8 @@ const patientRepository = require('../repositories/patientRepository');
 const patientInvitationRepository = require('../repositories/patientInvitationRepository');
 const auditService = require('./auditService');
 const { normalisePatientFields } = require('../validations/patientFields');
+const { isStaffUser } = require('../constants/roles');
+const { ForbiddenError } = require('../errors');
 
 /** The clinic's local date, YYYY-MM-DD. */
 const localToday = () => {
@@ -192,7 +194,23 @@ class PatientService {
       ? (before.email ?? null)
       : normaliseEmail(patientData.email);
 
-    const updated = await patientRepository.updatePatient(id, { ...normalisePatientFields(patientData, localToday()), email });
+    const fields = normalisePatientFields(patientData, localToday());
+
+    // [1.152.0] Steven's call. A released report went out under this name, birthdate and sex, and the
+    // record is what every screen and the verification page read them from: a patient could rewrite
+    // them afterwards and the old report would then seem to belong to someone else. Ask the clinic;
+    // staff can still correct them, and that is logged below. Contact details stay the patient's.
+    if (!isStaffUser(requestingUser) && await patientRepository.hasReleasedReport(id)) {
+      const d = new Date(before.birthdate);
+      const birthdate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const changed = fields.firstName !== before.first_name || fields.lastName !== before.last_name
+        || fields.birthdate !== birthdate || fields.sex !== before.sex;
+      if (changed) {
+        throw new ForbiddenError('This record has a released report, so its name, birthdate and sex can only be corrected by the clinic. Please ask at the front desk or call us.');
+      }
+    }
+
+    const updated = await patientRepository.updatePatient(id, { ...fields, email });
 
     // Audited with a field-level diff, not a bare "patient updated". [1.24.0]
     //

@@ -139,6 +139,18 @@ class PaymentSubmissionService {
         throw error;
       }
 
+      // [1.152.0] One transfer pays for one booking. Says nothing of whose it was. The same reference
+      // on this booking again is fine: that is a patient correcting a rejected proof.
+      const paidInto = paymentMethodId ? await paymentMethodRepository.findById(paymentMethodId) : null;
+      const used = await paymentRepository.findReferenceUse({
+        reference: referenceNumber.trim(), method: paidInto?.kind || 'GCash', visitId: patientVisitId,
+      });
+      if (used) {
+        const error = new Error('This reference number has already been used for another payment. Each booking needs its own transfer. Check the number on your confirmation, or contact the clinic.');
+        error.statusCode = 409;
+        throw error;
+      }
+
       // The portal no longer asks the patient to type an amount. [1.105.0] The booking already
       // states the figure, and an editable box beside it invited them to send something else. A
       // claim that names no amount is a claim to have sent what was asked, so it records that

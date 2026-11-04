@@ -1,9 +1,10 @@
-import React, { Suspense, startTransition, useState, useEffect, useCallback } from 'react';
+import React, { Suspense, startTransition, useState, useEffect, useCallback, useRef } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { GOOGLE_CLIENT_ID, isGoogleAuthConfigured } from './config/googleAuth';
 import { CONSOLE, consoleForNav, landingNavForRoles } from './config/navigation';
 import { lazyScreen } from './lib/lazyScreen';
+import { savedScreen, recordScreen, onScreenChange } from './lib/backStack';
 import Home from './pages/public/Home';
 import AboutUs from './pages/public/AboutUs';
 import ServicesPage from './pages/public/ServicesPage';
@@ -92,8 +93,8 @@ const MainApp = () => {
   const [legacyResetLink] = useState(hadLegacyResetLink);
   const [receiptNumber, setReceiptNumber] = useState(getInitialReceipt);
   const [verifyCode, setVerifyCode] = useState(getInitialVerify);
-  const [currentTab, setCurrentTab] = useState(() => (hadLegacyResetLink() ? 'forgot-password' : 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'dashboard', 'account'
-  const [activeNav, setActiveNav] = useState(null); // Active nav in staff/admin sidebar
+  const [currentTab, setCurrentTab] = useState(() => (hadLegacyResetLink() ? 'forgot-password' : savedScreen()?.tab ?? 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'dashboard', 'account'
+  const [activeNav, setActiveNav] = useState(() => savedScreen()?.nav ?? null); // Active nav in staff/admin sidebar
   // A section of the destination page to scroll to on arrival — the header's FAQ link sends a
   // visitor to Home's #faq from any other page. [1.72.0] Cleared by any plain navigation.
   const [pendingSection, setPendingSection] = useState(null);
@@ -113,19 +114,51 @@ const MainApp = () => {
   // The patient portal's tab. [1.81.0] Held here, above ClientDashboard, so going to My Account
   // and back lands on the tab the patient left; the dashboard used to forget it on every page
   // change. A different account signing in on the same browser starts on Home.
-  const [portalTab, setPortalTab] = useState('home');
+  //
+  // [1.152.0] Reloading stays on the tab, so the session being read at start-up is not a change of
+  // account: only one after that goes back to Home.
+  const [portalTab, setPortalTab] = useState(() => savedScreen()?.portalTab ?? 'home');
   const accountKey = user?.id ?? user?.email ?? null;
+  // Compared with the last account, not counted: React runs this again, with nothing changed, when a
+  // screen fetched on first use arrives.
+  const lastAccount = useRef(undefined);
   useEffect(() => {
-    setPortalTab('home');
-  }, [accountKey]);
+    if (loading) return;
+    if (lastAccount.current !== undefined && lastAccount.current !== accountKey) setPortalTab('home');
+    lastAccount.current = accountKey;
+  }, [accountKey, loading]);
 
   // Take a legacy reset token out of the address bar once it has been noticed. [1.73.0]
   useEffect(() => {
     if (!legacyResetLink) return;
     const url = new URL(window.location.href);
     url.searchParams.delete('reset_token');
-    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
   }, [legacyResetLink]);
+
+  // The browser's Back and a reload. [1.152.0] See lib/backStack.js. Each change of screen is a
+  // history entry, and Back or Forward puts the screen it lands on back. It names a screen and holds
+  // nothing else, and a screen still answers to the session and the role checks below, so Back after
+  // signing out shows the public site, never someone's portal.
+  const verifying = verifyCode !== null;
+  useEffect(() => {
+    recordScreen({ tab: currentTab, portalTab, nav: activeNav, verify: verifying });
+  }, [currentTab, portalTab, activeNav, verifying]);
+  useEffect(() => onScreenChange((screen) => {
+    if (!screen) return;
+    startTransition(() => {
+      setCurrentTab(screen.tab);
+      setPortalTab(screen.portalTab);
+      setActiveNav(screen.nav);
+      setNavIntent(null);
+      setPendingSection(null);
+    });
+    setVerifyCode((code) => {
+      if (screen.verify) return code ?? '';
+      if (code !== null) window.history.replaceState(window.history.state, '', window.location.pathname);
+      return null;
+    });
+  }), []);
 
   // Land each user on a destination they actually hold. This used to default to 'dashboard' —
   // an Admin/SuperAdmin-only destination — so every other role signed in pointing at an id it
@@ -160,7 +193,7 @@ const MainApp = () => {
     }
     if (verifyCode !== null) {
       setVerifyCode(null);
-      window.history.replaceState({}, '', window.location.pathname);
+      window.history.replaceState(window.history.state, '', window.location.pathname);
     }
     startTransition(() => {
       setCurrentTab(tab);
@@ -197,7 +230,7 @@ const MainApp = () => {
         receiptNumber={receiptNumber}
         onClose={() => {
           setReceiptNumber(null);
-          window.history.replaceState({}, '', window.location.pathname);
+          window.history.replaceState(window.history.state, '', window.location.pathname);
         }}
       />
     );

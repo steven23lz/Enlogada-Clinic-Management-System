@@ -37,6 +37,8 @@ export default function ProfileFormDialog({ profiles, reference, mode }) {
   // Ids carry the mode, so the two dialogs never share one even if both are mounted.
   const id = (field) => `${mode}-profile-${field}`;
   const set = (field) => (value) => setDraft({ ...draft, [field]: value });
+  // [1.152.0] A report has gone out under this name, birthdate and sex. The server refuses too.
+  const identityLocked = editing && Boolean(profiles.selected?.identity_locked);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,6 +62,14 @@ export default function ProfileFormDialog({ profiles, reference, mode }) {
             </div>
           )}
 
+          {identityLocked && (
+            <p data-testid="identity-locked" className="m-0 rounded-lg border border-line bg-sunken p-2.5 text-fine leading-relaxed text-ink-soft">
+              A report has been released under this name, so the name, birthdate and sex can only be
+              corrected by the clinic. Please ask at the front desk or call us. You can still change
+              the contact details below.
+            </p>
+          )}
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <label htmlFor={id('first-name')} className="field-label">First name <Required /></label>
@@ -68,7 +78,7 @@ export default function ProfileFormDialog({ profiles, reference, mode }) {
                 placeholder="Juan"
                 value={draft.firstName}
                 onChange={(e) => set('firstName')(e.target.value)}
-                disabled={busy}
+                disabled={busy || identityLocked}
                 required
               />
             </div>
@@ -79,7 +89,7 @@ export default function ProfileFormDialog({ profiles, reference, mode }) {
                 placeholder="Dela Cruz"
                 value={draft.lastName}
                 onChange={(e) => set('lastName')(e.target.value)}
-                disabled={busy}
+                disabled={busy || identityLocked}
                 required
               />
             </div>
@@ -92,7 +102,7 @@ export default function ProfileFormDialog({ profiles, reference, mode }) {
                 id={id('birthdate')}
                 value={draft.birthdate}
                 onChange={(e) => set('birthdate')(e.target.value)}
-                disabled={busy}
+                disabled={busy || identityLocked}
                 max={todayStr()}
                 yearRange={BIRTHDATE_YEAR_RANGE}
                 required
@@ -100,7 +110,7 @@ export default function ProfileFormDialog({ profiles, reference, mode }) {
             </div>
             <div className="space-y-1.5">
               <label htmlFor={id('sex')} className="field-label">Sex <Required /></label>
-              <Select value={draft.sex} onValueChange={set('sex')} disabled={busy}>
+              <Select value={draft.sex} onValueChange={set('sex')} disabled={busy || identityLocked}>
                 <SelectTrigger id={id('sex')}>
                   <SelectValue />
                 </SelectTrigger>

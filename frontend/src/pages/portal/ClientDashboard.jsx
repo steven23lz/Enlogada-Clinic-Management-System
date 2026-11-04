@@ -70,7 +70,7 @@ const ClientDashboard = ({ onNavigate, tab = 'home', onTabChange }) => {
       bookings.notePaymentCancelled();
     }
 
-    window.history.replaceState({}, '', window.location.pathname);
+    window.history.replaceState(window.history.state, '', window.location.pathname);
     // Both reloads are stable useCallbacks; the rule cannot see that through the hook objects,
     // and depending on the objects themselves would re-run this on every render — replaying the
     // banner the last line just stripped the query string to prevent.

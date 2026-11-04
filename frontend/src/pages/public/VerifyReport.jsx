@@ -136,7 +136,7 @@ export default function VerifyReport({ initialCode = '', onNavigate }) {
       const report = res.data.data.report;
       setCode(report.code);
       setState({ status: report.status, report });
-      window.history.replaceState({}, '', `${window.location.pathname}?verify=${report.code}`);
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}?verify=${report.code}`);
     } catch (err) {
       const status = err.response?.status;
       const message = err.response?.data?.message;
