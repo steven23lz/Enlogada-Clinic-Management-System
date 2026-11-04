@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   greeting, minutesBetween, listWords, waitingToPay, bookingState, todaysBookings,
-  deskNeeds, NO_TESTS_SHOWN, tillNeeds, departmentNeeds, decisionNeed, failedNeed, backupNeed, timeLeft,
+  deskNeeds, NO_TESTS_SHOWN, tillNeeds, departmentNeeds, decisionNeed, failedNeed, backupNeed, timeLeft, drawerNeed,
   topServices, hoursSoFar, departmentRows, nextSevenDays,
 } from '../../src/lib/today.js';
 import { formatTime12 } from '../../src/lib/date.js';
@@ -208,6 +208,37 @@ describe('decisionNeed deadlines', () => {
     expect(later.tone).toBe('blue');
     expect(timeLeft(-3)).toBe('time is up');
     expect(timeLeft(null)).toBeNull();
+  });
+});
+
+// [1.150.0] The drawer: 14 September 2026 is a Monday, open 08:00 to 17:00 in `hours` below.
+describe('drawerNeed', () => {
+  const hours = { week: [{ dayOfWeek: 1, isOpen: true, openTime: '08:00', closeTime: '17:00' }], upcoming: [] };
+  const status = { uncounted: [], todayCounted: false, todayCash: 1500 };
+
+  it('says nothing all day, then reminds half an hour before closing', () => {
+    expect(drawerNeed(status, { hours, now: at(16, 29) })).toEqual([]);
+    const [need] = drawerNeed(status, { hours, now: at(16, 30) });
+    expect(need.id).toBe('cash-count');
+    expect(need.title).toBe("Count today's drawer");
+    expect(need.detail).toMatch(/1,500\.00 in cash today/);
+    expect(need.action.go).toBe('cashier-count');
+  });
+
+  it('asks nothing once it is counted, with no cash taken, or with no hours to go by', () => {
+    expect(drawerNeed({ ...status, todayCounted: true }, { hours, now: at(17) })).toEqual([]);
+    expect(drawerNeed({ ...status, todayCash: 0 }, { hours, now: at(17) })).toEqual([]);
+    expect(drawerNeed(status, { hours: null, now: at(17) })).toEqual([]);
+    expect(drawerNeed(undefined, { hours, now: at(17) })).toEqual([]);
+  });
+
+  it('puts a day left uncounted first, and its button opens that day', () => {
+    const [need] = drawerNeed({ ...status, uncounted: ['2026-09-12'] }, { hours, now: at(9) });
+    expect(need.title).toBe('The drawer for September 12, 2026 was not counted');
+    expect(need.action.intent).toEqual({ countDate: '2026-09-12' });
+    const [two] = drawerNeed({ ...status, uncounted: ['2026-09-12', '2026-09-11'] }, { hours, now: at(9) });
+    expect(two.title).toBe('The drawer was not counted on 2 days');
+    expect(two.action.intent).toEqual({ countDate: '2026-09-12' });
   });
 });
 

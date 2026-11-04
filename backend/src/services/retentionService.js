@@ -3,6 +3,7 @@ const path = require('path');
 const notificationRepository = require('../repositories/notificationRepository');
 const auditRepository = require('../repositories/auditRepository');
 const hmoRepository = require('../repositories/hmoRepository');
+const queueCallRepository = require('../repositories/queueCallRepository');
 const auditService = require('./auditService');
 const { HMO_CARD_UPLOAD_ROOT } = require('../config/upload');
 const logger = require('../config/logger');
@@ -22,6 +23,7 @@ const RETENTION = Object.freeze({
   auditPhiReadDays: 730,     // "who opened this patient's record?": 2 years
   auditOtherDays: 2555,      // money, accounts, results: about 7 years, like the records they describe
   hmoCardDays: 365,          // evidence for one claim, long settled by then
+  queueCallDays: 30,         // a press of Call: of use on its day, and for a question soon after
 });
 
 class RetentionService {
@@ -71,7 +73,8 @@ class RetentionService {
     const notifications = await this.pruneNotifications();
     const auditRows = await this.pruneAuditLog();
     const hmoCards = await this.pruneHmoCards();
-    const summary = { notifications, auditRows, hmoCards };
+    const queueCalls = await queueCallRepository.pruneOlderThan(RETENTION.queueCallDays);
+    const summary = { notifications, auditRows, hmoCards, queueCalls };
 
     const parts = [
       notifications.readRows + notifications.staleRows && `${notifications.readRows + notifications.staleRows} old notification(s)`,

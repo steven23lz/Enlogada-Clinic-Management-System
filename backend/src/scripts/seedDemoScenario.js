@@ -36,6 +36,7 @@
  *   node src/scripts/seedDemoScenario.js
  */
 const db = require('../config/database');
+const { DENOMINATIONS } = require('../utils/cashCount');
 const { LAB_FIELD_SETS, SIGNATORIES } = require('../constants/labResultForms');
 // [1.125.0] The demo's reports are drawn on the clinic's own form, not as a page of text.
 const { renderClinicReport } = require('./demoReportPdf');
@@ -1246,6 +1247,9 @@ async function main() {
     ...bookings.map((b) => b.patient_visit_id),
   ]);
 
+  await seedCalls(today.map((v) => v.visit.id));
+  await seedCashCounts();
+
   // ── Summary ──────────────────────────────────────────────────────────────────────────────
   const counts = await db.query(`
     SELECT
@@ -1403,6 +1407,87 @@ async function renumberSeeded(visitIds) {
   });
 }
 
+/**
+ * So the waiting-room screen has something on it on demo day. [1.149.0] The next patient at the till
+ * and in each department, called a few minutes apart, as the Call buttons would have.
+ */
+async function seedCalls(visitIds) {
+  const oldest = (where, params = []) => db.query(
+    `SELECT pv.id FROM patient_visits pv
+      WHERE pv.id = ANY($1) AND pv.queue_number IS NOT NULL AND ${where}
+      ORDER BY pv.created_at, pv.id LIMIT 1`,
+    [visitIds, ...params]
+  );
+  const stations = [
+    ['Cashier', await oldest(`pv.status = 'Pending' AND NOT EXISTS (
+       SELECT 1 FROM payments pay WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid')`)],
+  ];
+  for (const department of ['Laboratory', 'Ultrasound', 'Xray']) {
+    stations.push([department, await oldest(`pv.status = 'Processing' AND EXISTS (
+       SELECT 1 FROM visit_tests vt
+         JOIN tests t ON t.id = vt.test_id
+         JOIN test_categories tc ON tc.id = t.category_id
+        WHERE vt.patient_visit_id = pv.id AND tc.name = $2 AND vt.status = 'Processing')`, [department])]);
+  }
+  for (const [i, [station, found]] of stations.entries()) {
+    if (!found.rows[0]) continue;
+    await db.query(
+      `INSERT INTO queue_calls (patient_visit_id, station, called_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP - ($3 || ' minutes')::interval)`,
+      [found.rows[0].id, station, String((stations.length - i) * 3)]
+    );
+  }
+}
+
+/** Notes and coins for an amount, largest first, with any centavos as other coins. */
+function piecesFor(amount) {
+  const pieces = {};
+  let left = Math.round(amount * 100);
+  for (const value of DENOMINATIONS) {
+    const each = Math.round(value * 100);
+    const count = Math.floor(left / each);
+    if (count > 0) pieces[value] = count;
+    left -= count * each;
+  }
+  return left > 0 ? { ...pieces, loose: left / 100 } : pieces;
+}
+
+/**
+ * The drawer counted at each past day's close, so Cashier Monitoring has a history. [1.150.0] Nearly
+ * every day balances, as a well-run till does; a couple are a few pesos out, with the cashier's note;
+ * one, about a week back, was never counted, which is what that looks like.
+ */
+async function seedCashCounts() {
+  const cashier = (await db.query(`SELECT id FROM users WHERE email = 'cashier@enlogada.com'`)).rows[0];
+  const { rows: days } = await db.query(
+    `SELECT to_char(pay.paid_at, 'YYYY-MM-DD') AS day,
+            COUNT(*)::int AS receipts,
+            COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method = 'Cash'), 0)::numeric(12,2) AS cash,
+            COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method = 'GCash'), 0)::numeric(12,2) AS gcash,
+            COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method = 'Bank'), 0)::numeric(12,2) AS bank
+       FROM payments pay
+      WHERE pay.payment_status = 'Paid' AND pay.receipt_number IS NOT NULL AND pay.paid_at < CURRENT_DATE
+      GROUP BY 1
+      ORDER BY 1`
+  );
+  const CHANGE_FUND = 1000;
+  const OUT = {
+    11: [-20, 'Short by twenty pesos: change given twice to one patient, noticed at closing.'],
+    23: [10, 'Over by ten pesos: a patient left their change on the counter.'],
+  };
+  for (const [i, d] of days.entries()) {
+    if (i === days.length - 7) continue;
+    const [off, note] = OUT[i] || [0, null];
+    const counted = CHANGE_FUND + Number(d.cash) + off;
+    await db.query(
+      `INSERT INTO cash_counts
+         (business_date, change_fund, expected_cash, expected_gcash, expected_bank, receipts, counted_cash, pieces, note, counted_by, counted_at)
+       VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $1::date + TIME '17:10')`,
+      [d.day, CHANGE_FUND, d.cash, d.gcash, d.bank, d.receipts, counted, JSON.stringify(piecesFor(counted)), note, cashier?.id ?? null]
+    );
+  }
+}
+
 // Run as a script; required, it lends the report helpers to redrawDemoReports.js. [1.141.0]
 if (require.main === module) {
   main().catch((err) => {
@@ -1411,4 +1496,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { labFormFor, labReportRows, signatoriesFor, splitImpression, FORM_PATIENT_TYPE, ULTRASOUND_REPORT };
+module.exports = { labFormFor, labReportRows, signatoriesFor, splitImpression, FORM_PATIENT_TYPE, ULTRASOUND_REPORT, seedCalls, seedCashCounts };

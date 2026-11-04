@@ -1,5 +1,7 @@
 import React from 'react';
-import { AlertCircle, ShieldAlert, UserCheck, Volume2 } from 'lucide-react';
+import { AlertCircle, ShieldAlert, UserCheck } from 'lucide-react';
+import CallButton from '../queue/CallButton';
+import { FRONT_DESK } from '../../lib/nowServing';
 import DataBadge from '../ui/data-badge';
 import EtaBadge from '../ui/eta-badge';
 import WaitBadge from '../ui/wait-badge';
@@ -29,7 +31,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
  *   here box above IS the search and narrows this list to the same name — two boxes would ask the
  *   same question twice. On for anyone who gets no box: the Cashier's read-only view. [1.75.0]
  */
-export default function ActiveQueuePanel({ queue, hmo, testAssignment, onCallPatient, showSearch = true }) {
+export default function ActiveQueuePanel({ queue, hmo, testAssignment, showSearch = true }) {
   /**
    * The queue is a BORROWED screen for anyone who is not the front desk. [1.53.0]
    *
@@ -49,6 +51,7 @@ export default function ActiveQueuePanel({ queue, hmo, testAssignment, onCallPat
   const { hasPermission } = useAuth();
   const canRegisterWalkIn = hasPermission('visits:create') && hasPermission('tests:assign') && hasPermission('patients:create');
   const canAttachTests = hasPermission('tests:assign');
+  const canCall = hasPermission('visits:create'); // constants/queueStations.js: what the Front Desk asks [1.149.0]
   const canRaiseHmo = hasPermission('hmo:request');
 
   return (
@@ -178,17 +181,6 @@ export default function ActiveQueuePanel({ queue, hmo, testAssignment, onCallPat
                             {visit.queue_number
                               ? <DataBadge variant="queue" label="Queue ticket">{visit.queue_number}</DataBadge>
                               : <span className="whitespace-nowrap text-fine text-slate-500">Not checked in</span>}
-                            {/* aria-label as well as title: `title` alone is not a reliable
-                                accessible name and is invisible on touch, so a screen reader
-                                announced two unlabelled buttons on every queue row. */}
-                            <button
-                              onClick={() => onCallPatient(visit.queue_number)}
-                              title="Call Queue Number"
-                              aria-label={`Call queue number ${visit.queue_number}`}
-                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-slate-400 hover:bg-brand-50 hover:text-brand-600"
-                            >
-                              <Volume2 className="h-3.5 w-3.5" />
-                            </button>
                           </div>
                           {/* [1.62.0] Under the ticket rather than in a column of its own: the
                               receptionist is asked "how much longer?" while looking at this row,
@@ -282,7 +274,18 @@ export default function ActiveQueuePanel({ queue, hmo, testAssignment, onCallPat
                         </TableCell>
 
                         <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex flex-wrap items-start justify-end gap-1.5">
+                            {/* [1.149.0] Records the call and puts it on the waiting-room screen.
+                                It only spoke on this PC before, for a ticket or for none. */}
+                            {canCall && visit.queue_number && (
+                              <CallButton
+                                visitId={visit.id}
+                                ticket={visit.queue_number}
+                                station={FRONT_DESK}
+                                patientName={`${visit.first_name} ${visit.last_name}`}
+                                calledAt={visit.calls?.[FRONT_DESK]}
+                              />
+                            )}
                             {/* Edit, not attach. [1.55.0] Tests are chosen at registration, so by
                                 the time a visit is in this queue the list already exists and what
                                 the desk needs is to CHANGE it. "Attach" described a dialog that

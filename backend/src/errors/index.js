@@ -178,6 +178,9 @@ function normalizeError(err) {
  */
 const CONSTRAINT_MESSAGES = {
   uq_payments_one_paid_per_visit: 'This visit has already been paid.',
+  chk_queue_calls_station: 'A patient can only be called to the front desk, the cashier or a department.',
+  uq_cash_counts_current_per_day: 'Someone else just counted this day. Reload to see their count.',
+  chk_cash_counts_amounts: 'A count and a change fund cannot be negative.',
   uq_paysub_one_live_per_visit: 'A payment for this visit is already waiting to be checked.',
   uq_hmo_one_live_claim_per_test: 'That test already has an HMO claim open.',
   uq_hmo_request_visit_test: 'That test is already on this HMO claim.',

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '../../components/ui/sheet';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
-import { toastSuccess, toastInfo } from '../../lib/toast';
+import { toastSuccess } from '../../lib/toast';
 import RescheduleDialog from '../../components/booking/RescheduleDialog';
 import TestPicker from '../../components/booking/TestPicker';
 import useOperationsReport from '../../hooks/useOperationsReport';
@@ -28,7 +28,7 @@ import CarriedOverPanel from '../../components/reception/CarriedOverPanel';
 import { useVisitDisposition } from '../../hooks/useVisitDisposition';
 import { useTestAssignment } from '../../hooks/useTestAssignment';
 import { useHmoLogging } from '../../hooks/useHmoLogging';
-import { UserCheck, UserPlus, AlertCircle, History, X } from 'lucide-react';
+import { UserCheck, UserPlus, AlertCircle, History, X, MonitorPlay } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import LoadingState from '../../components/ui/loading-state';
 import { formatCurrency } from '../../lib/currency';
@@ -90,6 +90,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
     seeBookings: hasPermission('appointments:read'),
     // [1.112.0] Typing in a walk-in's paper feedback form, from Visit History.
     recordFeedback: hasPermission('feedback:record'),
+    // [1.149.0] What a call to the Front Desk asks (constants/queueStations.js).
+    callPatient: hasPermission('visits:create'),
   };
   const showWho = can.checkIn || can.startVisit;
 
@@ -157,22 +159,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent, onDesk]);
 
-  /**
-   * Calls the patient by voice. [1.54.0] The queue row's other control — a per-row reprint of the
-   * physical slip — is gone: the ticket is printed once at registration, the number is on screen
-   * and called aloud, and a second copy answered a question nobody was asking. Its slip markup and
-   * handler went with it rather than being left behind for someone to wonder about.
-   */
-  const speakQueueNumber = (queueNum) => {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(`Queue Number ${queueNum}, please proceed to the desk`);
-      utterance.rate = 0.9;
-      window.speechSynthesis.speak(utterance);
-    } else {
-      toastInfo(`Calling Queue Number ${queueNum}`);
-    }
-  };
-
   return (
     <SidebarLayout
       title={PAGE_TITLES[view]}
@@ -201,12 +187,23 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
                endpoint itself demands, so the button and the API agree. The one Register button on
                the screen: the queue's empty state and the box's "nobody found" line point here
                rather than carrying a second copy of it. */
-            onDesk && can.registerPatient ? (
-              // Phones only: from `lg` up the same button is in the rail. [1.76.0]
-              <Button variant="outline" className="lg:hidden" onClick={() => setRegistering(true)}>
-                <UserPlus className="h-4 w-4" />
-                Register Walk-In
-              </Button>
+            onDesk && (can.registerPatient || can.callPatient) ? (
+              <>
+                {/* [1.149.0] Opens the TV's page in a tab of its own, to drag onto the TV. */}
+                {can.callPatient && (
+                  <Button variant="outline" onClick={() => window.open('/?display=queue', '_blank', 'noopener')}>
+                    <MonitorPlay className="h-4 w-4" />
+                    Waiting-room screen
+                  </Button>
+                )}
+                {/* Phones only: from `lg` up the same button is in the rail. [1.76.0] */}
+                {can.registerPatient && (
+                  <Button variant="outline" className="lg:hidden" onClick={() => setRegistering(true)}>
+                    <UserPlus className="h-4 w-4" />
+                    Register Walk-In
+                  </Button>
+                )}
+              </>
             ) : undefined
           }
         />
@@ -236,7 +233,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
               queue={queue}
               hmo={hmo}
               testAssignment={testAssignment}
-              onCallPatient={speakQueueNumber}
               showSearch={!showWho}
             />
             {can.seeBookings && (

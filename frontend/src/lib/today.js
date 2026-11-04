@@ -5,6 +5,8 @@ import { categoryLabel, issuesReports } from './categories';
 import { appointmentUrgency } from './paymentReview';
 import { hoursOn } from './clinicStatus';
 import { overTarget } from './turnaroundTarget';
+import { formatCurrency } from './currency';
+import { dayLabel } from './reportPrint';
 
 /**
  * The rules behind the Today screens. [1.77.0]
@@ -275,6 +277,48 @@ export function decisionNeed(requests = [], now = new Date()) {
       ? `Soonest: ${name(soonest)}, decide by ${deadlineLabel(soonest.decide_by, now)} (${timeLeft(soonest.minutes_to_decide)})`
       : someNames(requests.map(name)),
     action: { label: 'Review', go: 'service-requests' },
+  }];
+}
+
+/** How long before the clinic closes the till is reminded to count the drawer. */
+export const COUNT_REMINDER_MINUTES = 30;
+
+/**
+ * The drawer. [1.150.0] An earlier day that took cash and was never counted comes first, because it
+ * can only be counted for a week. Then today's, from half an hour before closing, because a count at
+ * 09:00 is not the day's count. Nothing while it is done, or while no cash was taken.
+ *
+ * @param {{uncounted?: string[], todayCounted?: boolean, todayCash?: number}} status  /cash-counts/status
+ * @param {{hours?: {week: object[], upcoming: object[]}|null, now?: Date}} options
+ */
+export function drawerNeed(status, { hours = null, now = new Date() } = {}) {
+  if (!status) return [];
+  const uncounted = status.uncounted || [];
+  if (uncounted.length) {
+    const [newest] = uncounted;
+    return [{
+      id: 'cash-count',
+      tone: 'amber',
+      icon: 'calculator',
+      title: uncounted.length === 1
+        ? `The drawer for ${dayLabel(newest)} was not counted`
+        : `The drawer was not counted on ${uncounted.length} days`,
+      detail: `A drawer can be counted up to 7 days later.${uncounted.length > 1 ? ` The latest is ${dayLabel(newest)}.` : ''}`,
+      action: { label: 'Count it', go: 'cashier-count', intent: { countDate: newest } },
+    }];
+  }
+  if (status.todayCounted || !(Number(status.todayCash) > 0) || !hours) return [];
+  const today = hoursOn(now, hours.week, hours.upcoming);
+  if (!today.open) return [];
+  const [closeHour, closeMinute] = String(today.to).split(':').map(Number);
+  if (now.getHours() * 60 + now.getMinutes() < closeHour * 60 + closeMinute - COUNT_REMINDER_MINUTES) return [];
+  return [{
+    id: 'cash-count',
+    tone: 'blue',
+    icon: 'calculator',
+    title: "Count today's drawer",
+    detail: `The till took ${formatCurrency(status.todayCash)} in cash today.`,
+    action: { label: 'Count it', go: 'cashier-count' },
   }];
 }
 

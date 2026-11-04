@@ -295,6 +295,16 @@ async function main() {
   await db.query('DELETE FROM notification_events WHERE created_at >= $1::timestamptz', [since]);
   await db.query('DELETE FROM notification_events ne WHERE NOT EXISTS (SELECT 1 FROM notification_reads nr WHERE nr.event_id = ne.id)');
 
+  // Cash counts the run made. [1.150.0] A recount in the run superseded whatever was there, so what
+  // it replaced becomes current again: the day reads as it did before the run.
+  await db.query('DELETE FROM cash_counts WHERE counted_at >= $1::timestamptz', [since]);
+  await db.query(
+    `UPDATE cash_counts c SET is_current = TRUE
+      WHERE NOT EXISTS (SELECT 1 FROM cash_counts x WHERE x.business_date = c.business_date AND x.is_current)
+        AND c.id = (SELECT y.id FROM cash_counts y WHERE y.business_date = c.business_date
+                     ORDER BY y.counted_at DESC, y.id DESC LIMIT 1)`
+  );
+
   // Audit entries written by the run, for the same reason: the actor is a seeded staff account.
   await db.query('DELETE FROM audit_log WHERE created_at >= $1::timestamptz', [since]);
 

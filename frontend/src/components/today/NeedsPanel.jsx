@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  AlertTriangle, CheckCircle2, Clock, DatabaseBackup, FlaskConical, Mail, Receipt, ShieldCheck, Wallet, WifiOff,
+  AlertTriangle, Calculator, CheckCircle2, Clock, DatabaseBackup, FlaskConical, Mail, Receipt, ShieldCheck, Wallet, WifiOff,
 } from 'lucide-react';
 import { Panel, PanelHeader } from '../ui/panel';
 import { Button } from '../ui/button';
@@ -9,7 +9,7 @@ import { SkeletonList } from '../ui/skeleton';
 import { cn } from '../../lib/utils';
 
 const ICONS = {
-  alert: AlertTriangle, backup: DatabaseBackup, clock: Clock, flask: FlaskConical, mail: Mail, receipt: Receipt,
+  alert: AlertTriangle, backup: DatabaseBackup, calculator: Calculator, clock: Clock, flask: FlaskConical, mail: Mail, receipt: Receipt,
   shield: ShieldCheck, wallet: Wallet, offline: WifiOff,
 };
 

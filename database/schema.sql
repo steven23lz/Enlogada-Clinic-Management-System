@@ -2,6 +2,8 @@
 -- Database: PostgreSQL (Local/Supabase hosted)
 
 -- Drop existing tables to allow clean recreation
+DROP TABLE IF EXISTS cash_counts CASCADE;
+DROP TABLE IF EXISTS queue_calls CASCADE;
 DROP TABLE IF EXISTS daily_counters CASCADE;
 DROP TABLE IF EXISTS discount_types CASCADE;
 DROP TABLE IF EXISTS audit_log CASCADE;
@@ -929,6 +931,46 @@ CREATE INDEX idx_notification_reads_user ON notification_reads(user_id, is_read)
 -- view of current user data. Scoped to the sensitive actions this phase's other work
 -- introduced (payment status changes, staff account changes, HMO provider changes, result
 -- corrections) rather than instrumenting every write in the app.
+-- The end-of-day count of the drawer. [1.150.0] One current row per business day; a recount adds a
+-- row and supersedes the last, so a shortage counted away still shows it was found. What was expected
+-- is a snapshot, so a later payment cannot change what the count was measured against; difference is
+-- worked out here, so it cannot disagree with the two figures beside it. See cashCountService.
+CREATE TABLE cash_counts (
+    id SERIAL PRIMARY KEY,
+    business_date DATE NOT NULL,
+    change_fund NUMERIC(12,2) NOT NULL DEFAULT 0,
+    expected_cash NUMERIC(12,2) NOT NULL DEFAULT 0,
+    expected_gcash NUMERIC(12,2) NOT NULL DEFAULT 0,
+    expected_bank NUMERIC(12,2) NOT NULL DEFAULT 0,
+    receipts INT NOT NULL DEFAULT 0,
+    counted_cash NUMERIC(12,2) NOT NULL,
+    difference NUMERIC(12,2) GENERATED ALWAYS AS (counted_cash - change_fund - expected_cash) STORED,
+    pieces JSONB NOT NULL DEFAULT '{}',
+    note TEXT,
+    counted_by INT,
+    counted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_current BOOLEAN NOT NULL DEFAULT TRUE,
+    CONSTRAINT fk_cash_counts_counted_by FOREIGN KEY (counted_by) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT chk_cash_counts_amounts CHECK (change_fund >= 0 AND counted_cash >= 0)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_counts_current_per_day ON cash_counts (business_date) WHERE is_current;
+CREATE INDEX IF NOT EXISTS idx_cash_counts_date ON cash_counts (business_date, counted_at);
+
+-- Who each station has called. [1.149.0] One row per press of Call; the waiting-room screen shows
+-- each station's newest. A call means nothing without its visit, so it goes with the visit.
+CREATE TABLE queue_calls (
+    id SERIAL PRIMARY KEY,
+    patient_visit_id INT NOT NULL,
+    station VARCHAR(20) NOT NULL,
+    called_by INT,
+    called_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_queue_calls_visit FOREIGN KEY (patient_visit_id) REFERENCES patient_visits(id) ON DELETE CASCADE,
+    CONSTRAINT fk_queue_calls_called_by FOREIGN KEY (called_by) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT chk_queue_calls_station CHECK (station IN ('Front Desk', 'Cashier', 'Laboratory', 'Ultrasound', 'Xray'))
+);
+CREATE INDEX IF NOT EXISTS idx_queue_calls_called_at ON queue_calls (called_at);
+CREATE INDEX IF NOT EXISTS idx_queue_calls_visit ON queue_calls (patient_visit_id, station, called_at);
+
 CREATE TABLE audit_log (
     id SERIAL PRIMARY KEY,
     -- ON DELETE SET NULL so the log genuinely outlives the actor, which is what the note above

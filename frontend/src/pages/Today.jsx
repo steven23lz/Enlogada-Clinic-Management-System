@@ -14,7 +14,7 @@ import api from '../config/api';
 import { daysAgoStr, todayStr } from '../lib/date';
 import { categoryLabel } from '../lib/categories';
 import {
-  backupNeed, decisionNeed, departmentNeeds, deskNeeds, failedNeed, greeting, tillNeeds, waitingToPay,
+  backupNeed, decisionNeed, departmentNeeds, deskNeeds, drawerNeed, failedNeed, greeting, tillNeeds, waitingToPay,
 } from '../lib/today';
 
 /** The department worklists, and the History each one's sent-or-not lives on. */
@@ -101,7 +101,9 @@ const Today = ({ onSelectNav }) => {
     hmo: (desk || (clinic && can.decide)) && can.hmo && (() => api.get('/hmo/requests', {
       params: { status: 'Pending' },
     }).then((r) => body(r).requests || [])),
-    hours: desk && (() => api.get('/schedule/public').then(body)),
+    hours: (desk || (till && can.takeMoney)) && (() => api.get('/schedule/public').then(body)),
+    // [1.150.0] Whoever closes the till, on the permission that counts the drawer.
+    drawer: till && can.takeMoney && can.billing && (() => api.get('/cash-counts/status').then(body)),
     backup: can.backups && (() => api.get('/admin/backups').then(body)),
     // One request for every section's figures: the server returns only the slices this account holds.
     ops: (desk || till || worklists.length > 0 || clinic) && (() => api.get('/reports/operations', { params: range }).then((r) => body(r).report)),
@@ -130,6 +132,8 @@ const Today = ({ onSelectNav }) => {
   const analytics = reads.read('analytics');
   const before = reads.read('yesterday');
   const backup = reads.read('backup');
+  const drawer = reads.read('drawer');
+  const hours = reads.read('hours');
 
   const needs = [];
   const couldNot = [];
@@ -147,6 +151,10 @@ const Today = ({ onSelectNav }) => {
       canCheck: can.takeMoney,
       now,
     }));
+    if (can.takeMoney) {
+      if (drawer.failed) couldNot.push('the cash count');
+      needs.push(...drawerNeed(drawer.data, { hours: hours.data, now }));
+    }
   }
   worklists.forEach(({ nav, category }) => {
     const pending = reads.read(`pending:${category}`);

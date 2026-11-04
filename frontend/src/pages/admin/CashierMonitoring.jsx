@@ -16,6 +16,7 @@ import { METHOD_FILTERS, METHOD_FILTER_ALL } from '../../lib/paymentMethods';
 import { ExternalLink, Receipt, RefreshCw, Banknote, Hash, UserCircle2, Undo2 } from 'lucide-react';
 import { DateField, RANGE_PRESETS } from '../../components/ui/date-field';
 import DateTime from '../../components/ui/date-time';
+import ClosedDaysPanel from '../../components/cashier/ClosedDaysPanel';
 
 // Visual Design Improvement Plan Phase V1 — see VISUAL_IDENTITY.md §3a #11.
 const PAGE_SIZE = 20;
@@ -310,6 +311,9 @@ const CashierMonitoring = () => {
             totalLabel={(loadError || loading) ? '' : `${total} transaction${total === 1 ? '' : 's'}`}
           />
         </Panel>
+
+        {/* [1.150.0] Each day's count of the drawer, on its own dates: this range is usually today. */}
+        <ClosedDaysPanel />
       </div>
     </div>
   );

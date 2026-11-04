@@ -112,6 +112,8 @@ node src/scripts/migratePatientInvitations.js    # [1.136.0] portal invitations,
 node src/scripts/migrateDiscountDeclaration.js   # [1.146.0] patient_visits.discount_id_*: a Senior Citizen / PWD discount declared online with an ID photo (--rollback reverses it)
 node src/scripts/migrateEmailChange.js           # [1.147.0] auth_codes accepts 'email_change': a patient moving their sign-in to a new address (--rollback reverses it)
 node src/scripts/migratePatientMessages.js       # [1.148.0] the stamps behind three automatic patient emails: results ready, missed paid booking, feedback (--rollback reverses it)
+node src/scripts/migrateQueueCalls.js            # [1.149.0] queue_calls: who each station called, for the waiting-room screen (--rollback reverses it)
+node src/scripts/migrateCashCounts.js            # [1.150.0] cash_counts: the end-of-day count of the drawer (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -200,9 +202,9 @@ The worst of it is `notification_reads`, which is a **fan-out** table: `notifyRo
 **There are now two test tiers, and they answer different questions.** `[1.63.0]`
 
 ```bash
-cd backend  && npm test        # 181 unit tests, node:test, ZERO dependencies, ~1s
-cd frontend && npm run test:unit # 160 unit tests, vitest, ~1.5s
-cd frontend && npm test        # 571 Playwright E2E, ~13m, needs both dev servers
+cd backend  && npm test        # 195 unit tests, node:test, ZERO dependencies, ~1s
+cd frontend && npm run test:unit # 179 unit tests, vitest, ~1.5s
+cd frontend && npm test        # 590 Playwright E2E, ~14m, needs both dev servers
 ```
 
 The unit tier covers the pure, deterministic rules where the *arithmetic* is the thing at risk:
@@ -221,7 +223,7 @@ each other's files.
 it is a function you could call from a REPL, it is a unit test — and it belongs there, because a
 7-minute suite is not where you want to discover that a rounding rule changed.
 
-There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 96 Playwright specs (571 tests, ~13m) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. See the tiers above.
+There **is** an automated end-to-end suite: `frontend/tests/e2e/` holds 98 Playwright specs (590 tests, ~14m) run with `npm test` (or `npm run test:ui`) from `frontend/`. It assumes **both dev servers are already running** and hits the real database — see `frontend/tests/e2e/README.md`. See the tiers above.
 
 The suite is a deliberately small demo-and-regression net, not exhaustive coverage: smoke, security boundaries (`api-authorization.spec.js` — Admin-vs-SuperAdmin separation of duties, combined-role access, and the cross-role PHI boundaries), ticket-release gating, payments, laboratory results, statutory discounts (`discounts.spec.js`), result amendment history (`result-versioning.spec.js`), password-change session revocation (`session-revocation.spec.js`), account lockout and PHI read auditing (`login-protection.spec.js`), permission-matrix enforcement (`rbac-enforcement.spec.js`), department-scoped patient records (`department-scoping.spec.js`), the per-department operations report (`operations-report.spec.js`), atomic online booking with its HMO card evidence rule (`booking-atomicity.spec.js`), the two dialogs that feature added (`hmo-card-review.spec.js` — because a card that uploads correctly and then renders as a broken image on the approval screen is a working feature failing at its job), moving a booking rather than cancelling it (`appointment-reschedule.spec.js`, plus `reschedule-ui.spec.js` for the dialog), when a visit must name the doctor who requested the test (`referring-physician.spec.js`), correcting a patient record (`patient-edit.spec.js` / `patient-edit-ui.spec.js`), what the patient is told about their own booking (`booking-communication.spec.js`), that the ETag revalidation cache never hides a change (`revalidation.spec.js`), that each role can see what it needs on the screen where it acts (`workflow-context.spec.js`), registering a walk-in in one pass (`walkin-registration.spec.js`), the patient journey at phone width (`mobile-patient.spec.js`), what an HMO decision has to record before it counts as one (`hmo-decision-trail.spec.js` — a refusal that names no reason leaves the cashier explaining a charge nobody wrote down), the three-step claim workflow itself (`hmo-claim-handoff.spec.js` — reception raises it, an Admin decides it, and the cashier has to be TOLD), and that a failed request never renders as an empty one (`failure-states.spec.js` — six screens shipped without an error branch, so a 500 fell through to the empty state and the app stated "Today's Revenue ₱0.00" over a day that took ₱8,344; `[1.74.0]` added the screens each role lands on, whose counters start at zero and stayed there on a failure), that Transaction History's takings answer for the dates its receipt list shows (`takings-range.spec.js`), that the front desk finds a booking, a record or nobody from one box and never offers a second visit to someone already in the queue (`front-desk.spec.js`), that each sidebar count is the number its screen shows and an action is on screen once (`sidebar.spec.js`), that every member of staff lands on Today, where each item has the button that deals with it and a button that opens another screen arrives already doing it (`today.spec.js`), that SuperAdmin assigns access on the "Who sees what" grid, where every switch says in words what it will change and nothing is saved until Save (`access-grid.spec.js`), that every screen's heading and breadcrumb are its sidebar name (`screen-names.spec.js`), that the patient portal's Home says what is owed and what it could not check, and its phone tab bar covers nothing (`portal-home.spec.js`), and that there are no refunds: no route, no permission, no button, and a paid visit points to a new visit (`refunds-removed.spec.js`, `[1.121.0]`), and that what a final receipt rules out stays ruled out: a payment over a pending HMO decision or an unchecked online proof, a paid no-show, an unpaid booking holding its slot past its payment window (`process-fixes.spec.js`, `[1.123.0]`), and that the server refuses what the screens refuse, whoever skips the screen (`process-rules.spec.js`, `[1.124.0]`), and that the reader's chosen text size scales the whole interface without inverting its own type ramp (`text-scale.spec.js` — a pixel-pinned font size looks perfect at the default and misbehaves only for the people who changed it), and that a patient can pay into the clinic's own account and only a cashier can turn that into money (`manual-payment.spec.js` — publishing an account number is SuperAdmin alone, and the amount a patient CLAIMS never becomes the amount they are charged), and that a package deal bills its own fixed price rather than the sum of its parts, with every component reaching its own department (`packages.spec.js` — a bundle that costs more than buying the parts separately is a surcharge wearing the word "package"), and that updating a service does not delete the fields the caller did not mention (`catalogue-partial-update.spec.js` — the status toggle used to wipe a test's patient preparation, which is the sentence the day-before reminder carries). It was cut down from ~200 tests once the module-by-module build-out finished; the rest asserted UI copy that legitimately keeps changing. Prefer adding a focused spec over reviving deleted ones from git history.
 
@@ -614,6 +616,20 @@ unit-tested), enforced in `patientInvitationService`:
   account with a same-name, same-birthdate profile is warned and may keep both.
 - Production caps: 5 invitation emails an address a day, `INVITE_DAILY_CAP` (50) per staff member.
 
+**The waiting room's TV is `?display=queue`, and it names nobody.** `[1.149.0]` Five tiles that
+never move, each station's current ticket, lit when called, with a chime and the spoken number once
+someone presses "Turn on sound" (a browser allows sound only after a press). No sign-in, because a TV
+has no account, so the privacy control is the SELECT in `queueCallRepository.findTodays` and the copy
+in `utils/nowServing.js`: a ticket, a station, a time. Never add a name, a visit id or a test. The one
+Call button (`components/queue/CallButton.jsx`) records a row in `queue_calls` and changes no status;
+a station answers to its screen's permission in the service (`constants/queueStations.js`: Front Desk
+`visits:create`, Cashier `billing:process`, a department `results:write` and cover for it), so there
+is no new permission. Tickets restart each day, so one from an earlier day cannot be called (409) and
+the worklist offers no button for it. With no screen open (`displayOpen`, nothing has asked in 20
+seconds) the calling PC says it aloud. The screen polls every 4 seconds, which production's shared
+limit of 100 per 15 minutes cannot take, so it has its own limiter; keep its answer free of anything
+that changes between calls, or every poll stops being a 304. `now-serving.spec.js` holds it.
+
 **A visit says how it came about.** `[1.136.0]` `patient_visits.booked_online`, stored when a booking
 is made, read by `CAME_IN_AS` (`constants/visits.js`) as `walk_in` / `online` / `clinic` on
 my-bookings, my-payments, the results history and the portal's visit list (`lib/visitOrigin.js`
@@ -920,6 +936,19 @@ pair and the evidence: `#53843b`/`#0a71a9` pass every check on both theme surfac
 the normal-vision floor. Same steps in both themes. Tritan separation is 5.2, so every chart using
 the pair also carries a legend and names both series in its tooltip; colour is never the only
 encoding. Median and p90 share one hue at two lightnesses because they are one distribution.
+
+**The drawer is counted at the end of the day, and the count is never overwritten.** `[1.150.0]`
+Cash Count (`billing:process`; an Admin reads the days on Cashier Monitoring on `billing:read`) takes
+the change fund and how many of each note and coin. The server adds them up in centavos
+(`utils/cashCount.js`, its list mirrored in `lib/cashCount.js` and held to it by a test), ignores any
+total a browser sends, and `difference` is a generated column. One current count a day per clinic
+(`uq_cash_counts_current_per_day`), so one drawer: two drawers would change this rule. What was
+expected is a SNAPSHOT, so a later payment cannot restate a count; it shows as "taken after this
+count". A difference needs a note and a recount needs a reason, and a recount supersedes rather than
+overwrites (`is_current`), so a shortage counted away still shows it was found. Up to 7 days late.
+A day before the clinic's first ever count reads "Before counting began" and raises no reminder. Today
+reminds whoever closes (`drawerNeed`, `data-need="cash-count"`, `intent.countDate`).
+`cash-count.spec.js` holds it.
 
 **A money total never comes from the transaction list.** `GET /payments/transactions` is a log of
 receipts *issued*, and it includes ones later reversed — the cashier's cash-up is the screen that
@@ -1312,7 +1341,7 @@ with a link to the printable document.
   - **Money comes from the summary**, never the receipt list, so "yesterday" is the whole of
     yesterday rather than "yesterday by now".
   - **Test contracts:** `data-testid="today-needs"`, each row `today-need` with `data-need`
-    (`no-tests-<visitId>`, `till`, `online`, `worklist-<Category>`,
+    (`no-tests-<visitId>`, `till`, `online`, `cash-count`, `backup`, `worklist-<Category>`,
     `hmo-decisions`, `failed`), plus `today-booking`, `today-takings`,
     `today-departments`. A spec about any other screen opens it first: `helpers/auth.js`
     `openScreen` / `signInTo`.

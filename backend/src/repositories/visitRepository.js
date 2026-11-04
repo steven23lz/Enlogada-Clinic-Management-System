@@ -353,6 +353,10 @@ class VisitRepository {
              u.first_name as created_by_first_name, u.last_name as created_by_last_name,
              pv.status as visit_status,
              q.queue_position, q.patients_ahead,
+             -- [1.149.0] When this visit was last called, per station: { "Cashier": "2026-…" }.
+             (SELECT jsonb_object_agg(s.station, s.last)
+                FROM (SELECT qc.station, MAX(qc.called_at) AS last FROM queue_calls qc
+                       WHERE qc.patient_visit_id = pv.id GROUP BY qc.station) s) AS calls,
              -- [1.122.0] A paid visit cannot be cancelled; the Desk hides Cancel on it.
              EXISTS (
                SELECT 1 FROM payments pay

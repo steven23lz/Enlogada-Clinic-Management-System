@@ -44,6 +44,8 @@ const PROTECTED_EMAILS = [
 // Child-to-parent order. Foreign keys are not all declared ON DELETE CASCADE, so this sequence
 // matters: deleting a parent first fails the constraint and aborts the whole transaction.
 const TRANSACTIONAL_TABLES = [
+  'cash_counts',
+  'queue_calls',
   'notification_reads',
   'notification_events',
   'audit_log',

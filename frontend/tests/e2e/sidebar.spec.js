@@ -74,11 +74,13 @@ test.describe('The sidebar', () => {
     // The Desk's own screen shows it, and it is the number the Desk shows.
     await page.getByRole('button', { name: 'Desk', exact: true }).first().click();
     const badge = page.locator('[data-nav-id="reception-queue"] [data-nav-count]');
-    await expect(badge).toHaveText(/^\d+$/, { timeout: 15000 });
+    // A long run fills today's queue past what a badge shows: "99+" is the right answer then. [1.149.0]
+    await expect(badge).toHaveText(/^\d+\+?$/, { timeout: 15000 });
 
     const inQueue = page.getByLabel('Today at the desk').locator('b').first();
     await expect(inQueue).toHaveText(/^\d+$/, { timeout: 15000 });
-    await expect(badge).toHaveText(await inQueue.innerText());
+    const inTheQueue = Number(await inQueue.innerText());
+    await expect(badge).toHaveText(inTheQueue > 99 ? '99+' : String(inTheQueue));
 
     // The count is aria-hidden: the button is still exactly "Desk".
     await expect(page.getByRole('button', { name: 'Desk', exact: true })).toBeVisible();

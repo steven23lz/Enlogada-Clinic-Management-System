@@ -14,7 +14,7 @@
 import {
   House, Users, ClipboardList, FileText, CreditCard, Calendar,
   FolderKanban, BarChart3, Activity, ShieldCheck, History,
-  Receipt, FlaskConical, Stethoscope, Scan, Wallet, CalendarCog, MessageSquareText } from 'lucide-react';
+  Receipt, FlaskConical, Stethoscope, Scan, Wallet, CalendarCog, MessageSquareText, Calculator } from 'lucide-react';
 
 // Which top-level screen component handles a destination. App.jsx maps these to real
 // components; this module stays free of component imports so it can be used from anywhere
@@ -130,6 +130,9 @@ export const OPS_NAV_GROUPS = [
       // issues a receipt and releases the visit — so it is the same authority as the counter till.
       { id: 'cashier-payments', label: 'Online Payments', icon: Wallet, staffOnly: true, permission: 'billing:process', console: CONSOLE.CASHIER },
       { id: 'cashier-history', label: 'Transaction History', icon: History, staffOnly: true, permission: 'billing:read', console: CONSOLE.CASHIER },
+      // [1.150.0] Counting the drawer is what whoever takes the money does. An Admin reads the same
+      // days on Cashier Monitoring, and does not count.
+      { id: 'cashier-count', label: 'Cash Count', icon: Calculator, staffOnly: true, permission: 'billing:process', console: CONSOLE.CASHIER },
     ],
   },
   {

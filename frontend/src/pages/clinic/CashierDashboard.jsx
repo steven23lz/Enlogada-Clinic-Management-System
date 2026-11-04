@@ -13,13 +13,15 @@ import { useBillingQueue } from '../../hooks/useBillingQueue';
 import { useCheckout } from '../../hooks/useCheckout';
 import { useReceipt } from '../../hooks/useReceipt';
 import { usePaymentReview } from '../../hooks/usePaymentReview';
+import { useCashCount } from '../../hooks/useCashCount';
+import CashCountPanel from '../../components/cashier/CashCountPanel';
 import CollectionsStrip from '../../components/cashier/CollectionsStrip';
 import BillingQueuePanel from '../../components/cashier/BillingQueuePanel';
 import CheckoutTerminal from '../../components/cashier/CheckoutTerminal';
 import TransactionHistoryPanel from '../../components/cashier/TransactionHistoryPanel';
 import OnlinePaymentsPanel from '../../components/cashier/OnlinePaymentsPanel';
 import PaymentConfirmDialog from '../../components/cashier/PaymentConfirmDialog';
-import { Receipt, Printer, History, Wallet, Search } from 'lucide-react';
+import { Receipt, Printer, History, Wallet, Search, Calculator } from 'lucide-react';
 
 // The sidebar's names, so the heading, the breadcrumb and the sidebar all call a screen the same
 // thing (option C3, "the same screens, tidied"). [1.75.0] "Cashier POS & Billing Terminal" was a
@@ -28,23 +30,26 @@ const PAGE_TITLES = {
   'cashier-queue': 'Billing Queue',
   'cashier-payments': 'Online Payments',
   'cashier-history': 'Transaction History',
+  'cashier-count': 'Cash Count',
 };
 
 const PAGE_ICONS = {
   'cashier-queue': Receipt,
   'cashier-payments': Wallet,
   'cashier-history': History,
+  'cashier-count': Calculator,
 };
 
 const PAGE_BLURBS = {
   'cashier-queue': 'Pick a patient, apply a statutory discount, take payment and print the receipt.',
   'cashier-payments': "Patients who paid into the clinic's GCash or bank account and are waiting for you to check the screenshot. Verifying issues a receipt and releases their booking pass.",
   'cashier-history': 'Receipts you and other cashiers have issued, for the daily cash-up. A paid receipt is final.',
+  'cashier-count': "Count the drawer at the end of the day. This works out what should be there, and keeps any difference on record for the Admin.",
 };
 const VALID_VIEWS = Object.keys(PAGE_TITLES);
 
 
-const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
+const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav, intent }) => {
   // Any nav value this component doesn't recognize (e.g. a stale/default 'dashboard') falls
   // back to the primary billing queue view.
   const view = VALID_VIEWS.includes(activeNav) ? activeNav : 'cashier-queue';
@@ -71,6 +76,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
   });
   // Only polls while its own screen is open, like the two above it.
   const review = usePaymentReview({ enabled: view === 'cashier-payments' });
+  // [1.150.0] Today's "the drawer was not counted" opens that day.
+  const count = useCashCount({ enabled: view === 'cashier-count', initialDate: intent?.countDate || null });
 
   // The till, the queue and the receipt are three separate concerns and are wired to each other
   // here rather than inside one another. `checkout.selectedVisit` is read by the queue (to pause polling)
@@ -163,6 +170,8 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav }) => {
         )}
 
         {view === 'cashier-payments' && <OnlinePaymentsPanel review={review} />}
+
+        {view === 'cashier-count' && <CashCountPanel count={count} />}
 
         {view === 'cashier-history' && (
           <TransactionHistoryPanel

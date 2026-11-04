@@ -2,6 +2,7 @@ import React, { forwardRef } from 'react';
 import { ReportDocument, ReportSection, ReportFigures, ReportTable, ReportColumns } from './ReportDocument';
 import { formatCurrency } from '../../lib/currency';
 import { formatDate } from '../../lib/date';
+import { DENOMINATIONS, outcomeWords, pieceLabel, pileValue } from '../../lib/cashCount';
 
 /**
  * What each Reports tab puts on paper. [1.117.0]
@@ -21,6 +22,61 @@ const hourLabel = (hour) => {
   return `${twelve}:00 ${h < 12 ? 'AM' : 'PM'}`;
 };
 const percent = (part, whole) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '—');
+
+/**
+ * One day's count of the drawer, for the sheet that goes in with the cash. [1.150.0] From the saved
+ * count, so it says what was recorded, and not what the form happened to hold.
+ */
+export const CashCountPrint = forwardRef(function CashCountPrint({ day }, ref) {
+  const c = day.current;
+  const piles = DENOMINATIONS
+    .filter((value) => Number(c.pieces[value]) > 0)
+    .map((value) => ({ label: pieceLabel(value), count: c.pieces[value], amount: formatCurrency(pileValue(value, c.pieces[value])) }));
+  if (Number(c.pieces.loose) > 0) piles.push({ label: 'Other coins', count: '', amount: formatCurrency(c.pieces.loose) });
+
+  return (
+    <ReportDocument ref={ref} title="Cash Count" startDate={day.date} endDate={day.date} scope="The clinic's drawer">
+      <ReportSection number={1} title="The drawer">
+        <ReportFigures
+          items={[
+            { label: 'Change fund', value: formatCurrency(c.changeFund) },
+            { label: 'Cash taken', value: formatCurrency(c.expectedCash) },
+            { label: 'Should have been in the drawer', value: formatCurrency(c.expectedInDrawer) },
+            { label: 'Counted', value: formatCurrency(c.counted) },
+            { label: 'Result', value: outcomeWords(c.difference) },
+            { label: 'Counted by', value: c.countedBy },
+          ]}
+        />
+      </ReportSection>
+      {c.note && <ReportSection number={2} title="Note"><p>{c.note}</p></ReportSection>}
+      <ReportSection number={c.note ? 3 : 2} title="Notes and coins counted">
+        <ReportTable
+          columns={[
+            { key: 'label', label: 'Note or coin' },
+            { key: 'count', label: 'How many', align: 'right' },
+            { key: 'amount', label: 'Amount', align: 'right' },
+          ]}
+          rows={piles}
+          total={{ label: 'Total', count: '', amount: formatCurrency(c.counted) }}
+          empty="The drawer was empty."
+        />
+      </ReportSection>
+      <ReportSection
+        number={c.note ? 4 : 3}
+        title="Taken by other methods"
+        note="This money never entered the drawer, so check it against the statements."
+      >
+        <ReportFigures
+          items={[
+            { label: 'GCash', value: formatCurrency(c.expectedGcash) },
+            { label: 'Bank', value: formatCurrency(c.expectedBank) },
+            { label: 'Receipts, every method', value: c.receipts },
+          ]}
+        />
+      </ReportSection>
+    </ReportDocument>
+  );
+});
 
 /** Departments: takings and sales by service. [1.119.0] No front desk or turnaround: see OperationsReport. */
 export const OperationsPrint = forwardRef(function OperationsPrint({ report, startDate, endDate }, ref) {

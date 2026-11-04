@@ -1,6 +1,6 @@
 # Handoff: open threads
 
-Last updated 2026-11-04, after [1.148.0]. For the next Claude Code agent working in this repo.
+Last updated 2026-11-04, after [1.150.0]. For the next Claude Code agent working in this repo.
 CLAUDE.md and the project memory load on their own; this file holds what they do not.
 
 The diagram update this file used to brief is done: [1.133.0] made it and [1.134.0] checked it
@@ -33,6 +33,15 @@ built; each fix below is what was agreed. If built, in this order: 3, then 2, th
 
 ## Open threads
 
+- **[1.150.0] Cash count.** On another database run `node src/scripts/migrateCashCounts.js`. It assumes
+  one drawer for the clinic, a choice made without Steven, to confirm: two drawers would need a count
+  per cashier. The flowcharts and DFDs do not show calling or counting yet; the use cases and ERD do.
+- **[1.149.0] "Now serving" screen.** On another database run `node src/scripts/migrateQueueCalls.js`.
+  Set up: open the Desk's "Waiting-room screen" on the TV's PC, press Full screen and Turn on sound
+  (the browser asks for that press every time the page is opened). Production's shared limit of 100
+  requests per 15 minutes per address looks low for a clinic where every PC shares one address on a
+  cloud host: the screen has its own allowance now, but the staff screens do not. Decide with the
+  deployment question below.
 - **[1.148.0] Seven automations** (backups, three patient emails, retention, HMO countdown,
   worklist target). On another database run `node src/scripts/migratePatientMessages.js`. Left for
   Steven:

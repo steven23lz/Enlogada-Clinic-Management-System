@@ -1,11 +1,98 @@
 # Database Migration & Schema History
 
+## [1.150.0] - 2026-11-04 (The end-of-day cash count)
+
+Run on an existing database: `node src/scripts/migrateCashCounts.js` (one table, `--rollback`
+reverses it). Steven chose this from the list of features that fit the approved modules (8 Cashier,
+14 Payment).
+
+The app knew to the centavo what the till took, and nothing about what was in the drawer. A shortage
+surfaced, if at all, when someone counted by hand, with nowhere to write it down. Now:
+
+- **Cash Count** (`cashier-count`, `billing:process`): the day's cash, GCash and bank from the one cash
+  book (`findTransactionSummary`), and a form that takes the change fund and how many of each note and
+  coin. The difference is stated as it is typed. GCash and bank are shown and not counted: that money
+  never entered the drawer.
+- **The server does the adding** (`utils/cashCount.js`, in centavos, unit-tested, and the frontend's
+  live total is held to it by a test that reads its list). A `counted` sent by a browser is ignored,
+  and `difference` is a generated column, so it cannot disagree with the figures beside it.
+- **One drawer, one current count a day** (`uq_cash_counts_current_per_day`). Whoever closes counts the
+  clinic's whole drawer, whichever cashier took each receipt. If the clinic ever runs two drawers, this
+  is the rule to change.
+- **What was expected is a snapshot.** A payment taken after the count cannot change what it was
+  measured against ([1.30.0]'s closed-day rule, applied to the drawer). It is named beside the count:
+  "₱190.00 taken after this count".
+- **A shortage or excess needs a note; a recount needs a reason.** A recount adds a version and
+  supersedes the last (`is_current`, as `test_results` does), so a shortage counted away still shows
+  it was found. Each count is an Activity Log line (`cash.day_counted`, `cash.day_recounted`), and a
+  difference rings the Admin's bell.
+- **A day can be counted up to 7 days later**, for a forgotten Friday. Past that it stays on record as
+  not counted.
+- **An Admin reads and does not count** (`billing:read`): Cashier Monitoring gains "Closed days", one
+  row per day that took money, paged at the server, totals from the summary. A day with no count says
+  "Not counted", because the absence is the finding. A day before the clinic's first ever count says
+  "Before counting began", and raises no reminder: nobody failed to count a day before this existed.
+- **Today reminds whoever closes** (`drawerNeed`, `data-need="cash-count"`): a past day left uncounted
+  first, its button opening that day (`intent.countDate`); then today's, from half an hour before
+  closing, once cash has been taken.
+- **The saved count prints** (`CashCountPrint`), for the sheet that goes in with the cash.
+- The demo seed counts each past day: nearly all balance, two are a few pesos out with a note, and one
+  was never counted. The purge removes the counts a run made and puts back what they replaced; the
+  reset clears them. `cash_counts` is financial, so retention leaves it alone.
+
+**Diagrams:** the use cases gain Call Patient and Count the Drawer, and the ERD gains `queue_calls`,
+`cash_counts` and `patient_invitations` (missing since [1.136.0]), so it draws all 36 tables. The
+flowcharts and DFDs do not show these two features yet.
+
+**Tests:** `cash-count.spec.js` (9); `cashCount.test.js` in both tiers; `drawerNeed` in `today.test.js`.
+
+## [1.149.0] - 2026-11-04 (The waiting-room "Now serving" screen)
+
+Run on an existing database: `node src/scripts/migrateQueueCalls.js` (one table, `--rollback`
+reverses it). Steven chose this from the list of features that fit the approved modules (7
+Receptionist, 18 Notification).
+
+The Desk's call button spoke the number on the reception PC's own speakers and recorded nothing;
+the till and the departments had no way to call at all, so a patient in the waiting room listened
+for a voice from one room. Now:
+
+- **`?display=queue`** is the TV's page (`pages/public/NowServing.jsx`, opened from the Desk's
+  "Waiting-room screen"): five tiles that never move (Front Desk, Cashier, Laboratory, Ultrasound,
+  X-Ray), each with its current ticket, and "Called just before". It needs no sign-in, because a TV
+  has no account, so it carries a ticket, a station and a time and nothing that names a person:
+  `queueCallRepository.findTodays` selects only those, `utils/nowServing.js` copies only those, and
+  `now-serving.spec.js` holds it. A new call lights its tile. "Turn on sound" adds a chime and the
+  spoken number, because a browser allows sound only after someone presses something. A failed read
+  keeps the last board and says it has stopped updating.
+- **One Call button** (`components/queue/CallButton.jsx`) on the Desk, the Billing Queue and every
+  worklist. It says when that station last called this visit (`calls` on `/visits/active`,
+  `last_called_at` on `/results/pending`). A call changes no status: it asks a patient to come, it
+  does not say they did.
+- **No screen open:** the reply carries `displayOpen` (a screen has asked in the last 20 seconds).
+  Without one nobody would see the call, so the calling PC says it aloud, which is all the old
+  button did, and the toast says so.
+- **Who may call answers to the screen it comes from** (`constants/queueStations.js`, in the
+  service): the Front Desk `visits:create`, the Cashier `billing:process`, a department
+  `results:write` and cover for that department. No new permission, so no new row on the grid.
+- **What is refused (409):** no ticket yet (a booking not checked in); a ticket from an earlier day,
+  because numbers restart daily and someone else may hold it today, so the worklist offers no button
+  for one; a paid visit to the Cashier; a department with nothing waiting for this patient, which also
+  covers an unpaid visit (not released to it).
+- **Its own rate limit.** The screen asks every 4 seconds, 225 times per 15 minutes, and production's
+  shared limit is 100, so it would have stopped by mid-morning. `displayLimiter` (1,500) is its own,
+  and the shared limiter skips it. The answer has nothing that changes between calls, so an unchanged
+  board is a 304.
+- A call goes with its visit (`ON DELETE CASCADE`: the unpaid sweep, the reset, the purge). The
+  retention pass removes calls after 30 days. The demo seed calls the next patient at each station.
+
+**Tests:** `now-serving.spec.js` (10); `nowServing.test.js` in both tiers.
+
 ## [1.148.0] - 2026-11-04 (What only happened if somebody remembered, automated)
 
 Run on an existing database: `node src/scripts/migratePatientMessages.js` (three nullable
 timestamps, `--rollback` reverses it). Steven asked whether the main processes had a bug, a rule, or
 anything to improve or automate. The walk-through found no new broken rule; it found work that
-happened only when a person remembered it. He chose all seven.
+happened only when a person remembered it. Steven chose all seven.
 
 1. **A nightly backup, which nothing made before.** `services/backupService.js`, swept every five
    minutes by `jobs/backupScheduler.js`: due after `BACKUP_AT` (18:00), and at once whenever the
