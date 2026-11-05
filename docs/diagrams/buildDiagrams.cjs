@@ -129,12 +129,18 @@ function flowchart(spec) {
   const columns = spec.columns;
   // Column x positions: a column is wider when one of its steps has a side branch. A chart with
   // its login inside the first column starts further right, because the loop sits to its left.
-  const widths = columns.map((col) => NODE_W + (col.some((s) => s.side) ? SIDE_W + 36 : 0));
-  const left = columns[0].some((s) => s.forgot) ? 60 + FORGOT_REACH : 60;
+  // Several branches ending in one column each take a lane to its right, and the column makes room.
+  const endLanes = (col) => col.filter((s) => s.side && s.side.toEnd === true).length;
+  const widths = columns.map((col) => NODE_W + (col.some((s) => s.side) ? SIDE_W + 36 : 0)
+    + Math.max(0, endLanes(col) - 1) * 20);
+  const left =columns[0].some((s) => s.forgot) ? 60 + FORGOT_REACH : 60;
+  // A chained chart with a branch that ends early needs room for that line's lane beside the link
+  // into the next column, or the two run 4px apart.
+  const gap = spec.colGap || COL_GAP;
   const xs = [];
   let x = left;
-  widths.forEach((w) => { xs.push(x); x += w + COL_GAP; });
-  const totalW = x - COL_GAP - left;
+  widths.forEach((w) => { xs.push(x); x += w + gap; });
+  const totalW = x - gap - left;
 
   // The paper's own header, which Steven asked for: the actor, Login, the access check and the
   // landing screen in ONE centred stack above the columns, with the no branch going left to the
@@ -163,9 +169,11 @@ function flowchart(spec) {
   const lastOfColumn = [];
   const firstOfColumn = [];
   const merges = [];
-  let endLane = -1;
   columns.forEach((col, ci) => {
     const cx = xs[ci];
+    // The lowest branch takes the nearest lane. Numbered the other way round, a lower box's line ran
+    // out across the lanes of every box above it, and a crossing reads as a join.
+    let endLane = endLanes(col);
     let y = topY;
     // Place every step in the column first, so a side branch knows the step it rejoins.
     const main = col.map((step) => {
@@ -210,7 +218,7 @@ function flowchart(spec) {
           // lane of its own: straight down out of the box, which is the obvious route, runs the
           // line through every side box below it in the same column — the Desk's no-show branch
           // crossed three of them.
-          endLane += 1;
+          endLane = Math.max(0, endLane - 1);
           merges.push({ cell: side, lane: cx + NODE_W + 36 + SIDE_W + 22 + endLane * 20 });
         } else {
           // Down the side column, across the gap above the step it rejoins, and into its TOP.
@@ -247,7 +255,7 @@ function flowchart(spec) {
       const prev = lastOfColumn[ci - 1];
       const next = firstOfColumn[ci];
       if (!prev || !next) continue;
-      const gapX = xs[ci] - COL_GAP / 2;
+      const gapX = xs[ci] - gap / 2;
       p.edge(prev, next, '', S.edge + 'exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;',
         [[gapX, prev.y + prev.h / 2], [gapX, linkY], [next.x + next.w / 2, linkY]]);
     }
@@ -275,7 +283,7 @@ function flowchart(spec) {
     // closes the side column off below); the arc hop says the two only pass.
     ...merges.map((m) => (m.down
       ? { cell: m.cell, x: m.cell.x + m.cell.w / 2, from: 'bottom', hop: true }
-      : { cell: m.cell, x: m.lane, from: 'side' })),
+      : { cell: m.cell, x: m.lane, from: 'side', hop: spec.chain })),
   ].sort((a, b) => a.x - b.x);
   const endCx = left + totalW / 2;
   const span = (into.length - 1) * ENTRY_GAP;
@@ -314,14 +322,18 @@ function flowchart(spec) {
   return p;
 }
 
+// A Super Admin also reaches every Admin screen; this chart draws what only they do, plus the
+// screens they run. A refund is theirs by role, never on a receipt they took themselves [1.155.0].
 const SUPER_ADMIN_FLOW = {
   name: 'Super Admin', actor: 'Super Admin', landing: 'Today',
   columns: [
     [{ k: 'proc', l: 'Who Sees What' }, { k: 'proc', l: 'Edit role access' }, { k: 'proc', l: 'Review changes and save' }],
     [{ k: 'proc', l: 'One Person' }, { k: 'proc', l: 'Grant or revoke access' }, { k: 'proc', l: 'Change is audited' }],
-    [{ k: 'proc', l: 'Staff Accounts' }, { k: 'proc', l: 'Add or deactivate staff' }],
-    [{ k: 'proc', l: 'Services Catalog' }, { k: 'proc', l: 'Edit tests and prices' }],
-    [{ k: 'proc', l: 'Payment Methods' }, { k: 'proc', l: 'Publish GCash and QR' }],
+    [{ k: 'proc', l: 'Staff and Elevated Accounts' }, { k: 'proc', l: 'Add or deactivate accounts' }],
+    [{ k: 'proc', l: 'Services Catalog' }, { k: 'proc', l: 'Edit tests, prices and packages' }],
+    [{ k: 'proc', l: 'Payment Methods' }, { k: 'proc', l: 'Publish GCash and QR' }, { k: 'proc', l: 'Set one or per-cashier drawer' }],
+    [{ k: 'proc', l: 'Transaction History' }, { k: 'proc', l: 'Open a receipt' }, { k: 'proc', l: 'Refund: pick case and tests' },
+      { k: 'proc', l: 'Record reason and money back' }, { k: 'proc', l: 'Patient emailed, receipt marked' }],
     [{ k: 'proc', l: 'Clinic Schedule' }, { k: 'proc', l: 'Set hours and closures' }, { k: 'proc', l: 'Affected patients emailed' }],
     [{ k: 'proc', l: 'Reports' }, { k: 'proc', l: 'Generate report' }, { k: 'io', l: 'Print A4 or export Excel' }],
     [{ k: 'proc', l: 'Patient Feedback' }, { k: 'proc', l: 'Manage survey questions' }, { k: 'proc', l: 'Review visit feedback' }],
@@ -329,17 +341,24 @@ const SUPER_ADMIN_FLOW = {
   ],
 };
 
+// A package part-covered by an HMO goes back to each test's own price [1.159.0], whichever way the
+// lines were decided, so the check comes after both branches have rejoined.
 const ADMIN_FLOW = {
   name: 'Admin', actor: 'Admin', landing: 'Today',
   columns: [
     [{ k: 'proc', l: 'Service Requests' }, { k: 'proc', l: 'Open HMO claim and deadline' },
       { k: 'dec', l: 'Approve the claim?', mainLabel: 'yes',
         side: { l: 'Record refusal reason', label: 'no', mergeTo: 2 } },
-      { k: 'proc', l: 'Record approval code' }, { k: 'proc', l: 'Notify cashier and patient' }],
+      { k: 'proc', l: 'Record approval code' },
+      { k: 'dec', l: 'Only part of a package covered?', mainLabel: 'no',
+        side: { l: 'Tests back to own prices', label: 'yes' } },
+      { k: 'proc', l: 'Notify cashier and patient' }],
     [{ k: 'proc', l: 'Appointments' }, { k: 'proc', l: 'View bookings and moves' }],
-    [{ k: 'proc', l: 'Patient Records' }, { k: 'proc', l: 'Search, correct or archive' }, { k: 'io', l: 'Print record' }],
-    [{ k: 'proc', l: 'Cashier Monitoring' }, { k: 'proc', l: 'Review cashier takings' }],
+    [{ k: 'proc', l: 'Patient Records' }, { k: 'proc', l: 'Search, correct or archive' }, { k: 'proc', l: 'Invite or unlink portal access' }, { k: 'io', l: 'View or print a report' }],
+    [{ k: 'proc', l: 'Cashier Monitoring' }, { k: 'proc', l: 'Review takings and cash counts' }],
     [{ k: 'proc', l: 'Staff Accounts' }, { k: 'proc', l: 'Add or update staff' }],
+    [{ k: 'proc', l: 'Services Catalog' }, { k: 'proc', l: 'Edit tests, prices and packages' }],
+    [{ k: 'proc', l: 'Clinic Schedule' }, { k: 'proc', l: 'Set hours and closures' }, { k: 'proc', l: 'Affected patients emailed' }],
     [{ k: 'proc', l: 'Reports' }, { k: 'proc', l: 'Generate report' }, { k: 'io', l: 'Print A4 or export Excel' }],
     [{ k: 'proc', l: 'Patient Feedback' }, { k: 'proc', l: 'Manage survey questions' }, { k: 'proc', l: 'Review visit feedback' }],
     [{ k: 'proc', l: 'Activity Log' }, { k: 'proc', l: 'Review audit trail' }],
@@ -367,6 +386,9 @@ const RECEPTIONIST_FLOW = {
         side: { l: 'Pick tests, start walk-in visit', label: 'no', mergeTo: 2 } },
       { k: 'proc', l: 'Confirm tests, check in' },
       { k: 'io', l: 'Issue queue ticket' },
+      // Until a department has started [1.156.0]: the ticket goes, and the booking returns to its date.
+      { k: 'dec', l: 'Checked in by mistake?', mainLabel: 'no',
+        side: { l: 'Undo check-in with a reason', label: 'yes', toEnd: true } },
       { k: 'dec', l: 'HMO patient?', mainLabel: 'no',
         side: { l: 'Record card, send to Admin', label: 'yes' } },
       { k: 'dec', l: 'Already paid?', mainLabel: 'no',
@@ -374,21 +396,24 @@ const RECEPTIONIST_FLOW = {
       { k: 'proc', l: 'Send patient to the cashier' }],
     [{ k: 'proc', l: 'Patient Records' },
       { k: 'proc', l: 'Open patient file' },
-      { k: 'proc', l: 'Link walk-in to account' }],
+      { k: 'proc', l: 'Invite patient to the portal' }],
     [{ k: 'proc', l: 'Visit History' },
       { k: 'proc', l: 'Review past visits' },
       { k: 'proc', l: 'Record paper feedback' }],
   ],
 };
 
-// The till: one bill, one receipt, and online payment proof verification.
-// Before payment is taken, the cashier confirms the final list of tests with the patient.
+// The till: one bill, one receipt, online payment proof verification, and the day's cash count.
+// Before payment is taken, the cashier confirms the final list of tests with the patient. A pending
+// HMO decision stops the till unless the claim is withdrawn and the bill charged in full [1.123.0].
 const CASHIER_FLOW = {
   name: 'Cashier', actor: 'Cashier', landing: 'Today',
   columns: [
     [{ k: 'proc', l: 'Billing Queue' },
       { k: 'proc', l: 'Select patient to bill' },
       { k: 'proc', l: 'System computes the bill' },
+      { k: 'dec', l: 'HMO decision pending?', mainLabel: 'no',
+        side: { l: 'Wait, or withdraw the claim', label: 'yes' } },
       { k: 'dec', l: 'Senior or PWD ID?', mainLabel: 'no',
         side: { l: 'Apply 20% discount', label: 'yes' } },
       { k: 'proc', l: 'Confirm final tests' },
@@ -404,6 +429,15 @@ const CASHIER_FLOW = {
       { k: 'proc', l: 'Pick date range' },
       { k: 'proc', l: 'View takings and receipts' },
       { k: 'io', l: 'Print receipt copy' }],
+    // [1.150.0] The server adds it up, and a difference needs a note.
+    [{ k: 'proc', l: 'Cash Count' },
+      { k: 'proc', l: 'Enter change fund and count' },
+      { k: 'dec', l: 'Matches expected cash?', mainLabel: 'yes',
+        side: { l: 'Write a note on the difference', label: 'no' } },
+      { k: 'proc', l: 'Save the count' },
+      { k: 'io', l: 'Print count sheet' }],
+    [{ k: 'proc', l: 'Patient Records' },
+      { k: 'proc', l: 'Open patient file' }],
   ],
 };
 
@@ -417,6 +451,10 @@ function departmentFlow(dept, formStep) {
       [{ k: 'proc', l: `${dept} Worklist` },
         { k: 'proc', l: 'Open a released ticket' },
         { k: 'proc', l: 'Perform the test' },
+        // [1.163.0] 60 minutes from joining the queue, or 15 minutes before closing, then the
+        // department, Admin and SuperAdmin are alerted until the file is uploaded.
+        { k: 'dec', l: 'Uploaded by 60 min or closing?', mainLabel: 'yes',
+          side: { l: 'Alert staff and Admin', label: 'no' } },
         { k: 'io', l: formStep },
         { k: 'dec', l: 'Ready to release?', mainLabel: 'yes',
           side: { l: 'Save for later', label: 'no', toEnd: true } },
@@ -424,45 +462,58 @@ function departmentFlow(dept, formStep) {
         { k: 'dec', l: 'Email report to patient?', mainLabel: 'no',
           side: { l: 'Send report by email', label: 'yes' } },
         { k: 'proc', l: 'Ticket moves to history' }],
+      // [1.156.0] A wrong patient or file is withdrawn; a wrong figure is amended, and the old
+      // version stays readable until the new one is out.
       [{ k: 'proc', l: `${dept} History` },
         { k: 'proc', l: 'Search past reports' },
-        { k: 'dec', l: 'Correction needed?', mainLabel: 'no',
+        { k: 'dec', l: 'Wrong patient or file?', mainLabel: 'no',
+          side: { l: 'Withdraw with a reason', label: 'yes', toEnd: true } },
+        { k: 'dec', l: 'Wrong figure on the report?', mainLabel: 'no',
           side: { l: 'Release corrected report', label: 'yes' } },
         { k: 'io', l: 'Print or email report' }],
+      [{ k: 'proc', l: 'Patient Records' },
+        { k: 'proc', l: 'Open patient and results' }],
     ],
   };
 }
 
 const CLIENT_FLOW = {
   name: 'Client Patient', actor: 'Client / Patient', landing: 'View services', gate: false,
-  start: 'Open website', chain: true,
+  start: 'Open website', chain: true, colGap: 100,
   columns: [
     // Services are public, so a patient's login comes here rather than in the header. Entering the
     // emailed code finishes a sign-up already signed in, so a new account rejoins past the login.
+    // With no payment account published, online booking is closed [1.153.0]. A Senior or PWD
+    // declares it when booking, because a paid receipt is final [1.146.0].
     [{ k: 'proc', l: 'Book a visit' },
-      { k: 'dec', l: 'Have an account?', mainLabel: 'yes', side: { l: 'Register and verify code', label: 'no', mergeTo: 3 } },
+      { k: 'dec', l: 'Have an account?', mainLabel: 'yes', side: { l: 'Register, agree, verify code', label: 'no', mergeTo: 3 } },
       { k: 'proc', l: 'Login' },
       { k: 'dec', l: 'Access Granted?', mainLabel: 'yes', forgot: true },
       { k: 'proc', l: 'Choose patient profile' },
+      { k: 'dec', l: 'Online booking open?', mainLabel: 'yes', side: { l: 'Told that booking is closed', label: 'no', toEnd: true } },
       { k: 'proc', l: 'Pick date, time and tests' },
+      { k: 'dec', l: 'Senior or PWD?', mainLabel: 'no', side: { l: 'Declare discount with ID photo', label: 'yes' } },
       { k: 'dec', l: 'HMO patient?', mainLabel: 'no', side: { l: 'Attach HMO card and request', label: 'yes' } },
       { k: 'proc', l: 'Confirm booking' }],
     // Payment first [1.123.0] [1.132.0]: a self-pay booking holds its slot for the payment window,
     // an HMO booking until its start while the claim waits; neither paid nor approved in time,
-    // the slot is released and the patient emailed.
+    // the slot is released and the patient emailed. They may release it sooner themselves [1.146.0].
     [{ k: 'io', l: 'Get reference and email' },
+      { k: 'dec', l: 'Keep the booking?', mainLabel: 'yes', side: { l: 'Release unpaid booking', label: 'no', toEnd: true } },
       { k: 'dec', l: 'Self-pay booking?', mainLabel: 'yes', side: { l: 'Wait for HMO decision', label: 'no', mergeTo: 2 } },
       { k: 'io', l: 'Confirm tests, pay, upload proof' },
       { k: 'dec', l: 'Paid or approved in time?', mainLabel: 'yes',
         side: { l: 'Slot released, emailed', label: 'no', toEnd: 'down' } },
       { k: 'io', l: 'Get QR booking pass' }],
+    // A paid booking nobody came for stays, to be moved, and its patient is emailed the next morning.
     [{ k: 'io', l: 'Receive reminder email' },
       { k: 'dec', l: 'Need another date?', mainLabel: 'no', side: { l: 'Reschedule booking', label: 'yes' } },
-      { k: 'proc', l: 'Arrive at clinic' },
+      { k: 'dec', l: 'Arrived on the day?', mainLabel: 'yes', side: { l: 'Emailed, booking to be moved', label: 'no', toEnd: true } },
       { k: 'proc', l: 'Desk scans QR pass' },
       { k: 'io', l: 'Get queue ticket' }],
     [{ k: 'proc', l: 'Test performed' },
       { k: 'proc', l: 'Result released by clinic' },
+      { k: 'io', l: 'Get results-ready email' },
       { k: 'io', l: 'View digital copy in portal' },
       { k: 'io', l: 'Answer visit feedback' }],
   ],
@@ -479,7 +530,10 @@ function useCase(spec) {
     const y = 80 + i * (h + gap);
     const cell = p.node(label, 320, y, w, h, S.ellipse);
     placed[label] = cell;
-    p.edge({ id: p.cells[0].match(/id="(n\d+)"/)[1] }, cell, '', S.edgeStraight);
+    // To each ellipse's left point. They all share that x, so no line reaches another ellipse; aimed
+    // at the centre, the steep ones at each end ran through the names of the cases beside them.
+    // They fan out from one point at the actor's middle, which also keeps them off the actor's name.
+    p.edge({ id: p.cells[0].match(/id="(n\d+)"/)[1] }, cell, '', `${S.edgeStraight}exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;`);
   });
   // Each extension takes its base case's row, or the next free row below it: two extending one
   // case (Book Appointment, [1.146.0]) were drawn one on top of the other.
@@ -490,40 +544,45 @@ function useCase(spec) {
     let y = from.y;
     while (taken.has(y)) y += h + gap;
     taken.add(y);
-    const cell = p.node(rel.to, 680, y, w, h, S.ellipse);
-    p.edge(from, cell, rel.kind === 'include' ? '«include»' : '«extend»', S.edgeDashed);
+    const cell = p.node(rel.to, 760, y, w, h, S.ellipse);
+    p.edge(from, cell, rel.kind === 'include' ? '«include»' : '«extend»',
+      `${S.edgeDashed}exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;`);
   });
   return p;
 }
 
+// Every account signs in the same way, so every sheet shows the same way back in.
+const RESET = { from: 'Login', to: 'Reset Forgotten Password', kind: 'extend' };
+
+const departmentCases = (name, actor, worklist, upload, print) => ({
+  name, actor,
+  cases: ['Login', 'View Today', 'Receive No-Upload Alert', worklist, upload, 'Release Result', 'Replace Released Report', 'Withdraw Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
+  relations: [RESET, { from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: print, kind: 'extend' }],
+});
+
 const USE_CASES = [
   { name: 'Super Admin', actor: 'Super Admin',
-    cases: ['Login', 'View Today', 'Manage Roles and Permissions', 'Manage Per-Account Access', 'Manage Staff and Admin Accounts', 'Manage Services, Packages and Pricing', 'Publish Payment Channels', 'Manage Clinic Schedule', 'Generate Reports', 'View Patient Feedback', 'View Activity Log', 'Archive and Restore Patient Records', 'Logout'],
-    relations: [{ from: 'Manage Roles and Permissions', to: 'Record Change in Activity Log', kind: 'include' }, { from: 'Generate Reports', to: 'Print or Export Report', kind: 'extend' }, { from: 'View Patient Feedback', to: 'Manage Feedback Questions', kind: 'extend' }] },
+    cases: ['Login', 'View Today', 'Manage Roles and Permissions', 'Manage Per-Account Access', 'Manage Elevated Accounts', 'Manage Staff Accounts', 'Manage Services, Packages and Pricing', 'Publish Payment Channels', 'Set Cash Drawer Mode', 'Refund a Receipt', 'Manage Clinic Schedule', 'Generate Reports', 'View Patient Feedback', 'View Activity Log', 'Archive and Restore Patient Records', 'Logout'],
+    relations: [RESET, { from: 'Manage Roles and Permissions', to: 'Record Change in Activity Log', kind: 'include' }, { from: 'Refund a Receipt', to: 'Email Patient and Mark Receipt', kind: 'include' }, { from: 'Generate Reports', to: 'Print or Export Report', kind: 'extend' }, { from: 'View Patient Feedback', to: 'Manage Feedback Questions', kind: 'extend' }] },
   { name: 'Admin', actor: 'Admin',
-    cases: ['Login', 'View Today', 'Decide HMO Claims', 'Manage Staff Accounts', 'View Appointments', 'Manage Patient Records', 'Archive and Restore Patient Records', 'Monitor Cashier Transactions', 'Generate Reports', 'View Patient Feedback', 'View Activity Log', 'Logout'],
-    relations: [{ from: 'Monitor Cashier Transactions', to: 'View Daily Cash Counts', kind: 'extend' }, { from: 'Manage Patient Records', to: 'Print Records and Results', kind: 'extend' }, { from: 'Generate Reports', to: 'Print or Export Report', kind: 'extend' }, { from: 'View Patient Feedback', to: 'Manage Feedback Questions', kind: 'extend' }] },
+    cases: ['Login', 'View Today', 'Decide HMO Claims', 'Manage Staff Accounts', 'Manage Services, Packages and Pricing', 'Manage Clinic Schedule', 'View Appointments', 'Manage Patient Records', 'Archive and Restore Patient Records', 'Monitor Cashier Transactions', 'Receive No-Upload Alert', 'Generate Reports', 'View Patient Feedback', 'View Activity Log', 'Logout'],
+    relations: [RESET, { from: 'Decide HMO Claims', to: 'Reprice Part-Covered Package', kind: 'include' }, { from: 'Monitor Cashier Transactions', to: 'View Daily Cash Counts', kind: 'extend' }, { from: 'Manage Patient Records', to: 'Print Records and Results', kind: 'extend' }, { from: 'Manage Patient Records', to: 'Invite or Unlink Portal Access', kind: 'extend' }, { from: 'Generate Reports', to: 'Print or Export Report', kind: 'extend' }, { from: 'View Patient Feedback', to: 'Manage Feedback Questions', kind: 'extend' }] },
   { name: 'Receptionist', actor: 'Receptionist',
-    cases: ['Login', 'View Today', 'Find Patient or Booking', 'Verify QR Code', 'Check In Patient', 'Register Walk-In', 'Assign Tests to a Visit', 'Raise HMO Claim', 'Reschedule Booking', 'View Patient Records', 'View Visit History', 'Logout'],
-    relations: [{ from: 'Check In Patient', to: 'Issue Queue Ticket', kind: 'include' }, { from: 'Register Walk-In', to: 'Create Patient Record', kind: 'include' }, { from: 'View Patient Records', to: 'Link Walk-In to Account', kind: 'extend' }, { from: 'View Visit History', to: 'Record Paper Feedback', kind: 'extend' }] },
+    cases: ['Login', 'View Today', 'Find Patient or Booking', 'Verify QR Code', 'Check In Patient', 'Undo Check-In', 'Register Walk-In', 'Assign Tests to a Visit', 'Raise HMO Claim', 'Reschedule Booking', 'View Patient Records', 'View Visit History', 'Logout'],
+    relations: [RESET, { from: 'Check In Patient', to: 'Issue Queue Ticket', kind: 'include' }, { from: 'Register Walk-In', to: 'Create Patient Record', kind: 'include' }, { from: 'View Patient Records', to: 'Invite Patient to the Portal', kind: 'extend' }, { from: 'View Visit History', to: 'Record Paper Feedback', kind: 'extend' }] },
   { name: 'Cashier', actor: 'Cashier',
-    cases: ['Login', 'View Today', 'Confirm Final Tests', 'Process Billing and Payment', 'Apply Statutory Discount', 'Withdraw HMO Claim', 'Review Online Payment Proof', 'View Transaction History', 'Count the Drawer', 'Logout'],
+    cases: ['Login', 'View Today', 'Confirm Final Tests', 'Process Billing and Payment', 'Apply Statutory Discount', 'Withdraw HMO Claim', 'Review Online Payment Proof', 'View Transaction History', 'Count the Drawer', 'View Patient Records', 'Logout'],
     // [1.146.0] A Senior Citizen / PWD discount declared online is granted once its ID is checked.
-    relations: [{ from: 'Process Billing and Payment', to: 'Issue Receipt', kind: 'include' }, { from: 'Count the Drawer', to: 'Print Cash Count Sheet', kind: 'extend' }, { from: 'View Transaction History', to: 'Print Receipt Copy', kind: 'extend' }, { from: 'Review Online Payment Proof', to: 'Check Declared Senior/PWD ID', kind: 'extend' }] },
-  { name: 'Laboratory Staff', actor: 'Laboratory Staff',
-    cases: ['Login', 'View Today', 'View Laboratory Worklist', 'Upload Laboratory Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
-    relations: [{ from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: 'Print Laboratory Result', kind: 'extend' }] },
-  { name: 'Ultrasound Staff', actor: 'Ultrasound Staff',
-    cases: ['Login', 'View Today', 'View Ultrasound Worklist', 'Upload Ultrasound Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
-    relations: [{ from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: 'Print Ultrasound Result', kind: 'extend' }] },
+    relations: [RESET, { from: 'Process Billing and Payment', to: 'Issue Receipt', kind: 'include' }, { from: 'Count the Drawer', to: 'Print Cash Count Sheet', kind: 'extend' }, { from: 'View Transaction History', to: 'Print Receipt Copy', kind: 'extend' }, { from: 'Review Online Payment Proof', to: 'Check Declared Senior/PWD ID', kind: 'extend' }] },
+  departmentCases('Laboratory Staff', 'Laboratory Staff', 'View Laboratory Worklist', 'Upload Laboratory Report', 'Print Laboratory Result'),
+  departmentCases('Ultrasound Staff', 'Ultrasound Staff', 'View Ultrasound Worklist', 'Upload Ultrasound Report', 'Print Ultrasound Result'),
   // [1.143.0] X-ray uploads and releases its reports here again, as the other departments do.
-  { name: 'Xray Staff', actor: 'X-Ray Staff',
-    cases: ['Login', 'View Today', 'View X-Ray Worklist', 'Upload X-Ray Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
-    relations: [{ from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: 'Print X-Ray Result', kind: 'extend' }] },
+  departmentCases('Xray Staff', 'X-Ray Staff', 'View X-Ray Worklist', 'Upload X-Ray Report', 'Print X-Ray Result'),
   { name: 'Client Patient', actor: 'Client / Patient',
     // [1.146.0] An unpaid booking can be released by the patient, and a Senior / PWD discount declared.
-    cases: ['Register Account', 'Login', 'View Available Services', 'Manage Patient Profiles', 'Book Appointment', "Upload Doctor's Request", 'Reschedule Booking', 'Release Unpaid Booking', 'Pay Online and Upload Proof', 'View Digital Copy of Results', 'View Receipt', 'Answer Visit Feedback', 'Manage Account Profile', 'Logout'],
-    relations: [{ from: 'Register Account', to: 'Verify Emailed Code', kind: 'include' }, { from: 'Login', to: 'Sign In with Google', kind: 'extend' }, { from: 'Book Appointment', to: 'Generate QR Booking Pass', kind: 'extend' }, { from: 'Book Appointment', to: 'Declare Senior/PWD Discount', kind: 'extend' }, { from: 'Pay Online and Upload Proof', to: 'Confirm Final Tests', kind: 'include' }] },
+    // [1.136.0] A walk-in's record reaches an account by invitation. [1.126.0] Anyone can check a report's code.
+    cases: ['Register Account', 'Login', 'View Available Services', 'Manage Patient Profiles', 'Accept Record Invitation', 'Book Appointment', "Upload Doctor's Request", 'Reschedule Booking', 'Release Unpaid Booking', 'Pay Online and Upload Proof', 'View Digital Copy of Results', 'View Receipt', 'Answer Visit Feedback', 'Manage Account Profile', 'Logout'],
+    relations: [{ from: 'Register Account', to: 'Verify Emailed Code', kind: 'include' }, { from: 'Register Account', to: 'Agree to Terms and Privacy Policy', kind: 'include' }, RESET, { from: 'Login', to: 'Sign In with Google', kind: 'extend' }, { from: 'Book Appointment', to: 'Generate QR Booking Pass', kind: 'extend' }, { from: 'Book Appointment', to: 'Declare Senior/PWD Discount', kind: 'extend' }, { from: 'Pay Online and Upload Proof', to: 'Confirm Final Tests', kind: 'include' }, { from: 'View Digital Copy of Results', to: 'Verify Report Code', kind: 'extend' }, { from: 'Manage Account Profile', to: 'Change Sign-In Email', kind: 'extend' }] },
 ];
 
 // ── 3. DFD level 0 ──────────────────────────────────────────────────────────────────────────────
@@ -571,53 +630,66 @@ function dfd0(spec) {
 
 const DFD0 = [
   { name: 'Super Admin',
-    inputs: ['Login details', 'Role access', 'Services and prices', 'Payment channel', 'Clinic hours', 'Feedback questions', 'Report request'],
-    outputs: ['Account confirmed', 'Updated access', 'Updated services', 'Reports', 'Patient feedback', 'Audit trail'] },
+    inputs: ['Login details', 'Reset request and code', 'Role access', 'Elevated account', 'Services and prices', 'Payment channel', 'Cash drawer mode', 'Clinic hours', 'Refund request', 'Feedback questions', 'Report request'],
+    outputs: ['Account confirmed', 'Reset code', 'Updated access', 'Account saved', 'Updated services', 'Published channel', 'Published hours', 'Refund record', 'Reports', 'Patient feedback', 'Audit trail'] },
   { name: 'Admin',
-    inputs: ['Login details', 'HMO decision', 'Staff account', 'Record update', 'Feedback questions', 'Report request'],
-    outputs: ['Account confirmed', 'HMO claims', 'Patient records', 'Reports', 'Patient feedback', 'Payment records'] },
+    inputs: ['Login details', 'Reset request and code', 'HMO decision', 'Staff account', 'Services and prices', 'Clinic hours', 'Record update', 'Portal access change', 'Feedback questions', 'Report request'],
+    outputs: ['Account confirmed', 'Reset code', 'HMO claims', 'Account saved', 'Updated services', 'Published hours', 'Patient records', 'Reports', 'Payments and cash counts', 'Patient feedback', 'No-upload alert', 'Audit trail'] },
   { name: 'Receptionist',
-    inputs: ['Login details', 'Walk-in details', 'Scanned QR code', 'Test request', 'HMO claim', 'Reschedule request', 'Paper feedback'],
-    outputs: ['Account confirmed', 'Booking details', 'Queue ticket', 'Billing request', 'HMO decision', 'Patient records'] },
+    inputs: ['Login details', 'Reset request and code', 'Walk-in details', 'Scanned QR code', 'Undo check-in', 'Test request', 'HMO claim', 'Reschedule request', 'Portal invitation', 'Paper feedback'],
+    outputs: ['Account confirmed', 'Reset code', 'Booking details', 'Queue ticket', 'Billing request', 'HMO decision', 'Patient records'] },
   { name: 'Cashier',
-    inputs: ['Login details', 'Confirmed tests', 'Payment details', 'Discount claim', 'Proof decision'],
-    outputs: ['Account confirmed', 'Patients to bill', 'Receipt', 'Payment proofs', 'Takings'] },
+    inputs: ['Login details', 'Reset request and code', 'Confirmed tests', 'Payment details', 'Discount claim', 'Claim withdrawal', 'Proof decision', 'Cash count'],
+    outputs: ['Account confirmed', 'Reset code', 'Patients to bill', 'Receipt', 'Payment proofs', 'Takings', 'Count sheet'] },
   { name: 'Laboratory Staff',
-    inputs: ['Login details', 'Laboratory report file', 'Release authorisation', 'Email request'],
-    outputs: ['Account confirmed', 'Laboratory requests', 'Patient details', 'Released result'] },
+    inputs: ['Login details', 'Reset request and code', 'Laboratory report file', 'Release authorisation', 'Withdrawal reason', 'Email request'],
+    outputs: ['Account confirmed', 'Reset code', 'Laboratory requests', 'Patient details', 'Released result', 'No-upload alert'] },
   { name: 'Ultrasound Staff',
-    inputs: ['Login details', 'Ultrasound report file', 'Release authorisation', 'Email request'],
-    outputs: ['Account confirmed', 'Ultrasound requests', 'Patient details', 'Released result'] },
+    inputs: ['Login details', 'Reset request and code', 'Ultrasound report file', 'Release authorisation', 'Withdrawal reason', 'Email request'],
+    outputs: ['Account confirmed', 'Reset code', 'Ultrasound requests', 'Patient details', 'Released result', 'No-upload alert'] },
   { name: 'Xray Staff',
-    inputs: ['Login details', 'X-ray report file', 'Release authorisation', 'Email request'],
-    outputs: ['Account confirmed', 'X-ray requests', 'Patient details', 'Released result'] },
+    inputs: ['Login details', 'Reset request and code', 'X-ray report file', 'Release authorisation', 'Withdrawal reason', 'Email request'],
+    outputs: ['Account confirmed', 'Reset code', 'X-ray requests', 'Patient details', 'Released result', 'No-upload alert'] },
   { name: 'Client Patient',
-    inputs: ['Registration details', 'Verification code', 'Login details', 'Patient profile', 'Booking and doctor request', 'Reschedule request', 'Proof of payment', 'Visit feedback'],
-    outputs: ['Account confirmed', 'Booking reference', 'QR booking pass', 'Reminder and status emails', 'Receipt', 'Digital copy of result'] },
+    inputs: ['Registration details', 'Verification code', 'Login details', 'Reset request and code', 'Patient profile', 'Invitation answer', 'Booking and doctor request', 'Discount ID', 'Reschedule request', 'Release request', 'Proof of payment', 'Visit feedback'],
+    outputs: ['Emailed code', 'Account confirmed', 'Portal invitation', 'Booking reference', 'QR booking pass', 'Reminder and status emails', 'Receipt', 'Digital copy of result'] },
 ];
 
 function dfd0Context() {
   const p = new Page('Context');
-  const sys = p.node(SYSTEM_ONE_LINE, 560, 470, 360, 140, S.system);
-  const left = ['Client / Patient', 'Receptionist', 'Cashier', 'Laboratory Staff'];
+  const SYS_X = 700, SYS_W = 360, ROW0 = 120, ROW_GAP = 220, ENT_H = 80, ENT_W = 200;
+  const sys = p.node(SYSTEM_ONE_LINE, SYS_X, 380, SYS_W, 220, S.system);
+  const left =['Client / Patient', 'Receptionist', 'Cashier', 'Laboratory Staff'];
   const right = ['Ultrasound Staff', 'X-Ray Staff', 'Admin', 'Super Admin'];
   const labels = {
     'Client / Patient': 'bookings, payments, results',
-    Receptionist: 'check-in, walk-ins, queue',
-    Cashier: 'billing, receipts, takings',
-    'Laboratory Staff': 'laboratory results',
-    'Ultrasound Staff': 'ultrasound results',
-    'X-Ray Staff': 'x-ray results',
-    Admin: 'HMO decisions, reports',
-    'Super Admin': 'access, services, schedule',
+    Receptionist: 'check-in, walk-ins, invitations',
+    Cashier: 'billing, receipts, cash count',
+    'Laboratory Staff': 'laboratory reports',
+    'Ultrasound Staff': 'ultrasound reports',
+    'X-Ray Staff': 'x-ray reports',
+    Admin: 'HMO decisions, records, reports',
+    'Super Admin': 'access, services, refunds',
   };
+  // Every actor has a line of its own into the system, at its own height. Left to draw.io, two actors
+  // shared a vertical run into the box, which reads as the two being connected to each other. The
+  // outer rows take the lane nearer the system, so no line crosses another.
+  const entryY = (i) => 0.2 + i * 0.2;
+  const laneOut = (i) => (i === 0 || i === 3 ? 60 : 100);
+  const sysY = (i) => 380 + entryY(i) * 220;
   left.forEach((name, i) => {
-    const e = p.node(name, 80, 120 + i * 220, 200, 80, S.entity);
-    p.edge(e, sys, labels[name], S.edgeFlow + 'startArrow=classic;startFill=1;');
+    const y = ROW0 + i * ROW_GAP;
+    const e = p.node(name, 80, y, ENT_W, ENT_H, S.entity);
+    const lane = SYS_X - laneOut(i);
+    p.edge(e, sys, labels[name], `${S.edgeFlow}startArrow=classic;startFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=${entryY(i).toFixed(1)};entryDx=0;entryDy=0;`,
+      [[lane, y + ENT_H / 2], [lane, sysY(i)]], { at: -1, dx: 130, dy: 0 });
   });
   right.forEach((name, i) => {
-    const e = p.node(name, 1200, 120 + i * 220, 200, 80, S.entity);
-    p.edge(e, sys, labels[name], S.edgeFlow + 'startArrow=classic;startFill=1;');
+    const y = ROW0 + i * ROW_GAP;
+    const e = p.node(name, 1480, y, ENT_W, ENT_H, S.entity);
+    const lane = SYS_X + SYS_W + laneOut(i);
+    p.edge(e, sys, labels[name], `${S.edgeFlow}startArrow=classic;startFill=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=${entryY(i).toFixed(1)};entryDx=0;entryDy=0;`,
+      [[lane, y + ENT_H / 2], [lane, sysY(i)]], { at: -1, dx: -130, dy: 0 });
   });
   return p;
 }
@@ -627,7 +699,7 @@ const STORES = {
   D1: 'Users and Access', D2: 'Patients', D3: 'Appointments and Visits',
   D4: 'Payments', D5: 'Service Catalogue', D6: 'Diagnostic Results',
   D7: 'HMO Claims', D8: 'Clinic Schedule', D9: 'Logs and Notifications',
-  D10: 'Patient Feedback',
+  D10: 'Patient Feedback', D11: 'Clinic Settings',
 };
 
 // The shape the paper's own Level 1 figures use, and Steven's reference: ONE small actor at the
@@ -643,13 +715,6 @@ const STORES = {
 function dfd1(spec) {
   const p = new Page(spec.name);
   const PROC_H = 116, ROW_H = 190, TOP = 70;
-  const ENT_X = 40, ENT_W = 200, ENT_H = 150;
-  const PROC_X = 700, PROC_W = 280, STORE_X = 1180;
-  // The tracks stop 170px short of the process, which leaves a clear band for the labels.
-  const TRACK_GAP = 22, TRACK_FIRST = PROC_X - 170, LABEL = { dx: -80, dy: 0 };
-
-  const ent = p.node(spec.name, ENT_X, TOP, ENT_W, ENT_H, S.entity);
-  const entRight = ENT_X + ENT_W;
   const total = spec.processes.length * ROW_H - (ROW_H - PROC_H);
 
   // Every flow on the sheet, in the order it leaves the actor: top to bottom, process by process.
@@ -657,6 +722,18 @@ function dfd1(spec) {
     ...(proc.in || []).map((label) => ({ i, label, into: true })),
     ...(proc.out || []).map((label) => ({ i, label, into: false })),
   ]);
+
+  // The margin is as wide as the sheet's flows need, or the leftmost tracks run into the actor. The
+  // actor grows only enough to keep its flows 8px apart where they leave it.
+  const TRACK_GAP = 22;
+  const ENT_X = 40, ENT_W = 200, ENT_H = Math.max(150, (all.length + 1) * 8);
+  const PROC_W = 280;
+  const PROC_X = Math.max(700, ENT_X + ENT_W + 40 + all.length * TRACK_GAP + 170);
+  const STORE_X = PROC_X + 480;
+  // The tracks stop 170px short of the process, which leaves a clear band for the labels.
+  const TRACK_FIRST = PROC_X - 170, LABEL = { dx: -80, dy: 0 };
+
+  const ent = p.node(spec.name, ENT_X, TOP, ENT_W, ENT_H, S.entity);
   const entY = (g) => TOP + ((g + 1) * ENT_H) / (all.length + 1);
 
   let g = 0;
@@ -740,60 +817,85 @@ const P = {
   notify: { n: '19.0', name: 'Send Emails' },
   audit: { n: '20.0', name: 'Record Audit Trail' },
   feedback: { n: '21.0', name: 'Manage Patient Feedback' },
+  refund: { n: '22.0', name: 'Process Refund' },
+  cash: { n: '23.0', name: 'Count the Drawer' },
+  portal: { n: '24.0', name: 'Manage Portal Access' },
+  withdraw: { n: '25.0', name: 'Withdraw Report' },
+  alert: { n: '26.0', name: 'Alert on Unuploaded Results' },
+  settings: { n: '27.0', name: 'Set Cash Drawer Mode' },
+  channels: { n: '28.0', name: 'Publish Payment Channels' },
+  hmoWithdraw: { n: '29.0', name: 'Withdraw HMO Claim' },
 };
-const login = () => ({ ...P.login, in: ['Login details'], out: ['Account confirmed'], stores: [{ id: 'D1', to: 'Check credentials', from: 'Account details' }] });
+const login = () => ({ ...P.login, in: ['Login details', 'Reset request and code'], out: ['Account confirmed', 'Reset code'], stores: [{ id: 'D1', to: 'Check credentials, save password', from: 'Account details' }] });
 
 const DFD1 = [
   { name: 'Super Admin', processes: [
     login(), { ...P.rbac, in: ['Role access'], out: ['Updated access'], stores: [{ id: 'D1', to: 'Save access' }] },
+    { ...P.staff, in: ['Elevated account'], out: ['Account saved'], stores: [{ id: 'D1', to: 'Save account' }] },
     { ...P.catalogue, in: ['Services and prices'], out: ['Updated services'], stores: [{ id: 'D5', to: 'Save service', from: 'Service list' }] },
+    { ...P.channels, in: ['Payment channel'], out: ['Published channel'], stores: [{ id: 'D4', to: 'Save channel' }] },
+    { ...P.settings, in: ['Cash drawer mode'], stores: [{ id: 'D11', to: 'Save mode' }] },
+    { ...P.refund, in: ['Refund request'], out: ['Refund record'], stores: [{ id: 'D4', to: 'Save refund', from: 'Receipt' }, { id: 'D3', to: 'Close refunded tests' }] },
     { ...P.schedule, in: ['Clinic hours'], out: ['Published hours'], stores: [{ id: 'D8', to: 'Save hours' }, { id: 'D3', from: 'Affected bookings' }] },
     { ...P.reports, in: ['Report request'], out: ['Reports'], stores: [{ id: 'D4', from: 'Payments' }, { id: 'D3', from: 'Visits and tests' }] },
     { ...P.feedback, in: ['Feedback questions'], out: ['Patient feedback'], stores: [{ id: 'D10', to: 'Save questions', from: 'Feedback answers' }] },
     { ...P.audit, out: ['Audit trail'], stores: [{ id: 'D9', from: 'Audit entries' }] }] },
   { name: 'Admin', processes: [
-    login(), { ...P.hmoDecide, in: ['HMO decision'], out: ['HMO claims'], stores: [{ id: 'D7', to: 'Save decision', from: 'Pending claims' }, { id: 'D9', to: 'Notify cashier and patient' }] },
+    login(), { ...P.hmoDecide, in: ['HMO decision'], out: ['HMO claims'], stores: [{ id: 'D7', to: 'Save decision', from: 'Pending claims' }, { id: 'D3', to: 'Keep slot, reprice package' }] },
     { ...P.staff, in: ['Staff account'], out: ['Account saved'], stores: [{ id: 'D1', to: 'Save account' }] },
+    { ...P.catalogue, in: ['Services and prices'], out: ['Updated services'], stores: [{ id: 'D5', to: 'Save service', from: 'Service list' }] },
+    { ...P.schedule, in: ['Clinic hours'], out: ['Published hours'], stores: [{ id: 'D8', to: 'Save hours' }, { id: 'D3', from: 'Affected bookings' }] },
     { ...P.records, in: ['Record update'], out: ['Patient records'], stores: [{ id: 'D2', to: 'Update or archive', from: 'Patient details' }] },
-    { ...P.reports, in: ['Report request'], out: ['Reports'], stores: [{ id: 'D4', from: 'Payments' }, { id: 'D3', from: 'Visits and tests' }] },
-    { ...P.feedback, in: ['Feedback questions'], out: ['Patient feedback'], stores: [{ id: 'D10', to: 'Save questions', from: 'Feedback answers' }] }] },
+    { ...P.portal, in: ['Portal access change'], stores: [{ id: 'D2', to: 'Save invitation or unlink' }, { id: 'D1', from: 'Account' }] },
+    { ...P.reports, in: ['Report request'], out: ['Reports', 'Payments and cash counts'], stores: [{ id: 'D4', from: 'Payments, counts' }, { id: 'D3', from: 'Visits and tests' }] },
+    { ...P.feedback, in: ['Feedback questions'], out: ['Patient feedback'], stores: [{ id: 'D10', to: 'Save questions', from: 'Feedback answers' }] },
+    { ...P.alert, out: ['No-upload alert'], stores: [{ id: 'D3', from: 'Tests with no report' }, { id: 'D9', to: 'Save notification' }] },
+    { ...P.audit, out: ['Audit trail'], stores: [{ id: 'D9', from: 'Audit entries' }] }] },
   { name: 'Receptionist', processes: [
-    login(), { ...P.profiles, in: ['Walk-in details'], out: ['Patient records'], stores: [{ id: 'D2', to: 'Save or link patient', from: 'Patient details' }] },
-    { ...P.appts, in: ['Reschedule request'], out: ['Updated booking'], stores: [{ id: 'D3', to: 'Move booking', from: 'Bookings' }] },
-    { ...P.checkin, in: ['Scanned QR code'], out: ['Queue ticket'], stores: [{ id: 'D3', to: 'Save arrival and ticket', from: "Today's bookings" }] },
+    login(), { ...P.profiles, in: ['Walk-in details'], out: ['Patient records'], stores: [{ id: 'D2', to: 'Save patient', from: 'Patient details' }] },
+    { ...P.portal, in: ['Portal invitation'], stores: [{ id: 'D2', to: 'Save invitation' }] },
+    { ...P.appts, in: ['Reschedule request'], out: ['Booking details'], stores: [{ id: 'D3', to: 'Move booking', from: 'Bookings' }] },
+    { ...P.checkin, in: ['Scanned QR code', 'Undo check-in'], out: ['Queue ticket'], stores: [{ id: 'D3', to: 'Save or undo arrival', from: "Today's bookings" }] },
     { ...P.requests, in: ['Test request'], out: ['Billing request'], stores: [{ id: 'D3', to: 'Save visit tests' }, { id: 'D5', from: 'Services and packages' }] },
-    { ...P.hmoRaise, in: ['HMO claim'], out: ['Claim sent'], stores: [{ id: 'D7', to: 'Save claim and card' }] },
+    { ...P.hmoRaise, in: ['HMO claim'], out: ['HMO decision'], stores: [{ id: 'D7', to: 'Save claim and card', from: 'Decision' }] },
     { ...P.feedback, in: ['Paper feedback'], stores: [{ id: 'D10', to: 'Save paper feedback' }] }] },
   { name: 'Cashier', processes: [
-    login(), { ...P.billing, in: ['Tests and payment'], out: ['Receipt'], stores: [{ id: 'D4', to: 'Save payment', from: 'Discount types' }, { id: 'D3', from: 'Tests and prices' }] },
+    login(), { ...P.billing, in: ['Confirmed tests', 'Payment details', 'Discount claim'], out: ['Patients to bill', 'Receipt'], stores: [{ id: 'D4', to: 'Save payment', from: 'Discount types' }, { id: 'D3', from: 'Tests and prices' }] },
+    { ...P.hmoWithdraw, in: ['Claim withdrawal'], stores: [{ id: 'D7', to: 'Close pending lines' }] },
     { ...P.proof, in: ['Proof decision'], out: ['Payment proofs'], stores: [{ id: 'D4', to: 'Save outcome', from: 'Uploaded proofs' }] },
-    { ...P.release, out: ['Sent to department'], stores: [{ id: 'D3', to: 'Set to processing' }] },
-    { ...P.reports, in: ['Date range'], out: ['Takings'], stores: [{ id: 'D4', from: 'Payments' }] }] },
-  ...['Laboratory', 'Ultrasound', 'Xray'].map((dept) => ({
-    name: `${dept} Staff`, processes: [
-      login(),
-      { ...P.results, in: [`${dept === 'Xray' ? 'X-ray' : dept} report file`], out: ['Test requests'], stores: [{ id: 'D6', to: 'Save report and version' }, { id: 'D3', from: 'Released tests' }] },
-      { ...P.deliver, in: ['Release authorisation'], out: ['Released result'], stores: [{ id: 'D6', to: 'Save release and code' }] },
-      { ...P.notify, in: ['Email request'], out: ['Result emailed'], stores: [{ id: 'D9', to: 'Save notification' }] }],
-  })),
+    { ...P.release, stores: [{ id: 'D3', to: 'Set to processing' }] },
+    { ...P.reports, out: ['Takings'], stores: [{ id: 'D4', from: 'Payments' }] },
+    { ...P.cash, in: ['Cash count'], out: ['Count sheet'], stores: [{ id: 'D4', to: 'Save count', from: 'Expected cash' }] }] },
+  ...['Laboratory', 'Ultrasound', 'Xray'].map((dept) => {
+    const shown = dept === 'Xray' ? 'X-ray' : dept;
+    return {
+      name: `${dept} Staff`, processes: [
+        login(),
+        { ...P.results, in: [`${shown} report file`], out: [`${shown} requests`, 'Patient details'], stores: [{ id: 'D6', to: 'Save report and version' }, { id: 'D3', from: 'Released tests' }] },
+        { ...P.deliver, in: ['Release authorisation'], out: ['Released result'], stores: [{ id: 'D6', to: 'Save release and code' }] },
+        { ...P.withdraw, in: ['Withdrawal reason'], stores: [{ id: 'D6', to: 'Clear authorisation' }] },
+        { ...P.notify, in: ['Email request'], stores: [{ id: 'D6', from: 'Report file' }] },
+        { ...P.alert, out: ['No-upload alert'], stores: [{ id: 'D3', from: 'Tests with no report' }, { id: 'D9', to: 'Save notification' }] }],
+    };
+  }),
   { name: 'Client Patient', processes: [
-    { ...P.login, in: ['Registration details', 'Login details'], out: ['Verification code', 'Account confirmed'], stores: [{ id: 'D1', to: 'Save account and code', from: 'Account details' }] },
-    { ...P.profiles, in: ['Patient profile'], out: ['Saved profiles'], stores: [{ id: 'D2', to: 'Save profile', from: 'Profile details' }] },
-    { ...P.appts, in: ['Booking and doctor request', 'Reschedule request'], out: ['Booking reference'], stores: [{ id: 'D3', to: 'Save or move booking', from: 'Open slots' }, { id: 'D8', from: 'Clinic hours' }] },
-    { ...P.proof, in: ['Proof of payment'], out: ['Receipt and QR pass'], stores: [{ id: 'D4', to: 'Save submission' }, { id: 'D3', from: 'Paid or HMO booking' }] },
+    { ...P.login, in: ['Registration details', 'Verification code', 'Login details', 'Reset request and code'], out: ['Emailed code', 'Account confirmed'], stores: [{ id: 'D1', to: 'Save account and code', from: 'Account details' }] },
+    { ...P.profiles, in: ['Patient profile', 'Invitation answer'], out: ['Portal invitation'], stores: [{ id: 'D2', to: 'Save profile, accept record', from: 'Profiles and invitations' }] },
+    { ...P.appts, in: ['Booking and doctor request', 'Discount ID', 'Reschedule request', 'Release request'], out: ['Booking reference'], stores: [{ id: 'D3', to: 'Save, move or release', from: 'Open slots' }, { id: 'D8', from: 'Clinic hours' }] },
+    { ...P.proof, in: ['Proof of payment'], out: ['Receipt', 'QR booking pass'], stores: [{ id: 'D4', to: 'Save submission' }, { id: 'D3', from: 'Paid or HMO booking' }] },
     { ...P.deliver, out: ['Digital copy of result'], stores: [{ id: 'D6', from: 'Released results' }] },
-    // The server's own emails [1.130.0] [1.131.0]: reminders read the bookings due one, and an
-    // unpaid booking whose time is up is released and logged. Patient emails are not D9 rows;
-    // that store's notifications are the staff bell.
-    { ...P.notify, out: ['Reminders and updates'], stores: [{ id: 'D3', to: 'Release unpaid booking', from: 'Bookings due' }, { id: 'D9', to: 'Release logged' }] },
+    // The server's own emails [1.130.0] [1.131.0] [1.148.0]: reminders read the bookings due one, and
+    // an unpaid booking whose time is up is released and logged. Patient emails are not D9 rows; that
+    // store's notifications are the staff bell.
+    { ...P.notify, out: ['Reminder and status emails'], stores: [{ id: 'D3', to: 'Release unpaid booking', from: 'Bookings due' }, { id: 'D9', to: 'Release logged' }] },
     { ...P.feedback, in: ['Visit feedback'], stores: [{ id: 'D10', to: 'Save feedback', from: 'Survey questions' }] }] },
 ];
 
 // ── 5. ERD, read from the live database ─────────────────────────────────────────────────────────
 const SHEETS = [
   { name: 'Clinical Core', tables: ['patients', 'patient_types', 'patient_invitations', 'patient_visits', 'appointments', 'visit_tests', 'tests', 'test_categories', 'test_packages', 'test_package_items', 'test_results', 'feedback_questions', 'visit_feedback_answers'] },
-  { name: 'Money and HMO', tables: ['payments', 'payment_methods', 'payment_submissions', 'cash_counts', 'discount_types', 'daily_counters', 'hmo_providers', 'hmo_requests', 'hmo_request_tests'] },
-  { name: 'Access Schedule and System', tables: ['users', 'roles', 'permissions', 'role_permissions', 'user_roles', 'user_permissions', 'user_departments', 'auth_codes', 'clinic_operating_hours', 'clinic_schedule_overrides', 'audit_log', 'notification_events', 'notification_reads'] },
+  { name: 'Money and HMO', tables: ['payments', 'payment_refunds', 'payment_refund_tests', 'payment_methods', 'payment_submissions', 'cash_counts', 'discount_types', 'daily_counters', 'hmo_providers', 'hmo_requests', 'hmo_request_tests'] },
+  { name: 'Access Schedule and System', tables: ['users', 'roles', 'permissions', 'role_permissions', 'user_roles', 'user_permissions', 'user_departments', 'auth_codes', 'clinic_settings', 'clinic_operating_hours', 'clinic_schedule_overrides', 'audit_log', 'notification_events', 'notification_reads'] },
 ];
 
 function pgType(c) {
@@ -819,6 +921,7 @@ function erdSheet(sheet, schema) {
   const ROW_H = 26, HEAD = 30;
 
   const rowIds = {};
+  const columnOf = {};
   const order = sheet.tables.slice().sort((a, b) => (columns[b] || []).length - (columns[a] || []).length);
   order.forEach((tbl) => {
     const cols = columns[tbl] || [];
@@ -829,6 +932,7 @@ function erdSheet(sheet, schema) {
     colBottom[ci] = y + h + 40;
     const table = p.node(tbl, x, y, 360, h, S.table);
     placed[tbl] = table;
+    columnOf[tbl] = ci;
     rowIds[tbl] = {};
     cols.forEach((c, ri) => {
       const row = p.node('', 0, HEAD + ri * ROW_H, 360, ROW_H, S.tableRow, table.id);
@@ -842,19 +946,22 @@ function erdSheet(sheet, schema) {
     });
   });
 
-  // Foreign keys inside the sheet; a parent on another sheet is drawn as a faint ghost.
+  // Foreign keys inside the sheet. A line runs in the gap beside a table's own column or the next
+  // one; a parent further away would be reached straight through the tables between, so it is drawn
+  // as a faint ghost at the foot of the child's column instead, as a parent on another sheet is. One
+  // ghost per column that needs it.
   const ghosts = {};
   sheet.tables.forEach((tbl) => {
     (fks[tbl] || []).forEach((f) => {
       let target = placed[f.parent];
-      if (!target) {
-        if (!ghosts[f.parent]) {
-          let ci = 0;
-          for (let i = 1; i < COL_X.length; i += 1) if (colBottom[i] < colBottom[ci]) ci = i;
-          ghosts[f.parent] = p.node(`${f.parent}\n(see the other sheet)`, COL_X[ci], colBottom[ci], 360, 54, S.tableGhost);
+      const ci = columnOf[tbl];
+      if (!target || Math.abs(columnOf[f.parent] - ci) > 1) {
+        const key = `${f.parent}@${ci}`;
+        if (!ghosts[key]) {
+          ghosts[key] = p.node(`${f.parent}\n(${target ? 'on this sheet' : 'see the other sheet'})`, COL_X[ci], colBottom[ci], 360, 54, S.tableGhost);
           colBottom[ci] += 94;
         }
-        target = ghosts[f.parent];
+        target = ghosts[key];
       } else {
         // Point at the parent's own key row, the way Workbench draws it.
         const pk = (pks[f.parent] || [])[0];

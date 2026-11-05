@@ -16,7 +16,7 @@ diagrams, and Workbench-style tables for the ERD. What changed is the content.
 | `usecases.drawio` | 8 | the use case diagrams |
 | `dfd-level0.drawio` | 9 | the per-actor Level 0 sheets, plus a context diagram showing all eight entities |
 | `dfd-level1.drawio` | 8 | the per-actor Level 1 sheets |
-| `erd.drawio` | 3 | the single ERD, split because 33 tables do not read on one page |
+| `erd.drawio` | 3 | the single ERD, split because 38 tables do not read on one page |
 | `png/` | 36 | exports at scale 3 for placing in the paper |
 
 ## Regenerating
@@ -54,7 +54,14 @@ Worth knowing before a panelist asks, because each one differs from the old figu
 - A booking issues a reference and confirmation email first. A self-pay booking holds its slot for 60 minutes while the patient confirms final tests, pays via GCash or bank transfer, and uploads proof; an HMO booking holds its slot until its own start time while an Admin decides the claim (refused, the patient has 60 minutes to pay it). Neither paid nor approved in time, the slot is released and the patient emailed. The **QR booking pass** is issued only once the booking is paid or HMO-approved.
 - The **queue ticket** is issued later, at check-in or walk-in registration at the Front Desk, once the visit's tests are chosen: a visit is never opened without them.
 - A visit reaches its department only once it is **paid**. An HMO patient still goes to the cashier, whose receipt covers the patient's share (₱0 when the HMO approved everything).
-- Before taking payment, the cashier confirms the final list of tests with the patient and issues the **receipt** (never the queue number). There is no refund or receipt reversal in the system.
+- Before taking payment, the cashier confirms the final list of tests with the patient and issues the **receipt** (never the queue number). A pending HMO decision stops the till unless the claim is withdrawn and the bill charged in full.
+- A paid receipt is final, with **two recorded refund cases**: the clinic cannot perform a test, or a payment was recorded by mistake. Only a Super Admin refunds, never on a receipt they took themselves, and the patient is emailed.
+- The cashier **counts the drawer** at the end of the day. The server adds up the count, and a difference needs a note. Super Admin can switch from one shared drawer to one per cashier.
+- A mistake can be taken back: the desk **undoes a check-in** until a department has started, and a department **withdraws** a report on the wrong patient or file. A wrong figure is amended instead.
+- With **no test result uploaded** 60 minutes after a patient joins the queue, or 15 minutes before closing, the department, Admin and Super Admin are alerted until it is uploaded.
+- An HMO covering only part of a package ends its price, and each test goes back to its own price.
+- A walk-in's record reaches a portal account by **invitation**, never by the desk linking it.
+- There is no waiting-room screen and no Call button; both are future recommendations in the paper.
 - Bookings and visits are never cancelled or marked no-show by hand. Unpaid bookings and unpaid visits expire automatically on a timer and log the expiry to the Activity Log; paid bookings that need another date are rescheduled.
 - An Admin decides HMO claims (a claim on a booking must be decided by the booking's start time, shown as "decide by") and generates four-tab A4/Excel reports, but cannot write or release a diagnostic result; the department does that.
 - Laboratory, Ultrasound and X-Ray attach and authorise a report file, placing a marked digital copy with a verification code in the patient's portal. Emailing the report to the patient is an optional choice after release or from History, never automatic on release. (From [1.129.0] to [1.143.0] X-ray only marked its exams done; those exams still read Done, with no report.)

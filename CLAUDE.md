@@ -1756,3 +1756,6 @@ Services Catalogue.
   line into End has its own nested lane and its own point on End's outline, so no two lines share
   a segment or an arrowhead (Steven: a shared line reads as boxes connected to each other when
   presented). `checkDiagrams.cjs` cannot see a line on a line; look at the PNGs.
+  **No line through a box, on any figure.** A use case line ends at its ellipse's left point, branches
+  ending in one column take the nearer lane the lower they are, and an ERD foreign key to a table two
+  or more columns away, or on another sheet, points at a ghost at the foot of its own column.
