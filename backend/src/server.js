@@ -8,6 +8,7 @@ const reminderScheduler = require('./jobs/reminderScheduler');
 const unpaidExpiryScheduler = require('./jobs/unpaidExpiryScheduler');
 const patientMessageScheduler = require('./jobs/patientMessageScheduler');
 const retentionScheduler = require('./jobs/retentionScheduler');
+const overdueResultScheduler = require('./jobs/overdueResultScheduler');
 const backupScheduler = require('./jobs/backupScheduler');
 
 const server = app.listen(env.PORT, () => {
@@ -25,6 +26,7 @@ const server = app.listen(env.PORT, () => {
   // [1.148.0] Results ready / missed booking / feedback emails, the retention pass, the nightly backup.
   patientMessageScheduler.start();
   retentionScheduler.start();
+  overdueResultScheduler.start();
   backupScheduler.start();
 });
 
@@ -49,6 +51,7 @@ process.on('SIGTERM', () => {
   unpaidExpiryScheduler.stop();
   patientMessageScheduler.stop();
   retentionScheduler.stop();
+  overdueResultScheduler.stop();
   backupScheduler.stop();
   server.close(() => {
     db.pool.end();

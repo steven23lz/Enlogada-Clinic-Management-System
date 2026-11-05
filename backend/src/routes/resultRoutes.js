@@ -13,6 +13,8 @@ const router = express.Router();
 // The sidebar reflects the same boundary; see frontend/src/config/navigation.js.
 
 // Department staff views pending tests by category (Laboratory, Xray, Ultrasound)
+// [1.163.0] The banner: patients past the turnaround with no report, in this person's own departments.
+router.get('/overdue', verifyToken, authorizeStaff, authorizePermissions('results:read'), resultController.getOverdue);
 router.get('/pending/:category', verifyToken, authorizeStaff, authorizePermissions('results:read'), resultController.getPending);
 
 // UI/UX Phase 1: department staff review results they've already released, by category

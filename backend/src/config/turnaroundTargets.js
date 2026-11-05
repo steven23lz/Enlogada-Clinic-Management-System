@@ -28,7 +28,9 @@
  * A department missing from the map gets a NULL target and a NULL rate — measured, not judged
  * against a promise nobody made. That path already existed; it is now simply the default one.
  */
-const DEFAULT_TURNAROUND_TARGETS = {};
+// [1.163.0] Steven's decision for the clinic: 60 minutes, every department. It stands in for the empty
+// default described above. TURNAROUND_TARGETS still overrides it, and TURNAROUND_TARGETS=off judges nothing.
+const DEFAULT_TURNAROUND_TARGETS = Object.freeze({ Laboratory: 60, Ultrasound: 60, Xray: 60 });
 
 function parseTargets(raw) {
   if (!raw) return DEFAULT_TURNAROUND_TARGETS;

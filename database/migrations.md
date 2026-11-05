@@ -1,5 +1,12 @@
 # Database Migration & Schema History
 
+## [1.163.0] - 2026-11-06 (No test result uploaded: a hard alert)
+
+`migrateOverdueResults.js`: `visit_tests.overdue_notified_at`, `closing_notified_at`. His timeline: in the queue at 3:15 PM, pinged at 4:15 PM if no result is uploaded, not pinged if one was. In the queue at 4:17 PM, its hour runs past the 5:00 PM close, so 15 minutes before closing every test with no result pings, on that day's real hours (`utils/closingNotice.js`). Steven: if 60 minutes pass with no upload, in every department, for each patient in the queue, a hard notification goes to the staff
+responsible and to Admin and SuperAdmin. The clock starts when the test reaches the department (paid and here, whichever came last) and stops at the upload. The bell rings once per patient and department; the banner stays above every
+screen of whoever answers for it until the report is uploaded, and cannot be dismissed. 60 minutes is now the default for every department, so Today judges them and the worklist's red badge shows. A record of what the clinic promises, not a measurement: `TURNAROUND_TARGETS` overrides it.
+**Tests:** `second-walk.spec.js`.
+
 ## [1.162.0] - 2026-11-06 (The clinic's answers: online, 10 years, ready for more than one drawer)
 
 `migrateCashDrawers.js`: `clinic_settings`, `cash_counts.drawer_of`; `uq_cash_counts_current_per_day` is now per day and drawer.

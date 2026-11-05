@@ -3,6 +3,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
+import OverdueResultsBanner from './OverdueResultsBanner';
 import Logo from './Logo';
 import ErrorBoundary from './ErrorBoundary';
 import { usePolling } from '../hooks/usePolling';
@@ -784,6 +785,9 @@ const StaffShell = ({ title = 'Today', activeNav = 'today', onSelectNav, railAct
             </Button>
           </div>
         </header>
+
+        {/* [1.163.0] Outside the scrolling screen, so it stays in view whatever is open. */}
+        <OverdueResultsBanner activeNav={activeNav} onSelectNav={onSelectNav} />
 
         {/* Dynamic screen view content */}
         <main ref={mainRef} className="flex-1 overflow-y-auto p-4 sm:p-6 lg:px-7 lg:py-6">

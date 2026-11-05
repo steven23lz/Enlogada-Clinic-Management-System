@@ -538,6 +538,10 @@ CREATE TABLE visit_tests (
     -- holds the share, or the list price once an HMO covers only part of the package.
     package_share NUMERIC(10,2),
     list_price NUMERIC(10,2),
+    -- When the staff were told this test passed the clinic's turnaround with no report. Once. [1.163.0]
+    overdue_notified_at TIMESTAMP,
+    -- And when they last had the call 15 minutes before closing. Once a day. [1.163.0]
+    closing_notified_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- When an exam was done, and by whom, in a department that issues no report here (X-ray):

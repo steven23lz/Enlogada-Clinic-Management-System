@@ -4,8 +4,17 @@ const patientService = require('../services/patientService');
 const auditService = require('../services/auditService');
 const logger = require('../config/logger');
 const { servesInline } = require('../constants/reportFileTypes');
+const overdueResultService = require('../services/overdueResultService');
 
 class ResultController {
+  async getOverdue(req, res, next) {
+    try {
+      return res.status(200).json({ status: 'success', data: { overdue: await overdueResultService.list(req.user) } });
+    } catch (err) {
+      return next(err);
+    }
+  }
+
   async getPending(req, res, next) {
     try {
       const { category } = req.params;

@@ -29,7 +29,7 @@ staff need internet to work. There is no offline mode: if the internet is down, 
 | `BACKUP_COPY_DIR` | a second location that is not this server's disk |
 | `RATE_LIMIT_MAX` | optional. Requests per 15 minutes per address, default 3,000 |
 | `RECORD_AUTO_ARCHIVE` | optional. `off` stops the 10-year archive, leaving it to the Archive button |
-| `TURNAROUND_TARGETS` | optional. The clinic's promised turnaround, such as `Laboratory:60,Xray:30,Ultrasound:45` |
+| `TURNAROUND_TARGETS` | optional. 60 minutes for every department unless set, such as `Laboratory:60,Xray:30,Ultrasound:45` |
 
 The website needs `VITE_API_BASE_URL` and `VITE_GOOGLE_CLIENT_ID` set **before** `npm run build`: they are built in, and
 setting them later does nothing. Add the public address to the Google sign-in client's allowed origins.

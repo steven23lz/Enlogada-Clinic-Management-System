@@ -115,6 +115,9 @@ module.exports = {
   // [1.148.0] Old notifications, Activity Log entries and HMO card photos are removed on a schedule
   // (jobs/retentionScheduler.js), as the prune scripts do by hand. Off with RETENTION=off.
   RETENTION: process.env.RETENTION !== 'off',
+  // [1.163.0] Tells the staff when a patient passes the turnaround with no report
+  // (jobs/overdueResultScheduler.js). Off with OVERDUE_ALERTS=off.
+  OVERDUE_ALERTS: process.env.OVERDUE_ALERTS !== 'off',
   // [1.162.0] A record with no activity for 10 years is archived, never deleted. Off with
   // RECORD_AUTO_ARCHIVE=off, which leaves it to the Archive button on Patient Records.
   RECORD_AUTO_ARCHIVE: process.env.RECORD_AUTO_ARCHIVE !== 'off',

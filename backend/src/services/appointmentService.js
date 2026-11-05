@@ -1177,3 +1177,4 @@ class AppointmentService {
 }
 
 module.exports = new AppointmentService();
+module.exports.resolveDay = resolveDay;

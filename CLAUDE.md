@@ -120,6 +120,7 @@ node src/scripts/migratePackageOwnPrice.js       # [1.159.0] a package line's sh
 node src/scripts/migrateRefusedClaimLines.js     # [1.160.0] data only: tests on a refused claim are free for a new claim
 node src/scripts/migrateRetirePrivate.js         # [1.161.0] Private patients become Self Pay, and the type goes (--rollback restores them)
 node src/scripts/migrateCashDrawers.js           # [1.162.0] clinic_settings, cash_counts.drawer_of: one shared drawer until Super Admin says otherwise (--rollback reverses it)
+node src/scripts/migrateOverdueResults.js        # [1.163.0] visit_tests.overdue_notified_at: staff are told once when a patient passes the turnaround (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -403,7 +404,9 @@ now logs in once at boot (`verifyMailLogin`, `startupAdvisory.reportAccountMail`
 failed send carries `recipientRejected`; only that answers "Check the address" — the clinic's own
 login, connection or quota answers "The clinic can't send email right now" (`isRecipientRejection`).
 
-`TURNAROUND_TARGETS` (optional, e.g. `Laboratory:90,Xray:30`) sets the per-department turnaround
+**No test result uploaded: a hard alert.** `[1.163.0]` Steven's rule, every department, each patient: 60 minutes from joining the queue (paid and here, whichever came last), and 15 minutes before that day's closing for every test still with no file, whatever its hour says (`utils/closingNotice.js`, `closing_notified_at`, once a day). `jobs/overdueResultScheduler.js` rings the bell once per patient and department (`overdue_notified_at`) for the department's staff, Admin and SuperAdmin; `OverdueResultsBanner` (`overdue-results`, `GET /results/overdue`) stays above every screen of whoever answers for it, with no dismiss, until the upload. `OVERDUE_ALERTS=off` stops the bell.
+
+`TURNAROUND_TARGETS` (optional; 60 minutes for every department without it, `off` judges nothing, e.g. `Laboratory:90,Xray:30`) sets the per-department turnaround
 benchmarks the Today screen's department table judges against (it reads "Not set" without one).
 `[1.62.0]` `[1.111.0]` They are a clinic
 POLICY, not a measurement, and the built-in values are plausible defaults nobody has agreed — which

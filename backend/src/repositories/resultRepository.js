@@ -2,6 +2,29 @@ const db = require('../config/database');
 const { hmoEffectiveStatus } = require('../constants/hmoEffectiveStatus');
 const { CAME_IN_AS } = require('../constants/visits');
 
+/**
+ * A test past its department's turnaround with no report. [1.163.0] The clock starts as the worklist's badge
+ * does: paid and here, whichever came last. It stops at the upload: `Waiting for Release` may be parked with no
+ * file yet, so the file is what is asked about, not the status. $1 is the department, $2 its minutes.
+ */
+const OVERDUE_FROM = `
+  FROM visit_tests vt
+  JOIN tests t ON t.id = vt.test_id
+  JOIN test_categories tc ON tc.id = t.category_id
+  JOIN patient_visits pv ON pv.id = vt.patient_visit_id
+  JOIN patients p ON p.id = pv.patient_id
+  JOIN LATERAL (
+    SELECT MIN(p2.paid_at) AS paid_at
+      FROM payments p2
+     WHERE p2.patient_visit_id = pv.id AND p2.payment_status = 'Paid'
+  ) pay ON pay.paid_at IS NOT NULL
+ WHERE tc.name = $1
+   AND pv.status = 'Processing'
+   AND vt.status IN ('Processing', 'Waiting for Release')
+   AND GREATEST(pv.created_at, pay.paid_at) < CURRENT_TIMESTAMP - make_interval(mins => $2)
+   AND NOT EXISTS (SELECT 1 FROM test_results tr
+                    WHERE tr.visit_test_id = vt.id AND tr.is_current AND tr.file_path IS NOT NULL)`;
+
 class ResultRepository {
   // The modality worklist gate. This query previously filtered on vt.status alone and never
   // looked at the parent visit at all, so a ticket appeared here the instant a client picked
@@ -12,6 +35,57 @@ class ResultRepository {
   // vt.status is correspondingly narrowed to the two states a released ticket can be in.
   // 'Pending'/'Approved' tests are by definition not released and belong to the front desk
   // and cashier only.
+  /** Tests newly past `minutes` with no report in `category`, stamped so each is told once. [1.163.0] */
+  async claimOverdue(category, minutes) {
+    const { rows } = await db.query(
+      `WITH due AS (
+         SELECT vt.id, t.name AS test_name, pv.id AS visit_id, pv.queue_number, p.first_name, p.last_name
+           ${OVERDUE_FROM}
+            AND vt.overdue_notified_at IS NULL
+            -- Had the closing call today: its own hour running out minutes later says nothing new.
+            AND (vt.closing_notified_at IS NULL OR vt.closing_notified_at < CURRENT_DATE)
+          FOR UPDATE OF vt SKIP LOCKED
+       )
+       UPDATE visit_tests vt SET overdue_notified_at = CURRENT_TIMESTAMP
+         FROM due WHERE vt.id = due.id
+       RETURNING due.*`,
+      [category, minutes]
+    );
+    return rows;
+  }
+
+  /**
+   * Every test in the queue with no result in `category`, for the call 15 minutes before closing, stamped so
+   * each has it once a day. A test still waiting tomorrow gets tomorrow's. [1.163.0]
+   */
+  async claimBeforeClosing(category) {
+    const { rows } = await db.query(
+      `WITH due AS (
+         SELECT vt.id, t.name AS test_name, pv.id AS visit_id, pv.queue_number, p.first_name, p.last_name
+           ${OVERDUE_FROM}
+            AND (vt.closing_notified_at IS NULL OR vt.closing_notified_at < CURRENT_DATE)
+          FOR UPDATE OF vt SKIP LOCKED
+       )
+       UPDATE visit_tests vt SET closing_notified_at = CURRENT_TIMESTAMP
+         FROM due WHERE vt.id = due.id
+       RETURNING due.*`,
+      [category, 0]
+    );
+    return rows;
+  }
+
+  /** Tests past `minutes` with no report in `category`, longest wait first, for the banner. [1.163.0] */
+  async findOverdue(category, minutes) {
+    const { rows } = await db.query(
+      `SELECT vt.id AS visit_test_id, t.name AS test_name, pv.queue_number, p.first_name, p.last_name,
+              FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - GREATEST(pv.created_at, pay.paid_at))) / 60)::int AS waited_minutes
+         ${OVERDUE_FROM}
+        ORDER BY waited_minutes DESC`,
+      [category, minutes]
+    );
+    return rows;
+  }
+
   async findPendingByCategory(categoryName) {
     const queryText = `
       SELECT vt.id as visit_test_id, vt.status as test_status, vt.price_at_time, vt.remarks,

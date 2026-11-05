@@ -8,6 +8,7 @@ import { openPortalTab } from './helpers/portal.js';
 import { appointmentForm } from './helpers/booking.js';
 import { nthWorkingDay } from './helpers/dates.js';
 import { runScript } from './helpers/backendScript.js';
+import { reportPart } from './helpers/reportFile.js';
 import { API, CREDS, loginAs } from './helpers/payments.js';
 
 /**
@@ -371,6 +372,87 @@ test.describe('A second walk through the combinations [1.160.0]', () => {
     // Restored by a person, it is not taken straight back.
     expect((await ctx.patch(`${API}/patients/${old.id}/archive`, { headers: auth(su), data: { archived: false } })).status()).toBe(200);
     expect(JSON.parse(runScript('e2eAgeRecord.js', ['--sweep'], 'archive sweep').trim().split('\n').pop())).not.toContain(old.id);
+  });
+
+  test('[1.163.0] over 60 minutes with no report: the bell once, a banner that stays, and it goes with the upload', async ({ page }) => {
+    const su = await loginAs(ctx, CREDS.superadmin);
+    const labToken = await loginAs(ctx, { email: 'lab@enlogada.com', password: 'Password123!' });
+    const xrayToken = await loginAs(ctx, { email: 'xray@enlogada.com', password: 'Password123!' });
+    const tests = (await (await ctx.get(`${API}/tests`)).json()).data.tests;
+    const labTest = tests.find((t) => t.is_active && t.category_name === 'Laboratory' && Number(t.price) > 0);
+    const person = fixturePerson();
+    const patient = (await (await ctx.post(`${API}/patients`, {
+      headers: auth(desk),
+      data: { patientTypeId: await patientTypeId(ctx, API, desk, 'Self Pay'), firstName: person.firstName, lastName: person.lastName, birthdate: '1980-01-01', sex: 'Male', contactNumber: FIXTURE_CONTACT },
+    })).json()).data.patient;
+    const visit = (await (await ctx.post(`${API}/visits`, { headers: auth(desk), data: { patientId: patient.id, visitType: 'Walk in', testIds: [labTest.id] } })).json()).data.visit;
+    await ctx.post(`${API}/payments`, { headers: auth(cashier), data: { patientVisitId: visit.id, paymentMethod: 'Cash', amount: Number((await billOf(visit.id)).totalAmount) } });
+    const [line] = await lines(visit.id);
+    const overdue = async (token) => (await (await ctx.get(`${API}/results/overdue`, { headers: auth(token) })).json()).data.overdue;
+    const names = (list) => list.flatMap((d) => d.patients.map((p) => p.visitTestId));
+    const sweep = () => Number(runScript('e2eOverdue.js', ['--sweep'], 'overdue sweep').trim().split('\n').pop());
+    sweep();
+
+    runScript('e2eOverdue.js', [`--visit=${visit.id}`, '--minutes=50'], 'move visit');
+    const atFifty = await overdue(labToken);
+    // Unless this run happens to fall in the last 15 minutes of the day, when everything is listed.
+    if (!atFifty.some((d) => d.closesAt)) expect(names(atFifty), 'fifty minutes is not over').not.toContain(line.id);
+
+    runScript('e2eOverdue.js', [`--visit=${visit.id}`, '--minutes=15'], 'move visit');
+    expect(names(await overdue(labToken)), 'the department').toContain(line.id);
+    expect(names(await overdue(admin)), 'the Admin').toContain(line.id);
+    expect(names(await overdue(su)), 'the SuperAdmin').toContain(line.id);
+    expect(names(await overdue(xrayToken)), 'not another department').not.toContain(line.id);
+    expect((await ctx.get(`${API}/results/overdue`, { headers: auth(desk) })).status(), 'not the desk').toBe(403);
+
+    expect(sweep(), 'told once').toBeGreaterThanOrEqual(1);
+    expect(sweep(), 'and not twice').toBe(0);
+    const bell = await (await ctx.get(`${API}/notifications`, { headers: auth(labToken) })).text();
+    expect(bell).toContain(`No test result uploaded for: Ticket ${visit.queue_number}, ${person.firstName} ${person.lastName}`);
+
+    await signInTo(page, 'lab@enlogada.com', 'Patient Records');
+    const banner = page.getByTestId('overdue-results');
+    await expect(banner).toContainText(person.lastName, { timeout: 20000 });
+    await expect(banner).toContainText('no test result uploaded');
+    await expect(banner.getByRole('button', { name: /dismiss|close/i }), 'it cannot be waved away').toHaveCount(0);
+    await banner.getByRole('button', { name: 'Go to the worklist' }).first().click();
+    await expect(page.getByRole('heading', { name: 'Laboratory Worklist', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
+    await expect(banner, 'still there on the worklist').toContainText(person.lastName);
+
+    const saved = await ctx.post(`${API}/results/${line.id}`, { headers: auth(labToken), multipart: { file: reportPart('overdue') } });
+    expect(saved.status(), await saved.text()).toBeLessThan(300);
+    expect(names(await overdue(labToken)), 'gone with the upload').not.toContain(line.id);
+  });
+
+  test('[1.163.0] 15 minutes before closing, every test with no result pings, whatever its own hour says', async () => {
+    const labToken = await loginAs(ctx, { email: 'lab@enlogada.com', password: 'Password123!' });
+    const tests = (await (await ctx.get(`${API}/tests`)).json()).data.tests;
+    const labTest = tests.find((t) => t.is_active && t.category_name === 'Laboratory' && Number(t.price) > 0);
+    const inQueue = async () => {
+      const person = fixturePerson();
+      const patient = (await (await ctx.post(`${API}/patients`, {
+        headers: auth(desk),
+        data: { patientTypeId: await patientTypeId(ctx, API, desk, 'Self Pay'), firstName: person.firstName, lastName: person.lastName, birthdate: '1980-01-01', sex: 'Male', contactNumber: FIXTURE_CONTACT },
+      })).json()).data.patient;
+      const visit = (await (await ctx.post(`${API}/visits`, { headers: auth(desk), data: { patientId: patient.id, visitType: 'Walk in', testIds: [labTest.id] } })).json()).data.visit;
+      await ctx.post(`${API}/payments`, { headers: auth(cashier), data: { patientVisitId: visit.id, paymentMethod: 'Cash', amount: Number((await billOf(visit.id)).totalAmount) } });
+      return { person, visit, line: (await lines(visit.id))[0] };
+    };
+    const closing = () => Number(runScript('e2eOverdue.js', ['--sweep', '--closing'], 'closing sweep').trim().split('\n').pop());
+    // The bell shows the latest 20, and a full run leaves plenty waiting: this call clears those first.
+    closing();
+    const justArrived = await inQueue();
+    const uploaded = await inQueue();
+    const saved = await ctx.post(`${API}/results/${uploaded.line.id}`, { headers: auth(labToken), multipart: { file: reportPart('closing') } });
+    expect(saved.status(), await saved.text()).toBeLessThan(300);
+
+    expect(closing(), 'minutes in the queue, and still called').toBeGreaterThanOrEqual(1);
+    expect(closing(), 'and only once that day').toBe(0);
+
+    const bell = await (await ctx.get(`${API}/notifications`, { headers: auth(labToken) })).text();
+    expect(bell).toContain(`${justArrived.person.firstName} ${justArrived.person.lastName}`);
+    expect(bell).toContain('The clinic closes at');
+    expect(bell, 'a result uploaded: nobody is pinged').not.toContain(`Ticket ${uploaded.visit.queue_number}, ${uploaded.person.firstName} ${uploaded.person.lastName}`);
   });
 
   test('a name is a name, a phone has digits, and one account holds one of each person', async () => {
