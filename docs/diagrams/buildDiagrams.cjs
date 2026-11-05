@@ -39,7 +39,8 @@ const S = {
   storeTag: 'rounded=0;whiteSpace=wrap;html=1;align=center;' + FONT,
   storeName: 'rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=8;' + FONT,
   edge: 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;jettySize=auto;orthogonalLoop=1;' + SMALL,
-  edgeStraight: 'edgeStyle=none;rounded=0;html=1;endArrow=none;' + SMALL,
+  // The actor's line to a use case. Strict UML draws it plain; Steven wants the arrowhead.
+  edgeStraight: 'edgeStyle=none;rounded=0;html=1;endArrow=classic;' + SMALL,
   edgeFlow: 'edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;verticalAlign=bottom;' + SMALL,
   edgeDashed: 'endArrow=open;endSize=12;dashed=1;html=1;' + SMALL,
   table: 'shape=table;startSize=30;container=1;collapsible=0;childLayout=tableLayout;fixedRows=1;rowLines=0;fontStyle=1;align=center;resizeLast=1;html=1;fillColor=none;strokeColor=#000000;fontColor=#000000;fontFamily=Helvetica;fontSize=14;',
