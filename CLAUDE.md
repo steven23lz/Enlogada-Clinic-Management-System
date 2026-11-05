@@ -1072,6 +1072,10 @@ and the bill was ₱3,214.40, since all five share six tests and a test is on a 
   a test on a visit asks it too. A spec opening a second visit for one patient today with the same test sends
   `confirmRepeatTests: true` or a different test; `bookableTestId` already varies.
 - **A package costs no more than its tests bought separately.**
+- **A retired test is out of its packages.** `[1.158.0]` `packageService.afterTestChanged`, in the test's own transaction: out of
+  every package when retired, and a package that no longer fits goes off sale (`utils/packageFit.js`), a lower price included.
+  Reactivating does not put it back. Visits already made keep their lines. `package-retired-test.spec.js`.
+- **A test on an HMO claim comes off once refused**, never while waiting or approved (`removeTestFromVisit`, `hmo-package.spec.js`).
 
 **Packages are managed on Services Catalog, behind `tests:manage`.** `[1.47.0]` Deliberately the
 same permission that governs pricing a test, because a package IS a price — a separate one would

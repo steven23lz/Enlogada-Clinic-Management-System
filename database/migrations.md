@@ -1,5 +1,27 @@
 # Database Migration & Schema History
 
+## [1.158.0] - 2026-11-05 (A retired test leaves its packages; a refused test can come off)
+
+No schema change. Steven: "of course it should be out of the package if it is inactive". It stayed in, on the
+reasoning that HIV Screening was switched off for having no price of its own, which stopped being true when HIV was
+priced, so a package kept selling a test the clinic had stopped doing.
+
+**Retiring a test takes it out of every package** (`packageService.afterTestChanged`, in the same transaction, and
+logged). Reactivating does not put it back. A package on sale that no longer fits goes off sale (`utils/packageFit.js`,
+unit-tested): fewer than two tests, or dearer than its tests. Package A without HIV is ₱1,150 of tests at ₱1,450. Lowering
+a test's price runs the same check, by either route. Offering one again answers to both rules. Services Catalog names the
+packages before the switch and what happened after it (`package-notice`, until dismissed). Visits already made keep their
+lines and bill; a paid one the clinic can no longer do is a recorded refund. Both package reads filter `t.is_active`,
+which holds the rule against a row changed any other way.
+
+**An HMO claim on tests inside a package was followed through**, and the money was right every time: the patient pays
+the package less each approved share, to the centavo, and the refund screen refuses what the HMO covers. One hole: a
+test on a claim could never be taken off ("This is still in use", the foreign key), even after the HMO refused, so
+"my HMO said no, so I won't have that test" had no way through. `testService.removeTestFromVisit` now reads each line with
+`hmoEffectiveStatus`: refused comes off, its reason on the Activity Log, and a claim left empty goes with its card image;
+waiting or approved is refused in a sentence naming the Admin. A package goes whole or not at all, as before.
+**Tests:** `package-retired-test.spec.js`, `hmo-package.spec.js`, one unit file.
+
 ## [1.157.0] - 2026-11-05 (The same test twice)
 
 No schema change. Steven ticked every package and it was accepted. All five packages hold the same six

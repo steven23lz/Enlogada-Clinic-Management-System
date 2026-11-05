@@ -71,7 +71,7 @@ class TestController {
         price,
         preparation,
         isActive
-      });
+      }, req.user);
       return res.status(200).json({
         status: 'success',
         message: 'Test updated successfully.',
@@ -94,7 +94,7 @@ class TestController {
         });
       }
 
-      const test = await testService.updateTestPrice(id, parseFloat(price));
+      const test = await testService.updateTestPrice(id, parseFloat(price), req.user);
       return res.status(200).json({
         status: 'success',
         message: 'Test price updated successfully.',

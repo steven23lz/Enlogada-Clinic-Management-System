@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const db = require('../config/database');
 const testRepository = require('../repositories/testRepository');
 const packageService = require('./packageService');
@@ -6,6 +8,7 @@ const patientService = require('./patientService');
 const auditService = require('./auditService');
 const paymentRepository = require('../repositories/paymentRepository');
 const { assertNoProofWaiting } = require('./billLock');
+const { HMO_CARD_UPLOAD_ROOT } = require('../config/upload');
 const { assertNoRepeat, logConfirmed } = require('./repeatTestGuard');
 const { DIAGNOSTIC_CATEGORIES } = require('../constants/modality');
 
@@ -114,7 +117,7 @@ class TestService {
    * a partial update safe. Deciding it here rather than in the controller keeps it true for every
    * caller, including any future one that never reads this comment.
    */
-  async updateTest(id, testData) {
+  async updateTest(id, testData, requestingUser = null) {
     const existing = await testRepository.findTestById(id);
     if (!existing) {
       const error = new Error('Test not found');
@@ -126,15 +129,25 @@ class TestService {
       testData.categoryId ?? existing.category_id,
       testData.isActive === undefined ? existing.is_active : testData.isActive
     );
-    return await testRepository.updateTest(id, {
-      ...testData,
-      ...(typeof testData.name === 'string' ? { name: testData.name.trim() } : {}),
-      preparation: testData.preparation === undefined ? existing.preparation : testData.preparation,
-      isActive: testData.isActive === undefined ? existing.is_active : testData.isActive,
+    const isActive = testData.isActive === undefined ? existing.is_active : testData.isActive;
+    return await db.withTransaction(async () => {
+      const test = await testRepository.updateTest(id, {
+        ...testData,
+        ...(typeof testData.name === 'string' ? { name: testData.name.trim() } : {}),
+        preparation: testData.preparation === undefined ? existing.preparation : testData.preparation,
+        isActive,
+      });
+      // [1.158.0] Out of its packages when retired; a lower price can leave one dearer than its tests.
+      const retired = existing.is_active && !isActive;
+      const cheaper = isActive && Number(testData.price) < Number(existing.price);
+      const { changes, notice } = retired || cheaper
+        ? await packageService.afterTestChanged(test.id, { testName: test.name, retired, requestingUser })
+        : { changes: [], notice: '' };
+      return { ...test, packagesChanged: changes, packageNotice: notice };
     });
   }
 
-  async updateTestPrice(id, price) {
+  async updateTestPrice(id, price, requestingUser = null) {
     const existing = await testRepository.findTestById(id);
     if (!existing) {
       const error = new Error('Test not found');
@@ -147,7 +160,13 @@ class TestService {
       error.statusCode = 400;
       throw error;
     }
-    return await testRepository.updateTestPrice(id, price);
+    return await db.withTransaction(async () => {
+      const test = await testRepository.updateTestPrice(id, price);
+      const { changes, notice } = Number(price) < Number(existing.price)
+        ? await packageService.afterTestChanged(test.id, { testName: test.name, requestingUser })
+        : { changes: [], notice: '' };
+      return { ...test, packagesChanged: changes, packageNotice: notice };
+    });
   }
 
   async getCategories() {
@@ -302,17 +321,39 @@ class TestService {
       refuse(`${removedPackage || line.test_name} is the only thing on this visit, and a visit needs at least one test. If the patient wants none of it, leave it unpaid: an unpaid walk-in is removed at the end of its day, and an unpaid booking when its time to pay runs out (the patient can also release it from their portal).`);
     }
 
-    const removed = await testRepository.deleteVisitTests(ids);
+    // [1.158.0] A line on an HMO claim. The foreign key answered "This is still in use", for good,
+    // even once the HMO had refused: "my HMO said no, so I won't have that test" had no way through.
+    // A refusal is the one that may come off, and what it said goes on the Activity Log, because the
+    // claim line goes with it. Waiting or approved is the Admin's decision to change first.
+    const claims = await testRepository.findClaimsOnLines(ids);
+    const open = claims.find((c) => c.status !== 'Rejected');
+    if (open) {
+      refuse(open.status === 'Approved'
+        ? `${open.provider_name} approved ${open.test_name}, so it cannot be taken off here. If the patient no longer wants it, an Admin changes that decision on Service Requests first.`
+        : `${open.test_name} is waiting for ${open.provider_name}'s decision, so it cannot be taken off yet. An Admin records the HMO's answer on Service Requests first.`);
+    }
+    const refusedNote = claims.length
+      ? ` (refused by ${claims[0].provider_name}: ${claims[0].reason || 'no reason recorded'})`
+      : '';
 
-    await auditService.log({
-      actorId: requestingUser?.userId,
-      action: 'visit_test.removed',
-      entityType: 'patient_visit',
-      entityId: line.patient_visit_id,
-      description: removedPackage
-        ? `Removed package ${removedPackage} (${removed.length} tests) from the visit`
-        : `Removed ${line.test_name} from the visit`,
+    const { removed, cards } = await db.withTransaction(async () => {
+      const cardFiles = await testRepository.removeClaimLines(ids);
+      const rows = await testRepository.deleteVisitTests(ids);
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: 'visit_test.removed',
+        entityType: 'patient_visit',
+        entityId: line.patient_visit_id,
+        description: removedPackage
+          ? `Removed package ${removedPackage} (${rows.length} tests) from the visit${refusedNote}`
+          : `Removed ${line.test_name} from the visit${refusedNote}`,
+      });
+      return { removed: rows, cards: cardFiles };
     });
+    // After the commit: nothing refers to these now. A file left behind is only an orphan.
+    for (const card of cards) {
+      fs.promises.unlink(path.join(HMO_CARD_UPLOAD_ROOT, path.basename(card))).catch(() => {});
+    }
 
     return { removed: removed.length, packageName: removedPackage, testName: line.test_name };
   }

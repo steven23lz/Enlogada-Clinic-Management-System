@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { hmoEffectiveStatus } = require('../constants/hmoEffectiveStatus');
 
 class TestRepository {
   async findAllTests(includeInactive = false) {
@@ -194,6 +195,46 @@ class TestRepository {
       [patientVisitId, packageId]
     );
     return result.rows;
+  }
+
+  /**
+   * Where each of these lines stands with its HMO, if it is on a claim at all. [1.158.0] A refusal at
+   * either level is a refusal: hmoEffectiveStatus, the bill's own rule.
+   */
+  async findClaimsOnLines(ids) {
+    if (!ids.length) return [];
+    const { rows } = await db.query(
+      `SELECT vt.id, t.name AS test_name, hp.name AS provider_name,
+              COALESCE(hrt.decision_reason, hr.decision_reason) AS reason,
+              ${hmoEffectiveStatus('hr', 'hrt')} AS status
+         FROM hmo_request_tests hrt
+         JOIN hmo_requests hr ON hr.id = hrt.hmo_request_id
+         JOIN hmo_providers hp ON hp.id = hr.hmo_provider_id
+         JOIN visit_tests vt ON vt.id = hrt.visit_test_id
+         JOIN tests t ON t.id = vt.test_id
+        WHERE hrt.visit_test_id = ANY($1::int[])`,
+      [ids]
+    );
+    return rows;
+  }
+
+  /**
+   * Takes these lines off their claims, and removes a claim left with none, as removing a visit does.
+   * @returns {Promise<string[]>} the card images of the claims removed, to delete after the commit.
+   */
+  async removeClaimLines(ids) {
+    const { rows: claims } = await db.query(
+      'DELETE FROM hmo_request_tests WHERE visit_test_id = ANY($1::int[]) RETURNING hmo_request_id AS id',
+      [ids]
+    );
+    if (!claims.length) return [];
+    const { rows: cards } = await db.query(
+      `DELETE FROM hmo_requests hr WHERE hr.id = ANY($1::int[])
+          AND NOT EXISTS (SELECT 1 FROM hmo_request_tests hrt WHERE hrt.hmo_request_id = hr.id)
+        RETURNING card_file_path AS p`,
+      [[...new Set(claims.map((c) => c.id))]]
+    );
+    return cards.map((c) => c.p).filter(Boolean);
   }
 
   async deleteVisitTests(ids) {

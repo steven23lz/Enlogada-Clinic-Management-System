@@ -11,9 +11,9 @@ class PackageRepository {
   /**
    * Active packages with their components, one row per component.
    *
-   * `t.is_active` is deliberately NOT filtered. HIV Screening is switched off so it cannot be sold
-   * on its own at a price nobody set, but it is a real component of all five packages and has to
-   * come back here or the bundle silently loses a test.
+   * [1.158.0] Only tests still offered. Retiring a test takes it out of its packages
+   * (packageService.afterTestChanged); this holds the rule against a row changed any other way. It
+   * used to keep retired tests in, for HIV Screening, then switched off for having no price of its own.
    */
   async findActiveWithItems() {
     const queryText = `
@@ -27,7 +27,7 @@ class PackageRepository {
         JOIN test_package_items pi ON pi.package_id = p.id
         JOIN tests t               ON t.id = pi.test_id
         JOIN test_categories tc    ON tc.id = t.category_id
-       WHERE p.is_active
+       WHERE p.is_active AND t.is_active
        ORDER BY p.code, tc.name, t.name
     `;
     const result = await db.query(queryText);
@@ -112,7 +112,29 @@ class PackageRepository {
     return rows[0] || null;
   }
 
-  /** One package and its components, by id. Same non-filtering of `t.is_active` as above. */
+  /** Every package holding this test, with the name of each and what its tests add up to now. */
+  async findHolding(testId) {
+    const { rows } = await db.query(
+      `SELECT p.id, p.code, p.name, p.price, p.is_active,
+              COUNT(*) FILTER (WHERE t.is_active AND t.id <> $1)::int AS tests_left,
+              COALESCE(SUM(t.price) FILTER (WHERE t.is_active AND t.id <> $1), 0) AS others_total,
+              (SELECT price FROM tests WHERE id = $1) AS test_price
+         FROM test_packages p
+         JOIN test_package_items pi ON pi.package_id = p.id
+         JOIN tests t ON t.id = pi.test_id
+        WHERE p.id IN (SELECT package_id FROM test_package_items WHERE test_id = $1)
+        GROUP BY p.id
+        ORDER BY p.code`,
+      [testId]
+    );
+    return rows;
+  }
+
+  async removeTestFromPackages(testId) {
+    await db.query('DELETE FROM test_package_items WHERE test_id = $1', [testId]);
+  }
+
+  /** One package and its components, by id: only tests still offered, as above. */
   async findByIdsWithItems(packageIds) {
     if (!packageIds || packageIds.length === 0) return [];
     const queryText = `
@@ -122,7 +144,7 @@ class PackageRepository {
              t.price AS test_price
         FROM test_packages p
         JOIN test_package_items pi ON pi.package_id = p.id
-        JOIN tests t               ON t.id = pi.test_id
+        JOIN tests t               ON t.id = pi.test_id AND t.is_active
        WHERE p.id = ANY($1)
        ORDER BY p.code, t.name
     `;

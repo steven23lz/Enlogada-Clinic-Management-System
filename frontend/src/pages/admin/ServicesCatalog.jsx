@@ -23,9 +23,15 @@ import { useFreshness } from '../../hooks/useFreshness';
  * about to do the other. They have a hook and a panel each; this wires them together.
  */
 const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
-  const catalogue = useTestCatalogue();
   const hmoAdmin = useHmoProviderAdmin();
   const packageAdmin = usePackageAdmin();
+  const catalogue = useTestCatalogue({ onPackagesChanged: packageAdmin.reload });
+
+  // [1.158.0] Asked before it happens: retiring a test takes it out of every package holding it.
+  const retiring = catalogue.confirmTarget?.is_active ? catalogue.confirmTarget : null;
+  const holders = retiring
+    ? packageAdmin.packages.filter((p) => p.isActive && (p.tests || []).some((t) => t.id === retiring.id))
+    : [];
 
   // One control, three lists. It used to reload only the services, so a package or a provider
   // added by someone else stayed missing from a screen the reader had just deliberately
@@ -57,6 +63,13 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
             </>
           }
         />
+
+        {catalogue.packageNotice && (
+          <div data-testid="package-notice" role="status" className="alert alert-warning flex-wrap">
+            <span className="min-w-0 flex-1">{catalogue.packageNotice}</span>
+            <Button type="button" size="xs" variant="outline" onClick={catalogue.dismissPackageNotice}>Dismiss</Button>
+          </div>
+        )}
 
         <ServicesTablePanel catalogue={catalogue} />
         <PackagesPanel packageAdmin={packageAdmin} />
@@ -98,7 +111,7 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
           onOpenChange={(open) => { if (!open) catalogue.dismissToggle(); }}
           title={catalogue.confirmTarget?.is_active ? 'Deactivate Service' : 'Activate Service'}
           description={catalogue.confirmTarget && (
-            `Are you sure you want to change "${catalogue.confirmTarget.name}" from ${catalogue.confirmTarget.is_active ? 'Active' : 'Inactive'} to ${catalogue.confirmTarget.is_active ? 'Inactive' : 'Active'}? This immediately affects its availability on the public booking form.`
+            `Are you sure you want to change "${catalogue.confirmTarget.name}" from ${catalogue.confirmTarget.is_active ? 'Active' : 'Inactive'} to ${catalogue.confirmTarget.is_active ? 'Inactive' : 'Active'}? This immediately affects its availability on the public booking form.${holders.length ? ` It also comes out of ${holders.map((p) => p.name).join(', ')}, and any package that would then cost more than its tests goes off sale until repriced. Visits already booked keep it.` : ''}`
           )}
           confirmLabel={catalogue.confirmTarget?.is_active ? 'Deactivate' : 'Activate'}
           onConfirm={catalogue.confirmToggle}

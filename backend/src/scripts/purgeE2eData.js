@@ -128,12 +128,7 @@ async function purgeNameScopedFixtures() {
     // Only ever removes rows nothing references — a fixture that a surviving visit still points at
     // stays, because deleting it would orphan that visit's line and change what a past bill says
     // it was for.
-    await db.query(
-      `DELETE FROM tests t
-        WHERE t.name LIKE 'E2E %'
-          AND NOT EXISTS (SELECT 1 FROM visit_tests vt WHERE vt.test_id = t.id)
-          AND NOT EXISTS (SELECT 1 FROM test_package_items pi WHERE pi.test_id = t.id)`
-    );
+    // Removed further down, once the fixture packages holding them are gone. [1.158.0]
 
     // Feedback questions a spec added. [1.112.0] Answered ones went with their visits above (the
     // answers cascade), so only a question nothing answers is removed — the same rule as the
@@ -159,6 +154,15 @@ async function purgeNameScopedFixtures() {
       `DELETE FROM test_packages p
         WHERE p.name LIKE 'E2E %'
           AND NOT EXISTS (SELECT 1 FROM visit_tests vt WHERE vt.package_id = p.id)`
+    );
+
+    // After the packages: a fixture test still in a fixture package was skipped, and stayed in the
+    // Services Catalog. [1.158.0]
+    await db.query(
+      `DELETE FROM tests t
+        WHERE t.name LIKE 'E2E %'
+          AND NOT EXISTS (SELECT 1 FROM visit_tests vt WHERE vt.test_id = t.id)
+          AND NOT EXISTS (SELECT 1 FROM test_package_items pi WHERE pi.test_id = t.id)`
     );
 
     // Payment channel fixtures, by the same rule. [1.89.0] manual-payment and proof-review publish an

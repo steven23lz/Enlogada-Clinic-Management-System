@@ -15,7 +15,15 @@ import api from '../config/api';
  * held on the server side in testService.updateTest, where it protects every caller rather than
  * this one screen.
  */
-export function useTestCatalogue() {
+export function useTestCatalogue({ onPackagesChanged } = {}) {
+  // [1.158.0] What a change just did to the packages holding the test, said by the server. It stays
+  // up until dismissed: a package going off sale is not something to read in a passing toast.
+  const [packageNotice, setPackageNotice] = useState('');
+  const heard = (test) => {
+    if (!test?.packagesChanged?.length) return;
+    setPackageNotice(test.packageNotice || '');
+    onPackagesChanged?.();
+  };
   const [tests, setTests] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -116,13 +124,14 @@ export function useTestCatalogue() {
     setSubmitting(true);
     try {
       if (editingTest) {
-        await api.put(`/tests/${editingTest.id}`, {
+        const res = await api.put(`/tests/${editingTest.id}`, {
           categoryId: parseInt(form.categoryId, 10),
           name: form.name,
           price: numericPrice,
           preparation: form.preparation,
           isActive: form.isActive,
         });
+        heard(res.data.data.test);
         setModalSuccess('Service updated successfully! Live website catalog updated.');
       } else {
         await api.post('/tests', {
@@ -163,12 +172,13 @@ export function useTestCatalogue() {
     try {
       // `preparation` is not sent, and must not be: testService.updateTest keeps what a caller
       // does not mention, so this changes the flag and nothing else.
-      await api.put(`/tests/${test.id}`, {
+      const res = await api.put(`/tests/${test.id}`, {
         categoryId: test.category_id,
         name: test.name,
         price: parseFloat(test.price),
         isActive: !test.is_active,
       });
+      heard(res.data.data.test);
       setConfirmTarget(null);
     } catch (err) {
       console.error(err);
@@ -214,6 +224,7 @@ export function useTestCatalogue() {
     showModal, editingTest, form, setForm, modalError, modalSuccess, submitting,
     openAdd, openEdit, closeModal, save,
     confirmTarget, toggling, toggleError, requestToggle, dismissToggle, confirmToggle,
+    packageNotice, dismissPackageNotice: () => setPackageNotice(''),
     reload,
   };
 }

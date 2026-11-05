@@ -128,6 +128,7 @@ export default function ServicesTablePanel({ catalogue }) {
                           switch is reachable by keyboard. [1.128.0] */}
                       <button
                         type="button"
+                        data-testid="service-toggle"
                         onClick={() => catalogue.requestToggle(test)}
                         className="cursor-pointer rounded-full border-0 bg-transparent p-0"
                       >

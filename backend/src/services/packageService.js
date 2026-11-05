@@ -4,6 +4,8 @@ const visitRepository = require('../repositories/visitRepository');
 const db = require('../config/database');
 const { ValidationError, ConflictError } = require('../errors');
 const { findOverlap, sharedTests, overlapMessage, onVisitMessage } = require('../utils/packageOverlap');
+const { whyOffSale, describeChanges } = require('../utils/packageFit');
+const auditService = require('./auditService');
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
@@ -130,6 +132,47 @@ class PackageService {
   }
 
   /**
+   * What a change to a test does to the packages holding it. [1.158.0] In the caller's transaction, so
+   * the test and its packages move together.
+   *
+   * Retired: it comes out of every package, on sale or not, so offering one again can never bring it
+   * back. Reactivating does not put it back: what a package holds is someone's decision. Either way, a
+   * package on sale that no longer fits (utils/packageFit.js) goes off sale. Visits already made keep
+   * their lines and their price: a paid one the clinic can no longer do is a recorded refund [1.155.0].
+   *
+   * @returns {Promise<{ changes: object[], notice: string }>}
+   */
+  async afterTestChanged(testId, { testName, retired = false, requestingUser = null }) {
+    const holding = await packageRepository.findHolding(testId);
+    if (holding.length === 0) return { changes: [], notice: '' };
+    if (retired) await packageRepository.removeTestFromPackages(testId);
+
+    const changes = [];
+    for (const pkg of holding) {
+      const listTotal = Number(pkg.others_total) + (retired ? 0 : Number(pkg.test_price));
+      const testsLeft = pkg.tests_left + (retired ? 0 : 1);
+      const offSale = pkg.is_active ? whyOffSale({ price: pkg.price, testsLeft, listTotal }) : null;
+      if (offSale) await packageRepository.update(pkg.id, { isActive: false });
+      if (!retired && !offSale) continue;
+      changes.push({
+        id: pkg.id, name: pkg.name, price: pkg.price, testsLeft, listTotal, wasOffered: pkg.is_active, offSale,
+      });
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: offSale ? 'package.taken_off_sale' : 'package.test_removed',
+        entityType: 'test_package',
+        entityId: pkg.id,
+        description: offSale
+          ? `${pkg.name} taken off sale after a change to ${testName}: ${offSale === 'too_few' ? `${testsLeft} test(s) left` : `₱${pkg.price} against ₱${listTotal.toFixed(2)} of tests`}`
+          : `${testName} retired, so it came out of ${pkg.name}`,
+      });
+    }
+    // A retired package losing a test is on its record; the person acting need only hear about sales.
+    const told = changes.filter((c) => c.wasOffered);
+    return { changes: told, notice: describeChanges({ testName, retired, changes: told }) };
+  }
+
+  /**
    * Two packages on offer under one name cannot be told apart on the booking screen. [1.157.0] A
    * service's name was already unique in its department; a package's code was, and its name was not.
    * Checked when naming one or offering one again, so a retired one may share a name until then.
@@ -151,10 +194,16 @@ class PackageService {
    * later, must never stop a package being taken off sale.
    */
   async assertWorthBuying(id, { price, isActive, chosenTests }) {
-    if (isActive === false || (price === undefined && !chosenTests)) return;
+    if (isActive === false || (price === undefined && !chosenTests && isActive !== true)) return;
 
     const current = id ? await packageRepository.findByIdsWithItems([id]) : [];
-    const priceNow = price !== undefined ? price : current[0]?.price;
+    // [1.158.0] Offered again as it stands: a test retired from it since must not bring it back short.
+    if (!chosenTests && id && isActive === true && current.length < 2) {
+      throw new ValidationError('This package has fewer than two tests left. Add its tests before offering it again.');
+    }
+    const priceNow = price !== undefined
+      ? price
+      : (current[0]?.price ?? (id ? (await packageRepository.findById(id))?.price : undefined));
     const parts = chosenTests
       ? chosenTests.map((t) => t.price)
       : current.map((r) => r.test_price);
