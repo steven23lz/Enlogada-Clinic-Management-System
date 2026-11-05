@@ -192,6 +192,7 @@ class CashCountService {
     if (outcome !== 'balanced') {
       notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
         title: `Drawer ${outcome} by ${formatCurrency(Math.abs(saved.difference))}`,
+        target: { kind: 'cash-count' },
         message: `The count for ${date}. See Cashier Monitoring.`,
         type: 'warning',
       }).catch(() => { /* the count is on record whether or not the bell rings */ });

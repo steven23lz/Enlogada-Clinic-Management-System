@@ -1,5 +1,13 @@
 # Database Migration & Schema History
 
+## [1.164.0] - 2026-11-06 (A notification opens what it is about)
+
+`migrateNotificationTargets.js`: `notification_events.target`. Steven: clicking a notification took nobody anywhere; it only marked it read. Every notification now says what it is about, and
+`lib/notificationTarget.js` opens the right screen for whoever clicks: a test with no result opens that department's worklist with the patient found, an HMO decision the till for a cashier and the Desk for a receptionist,
+a claim that claim, a receipt that receipt. Notices sent before this open nothing, as they always did.
+
+Found on the way: **nobody told the Admin an HMO claim was waiting.** Only the decision had a notification. `hmoService.announceClaim` now does, from the Desk and from a booking.
+
 ## [1.163.0] - 2026-11-06 (No test result uploaded: a hard alert)
 
 `migrateOverdueResults.js`: `visit_tests.overdue_notified_at`, `closing_notified_at`. His timeline: in the queue at 3:15 PM, pinged at 4:15 PM if no result is uploaded, not pinged if one was. In the queue at 4:17 PM, its hour runs past the 5:00 PM close, so 15 minutes before closing every test with no result pings, on that day's real hours (`utils/closingNotice.js`). Steven: if 60 minutes pass with no upload, in every department, for each patient in the queue, a hard notification goes to the staff

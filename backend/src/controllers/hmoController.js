@@ -34,6 +34,7 @@ class HmoController {
         },
         req.user
       );
+      hmoService.announceClaim(request.id).catch(() => { /* the claim stands whether or not the bell rings */ });
       return res.status(201).json({
         status: 'success',
         message: 'HMO request logged successfully.',

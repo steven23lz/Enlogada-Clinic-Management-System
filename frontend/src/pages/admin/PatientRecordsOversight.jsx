@@ -54,7 +54,7 @@ const PAGE_SIZE = 15;
  * Opening a patient's records, opening a report, printing it and downloading it each write a
  * line in the Activity Log.
  */
-const PatientRecordsOversight = ({ onSelectNav }) => {
+const PatientRecordsOversight = ({ onSelectNav, intent = null }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -184,11 +184,12 @@ const PatientRecordsOversight = ({ onSelectNav }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, from, to, showArchived]);
 
-  // Open on the roster, most recently seen first.
+  // Open on the roster, most recently seen first. [1.164.0] Or on the patient a notification is about.
   useEffect(() => {
-    load({ p: 1 });
+    if (intent?.find) setQuery(intent.find);
+    load({ p: 1, ...(intent?.find ? { q: intent.find } : {}) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [intent]);
 
   const handleSearch = (e) => {
     e.preventDefault();

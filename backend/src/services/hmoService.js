@@ -64,6 +64,7 @@ async function handOffToCashier(request, { type, title, detail }) {
   await notificationService.notifyRoles(['Cashier', 'Receptionist'], {
     title,
     type,
+    target: { kind: 'till', find: patient },
     message: patient ? `${patient} — ${detail}` : detail,
   });
 }
@@ -333,6 +334,22 @@ class HmoService {
       for (const v of visits) await appointmentRepository.holdForHmo(v.id);
 
       return request;
+    });
+  }
+
+  /**
+   * Tells whoever decides claims that one is waiting. [1.164.0] Nothing did: the Admin found out from Today,
+   * if they looked, and a booking's slot is held on their answer. After the commit, and never fails the claim.
+   */
+  async announceClaim(requestId) {
+    const request = await hmoRepository.findRequestById(requestId);
+    if (!request) return;
+    const patient = [request.patient_first_name, request.patient_last_name].filter(Boolean).join(' ');
+    await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
+      title: 'HMO claim to decide',
+      message: `${patient ? `${patient}: ` : ''}${request.provider_name} claim, waiting for your decision.`,
+      type: 'warning',
+      target: { kind: 'claim', claimId: request.id },
     });
   }
 

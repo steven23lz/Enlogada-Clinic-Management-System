@@ -4,6 +4,7 @@ import React, {
 import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import OverdueResultsBanner from './OverdueResultsBanner';
+import { notificationDestination } from '../lib/notificationTarget';
 import Logo from './Logo';
 import ErrorBoundary from './ErrorBoundary';
 import { usePolling } from '../hooks/usePolling';
@@ -307,6 +308,19 @@ const StaffShell = ({ title = 'Today', activeNav = 'today', onSelectNav, railAct
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
     }
+  };
+
+  // [1.164.0] Where a notification opens for this person: their sidebar decides, so it is never a refusal.
+  const destinationOf = (n) => notificationDestination(n.target, (navId) => {
+    const item = findNavItem(navId);
+    return Boolean(item) && canSee(item, userRoles, userPermissions, userDepartments);
+  });
+
+  const openNotification = (n, destination) => {
+    if (!n.is_read) handleMarkAsRead(n.id);
+    if (!destination) return;
+    setShowNotifications(false);
+    onSelectNav?.(destination.nav, destination.intent);
   };
 
   const handleMarkAllAsRead = async () => {
@@ -714,10 +728,13 @@ const StaffShell = ({ title = 'Today', activeNav = 'today', onSelectNav, railAct
                         // bell rather than to any one feature, and an urgent item has to be
                         // findable at a glance and stay visibly urgent after it is read.
                         const isCritical = n.type === 'critical';
+                        const destination = destinationOf(n);
                         return (
                           <button
                             key={n.id}
-                            onClick={() => !n.is_read && handleMarkAsRead(n.id)}
+                            data-testid="notification-item"
+                            data-opens={destination?.nav || ''}
+                            onClick={() => openNotification(n, destination)}
                             className={cn(
                               'flex w-full cursor-pointer gap-2.5 rounded-lg border-0 px-2.5 py-2 text-left transition-colors',
                               isCritical
@@ -761,6 +778,11 @@ const StaffShell = ({ title = 'Today', activeNav = 'today', onSelectNav, railAct
                               >
                                 {n.message}
                               </span>
+                              {destination && (
+                                <span className="mt-0.5 block text-micro font-semibold text-brand-700">
+                                  Open {findNavItem(destination.nav)?.label} &rarr;
+                                </span>
+                              )}
                             </span>
                           </button>
                         );

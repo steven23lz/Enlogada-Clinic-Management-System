@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Panel, PanelBody } from '../../components/ui/panel';
 import PageHeader from '../../components/ui/page-header';
 import RefreshButton from '../../components/ui/refresh-button';
@@ -29,7 +29,7 @@ const PAGE_SIZE = 15;
 // Module 7 built request *initiation*; approval existed on the backend
 // (PUT /hmo/request/:id/approve, PUT /hmo/request-test/:id) but had no UI anywhere, and there
 // was no way to even discover pending requests (no "list" endpoint existed before this pass).
-const ServiceRequests = () => {
+const ServiceRequests = ({ intent = null }) => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   // A failed fetch used to reach console.error and stop there, so the screen rendered its
@@ -99,6 +99,15 @@ const ServiceRequests = () => {
       setDetailLoading(false);
     }
   };
+
+  // [1.164.0] A notification about a claim opens that claim. Once per navigation.
+  const handledIntent = useRef(null);
+  useEffect(() => {
+    if (!intent?.claimId || handledIntent.current === intent) return;
+    handledIntent.current = intent;
+    openDetail(intent.claimId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent]);
 
   const refreshDetail = async (requestId) => {
     const res = await api.get(`/hmo/request/${requestId}`);

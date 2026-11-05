@@ -968,6 +968,8 @@ CREATE TABLE notification_events (
     title VARCHAR(200) NOT NULL,
     message TEXT NOT NULL,
     type VARCHAR(20) NOT NULL DEFAULT 'info',
+    -- What it is about, so clicking it opens that (lib/notificationTarget.js). NULL opens nothing. [1.164.0]
+    target JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_notification_events_type CHECK (type IN ('info', 'success', 'warning', 'critical'))
 );

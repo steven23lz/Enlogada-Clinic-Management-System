@@ -374,6 +374,7 @@ class PaymentGatewayService {
           );
           await notificationService.notifyRoles(['Cashier', 'Admin', 'SuperAdmin'], {
             title: 'Double payment — refund required',
+            target: { kind: 'online-payments' },
             message: `An online payment settled for a visit already paid at the counter (session ${sessionId}). Refund the online payment.`,
             type: 'critical'
           });
@@ -385,6 +386,7 @@ class PaymentGatewayService {
       if (settled) {
         await notificationService.notifyRoles(['Cashier', 'Admin', 'SuperAdmin'], {
           title: 'Online payment recovered',
+          target: { kind: 'receipt', receipt: receiptNumber },
           message: `A superseded checkout session was completed and has been recorded (receipt #${receiptNumber}). Verify against the provider dashboard.`,
           type: 'warning'
         });
@@ -397,6 +399,7 @@ class PaymentGatewayService {
 
     await notificationService.notifyRoles(['Cashier', 'Admin', 'SuperAdmin'], {
       title: 'Online Payment Received',
+      target: { kind: 'receipt', receipt: receiptNumber },
       message: `Receipt #${receiptNumber} — ${pending.first_name} ${pending.last_name}, PHP ${parseFloat(settled.amount).toFixed(2)} via ${settled.payment_method}`,
       type: 'success'
     });
@@ -423,6 +426,7 @@ class PaymentGatewayService {
       if (hours && contended >= hours.max_concurrent_bookings) {
         await notificationService.notifyRoles(['Admin', 'SuperAdmin', 'Receptionist'], {
           title: 'Slot overbooked by a late payment',
+          target: { kind: 'booking', reference: confirmed.appointment_reference },
           message:
             `${confirmed.appointment_reference} paid after its hold lapsed and the slot had been ` +
             'taken. The booking stands — the money was received. Two patients now hold this time.',

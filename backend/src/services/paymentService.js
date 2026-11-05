@@ -382,6 +382,7 @@ class PaymentService {
     if (announce) {
       await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
         title: 'Payment Confirmed',
+        target: { kind: 'receipt', receipt: receiptNumber },
         message: `Receipt #${receiptNumber} — ${bill.patientName}, ${formatCurrency(authoritativeTotal)}`,
         type: 'success'
       });

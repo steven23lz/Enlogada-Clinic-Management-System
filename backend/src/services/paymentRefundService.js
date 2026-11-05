@@ -171,6 +171,7 @@ class PaymentRefundService {
     const patientName = `${payment.first_name} ${payment.last_name}`;
     await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
       title: 'Payment refunded',
+      target: { kind: 'receipt', receipt: outcome.receiptNumber },
       message: `${formatCurrency(outcome.amount)} back from receipt ${outcome.receiptNumber} — ${patientName}`,
       type: 'warning',
     }).catch(() => {});

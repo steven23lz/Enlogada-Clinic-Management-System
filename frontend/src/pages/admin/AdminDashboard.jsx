@@ -32,13 +32,13 @@ const AdminDashboard = ({ activeNav = 'staff', onSelectNav, intent = null }) => 
       case 'staff':
         return <StaffAccounts />;
       case 'service-requests':
-        return <ServiceRequests />;
+        return <ServiceRequests intent={intent} />;
       case 'cashier-monitoring':
         return <CashierMonitoring />;
       case 'appointments-list':
         return <AppointmentsOversight />;
       case 'patient-records':
-        return <PatientRecordsOversight onSelectNav={onSelectNav} />;
+        return <PatientRecordsOversight onSelectNav={onSelectNav} intent={intent} />;
       case 'clinic-schedule':
         return <ClinicSchedule />;
       case 'reports':

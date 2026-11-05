@@ -455,6 +455,103 @@ test.describe('A second walk through the combinations [1.160.0]', () => {
     expect(bell, 'a result uploaded: nobody is pinged').not.toContain(`Ticket ${uploaded.visit.queue_number}, ${uploaded.person.firstName} ${uploaded.person.lastName}`);
   });
 
+  test('[1.164.0] a notification opens what it is about, for whoever clicks it', async ({ page }) => {
+    const { patient, visitId, ticket } = await patientAndVisit();
+    const name = `${patient.first_name} ${patient.last_name}`;
+    const [line] = await lines(visitId);
+    const claimId = await idOf(await claim([line.id]));
+    const openBell = async () => {
+      await page.getByRole('button', { name: /notifications/i }).first().click();
+      return page.getByTestId('notification-item').filter({ hasText: patient.last_name }).first();
+    };
+
+    // The Admin is told a claim is waiting, and the notice opens that claim.
+    await signInTo(page, 'clinicadmin@enlogada.com', 'Reports');
+    const toDecide = await openBell();
+    await expect(toDecide).toContainText('HMO claim to decide', { timeout: 15000 });
+    await expect(toDecide).toHaveAttribute('data-opens', 'service-requests');
+    await toDecide.click();
+    // The dialog is what shows: the screen behind it is hidden from the page while it is open.
+    await expect(page.getByRole('dialog').getByText('HMO Request Review')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('dialog')).toContainText(name);
+
+    await approve(claimId);
+
+    // The decision goes to the cashier's till, with the patient found.
+    await page.evaluate(() => localStorage.clear());
+    await signInTo(page, 'multirole@enlogada.com', 'Patient Records');
+    const decided = await openBell();
+    await expect(decided).toContainText('HMO claim approved', { timeout: 15000 });
+    await expect(decided).toHaveAttribute('data-opens', 'cashier-queue');
+    await decided.click();
+    await expect(page.getByRole('heading', { name: 'Billing Queue', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByPlaceholder('Search ticket # or name...')).toHaveValue(name);
+    await expect(page.getByRole('button', { name: new RegExp(patient.last_name) }).first()).toContainText(ticket);
+  });
+
+  test('[1.164.0] the department, the receipt and the booking notices open theirs too', async ({ browser }) => {
+    const su = await loginAs(ctx, CREDS.superadmin);
+    const labToken = await loginAs(ctx, { email: 'lab@enlogada.com', password: 'Password123!' });
+    const tests = (await (await ctx.get(`${API}/tests`)).json()).data.tests;
+    const labTest = tests.find((t) => t.is_active && t.category_name === 'Laboratory' && Number(t.price) > 0);
+    const person = fixturePerson();
+    const patient = (await (await ctx.post(`${API}/patients`, {
+      headers: auth(desk),
+      data: { patientTypeId: await patientTypeId(ctx, API, desk, 'Self Pay'), firstName: person.firstName, lastName: person.lastName, birthdate: '1980-01-01', sex: 'Male', contactNumber: FIXTURE_CONTACT },
+    })).json()).data.patient;
+    const visit = (await (await ctx.post(`${API}/visits`, { headers: auth(desk), data: { patientId: patient.id, visitType: 'Walk in', testIds: [labTest.id] } })).json()).data.visit;
+    const paid = await ctx.post(`${API}/payments`, { headers: auth(cashier), data: { patientVisitId: visit.id, paymentMethod: 'Cash', amount: Number((await billOf(visit.id)).totalAmount) } });
+    const receipt = (await paid.json()).data.payment.receipt_number;
+    expect(labToken).toBeTruthy();
+
+    const signedIn = async (email, screen) => {
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      await signInTo(page, email, screen);
+      await page.getByRole('button', { name: /notifications/i }).first().click();
+      return page;
+    };
+
+    // A ticket reaching the laboratory opens its worklist, with the patient found.
+    const lab = await signedIn('lab@enlogada.com', 'Patient Records');
+    const ticket = lab.getByTestId('notification-item').filter({ hasText: person.lastName }).first();
+    await expect(ticket).toHaveAttribute('data-opens', 'lab-ops', { timeout: 15000 });
+    await ticket.click();
+    await expect(lab.getByRole('heading', { name: 'Laboratory Worklist', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
+    await expect(lab.getByPlaceholder('Search patient, test, queue...')).toHaveValue(person.fullName);
+    await expect(lab.locator('tbody tr').filter({ hasText: person.lastName }).first()).toBeVisible({ timeout: 15000 });
+    await lab.context().close();
+
+    // A payment opens that receipt in Transaction History, for whoever may see it.
+    const owner = await signedIn('admin@enlogada.com', 'Reports');
+    const payment = owner.getByTestId('notification-item').filter({ hasText: receipt }).first();
+    await expect(payment).toHaveAttribute('data-opens', 'cashier-history', { timeout: 15000 });
+    await payment.click();
+    await expect(owner.getByRole('heading', { name: 'Transaction History', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
+    await expect(owner.getByRole('row').filter({ hasText: receipt }).first()).toBeVisible({ timeout: 15000 });
+    await owner.context().close();
+    expect(su).toBeTruthy();
+
+    // A booking opens its card at the Desk for the front desk.
+    const client = await registerClient(ctx, { ...fixturePerson(), email: `second-walk-note-${Date.now()}@enlogada-e2e.test`, password: 'Password123!' });
+    const who = fixturePerson();
+    const profile = (await (await ctx.post(`${API}/patients`, {
+      headers: auth(client.token), data: { firstName: who.firstName, lastName: who.lastName, birthdate: '1991-09-19', sex: 'Male', contactNumber: FIXTURE_CONTACT },
+    })).json()).data.patient;
+    const date = nthWorkingDay(32);
+    const slot = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth(desk) })).json()).data.slots.find((x) => x.available);
+    const { appointment } = (await (await ctx.post(`${API}/appointments`, {
+      headers: auth(client.token),
+      multipart: appointmentForm({ patientId: profile.id, scheduledDate: date, scheduledTime: slot.time, testIds: [labTest.id] }, { doctorRequest: false }),
+    })).json()).data;
+    const front = await signedIn('receptionist@enlogada.com', 'Patient Records');
+    const booked = front.getByTestId('notification-item').filter({ hasText: appointment.appointment_reference }).first();
+    await expect(booked).toHaveAttribute('data-opens', 'reception-queue', { timeout: 15000 });
+    await booked.click();
+    await expect(front.getByTestId('booking-card')).toContainText(appointment.appointment_reference, { timeout: 15000 });
+    await front.context().close();
+  });
+
   test('a name is a name, a phone has digits, and one account holds one of each person', async () => {
     const person = fixturePerson();
     const { token } = await registerClient(ctx, { ...person, email: `second-walk-${Date.now()}@enlogada-e2e.test`, password: 'Password123!' });

@@ -6,7 +6,7 @@ const db = require('../config/database');
 // storage detail, not a change to the public contract.
 const SELECT_COLUMNS = `
   nr.id, nr.user_id, nr.is_read,
-  ne.title, ne.message, ne.type, ne.created_at
+  ne.title, ne.message, ne.type, ne.target, ne.created_at
 `;
 
 class NotificationRepository {
@@ -21,12 +21,12 @@ class NotificationRepository {
    * them can proceed and the whole API stalls until connectionTimeoutMillis fires. Nested here,
    * this simply joins the transaction already in progress and takes no extra connection.
    */
-  async createForUsers(userIds, { title, message, type }) {
+  async createForUsers(userIds, { title, message, type, target = null }) {
     if (!userIds || userIds.length === 0) return [];
     return await db.withTransaction(async () => {
       const eventResult = await db.query(
-        `INSERT INTO notification_events (title, message, type) VALUES ($1, $2, $3) RETURNING id, created_at`,
-        [title, message, type]
+        `INSERT INTO notification_events (title, message, type, target) VALUES ($1, $2, $3, $4::jsonb) RETURNING id, created_at`,
+        [title, message, type, target ? JSON.stringify(target) : null]
       );
       const event = eventResult.rows[0];
       const readsResult = await db.query(
@@ -35,7 +35,7 @@ class NotificationRepository {
          RETURNING id, user_id, is_read`,
         [event.id, userIds]
       );
-      return readsResult.rows.map((row) => ({ ...row, title, message, type, created_at: event.created_at }));
+      return readsResult.rows.map((row) => ({ ...row, title, message, type, target, created_at: event.created_at }));
     });
   }
 

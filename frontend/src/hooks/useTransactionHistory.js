@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import api from '../config/api';
-import { todayStr } from '../lib/date';
+import { todayStr, daysAgoStr } from '../lib/date';
 
 // Sent to the server as `limit` — this list pages at the database [1.29.0] rather than fetching
 // the whole date range and slicing it in the browser.
@@ -118,6 +118,15 @@ export function useTransactionHistory({ enabled = false, onRangeLoad } = {}) {
     reload: () => fetch(startDate, endDate, 1, search, method, true),
     /** Jump to a page, keeping the range AND the filters — a page 2 that drops one is a bug. */
     goToPage: (next) => fetch(startDate, endDate, next, appliedSearch, method),
+    /** [1.164.0] A notification about a receipt: found, over the last month rather than only today. */
+    findNow: (term) => {
+      const from = daysAgoStr(30);
+      const to = todayStr();
+      setStartDate(from);
+      setEndDate(to);
+      setSearch(term);
+      fetch(from, to, 1, term, method, true);
+    },
     /** Clear the box and re-run, so the list matches what the reader can see in the field. */
     clearSearch: () => { setSearch(''); fetch(startDate, endDate, 1, '', method); },
   };

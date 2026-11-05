@@ -188,6 +188,7 @@ class PaymentSubmissionService {
 
       await notificationService.notifyRoles(['Cashier', 'Admin', 'SuperAdmin'], {
         title: 'Proof of payment to review',
+        target: { kind: 'online-payments' },
         message: `Ref ${submission.reference_number} — ${formatCurrency(submission.amount_claimed)} awaiting verification`,
         type: 'info',
       }).catch(() => { /* a notification failure must never lose the claim */ });

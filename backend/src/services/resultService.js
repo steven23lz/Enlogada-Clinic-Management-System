@@ -862,6 +862,7 @@ class ResultService {
 
       await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
         title: isAmendment ? 'Result Amended and Re-released' : 'Result Released',
+        target: { kind: 'record', find: patientName },
         message: `${patientInfo.test_name} for ${patientName}`,
         type: isAmendment ? 'info' : 'success'
       });

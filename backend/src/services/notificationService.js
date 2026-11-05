@@ -13,7 +13,7 @@ class NotificationService {
   // Fire-and-forget by design, matching config/email.js's sendEmail: a notification is a
   // best-effort side effect of a real business operation (booking/payment/result release) and
   // must never be the reason that operation fails.
-  async notifyRoles(roleNames, { title, message, type = 'info' }) {
+  async notifyRoles(roleNames, { title, message, type = 'info', target = null }) {
     try {
       const recipients = await userRepository.findStaffUsers(roleNames);
       if (recipients.length === 0) return;
@@ -28,7 +28,8 @@ class NotificationService {
       await notificationRepository.createForUsers(userIds, {
         title,
         message,
-        type: VALID_TYPES.includes(type) ? type : 'info'
+        type: VALID_TYPES.includes(type) ? type : 'info',
+        target,
       });
     } catch (err) {
       logger.error('Failed to create notifications:', err);

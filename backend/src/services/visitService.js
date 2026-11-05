@@ -389,6 +389,7 @@ class VisitService {
 
     await notificationService.notifyRoles([...modalityRoles, 'Receptionist'], {
       title: 'Ticket Released to Your Department',
+      target: { kind: 'ticket', departments: categories, find: `${visitInfo.first_name} ${visitInfo.last_name}` },
       message: `Queue #${visitInfo.queue_number} — ${visitInfo.first_name} ${visitInfo.last_name} (${categories.join(', ')})`,
       type: 'info'
     });

@@ -1,4 +1,5 @@
 // @ts-check
+import { dayWithNoBooking } from './helpers/booking.js';
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
 import { openBooking } from './helpers/portal.js';
@@ -113,14 +114,9 @@ test.describe('HMO card evidence (UI)', () => {
     const providerId = (await (await ctx.get(`${API}/hmo/providers`, { headers: auth })).json())
       .data.providers[0].id;
 
-    // Far out, and offset per run, so this never collides with another spec's slot or its own
-    // previous run — a repeat of the same patient/date/time returns the existing booking.
-    const when = new Date();
-    // Inside the 365-day booking horizon [1.124.0]: at +500 the day reads closed and this test
-    // skipped itself, which looks exactly like a pass. 330-359 is clear of booking-atomicity's days.
-    when.setDate(when.getDate() + 330 + (Date.now() % 30));
-    while (when.getDay() === 0 || when.getDay() === 6) when.setDate(when.getDate() + 1);
-    const date = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
+    // A day this patient has nothing on: a random one can land on a test they already have booked,
+    // which the repeat rule refuses [1.157.0]. Inside the 365-day booking horizon [1.124.0].
+    const date = await dayWithNoBooking(ctx, clientToken, 330);
     const slots = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth })).json())
       .data.slots.filter((s) => s.available);
     test.skip(!slots.length, 'No available slot to book.');

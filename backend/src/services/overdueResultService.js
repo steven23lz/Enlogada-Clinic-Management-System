@@ -56,6 +56,7 @@ class OverdueResultService {
         const ticket = visit.queue_number ? `Ticket ${visit.queue_number}, ` : '';
         await notificationService.notifyRoles([CATEGORY_TO_STAFF_ROLE[department], 'Admin', 'SuperAdmin'], {
           title: `No test result uploaded for: ${ticket}${visit.first_name} ${visit.last_name}`,
+          target: { kind: 'worklist', departments: [department], find: `${visit.first_name} ${visit.last_name}` },
           message: window.inWindow
             ? `${visit.tests.join(', ')} (${label}). The clinic closes at ${formatTime12(window.closesAt)}.`
             : `${visit.tests.join(', ')} (${label}). ${minutes} minutes have passed since they joined the queue.`,

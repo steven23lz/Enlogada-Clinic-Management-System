@@ -63,9 +63,11 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav, intent }) => 
   // [1.77.0] Once per navigation, like every intent (see App.jsx).
   const handledIntent = useRef(null);
   useEffect(() => {
-    if (!intent || mode !== 'history' || handledIntent.current === intent) return;
+    if (!intent || handledIntent.current === intent) return;
     handledIntent.current = intent;
-    if (intent.delivery) worklist.setDeliveryFilter(intent.delivery);
+    if (intent.delivery && mode === 'history') worklist.setDeliveryFilter(intent.delivery);
+    // [1.164.0] A notification about this patient opens with them found.
+    if (intent.find) worklist.setSearch(intent.find);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent, mode]);
 

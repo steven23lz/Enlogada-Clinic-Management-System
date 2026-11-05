@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import SidebarLayout from '../../components/SidebarLayout';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -123,6 +123,17 @@ const CashierDashboard = ({ activeNav = 'cashier-queue', onSelectNav, intent }) 
 
 
 
+
+  // [1.164.0] A notification about a patient or a receipt opens with them found. Once per navigation.
+  const handledIntent = useRef(null);
+  useEffect(() => {
+    if (!intent?.find || handledIntent.current === intent) return;
+    handledIntent.current = intent;
+    if (view === 'cashier-queue') queue.setSearchQuery(intent.find);
+    if (view === 'cashier-history') history.findNow(intent.find);
+    // The hooks' functions are new each render; the intent is what decides.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, view]);
 
   return (
     <SidebarLayout

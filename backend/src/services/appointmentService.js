@@ -275,6 +275,7 @@ function payOnTheSpot(visitId, payNow, processedBy) {
 async function announcePayment(payment, patientName) {
   await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
     title: 'Payment Confirmed',
+    target: { kind: 'receipt', receipt: payment.receipt_number },
     message: `Receipt #${payment.receipt_number} — ${patientName}, ${formatCurrency(payment.amount)}`,
     type: 'success',
   });
@@ -696,9 +697,14 @@ class AppointmentService {
     // booking — and notifyRoles swallows its own errors, so it cannot fail the request either.
     await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
       title: 'New Appointment Booked',
+      target: { kind: 'booking', reference: outcome.appointment.appointment_reference },
       message: `${outcome.appointment.appointment_reference} — ${scheduledDate} at ${formatTime12(scheduledTime)}`,
       type: 'info'
     });
+
+    if (outcome.hmoRequest && !outcome.alreadyBooked) {
+      hmoService.announceClaim(outcome.hmoRequest.id).catch(() => { /* the booking stands */ });
+    }
 
     // And tell the patient. [1.24.0] Staff got a notification and the patient got nothing but a
     // confirmation screen that vanishes when the tab closes — taking the reference the front desk
@@ -999,6 +1005,7 @@ class AppointmentService {
     // never report a completed move as failed.
     await notificationService.notifyRoles(['Receptionist', 'Admin', 'SuperAdmin'], {
       title: 'Appointment Rescheduled',
+      target: { kind: 'booking', reference: appointment.appointment_reference },
       message:
         `${appointment.first_name} ${appointment.last_name} — ${previous.date} ${previous.time} → ` +
         `${scheduledDate} ${String(scheduledTime).slice(0, 5)}. Reason: ${why}`,

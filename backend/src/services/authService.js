@@ -431,6 +431,7 @@ class AuthService {
         });
         await notificationService.notifyRoles(['Admin', 'SuperAdmin'], {
           title: 'Account locked after failed sign-ins',
+          target: { kind: 'activity' },
           message: `${user.email} — ${state.failed_login_count} consecutive failures. Unlocks automatically in ${LOCK_DURATION_MINUTES} minutes.`,
           type: 'warning',
         });
