@@ -26,17 +26,6 @@ const BACKEND_URL = process.env.E2E_API_URL || 'http://localhost:5000';
 const API = `${BACKEND_URL}/api`;
 const PASSWORD = 'Password123!';
 
-/** A weekday far enough out that nothing else in the suite is competing for its slots. */
-function farWorkingDay() {
-  const d = new Date();
-  d.setDate(d.getDate() + 240 + (Date.now() % 40));
-  // Saturday closes at noon and carries 8 slots instead of 18, so a spec that lands there starts
-  // failing on the day of the week rather than on anything in the app.
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-
 test('a self-pay booking is confirmed without issuing the pass', async ({ page }) => {
   const ctx = await request.newContext();
 
@@ -45,7 +34,9 @@ test('a self-pay booking is confirmed without issuing the pass', async ({ page }
     data: { email: 'client@enlogada.com', password: PASSWORD },
   })).json()).data.token;
 
-  const date = farWorkingDay();
+  // Not a random far day: on one where this patient already holds these tests the repeat rule [1.157.0]
+  // refuses it, and another spec's booking for them that day is refused in turn.
+  const date = await dayWithNoBooking(ctx, token, 280);
   const free = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, {
     headers: { Authorization: `Bearer ${token}` },
   })).json()).data.slots.filter((s) => s.available);
