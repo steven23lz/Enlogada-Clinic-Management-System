@@ -21,6 +21,7 @@ import DateTime from '../../components/ui/date-time';
  * Three answers, each its own look, so none can be mistaken for another:
  *   genuine     the clinic issued this report and it is the current one.
  *   replaced    the clinic issued it, then released a correction. Real, but out of date.
+ *   withdrawn   the clinic took it back. [1.156.0] Says nothing else: it may be on the wrong person.
  *   not found   no report carries this code. Worded as "call the clinic", not "forgery": a code
  *               misread off a creased print reads exactly the same way.
  *
@@ -41,6 +42,13 @@ const TONES = {
     box: 'border-amber-200 bg-amber-50',
     ink: 'text-amber-900',
     soft: 'text-amber-800',
+  },
+  withdrawn: {
+    icon: ShieldAlert,
+    title: 'Withdrawn by the clinic',
+    box: 'border-rose-200 bg-rose-50',
+    ink: 'text-rose-900',
+    soft: 'text-rose-800',
   },
   'not-found': {
     icon: ShieldQuestion,
@@ -80,6 +88,10 @@ function Answer({ state, clinic }) {
       {state.status === 'not-found' ? (
         <p className={`m-0 mt-2 text-sm leading-relaxed ${tone.soft}`}>
           {state.message} The code is printed beside the QR, after “Verification code”.
+        </p>
+      ) : state.status === 'withdrawn' ? (
+        <p className={`m-0 mt-2 text-sm leading-relaxed ${tone.soft}`}>
+          {report.clinic} withdrew this report on {formatDate(report.withdrawnAt)}. Please do not rely on it. Call the clinic if you need to know more.
         </p>
       ) : (
         <>

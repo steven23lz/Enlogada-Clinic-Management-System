@@ -275,6 +275,23 @@ class AppointmentController {
     }
   }
 
+  async undoCheckIn(req, res, next) {
+    try {
+      const data = await appointmentService.undoCheckIn(req.params.id, { reason: req.body?.reason }, req.user);
+      return res.status(200).json({
+        status: 'success',
+        message: data.needsMoving
+          ? 'Check-in undone. Its own date is no longer free, so it stays on today for you to move.'
+          : data.movedBack
+            ? 'Check-in undone, and the booking is back on its own date.'
+            : 'Check-in undone.',
+        data,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async updateStatus(req, res, next) {
     try {
       const { id } = req.params;

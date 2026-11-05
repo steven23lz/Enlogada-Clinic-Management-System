@@ -7,7 +7,7 @@ const paymentSubmissionRepository = require('../repositories/paymentSubmissionRe
  * A patient sends the amount the portal stated; approving the proof records the bill as it stands
  * then. A discount applied, or a test added or removed, in between made the two differ: a senior
  * discount given after a full-price transfer recorded less than the patient sent, a test added
- * recorded more, and with no refunds [1.121.0] neither could be put right. So the bill stays as the
+ * recorded more, and neither is one of the two refund cases [1.155.0]. So the bill stays as the
  * patient paid it until the proof is verified or rejected. Rejecting first is the way to change it.
  *
  * @param {number} visitId

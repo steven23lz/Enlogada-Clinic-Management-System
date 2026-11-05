@@ -38,6 +38,10 @@ router.post('/:visitTestId/copies', verifyToken, authorizeStaff, authorizePermis
 // Department staff releases result and triggers email notification
 router.post('/:visitTestId/release', verifyToken, authorizeStaff, authorizePermissions('results:release'), resultController.releaseResult);
 
+// [1.156.0] Pull a released report back: released on the wrong patient, or the wrong file. Whoever may
+// authorise a report reaching a patient may take it back; the service keeps it to their department.
+router.post('/:visitTestId/withdraw', verifyToken, authorizeStaff, authorizePermissions('results:release'), resultController.withdrawResult);
+
 // Re-send a released report to the patient. Gated on `results:release` rather than a permission
 // of its own: whoever may authorise a report reaching a patient may put it in front of them
 // again, and a separate `results:email` would be held by nobody until somebody remembered to

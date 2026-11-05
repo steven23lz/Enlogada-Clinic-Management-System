@@ -82,6 +82,10 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
   const isCash = payment.payment_method === 'Cash';
 
   const sampleIdentity = isSampleIdentity(CLINIC);
+  // [1.155.0] A receipt that went back says so, on screen and on paper. The old refund's reprint still
+  // read as a valid paid receipt, which an HMO or an employer would reimburse.
+  const refunds = Array.isArray(payment.refunds) ? payment.refunds : [];
+  const fullyRefunded = payment.payment_status === 'Refunded';
 
   return (
     <div className="paper print-area mx-auto w-full max-w-[20rem] bg-white p-4 font-sans text-slate-900">
@@ -144,6 +148,11 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
           Reprint — duplicate copy
         </p>
       )}
+      {fullyRefunded && (
+        <p data-testid="receipt-refunded" className="m-0 mt-1 border-2 border-rose-500 py-0.5 text-center text-meta font-extrabold uppercase tracking-widest text-rose-600">
+          Refunded — not valid as proof of payment
+        </p>
+      )}
 
       <Rule dashed />
 
@@ -164,7 +173,10 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
           <div className="space-y-0.5">
             {bill.items.map((item, i) => (
               <div key={i} className="flex items-baseline justify-between gap-3 text-meta">
-                <span className="min-w-0 flex-1 truncate text-slate-700">{item.name}</span>
+                <span className="min-w-0 flex-1 truncate text-slate-700">
+                  {item.name}
+                  {item.status === 'Cancelled' && <span className="font-semibold text-rose-600"> (refunded)</span>}
+                </span>
                 <span className="tabular-nums font-medium">{formatCurrency(item.price)}</span>
               </div>
             ))}
@@ -209,6 +221,19 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
         <span className="text-fine font-extrabold uppercase tracking-wide">Amount paid</span>
         <span className="text-lead font-extrabold tabular-nums">{formatCurrency(net)}</span>
       </div>
+
+      {refunds.length > 0 && (
+        <div data-testid="receipt-refunds" className="mt-1.5 space-y-1">
+          {refunds.map((r) => (
+            <div key={r.id}>
+              <Row label={`Refunded ${new Date(r.refundedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}`} value={`- ${formatCurrency(r.amount)}`} tone="credit" />
+              <p className="m-0 text-micro leading-snug text-slate-500">
+                {r.tests?.length > 0 ? `${r.tests.join(', ')}. ` : ''}By {r.returnedVia}{r.reference ? ` (${r.reference})` : ''}. {r.reason}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <Rule dashed />
 

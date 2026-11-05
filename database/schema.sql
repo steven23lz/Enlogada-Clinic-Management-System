@@ -54,6 +54,8 @@ CREATE TABLE users (
     -- password reset or an email check, or a Google sign-in. Accepting a patient record needs it.
     -- NULL for accounts that never proved it, and again after a change of address. [1.136.0]
     email_verified_at TIMESTAMP,
+    -- When this account agreed to the Terms and Privacy Policy. [1.156.0] A patient's own account only.
+    terms_accepted_at TIMESTAMP,
     -- Consecutive failed sign-ins, and when the resulting lock expires. The policy is
     -- deliberately forgiving (10 failures, 15 minutes, self-expiring) because a tight lockout is
     -- itself a denial of service against the clinic: anyone who can guess a staff address could
@@ -422,6 +424,8 @@ CREATE TABLE appointments (
     -- reason, is also in audit_log. See migrations.md [1.105.0].
     reschedule_reason VARCHAR(500),
     rescheduled_at TIMESTAMP,
+    -- The date a check-in moved this booking from, so a mistaken check-in can return it. [1.156.0]
+    checked_in_from_date DATE,
     -- A PAID booking nobody came for: the patient is emailed the morning after, once. [1.148.0]
     -- Cleared when the booking is moved, so a moved booking missed again is told again.
     missed_notice_sent_at TIMESTAMP,
@@ -661,6 +665,11 @@ CREATE TABLE test_results (
     recorded_by INT,                                  -- who wrote the findings
     released_by INT NOT NULL,                         -- who authorised release to the patient
     released_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- when the findings were recorded
+    -- Pulled back from the patient: the wrong patient, or the wrong file. [1.156.0] authorised_at is
+    -- cleared, so every reader treats it as a draft again; these say it was once out, and why.
+    withdrawn_at TIMESTAMP,
+    withdrawn_by INT,
+    withdrawn_reason TEXT,
     authorised_at TIMESTAMP,                          -- when the release was authorised
 
     -- Amendment chain. A released report may be corrected, and the version it replaces must stay
@@ -700,7 +709,8 @@ CREATE TABLE test_results (
     CONSTRAINT uq_test_results_verification_code UNIQUE (verification_code),
     CONSTRAINT chk_results_verification_code CHECK (
         verification_code IS NULL
-        OR (authorised_at IS NOT NULL AND verification_code ~ '^[0-9A-HJKMNP-TV-Z]{10}$')
+        -- A withdrawn report keeps its code, so the public check can say it was withdrawn. [1.156.0]
+        OR ((authorised_at IS NOT NULL OR withdrawn_at IS NOT NULL) AND verification_code ~ '^[0-9A-HJKMNP-TV-Z]{10}$')
     ),
     CONSTRAINT fk_results_superseded_by FOREIGN KEY (superseded_by) REFERENCES test_results(id),
     CONSTRAINT fk_results_visit_test FOREIGN KEY (visit_test_id) REFERENCES visit_tests(id),
@@ -809,6 +819,42 @@ CREATE INDEX idx_payments_gateway_session ON payments(gateway_session_id);
 --
 -- `payment_id` links to the receipt approval produced. NULL until then, and NULL forever on a
 -- rejection.
+-- [1.156.0] Added after the tables they belong to, as a migration adds them.
+ALTER TABLE test_results ADD CONSTRAINT fk_test_results_withdrawn_by FOREIGN KEY (withdrawn_by) REFERENCES users(id) ON DELETE SET NULL;
+
+-- Money handed back. [1.155.0] One row per refund, and the only place the cash book, the drawer count
+-- and the reports read it from. `returned_via` is how the money went back, which is what the drawer
+-- answers to, and may differ from how it came in. kind 'legacy' is a reversal from before [1.121.0].
+CREATE TABLE payment_refunds (
+    id SERIAL PRIMARY KEY,
+    payment_id INT NOT NULL,
+    amount NUMERIC(10,2) NOT NULL,
+    kind VARCHAR(30) NOT NULL,
+    reason TEXT NOT NULL,
+    returned_via VARCHAR(50) NOT NULL,
+    returned_reference VARCHAR(100),
+    refunded_by INT,
+    refunded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_refunds_payment FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE,
+    CONSTRAINT fk_refunds_by FOREIGN KEY (refunded_by) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT chk_refunds_amount CHECK (amount > 0),
+    CONSTRAINT chk_refunds_kind CHECK (kind IN ('clinic_cannot_perform', 'recorded_by_mistake', 'legacy')),
+    CONSTRAINT chk_refunds_via CHECK (returned_via IN ('Cash', 'GCash', 'Bank'))
+);
+
+-- Which tests a refund was for, and how much of it each. A test is refunded once.
+CREATE TABLE payment_refund_tests (
+    refund_id INT NOT NULL,
+    visit_test_id INT NOT NULL,
+    amount NUMERIC(10,2) NOT NULL,
+    PRIMARY KEY (refund_id, visit_test_id),
+    CONSTRAINT fk_refund_tests_refund FOREIGN KEY (refund_id) REFERENCES payment_refunds(id) ON DELETE CASCADE,
+    CONSTRAINT fk_refund_tests_test FOREIGN KEY (visit_test_id) REFERENCES visit_tests(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_tests_one_per_test ON payment_refund_tests (visit_test_id);
+CREATE INDEX IF NOT EXISTS idx_refunds_payment ON payment_refunds (payment_id);
+CREATE INDEX IF NOT EXISTS idx_refunds_refunded_at ON payment_refunds (refunded_at);
+
 CREATE TABLE payment_submissions (
     id SERIAL PRIMARY KEY,
     patient_visit_id INT NOT NULL,

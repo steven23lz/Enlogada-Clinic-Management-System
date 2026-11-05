@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertCircle, ShieldAlert, UserCheck } from 'lucide-react';
 import CallButton from '../queue/CallButton';
+import UndoCheckIn from './UndoCheckIn';
 import { FRONT_DESK } from '../../lib/nowServing';
 import DataBadge from '../ui/data-badge';
 import EtaBadge from '../ui/eta-badge';
@@ -51,6 +52,7 @@ export default function ActiveQueuePanel({ queue, hmo, testAssignment, showSearc
   const { hasPermission } = useAuth();
   const canRegisterWalkIn = hasPermission('visits:create') && hasPermission('tests:assign') && hasPermission('patients:create');
   const canAttachTests = hasPermission('tests:assign');
+  const canUndoCheckIn = hasPermission('appointments:update');
   const canCall = hasPermission('visits:create'); // constants/queueStations.js: what the Front Desk asks [1.149.0]
   const canRaiseHmo = hasPermission('hmo:request');
 
@@ -294,6 +296,11 @@ export default function ActiveQueuePanel({ queue, hmo, testAssignment, showSearc
                               <Button onClick={() => testAssignment.openFor(visit.id)} variant="outline" size="xs">
                                 Edit Tests
                               </Button>
+                            )}
+                            {/* [1.156.0] The wrong booking checked in. Offered until a department
+                                has started on it, which the row knows as `work_started`. */}
+                            {canUndoCheckIn && visit.appointment_status === 'Confirmed' && !visit.work_started && (
+                              <UndoCheckIn visit={visit} onDone={() => queue.refresh()} />
                             )}
                             {/* No Cancel. [1.131.0] A paid visit is final, and an unpaid one is
                                 removed on its own if it is not paid by the end of the day. */}

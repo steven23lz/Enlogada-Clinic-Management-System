@@ -25,10 +25,11 @@ router.post('/', verifyToken, authorizeStaff, authorizePermissions('billing:proc
 // View transactions (with optional date range filters)
 router.get('/transactions', verifyToken, authorizeStaff, authorizePermissions('billing:read'), paymentController.getTransactions);
 
-// No refunds. [1.121.0] PATCH /:id/status refunded or voided a settled receipt, and was removed with
-// the feature: a paid receipt is final. Steven: a refund does not fit how the clinic works. One
-// person could take money and hand it back alone, a reprinted refunded receipt still read as paid,
-// and only a whole receipt could be reversed. Past reversals stay on record and in the cash book.
+// A paid receipt is final, with two recorded exceptions. [1.155.0] SuperAdmin alone, by role rather than
+// by permission, like the accounts a patient's money is sent to (paymentMethodRoutes.js): there is no
+// version of this that should be delegated by a tick on the grid. paymentRefundService has the rules.
+router.get('/:id/refund', verifyToken, authorizeRoles('SuperAdmin'), paymentController.getRefundOptions);
+router.post('/:id/refund', verifyToken, authorizeRoles('SuperAdmin'), paymentController.refund);
 
 // View payments for a specific visit
 // One receipt by number, viewable and printable.

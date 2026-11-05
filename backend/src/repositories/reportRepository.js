@@ -1,7 +1,7 @@
 const db = require('../config/database');
 const { hmoEffectiveStatus } = require('../constants/hmoEffectiveStatus');
 const {
-  ISSUED_IN_RANGE, REVERSED_IN_RANGE, ISSUED_IN_DAY_RANGE, MONEY_IN_RANGE, ISSUED_RECEIPT_CLAUSE
+  ISSUED_IN_RANGE, ISSUED_IN_DAY_RANGE, MONEY_IN_RANGE, ISSUED_RECEIPT_CLAUSE, REVERSED_TOTALS
 } = require('../constants/moneyRange');
 
 /**
@@ -214,16 +214,17 @@ class ReportRepository {
   async getSalesByService(startDate, endDate) {
     const queryText = `
       WITH paid AS (
+        -- One row per receipt, never per visit. [1.155.0] A visit paid, reversed as a mistake and paid
+        -- again has two receipts in collected, so it is two sales here, with the reversal beside them.
         SELECT pay.patient_visit_id,
-               SUM(pay.amount)                            AS collected,
-               SUM(pay.discount_amount + pay.vat_amount)  AS deducted
+               pay.amount                           AS collected,
+               pay.discount_amount + pay.vat_amount AS deducted
           FROM payments pay
          -- Must move with getBillingTotals and never separately: operations-report.spec.js
          -- asserts the sum of this breakdown reconciles to that query's collected figure to
          -- within a peso, and two bases would break it the moment anything is reversed. [1.30.0]
          WHERE ${ISSUED_RECEIPT_CLAUSE}
            AND ${ISSUED_IN_RANGE(true)}
-         GROUP BY pay.patient_visit_id
       ),
       lines AS (
         SELECT vt.patient_visit_id,
@@ -293,15 +294,13 @@ class ReportRepository {
    */
   async getBillingTotals(startDate, endDate) {
     const issued = ISSUED_IN_RANGE(true);
-    const reversed = REVERSED_IN_RANGE(true);
     const queryText = `
       SELECT
         COUNT(*) FILTER (WHERE ${issued})::int              AS receipts,
         COALESCE(SUM(pay.amount)      FILTER (WHERE ${issued}), 0)::numeric(12,2) AS collected,
         COALESCE(SUM(pay.discount_amount) FILTER (WHERE ${issued}), 0)::numeric(12,2) AS discounts,
         COALESCE(SUM(pay.vat_amount)  FILTER (WHERE ${issued}), 0)::numeric(12,2) AS vat_exempted,
-        COUNT(*) FILTER (WHERE ${reversed})::int          AS refunds,
-        COALESCE(SUM(pay.amount)      FILTER (WHERE ${reversed}), 0)::numeric(12,2) AS refunded
+        ${REVERSED_TOTALS(true, { amount: 'refunded', count: 'refunds' })}
       FROM payments pay
       WHERE ${ISSUED_RECEIPT_CLAUSE}
         AND ${MONEY_IN_RANGE(true)}

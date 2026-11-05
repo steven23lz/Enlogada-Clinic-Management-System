@@ -249,6 +249,12 @@ class ResultRepository {
         );
       }
 
+      // From every version, not the current one: a withdrawn report leaves no current row. [1.156.0]
+      const { rows: [{ next_version: nextVersion }] } = await db.query(
+        `SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM test_results WHERE visit_test_id = $1`,
+        [visitTestId]
+      );
+
       const inserted = await db.query(
         `INSERT INTO test_results (
            visit_test_id, file_path, file_original_name, file_mime_type, file_size_bytes,
@@ -260,7 +266,7 @@ class ResultRepository {
         [
           visitTestId, filePath || null, fileOriginalName || null,
           fileMimeType || null, fileSizeBytes || null, findings, remarks, releasedBy,
-          previous ? previous.version + 1 : 1,
+          nextVersion,
           // Only meaningful on an amendment; the first version has nothing to explain.
           previous ? (amendmentReason || null) : null,
         ]
@@ -295,6 +301,7 @@ class ResultRepository {
              tr.file_original_name, tr.file_path IS NOT NULL AS has_file,
              tr.amendment_reason,
              tr.released_at, tr.authorised_at, tr.superseded_by,
+             tr.withdrawn_at, tr.withdrawn_reason,
              rec.first_name AS recorded_by_first_name, rec.last_name AS recorded_by_last_name,
              rel.first_name AS released_by_first_name,  rel.last_name AS released_by_last_name
       FROM test_results tr
@@ -388,6 +395,26 @@ class ResultRepository {
    * releasing user's id — but nothing ever persisted it. The ticket flipped to 'Completed' and
    * the actor was dropped, leaving released_by holding whoever had typed the findings.
    */
+  /**
+   * Pulls a test's released reports back. [1.156.0] Every authorised version, because the one before
+   * the newest would otherwise become what the patient reads. Clearing authorised_at is the whole of
+   * it for the readers: "released" means that column everywhere, so the portal, the reports and the
+   * results history stop counting them at once. is_current goes too, so the test reads as having no
+   * report yet, and the next save is a new version: a release can never put this file back out.
+   * A draft correction still being written stays current. The rows and their files stay.
+   */
+  async withdrawAuthorisedVersions(visitTestId, { withdrawnBy, reason }) {
+    const { rows } = await db.query(
+      `UPDATE test_results
+          SET authorised_at = NULL, is_current = FALSE,
+              withdrawn_at = CURRENT_TIMESTAMP, withdrawn_by = $2, withdrawn_reason = $3
+        WHERE visit_test_id = $1 AND authorised_at IS NOT NULL
+        RETURNING id, version, file_original_name, emailed_to`,
+      [visitTestId, withdrawnBy, reason]
+    );
+    return rows;
+  }
+
   async markReleased(visitTestId, releasedBy, verificationCode) {
     const queryText = `
       UPDATE test_results
@@ -445,7 +472,7 @@ class ResultRepository {
    */
   async findByVerificationCode(code) {
     const { rows } = await db.query(
-      `SELECT tr.id, tr.version, tr.authorised_at,
+      `SELECT tr.id, tr.version, tr.authorised_at, tr.withdrawn_at,
               t.name AS test_name, tc.name AS category_name,
               p.first_name, p.last_name,
               replaced.authorised_at AS replaced_at
@@ -464,7 +491,7 @@ class ResultRepository {
             ORDER BY n.version
             LIMIT 1
          ) replaced ON TRUE
-        WHERE tr.verification_code = $1 AND tr.authorised_at IS NOT NULL`,
+        WHERE tr.verification_code = $1 AND (tr.authorised_at IS NOT NULL OR tr.withdrawn_at IS NOT NULL)`,
       [code]
     );
     return rows[0] || null;

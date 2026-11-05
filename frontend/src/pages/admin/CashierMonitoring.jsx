@@ -14,6 +14,7 @@ import { todayStr } from '../../lib/date';
 import { formatCurrency } from '../../lib/currency';
 import { METHOD_FILTERS, METHOD_FILTER_ALL } from '../../lib/paymentMethods';
 import { ExternalLink, Receipt, RefreshCw, Banknote, Hash, UserCircle2, Undo2 } from 'lucide-react';
+import RefundAction from '../../components/cashier/RefundAction';
 import { DateField, RANGE_PRESETS } from '../../components/ui/date-field';
 import DateTime from '../../components/ui/date-time';
 import ClosedDaysPanel from '../../components/cashier/ClosedDaysPanel';
@@ -266,6 +267,9 @@ const CashierMonitoring = () => {
                         }`}
                       >
                         {formatCurrency(t.amount)}
+                        {t.payment_status === 'Paid' && Number(t.refunded_amount) > 0 && (
+                          <span className="mt-0.5 block text-fine font-semibold text-rose-600">{formatCurrency(t.refunded_amount)} refunded</span>
+                        )}
                       </TableCell>
                       <TableCell label="Paid at" className="text-right text-fine text-slate-500"><DateTime value={t.paid_at} /></TableCell>
                       {/* Oversight could read a receipt NUMBER here and never open the receipt —
@@ -274,16 +278,19 @@ const CashierMonitoring = () => {
                           Admin holds it; this is looking, not taking money. */}
                       <TableCell label="Receipt" className="text-right">
                         {t.receipt_number ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="xs"
-                            onClick={() => window.open(`?receipt=${encodeURIComponent(t.receipt_number)}`, '_blank', 'noopener')}
-                            title={`Open receipt ${t.receipt_number} in a new tab`}
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            Open
-                          </Button>
+                          <div className="flex flex-wrap items-center justify-end gap-1.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="xs"
+                              onClick={() => window.open(`?receipt=${encodeURIComponent(t.receipt_number)}`, '_blank', 'noopener')}
+                              title={`Open receipt ${t.receipt_number} in a new tab`}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Open
+                            </Button>
+                            <RefundAction transaction={t} onDone={() => fetchTransactions(applied.from, applied.to, method, page)} />
+                          </div>
                         ) : (
                           <span className="text-fine text-slate-400">&mdash;</span>
                         )}

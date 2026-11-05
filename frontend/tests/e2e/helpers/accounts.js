@@ -36,7 +36,7 @@ export function setAuthCode(email, purpose, { code = TEST_CODE, readyToResend = 
  */
 export async function registerClient(apiContext, { firstName, lastName, email, password, contactNumber = '' }) {
   const started = await apiContext.post(`${API}/auth/register`, {
-    data: { firstName, lastName, email, password, contactNumber },
+    data: { firstName, lastName, email, password, contactNumber, acceptedTerms: true },
   });
   const startedBody = await started.json().catch(() => ({}));
   expect(started.status(), `sign-up for ${email}: ${startedBody.message || ''}`).toBe(201);

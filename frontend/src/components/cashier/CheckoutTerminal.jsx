@@ -288,7 +288,7 @@ export default function CheckoutTerminal({ checkout, queue }) {
 
                       It names the figure rather than saying "some tests", because the decision
                       the cashier is making is whether to collect that number now or wait for the
-                      provider. [1.121.0] There are no refunds, so money taken for a test the HMO
+                      provider. [1.155.0] A receipt is final, so money taken for a test the HMO
                       then approves cannot be given back: the warning says so. Not a block — some
                       providers take days, and the patient cannot always wait for one. */}
                   {/* [1.123.0] An online payment the patient sent, not yet checked. Taking money here as
@@ -315,7 +315,7 @@ export default function CheckoutTerminal({ checkout, queue }) {
                         </strong>
                         <span className="block font-normal mt-0.5">
                           Wait for the HMO's decision if you can. Charging it in full now withdraws
-                          the claim for {checkout.bill.hmoPendingCount > 1 ? 'those tests' : 'that test'}, and a payment cannot be refunded.
+                          the claim for {checkout.bill.hmoPendingCount > 1 ? 'those tests' : 'that test'}, and a change of mind isn't refunded.
                         </span>
                       </span>
                     </div>

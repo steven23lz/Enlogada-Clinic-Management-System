@@ -160,6 +160,15 @@ class ResultController {
     }
   }
 
+  async withdrawResult(req, res, next) {
+    try {
+      const data = await resultService.withdrawResult({ visitTestId: req.params.visitTestId, reason: req.body?.reason }, req.user);
+      return res.status(200).json({ status: 'success', message: 'Report withdrawn. The patient can no longer read it, and it is back on the worklist.', data });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async releaseResult(req, res, next) {
     try {
       const { visitTestId } = req.params;

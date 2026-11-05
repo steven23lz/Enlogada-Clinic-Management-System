@@ -304,7 +304,7 @@ function ScanAssist({ scanning, scan, amountDue }) {
  * Step one: are these the tests you want? [1.122.0]
  *
  * Asked BEFORE the clinic's account appears, because the money leaves the patient's banking app
- * and the clinic only sees it afterwards. A paid receipt is final: no refunds [1.121.0], and a paid
+ * and the clinic only sees it afterwards. A paid receipt is final: a change of mind is not refunded [1.155.0], and a paid
  * visit's tests cannot change. A patient still deciding is told not to pay yet: a booking is kept
  * only once paid [1.123.0], so they book again when sure.
  */
@@ -327,8 +327,8 @@ function FinalTestsCheck({ tests, amountDue, confirmed, onChange }) {
         </ul>
       )}
       <p className="m-0 text-fine leading-relaxed text-slate-600">
-        Once the clinic confirms your payment, these tests can&apos;t be changed and the payment
-        can&apos;t be refunded. Not sure yet? Don&apos;t pay now: a booking is kept only once it is
+        Once the clinic confirms your payment, these tests can&apos;t be changed, and changing your
+        mind isn&apos;t refunded. Not sure yet? Don&apos;t pay now: a booking is kept only once it is
         paid, and you can book again when you are sure.
       </p>
       <label className="flex cursor-pointer items-start gap-2 text-fine font-medium text-ink">

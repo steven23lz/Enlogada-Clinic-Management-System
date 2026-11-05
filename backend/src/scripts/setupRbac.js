@@ -198,7 +198,7 @@ const RETIRED = [
     permission: 'appointments:cancel',
     reason:
       'nothing is cancelled since [1.131.0]: an unpaid booking is temporary and is released on its ' +
-      'own when its time is up, and a paid one is moved, never cancelled (no refunds). The route it ' +
+      'own when its time is up, and a paid one is moved, never cancelled. The route it ' +
       'gated is gone.',
   },
 ];

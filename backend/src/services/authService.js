@@ -108,7 +108,8 @@ function sessionFor(user) {
  * role list, so it lands nowhere and shows nothing, and only an administrator can repair it.
  */
 async function createClientAccount({ firstName, lastName, email, passwordHash, contactNumber }) {
-  const created = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber);
+  // [1.156.0] Both ways here have agreed: the sign-up form's tick, and the line beside Google's button.
+  const created = await userRepository.createUser(firstName, lastName, email, passwordHash, contactNumber, { acceptedTerms: true });
   const clientRoleId = await userRepository.findRoleIdByName('Client');
   if (!clientRoleId) {
     // Failing loudly rolls the account back, so a misconfigured RBAC seed surfaces here rather
@@ -606,6 +607,25 @@ class AuthService {
       // 400, never 401: api.js treats a 401 as a sign-out.
       throw new ValidationError('That password is not right. If you signed up with Google, set a password first with "Forgot password".');
     }
+    return this.issueEmailChange(account, newEmail);
+  }
+
+  /**
+   * [1.156.0] Staff, for a patient who can no longer open their sign-in email, after checking an ID in
+   * person. No password: that is the thing they cannot get. The code still goes to the new address and
+   * is read out, so nobody can move an account to an address that is not in the room.
+   */
+  async startAssistedEmailChange(userId, { newEmail }) {
+    const account = await userRepository.findById(userId);
+    if (!account) throw new ValidationError('Account not found.');
+    if ((account.roles || []).some((r) => r && r !== 'Client')) {
+      throw new AppError('A staff sign-in email is changed on Staff Accounts.', 403);
+    }
+    return this.issueEmailChange(account, newEmail);
+  }
+
+  async issueEmailChange(account, newEmail) {
+    const userId = account.id;
     const address = normaliseAccountEmail(newEmail);
     if (address === canonicalEmail(account.email)) {
       throw new ValidationError('That is already your sign-in email.');
@@ -645,7 +665,7 @@ class AuthService {
    * address move with it, the old address is told (in the background), and a fresh session is
    * returned because the one in hand still names the old address.
    */
-  async confirmEmailChange(userId, { ticket, code }) {
+  async confirmEmailChange(userId, { ticket, code }, { byStaff = null } = {}) {
     if (!isWellFormedCode(code)) throw new ValidationError('Enter the 6-digit code from the email.');
     const account = await userRepository.findById(userId);
     if (!account) throw new ValidationError('Account not found.');
@@ -671,15 +691,18 @@ class AuthService {
       await userRepository.updateEmail(userId, newEmail);
       const moved = await patientRepository.moveAccountEmail(userId, oldEmail, newEmail);
       await authCodeRepository.consumeOpenForUser('email_change', userId);
+      // [1.156.0] Whoever holds a session under the old inbox is signed out; the patient sets a new
+      // password through the new one.
+      if (byStaff) await userRepository.revokeSessions(userId);
       return moved;
     });
 
     await auditService.log({
-      actorId: userId,
-      action: 'auth.email_changed',
+      actorId: byStaff || userId,
+      action: byStaff ? 'auth.email_changed_at_clinic' : 'auth.email_changed',
       entityType: 'user',
       entityId: userId,
-      description: `Changed the sign-in email from ${oldEmail} to ${newEmail} with a code sent to the new address`
+      description: `${byStaff ? 'At the clinic, ID checked: changed' : 'Changed'} the sign-in email from ${oldEmail} to ${newEmail} with a code sent to the new address`
         + (movedRecords ? ` (${movedRecords} of their own record${movedRecords === 1 ? '' : 's'} now use it too)` : ''),
     });
 
@@ -688,6 +711,7 @@ class AuthService {
     accountEmailService.sendEmailChanged({ to: oldEmail, firstName: account.first_name, newEmailHint: hintEmail(newEmail) })
       .catch((err) => logger.error(`Email-changed notice failed: ${err.message}`));
 
+    if (byStaff) return { email: newEmail, movedRecords };
     const user = await userRepository.findById(userId);
     return { ...sessionFor(user), movedRecords };
   }

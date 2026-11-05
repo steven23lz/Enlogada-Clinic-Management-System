@@ -406,7 +406,7 @@ class VisitService {
       throw error;
     }
 
-    // No visit is cancelled by hand. [1.131.0] A paid one is final ([1.122.0]: with no refunds,
+    // No visit is cancelled by hand. [1.131.0] A paid one is final ([1.155.0]: refunded only in the two recorded cases,
     // cancelling it kept the money and took the tests off every worklist, a void by another name),
     // and an unpaid one is temporary: it is removed on its own once its day ends unpaid
     // (unpaidExpiryService). Nobody, Admin included, gets an exception.

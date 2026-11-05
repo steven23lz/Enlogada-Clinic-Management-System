@@ -7,6 +7,7 @@ const userRepository = require('../repositories/userRepository');
 const auditService = require('./auditService');
 const patientService = require('./patientService');
 const accountEmailService = require('./accountEmailService');
+const authService = require('./authService');
 const { normaliseAccountEmail, canonicalEmail } = require('../validations/email');
 const {
   AppError, ConflictError, ForbiddenError, GoneError, NotFoundError,
@@ -139,6 +140,27 @@ class PatientInvitationService {
   // ── Staff ────────────────────────────────────────────────────────────────────────────────
 
   /** Everything the Portal access and Unlink dialogs need for one record. */
+  /**
+   * A patient who lost their sign-in inbox. [1.156.0] The account behind this record, on the record's
+   * own department scope. See authService.startAssistedEmailChange.
+   */
+  async accountBehindRecord(patientId, requestingUser) {
+    await patientService.getPatientById(patientId, requestingUser);
+    const patient = await patientRepository.findForPortalAccess(patientId);
+    if (!patient?.user_id) throw new ConflictError('This record has no portal account.');
+    return patient.user_id;
+  }
+
+  async startAccountEmailChange(patientId, { newEmail }, requestingUser) {
+    const userId = await this.accountBehindRecord(patientId, requestingUser);
+    return authService.startAssistedEmailChange(userId, { newEmail });
+  }
+
+  async confirmAccountEmailChange(patientId, { ticket, code }, requestingUser) {
+    const userId = await this.accountBehindRecord(patientId, requestingUser);
+    return authService.confirmEmailChange(userId, { ticket, code }, { byStaff: requestingUser.userId });
+  }
+
   async getPortalAccess(patientId, requestingUser) {
     // The department scope first [1.136.0, security review]: a laboratory account holds
     // patients:read for its own patients only, and this screen names the account and its address.

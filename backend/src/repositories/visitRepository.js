@@ -265,7 +265,7 @@ class VisitRepository {
 
   /**
    * PAID bookings whose day passed with nobody checked in. [1.130.0] A paid booking is moved, never
-   * written off ([1.123.0]: no refunds), so the end-of-day close leaves it, and the desk is told to
+   * written off (a receipt is final, [1.155.0]), so the end-of-day close leaves it, and the desk is told to
    * move it here.
    */
   async findMissedPaidBookings() {
@@ -353,6 +353,15 @@ class VisitRepository {
              u.first_name as created_by_first_name, u.last_name as created_by_last_name,
              pv.status as visit_status,
              q.queue_position, q.patients_ahead,
+             -- [1.156.0] Whether this row is a booking checked in, and whether that can still be undone.
+             (SELECT a.id FROM appointments a WHERE a.patient_visit_id = pv.id LIMIT 1) AS appointment_id,
+             (SELECT a.status FROM appointments a WHERE a.patient_visit_id = pv.id LIMIT 1) AS appointment_status,
+             EXISTS (
+               SELECT 1 FROM visit_tests wvt
+                WHERE wvt.patient_visit_id = pv.id
+                  AND (wvt.status IN ('Waiting for Release', 'Completed') OR wvt.performed_at IS NOT NULL
+                       OR EXISTS (SELECT 1 FROM test_results wtr WHERE wtr.visit_test_id = wvt.id))
+             ) AS work_started,
              -- [1.149.0] When this visit was last called, per station: { "Cashier": "2026-…" }.
              (SELECT jsonb_object_agg(s.station, s.last)
                 FROM (SELECT qc.station, MAX(qc.called_at) AS last FROM queue_calls qc
@@ -703,6 +712,31 @@ class VisitRepository {
     `;
     const result = await db.query(queryText, [visitId]);
     return result.rows.map((r) => r.category_name);
+  }
+
+  /** A report came back, so "your results are ready" is owed again when it goes out. [1.156.0] */
+  async clearResultsReadyEmail(visitId) {
+    await db.query('UPDATE patient_visits SET results_ready_emailed_at = NULL WHERE id = $1', [visitId]);
+  }
+
+  /**
+   * Out of today's queue, as if never checked in: no ticket, and back to when the booking was made,
+   * since a booking's visit dates from its check-in. [1.156.0]
+   */
+  async leaveTodaysQueue(visitId, bookedAt) {
+    // The waiting room's screen must not go on showing a ticket that is gone.
+    await db.query('DELETE FROM queue_calls WHERE patient_visit_id = $1', [visitId]);
+    await db.query(
+      `UPDATE visit_tests SET status = 'Pending', updated_at = CURRENT_TIMESTAMP
+        WHERE patient_visit_id = $1 AND status = 'Processing'`,
+      [visitId]
+    );
+    await db.query(
+      `UPDATE patient_visits
+          SET status = 'Pending', queue_number = NULL, created_at = $2, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1`,
+      [visitId, bookedAt]
+    );
   }
 
   // True once no test on the visit is still outstanding — lets the last result release close

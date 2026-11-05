@@ -2,7 +2,7 @@ const db = require('../config/database');
 const { hmoEffectiveStatus } = require('../constants/hmoEffectiveStatus');
 const { CAME_IN_AS } = require('../constants/visits');
 const {
-  ISSUED_IN_RANGE, REVERSED_IN_RANGE, ISSUED_RECEIPT_CLAUSE
+  ISSUED_IN_RANGE, REVERSED_IN_RANGE, ISSUED_RECEIPT_CLAUSE, REVERSED_TOTALS, REFUNDS_ON_PAYMENT
 } = require('../constants/moneyRange');
 // The payment vocabulary and the cash-up buckets built from it. [1.33.0]
 const {
@@ -174,6 +174,7 @@ class PaymentRepository {
     // construction rather than by coincidence.
     const selectList = `
       SELECT pay.*,
+             ${REFUNDS_ON_PAYMENT},
              (${ISSUED_IN_RANGE(hasDates)}) AS counted_in_collected,
              u.first_name as processed_by_first_name, u.last_name as processed_by_last_name,
              p.first_name as patient_first_name, p.last_name as patient_last_name,
@@ -224,9 +225,11 @@ class PaymentRepository {
     // and `bank` correctly become zero, because the clinic took nothing by those methods among
     // the rows being shown. The three still sum to `collected`. [1.33.0]
     let methodText = '';
+    let viaPlaceholder = null;
     if (method) {
       params.push(method);
-      methodText = ` AND pay.payment_method = $${params.length}`;
+      viaPlaceholder = `$${params.length}`;
+      methodText = ` AND pay.payment_method = ${viaPlaceholder}`;
     }
 
     // Money IN during the range, and money BACK during the range — two different dates, which is
@@ -271,10 +274,9 @@ class PaymentRepository {
           AS discounts,
         -- Reported beside the collections figure, never subtracted from it. Netting hides that a
         -- reversal happened, and a drawer short by a refund needs the refund named.
-        COALESCE(SUM(pay.amount) FILTER (WHERE ${reversed}), 0)::numeric(12,2)
-          AS reversed,
-        COUNT(*) FILTER (WHERE ${reversed})::int
-          AS reversals
+        -- [1.155.0] From the refunds themselves, since a refund may be part of a receipt. Filtered to
+        -- a method by how the money went BACK: that is what the drawer answers to.
+        ${REVERSED_TOTALS(hasDates, { via: viaPlaceholder })}
       FROM payments pay
       ${ISSUED_RECEIPT}
         AND ((${issued}) OR (${reversed}))${methodText}
@@ -396,7 +398,7 @@ class PaymentRepository {
   // appointmentRepository.findByPatientUserId and patientRepository.findPatientsByUserId.
   async findPaymentsByPatientUserId(userId) {
     const queryText = `
-      SELECT pay.*, p.first_name as patient_first_name, p.last_name as patient_last_name,
+      SELECT pay.*, ${REFUNDS_ON_PAYMENT}, p.first_name as patient_first_name, p.last_name as patient_last_name,
              pv.queue_number, pv.visit_type, pv.created_at AS visit_date, pv.patient_id,
              -- [1.136.0] Walk-in, booked online, or booked by the clinic: said on the receipt row.
              ${CAME_IN_AS('pv')} AS came_in_as
@@ -432,6 +434,7 @@ class PaymentRepository {
   async findByReceiptNumber(receiptNumber) {
     const queryText = `
       SELECT pay.*,
+             ${REFUNDS_ON_PAYMENT},
              u.first_name AS processed_by_first_name,
              u.last_name  AS processed_by_last_name,
              p.first_name AS patient_first_name,
@@ -472,7 +475,10 @@ class PaymentRepository {
          LEFT JOIN payment_methods m ON m.id = s.payment_method_id
         WHERE NOT $4::boolean
           AND s.patient_visit_id <> $1
-          AND s.status IN ('Pending', 'Verified')
+          -- [1.155.0] A verified proof whose receipt went back no longer holds its reference: the
+          -- patient may use that transfer on the right booking.
+          AND (s.status = 'Pending' OR (s.status = 'Verified' AND EXISTS (
+                SELECT 1 FROM payments held WHERE held.id = s.payment_id AND held.payment_status = 'Paid')))
           AND COALESCE(m.kind, 'GCash') = $2
           AND UPPER(TRIM(s.reference_number)) = UPPER(TRIM($3))
        ORDER BY 1 NULLS LAST

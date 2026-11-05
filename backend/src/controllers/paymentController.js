@@ -1,4 +1,5 @@
 const paymentService = require('../services/paymentService');
+const paymentRefundService = require('../services/paymentRefundService');
 
 class PaymentController {
   async getBill(req, res, next) {
@@ -41,6 +42,26 @@ class PaymentController {
         message: `Payment processed. Receipt: ${payment.receipt_number}`,
         data: { payment }
       });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /** What the refund dialog shows: each test, what it would give back, and why it cannot if not. */
+  async getRefundOptions(req, res, next) {
+    try {
+      const data = await paymentRefundService.options(req.params.id, req.user);
+      return res.status(200).json({ status: 'success', data });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async refund(req, res, next) {
+    try {
+      const { kind, testIds, reason, returnedVia, returnedReference } = req.body;
+      const data = await paymentRefundService.refund(req.params.id, { kind, testIds, reason, returnedVia, returnedReference }, req.user);
+      return res.status(201).json({ status: 'success', message: 'Refund recorded.', data });
     } catch (err) {
       next(err);
     }

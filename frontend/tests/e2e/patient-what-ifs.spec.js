@@ -257,7 +257,7 @@ test.describe('What a patient found [1.151.0]', () => {
     const list = await ctx.post(`${API}/auth/login`, { data: { email: 'client@enlogada.com', password: [PASSWORD] } });
     expect(list.status()).toBe(400);
     const spaces = await ctx.post(`${API}/auth/register`, {
-      data: { firstName: 'Lorna', lastName: 'Bacus', email: `spaces${Date.now()}@enlogada-e2e.test`, password: '            ' },
+      data: { acceptedTerms: true, firstName: 'Lorna', lastName: 'Bacus', email: `spaces${Date.now()}@enlogada-e2e.test`, password: '            ' },
     });
     expect(spaces.status()).toBe(400);
     expect((await spaces.json()).message).toMatch(/only spaces/i);

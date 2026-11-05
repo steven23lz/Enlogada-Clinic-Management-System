@@ -64,6 +64,10 @@ router.post('/:id/invitations/check', verifyToken, authorizeStaff, authorizePerm
 router.post('/:id/invitations', verifyToken, authorizeStaff, authorizePermissions('patients:invite'), patientInvitationController.invite);
 router.post('/:id/invitations/resend', verifyToken, authorizeStaff, authorizePermissions('patients:invite'), patientInvitationController.resend);
 router.delete('/:id/invitations/open', verifyToken, authorizeStaff, authorizePermissions('patients:invite'), patientInvitationController.withdraw);
+// [1.156.0] A patient who can no longer open their sign-in email, at the clinic with their ID. Admin's,
+// as unlinking is: both decide who an account belongs to.
+router.post('/:id/account-email', verifyToken, authorizeStaff, authorizePermissions('patients:unlink'), patientInvitationController.startAccountEmailChange);
+router.post('/:id/account-email/confirm', verifyToken, authorizeStaff, authorizePermissions('patients:unlink'), patientInvitationController.confirmAccountEmailChange);
 router.delete('/:id/account-link', verifyToken, authorizeStaff, authorizePermissions('patients:unlink'), patientInvitationController.unlink);
 
 // Archiving a record. [1.56.0] Admin and SuperAdmin only, by ROLE rather than by permission, and

@@ -46,6 +46,8 @@ const PROTECTED_EMAILS = [
 const TRANSACTIONAL_TABLES = [
   'cash_counts',
   'queue_calls',
+  'payment_refund_tests',
+  'payment_refunds',
   'notification_reads',
   'notification_events',
   'audit_log',

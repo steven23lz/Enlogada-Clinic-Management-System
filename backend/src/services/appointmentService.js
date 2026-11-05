@@ -734,7 +734,7 @@ class AppointmentService {
    * A patient lets go of their own UNPAID booking. [1.146.0] Steven: when their HMO says no, or
    * they change their mind, waiting for the time to pay to run out kept a slot from somebody else
    * for nothing. Removed as the sweep removes an unpaid booking, with its Activity Log line and any
-   * payment proof kept on record. Never a paid one (no refunds [1.121.0]: it is moved instead), one
+   * payment proof kept on record. Never a paid one (a receipt is final [1.155.0]: it is moved instead), one
    * already checked in (the desk has it), or one whose payment is waiting to be checked.
    */
   async releaseUnpaid(appointmentId, requestingUser) {
@@ -1087,6 +1087,61 @@ class AppointmentService {
 
     // The ticket goes back with the reply, so the desk can tell the patient their number.
     return { ...updated, queue_number: joined?.queue_number ?? appointment.queue_number ?? null };
+  }
+
+  /**
+   * Takes back a check-in made by mistake: the wrong person's booking, or one for another day. [1.156.0]
+   *
+   * Only until a department has started on it. The visit leaves today's queue and its ticket goes, and a
+   * booking the check-in moved to today returns to its own date if that time is still free. If someone
+   * else has it, the booking stays on today, unchecked, for the desk to move: the reply says so.
+   */
+  async undoCheckIn(id, { reason }, requestingUser) {
+    const why = String(reason ?? '').trim();
+    const refuse = (statusCode, message) => {
+      const error = new Error(message);
+      error.statusCode = statusCode;
+      return error;
+    };
+    if (!why) throw refuse(400, 'Say why the check-in is being undone. It is kept in the Activity Log.');
+    if (why.length > RESCHEDULE_REASON_MAX) throw refuse(400, `Keep the reason under ${RESCHEDULE_REASON_MAX} characters.`);
+
+    const appointment = await appointmentRepository.findById(id);
+    if (!appointment) throw refuse(404, 'Appointment not found');
+    if (appointment.status !== 'Confirmed') throw refuse(409, 'This booking is not checked in, so there is nothing to undo.');
+    const started = await appointmentRepository.findWorkStartedOnVisit(appointment.patient_visit_id);
+    if (started) throw refuse(409, `${started.name} has already been started by its department, so this check-in can no longer be undone.`);
+
+    const time = String(appointment.scheduled_time).slice(0, 5);
+    const from = appointment.checked_in_from_date ? formatDateOnly(appointment.checked_in_from_date) : null;
+    let backToDate = null;
+    if (from && from >= todayLocalDateString()) {
+      const day = await resolveDay(from);
+      const taken = await appointmentRepository.countActiveInSlot({ scheduledDate: from, scheduledTime: time, excludeId: appointment.id });
+      if (day && taken < day.maxConcurrent) backToDate = from;
+    }
+
+    const restored = await db.withTransaction(async () => {
+      const row = await appointmentRepository.undoCheckIn(id, { backToDate });
+      if (!row) throw refuse(409, 'This booking changed while you were undoing it. Please reload and try again.');
+      await visitRepository.leaveTodaysQueue(appointment.patient_visit_id, appointment.created_at);
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: 'appointment.check_in_undone',
+        entityType: 'appointment',
+        entityId: appointment.id,
+        description: `${appointment.appointment_reference}: check-in undone, ticket ${appointment.queue_number} given up`
+          + `${backToDate ? `, back to ${backToDate} ${time}` : ''}. ${why}`,
+      });
+      return row;
+    });
+
+    return {
+      appointment: restored,
+      movedBack: Boolean(backToDate),
+      // Its own date's time went to someone else while it was checked in.
+      needsMoving: Boolean(from) && !backToDate,
+    };
   }
 }
 

@@ -7,7 +7,7 @@ import { formatCurrency } from '../../lib/currency';
 /**
  * The last check before money is taken: are these the patient's final tests? [1.122.0]
  *
- * A paid receipt is final. There are no refunds [1.121.0], and a paid visit's tests can no longer
+ * A paid receipt is final, refunded only in the two recorded cases [1.155.0], and a paid visit's tests can no longer
  * be added to or removed. So a patient still deciding between tests, charged at the counter, has
  * paid for what was on the screen. The dialog lists every test and its price, says plainly what
  * payment locks, and Take Payment waits until the cashier ticks that the patient has confirmed the
@@ -40,7 +40,7 @@ export default function PaymentConfirmDialog({ open, onOpenChange, bill, method,
       onOpenChange={onOpenChange}
       title="Are these the final tests?"
       description={bill
-        ? `Ask ${bill.patientName} to confirm the tests below. Once paid, tests can't be added or removed, and the payment can't be refunded.`
+        ? `Ask ${bill.patientName} to confirm the tests below. Once paid, tests can't be added or removed, and a change of mind isn't refunded.`
         : ''}
       confirmLabel={bill ? `Take ${formatCurrency(bill.totalAmount)}` : 'Take Payment'}
       confirmDisabled={!confirmed || (pending > 0 && !withdraw) || (declared && !idChecked)}

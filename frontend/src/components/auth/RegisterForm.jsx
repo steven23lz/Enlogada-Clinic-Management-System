@@ -50,6 +50,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
     confirmPassword: '',
     contactNumber: ''
   });
+  // [1.156.0] Asked once, here. The links open in a new tab, so reading them loses nothing typed.
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [pending, setPending] = useState(readPending);
   const [resendWait, setResendWait] = useState(60);
   const [code, setCode] = useState('');
@@ -101,7 +103,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
 
     setSubmitting(true);
     try {
-      const started = await register({ firstName, lastName, email, password, contactNumber });
+      const started = await register({ firstName, lastName, email, password, contactNumber, acceptedTerms });
       remember({ ticket: started.ticket, email: started.email, firstName: firstName.trim(), savedAt: Date.now() });
       setResendWait(started.resendAfterSeconds ?? 60);
       setCode('');
@@ -340,6 +342,24 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             />
           </AuthField>
         </div>
+
+        <label className="auth-rise flex cursor-pointer items-start gap-2 text-fine leading-relaxed text-ink-soft" style={{ '--i': 6 }}>
+          <input
+            type="checkbox"
+            data-testid="accept-terms"
+            required
+            checked={acceptedTerms}
+            onChange={(e) => setAcceptedTerms(e.target.checked)}
+            disabled={submitting}
+            className="mt-0.5 accent-brand-500"
+          />
+          <span>
+            I agree to the{' '}
+            <a href="/?legal=terms" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">Terms of Service</a>
+            {' '}and{' '}
+            <a href="/?legal=privacy" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">Privacy Policy</a>.
+          </span>
+        </label>
 
         <div className="auth-rise pt-1" style={{ '--i': 6 }}>
           <Button type="submit" variant="brand" loading={submitting} size="lg" className="w-full rounded-full">

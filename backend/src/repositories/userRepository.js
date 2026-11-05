@@ -121,13 +121,18 @@ class UserRepository {
     return result.rows[0];
   }
 
-  async createUser(firstName, lastName, email, passwordHash, contactNumber) {
+  /** Ends every session the account holds, without touching its password. [1.156.0] */
+  async revokeSessions(userId) {
+    await db.query('UPDATE users SET password_changed_at = CURRENT_TIMESTAMP WHERE id = $1', [userId]);
+  }
+
+  async createUser(firstName, lastName, email, passwordHash, contactNumber, { acceptedTerms = false } = {}) {
     const queryText = `
-      INSERT INTO users (first_name, last_name, email, password_hash, contact_number)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO users (first_name, last_name, email, password_hash, contact_number, terms_accepted_at)
+      VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN CURRENT_TIMESTAMP END)
       RETURNING id, first_name, last_name, email, contact_number, status, created_at
     `;
-    const result = await db.query(queryText, [firstName, lastName, email, passwordHash, contactNumber]);
+    const result = await db.query(queryText, [firstName, lastName, email, passwordHash, contactNumber, acceptedTerms]);
     return result.rows[0];
   }
 

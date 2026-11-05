@@ -18,6 +18,7 @@ import { HISTORY_PAGE_SIZE } from '../../hooks/useTransactionHistory';
 import { DateField, RANGE_PRESETS } from '../ui/date-field';
 import DataBadge from '../ui/data-badge';
 import DateTime from '../ui/date-time';
+import RefundAction from './RefundAction';
 
 /**
  * Receipts issued over a chosen range, for the daily cash-up.
@@ -137,6 +138,12 @@ export default function TransactionHistoryPanel({ history, receipt, operations }
                         }`}
                       >
                         {formatCurrency(t.amount)}
+                        {/* [1.155.0] Part of it went back: the receipt is still paid, for the rest. */}
+                        {t.payment_status === 'Paid' && Number(t.refunded_amount) > 0 && (
+                          <span data-testid="receipt-part-refunded" className="mt-0.5 block text-fine font-semibold text-rose-600">
+                            {formatCurrency(t.refunded_amount)} refunded
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell label="Status">
                         <StatusBadge status={t.payment_status || 'Paid'} />
@@ -194,6 +201,7 @@ export default function TransactionHistoryPanel({ history, receipt, operations }
                             <Printer className="h-3 w-3" />
                             Reprint
                           </Button>
+                          <RefundAction transaction={t} onDone={() => history.reload()} />
                         </div>
                       </TableCell>
                     </TableRow>

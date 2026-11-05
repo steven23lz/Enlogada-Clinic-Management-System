@@ -300,6 +300,42 @@ class AppointmentEmailService {
    * something the clinic controls. Silence reads as "it did not go through", and the usual next
    * step is paying a second time.
    */
+  /** [1.156.0] Says nothing of what the report was: it may not have been theirs. */
+  async sendReportWithdrawn({ to, patientName }) {
+    if (!to) return { skipped: true };
+    return sendEmail({
+      to,
+      subject: `A report was withdrawn — ${CLINIC_NAME}`,
+      html: shell(`Hello ${patientName},`, `
+        <p>The clinic has withdrawn a report it gave you online while it is being checked. Please do not
+           rely on that report, and please delete any copy you were sent.</p>
+        <p style="font-size:14px;">If you have a question about this, please contact the clinic.</p>
+      `),
+    });
+  }
+
+  /** [1.155.0] Money going back is never a surprise, and the receipt they hold no longer tells the whole story. */
+  async sendRefund({ to, patientName, receiptNumber, amount, tests = [], reason, returnedVia, owesAgain = false }) {
+    if (!to) {
+      logger.debug('Refund email skipped: no email address on the patient.');
+      return { skipped: true };
+    }
+
+    return sendEmail({
+      to,
+      subject: `Refund of ${amount} — ${CLINIC_NAME}`,
+      html: shell(`Hello ${patientName},`, `
+        <p>The clinic is giving back <strong>${esc(amount)}</strong> from receipt <strong>${esc(receiptNumber)}</strong>, by ${esc(returnedVia)}.</p>
+        ${tests.length ? `<p>${owesAgain ? 'It was for' : 'For'}: ${tests.map((t) => esc(t)).join(', ')}.</p>` : ''}
+        <p>Reason: ${esc(reason)}</p>
+        ${owesAgain
+          ? '<p>This payment was recorded by mistake, so the visit is unpaid again. The clinic will contact you if anything more is needed.</p>'
+          : '<p>Those tests have been cancelled. Anything else on the receipt goes ahead as planned.</p>'}
+        <p style="font-size:14px;">If you have a question about this, please contact the clinic.</p>
+      `),
+    });
+  }
+
   async sendPaymentVerified({ to, patientName, reference, receiptNumber, amount }) {
     if (!to) {
       logger.debug('Payment verified email skipped: no email address on the patient.');
@@ -394,7 +430,7 @@ class AppointmentEmailService {
   }
 
   /**
-   * A PAID booking nobody came for. Paid is final ([1.121.0]: no refunds), so the money is not
+   * A PAID booking nobody came for. Paid is final ([1.155.0]: a missed visit is not one of the two refund cases), so the money is not
    * lost: the booking is moved. The patient was otherwise never told, and the Desk's list of paid
    * bookings nobody came for waited on staff to ring them.
    */

@@ -200,7 +200,7 @@ class HmoRepository {
    * already reads as "the patient settles it", with the reason saying what really happened), and a
    * claim left with nothing approved on it is withdrawn ('Cancelled'), so it leaves the decision
    * queue. Without this, an approval landing later would bill the insurer for a test the patient
-   * had already paid for, and there is no refund to put that right.
+   * had already paid for, and a change of mind is not refunded [1.155.0].
    *
    * @returns {Promise<number>} how many lines were closed
    */

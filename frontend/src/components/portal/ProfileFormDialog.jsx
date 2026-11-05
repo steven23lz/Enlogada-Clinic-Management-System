@@ -50,7 +50,7 @@ export default function ProfileFormDialog({ profiles, reference, mode }) {
           <DialogDescription>
             {editing
               ? `Update ${profiles.selected?.first_name || 'this patient'}'s details.`
-              : 'For yourself, or someone in your family you book for.'}
+              : "For yourself, or someone in your family you book for. Visited the clinic before? Ask the front desk to invite this email instead, so your past visits stay together."}
           </DialogDescription>
         </DialogHeader>
 

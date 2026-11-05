@@ -15,7 +15,9 @@
  *                      `payment_status`: a receipt issued on the 19th was money on the 19th, and
  *                      dropping it once reversed is exactly what restated closed days.
  *
- *   REVERSED_IN_RANGE  money handed BACK during the range, bucketed by `refunded_at`.
+ *   REVERSED_IN_RANGE  money handed BACK during the range, bucketed by the refund's own date.
+ *                      [1.155.0] Read from `payment_refunds`: a receipt can be refunded in part, and
+ *                      more than once, so one date and the receipt's whole amount cannot say it.
  *
  * `reversed` is reported beside `collected` and never subtracted from it, so a receipt paid and
  * refunded the same day reads as money in and money out rather than as nothing having happened —
@@ -38,8 +40,42 @@ const inRange = (hasDates) => (col) => (hasDates
 
 const ISSUED_IN_RANGE = (hasDates) => inRange(hasDates)('paid_at');
 
+/** The refunds in the range, as a condition on `payment_refunds r`. */
+const REFUND_IN_RANGE = (hasDates) => (hasDates
+  ? `r.refunded_at >= $1::date AND r.refunded_at < ($2::date + 1)`
+  : `r.refunded_at >= CURRENT_DATE AND r.refunded_at < (CURRENT_DATE + 1)`);
+
+/** This receipt had money handed back in the range. */
 const REVERSED_IN_RANGE = (hasDates) =>
-  `pay.refunded_at IS NOT NULL AND ${inRange(hasDates)('refunded_at')}`;
+  `EXISTS (SELECT 1 FROM payment_refunds r WHERE r.payment_id = pay.id AND ${REFUND_IN_RANGE(hasDates)})`;
+
+/**
+ * The money handed back in the range, and how many times: `<amount>, <count>` for a SELECT list.
+ * `via` narrows it to one way of going back, which is the drawer's question: a GCash payment refunded
+ * in cash left the drawer. Give it as a parameter placeholder.
+ */
+const REVERSED_TOTALS = (hasDates, { via = null, amount = 'reversed', count = 'reversals' } = {}) => {
+  const where = `${REFUND_IN_RANGE(hasDates)}${via ? ` AND r.returned_via = ${via}` : ''}`;
+  return `(SELECT COALESCE(SUM(r.amount), 0)::numeric(12,2) FROM payment_refunds r WHERE ${where}) AS ${amount},
+          (SELECT COUNT(*)::int FROM payment_refunds r WHERE ${where}) AS ${count}`;
+};
+
+/**
+ * What a payment row carries about its refunds, for the receipt, the log and the patient. Callers alias
+ * `payments` as `pay`.
+ */
+const REFUNDS_ON_PAYMENT = `
+  (SELECT COALESCE(SUM(r.amount), 0)::numeric(12,2) FROM payment_refunds r WHERE r.payment_id = pay.id) AS refunded_amount,
+  (SELECT COALESCE(json_agg(json_build_object(
+            'id', r.id, 'amount', r.amount, 'kind', r.kind, 'reason', r.reason,
+            'returnedVia', r.returned_via, 'reference', r.returned_reference, 'refundedAt', r.refunded_at,
+            'tests', (SELECT COALESCE(json_agg(t.name ORDER BY t.name), '[]'::json)
+                        FROM payment_refund_tests rt
+                        JOIN visit_tests vt ON vt.id = rt.visit_test_id
+                        JOIN tests t ON t.id = vt.test_id
+                       WHERE rt.refund_id = r.id)
+          ) ORDER BY r.refunded_at), '[]'::json)
+     FROM payment_refunds r WHERE r.payment_id = pay.id) AS refunds`;
 
 /**
  * A row that represents a receipt the clinic actually handed to a patient.
@@ -78,5 +114,7 @@ module.exports = {
   REVERSED_IN_RANGE,
   ISSUED_IN_DAY_RANGE,
   MONEY_IN_RANGE,
-  ISSUED_RECEIPT_CLAUSE
+  ISSUED_RECEIPT_CLAUSE,
+  REVERSED_TOTALS,
+  REFUNDS_ON_PAYMENT,
 };

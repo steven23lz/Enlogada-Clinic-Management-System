@@ -10,15 +10,33 @@ const sqlList = (values) => values.map((v) => `'${v}'`).join(', ');
 
 /** One row per day from a window of payments: the same receipts, on the same rule, as the cash book. */
 const TAKINGS_BY_DAY = `
-  SELECT pay.paid_at::date AS day,
-         COUNT(*)::int AS receipts,
-         COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method = '${CASH_METHOD}'), 0)::numeric(12,2) AS cash,
-         COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method IN (${sqlList(EWALLET_METHODS)})), 0)::numeric(12,2) AS gcash,
-         COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method = '${BANK_METHOD}'), 0)::numeric(12,2) AS bank
-    FROM payments pay
-   WHERE ${ISSUED_RECEIPT_CLAUSE}
-     AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)
-   GROUP BY 1`;
+  WITH paid AS (
+    SELECT pay.paid_at::date AS day,
+           COUNT(*)::int AS receipts,
+           COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method = '${CASH_METHOD}'), 0) AS cash,
+           COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method IN (${sqlList(EWALLET_METHODS)})), 0) AS gcash,
+           COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method = '${BANK_METHOD}'), 0) AS bank
+      FROM payments pay
+     WHERE ${ISSUED_RECEIPT_CLAUSE}
+       AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)
+     GROUP BY 1
+  ),
+  -- [1.155.0] Cash handed back left the drawer that day, whenever the receipt was taken. The drawer only
+  -- answers for cash: money returned by GCash or bank never was in it.
+  handed_back AS (
+    SELECT r.refunded_at::date AS day, SUM(r.amount) AS cash
+      FROM payment_refunds r
+     WHERE r.returned_via = '${CASH_METHOD}'
+       AND r.refunded_at >= $1::date AND r.refunded_at < ($2::date + 1)
+     GROUP BY 1
+  )
+  SELECT COALESCE(p.day, b.day) AS day,
+         COALESCE(p.receipts, 0)::int AS receipts,
+         (COALESCE(p.cash, 0) - COALESCE(b.cash, 0))::numeric(12,2) AS cash,
+         COALESCE(p.gcash, 0)::numeric(12,2) AS gcash,
+         COALESCE(p.bank, 0)::numeric(12,2) AS bank
+    FROM paid p
+    FULL JOIN handed_back b ON b.day = p.day`;
 
 class CashCountRepository {
   /** Every count of one day, newest first: the current one, and any it replaced. */

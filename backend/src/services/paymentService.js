@@ -79,7 +79,7 @@ class PaymentService {
     //
     // Charged at full price here, because an undecided claim covers nothing — which is arithmetic
     // the cashier cannot see. The patient hands over the full amount for a test their HMO is
-    // about to cover, the approval lands the next day, and there is no refund [1.121.0]: the
+    // about to cover, the approval lands the next day, and a change of mind is not refunded [1.155.0]: the
     // patient has paid for something they had been told was covered, and the receipt is final.
     //
     // Reported, not blocked. Some providers take days to answer and the patient cannot be kept

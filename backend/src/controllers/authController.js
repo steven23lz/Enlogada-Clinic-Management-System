@@ -8,7 +8,16 @@ class AuthController {
    */
   async register(req, res, next) {
     try {
-      const { firstName, lastName, email, password, contactNumber } = req.body;
+      const { firstName, lastName, email, password, contactNumber, acceptedTerms } = req.body;
+
+      // [1.156.0] A patient's data is only held with their agreement (RA 10173), and a paid receipt's
+      // rules are in the Terms. Refused here as well as on the form: the account records the moment.
+      if (acceptedTerms !== true) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Please read and agree to the Terms of Service and Privacy Policy to create an account.'
+        });
+      }
 
       // Simple validations
       if (!firstName || !lastName || !email || !password) {

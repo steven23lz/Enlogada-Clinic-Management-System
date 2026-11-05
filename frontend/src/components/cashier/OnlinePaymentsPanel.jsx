@@ -291,8 +291,8 @@ export default function OnlinePaymentsPanel({ review }) {
               <p className="m-0 text-fine leading-relaxed text-ink-muted">
                 This records{' '}
                 <strong className="font-bold tabular-nums text-ink">{formatCurrency(due)}</strong>{' '}
-                as received, issues a receipt and releases the visit. It cannot be undone: a receipt
-                is final, and there are no refunds.
+                as received, issues a receipt and releases the visit. A receipt is final: only the
+                SuperAdmin can reverse one, and only if the clinic cannot do the test or it was a mistake.
               </p>
             </div>
 

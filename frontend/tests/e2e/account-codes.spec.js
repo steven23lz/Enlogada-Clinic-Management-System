@@ -42,7 +42,7 @@ test.describe('Sign-up needs the emailed code', () => {
 
   const start = (email) =>
     api.post(`${API}/auth/register`, {
-      data: { ...fixturePerson(), email, password: PASSWORD, contactNumber: '' },
+      data: { ...fixturePerson(), email, password: PASSWORD, contactNumber: '', acceptedTerms: true },
     });
   const verify = (ticket, code) => api.post(`${API}/auth/register/verify`, { data: { ticket, code } });
 
@@ -142,6 +142,7 @@ test.describe('Sign-up needs the emailed code', () => {
     await page.getByLabel('Email Address').fill(email);
     await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
     await page.getByLabel('Confirm Password').fill(PASSWORD);
+    await page.getByTestId('accept-terms').check();
     await page.locator('form').getByRole('button', { name: 'Create Account' }).click();
 
     await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();

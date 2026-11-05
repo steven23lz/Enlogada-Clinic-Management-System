@@ -1,5 +1,76 @@
 # Database Migration & Schema History
 
+## [1.156.0] - 2026-11-05 (Taking a mistake back, and what a patient agrees to)
+
+`migrateCorrections.js` (`--rollback` reverses it): `test_results.withdrawn_at/_by/_reason`,
+`appointments.checked_in_from_date`, `users.terms_accepted_at`, and `chk_results_verification_code` now
+lets a withdrawn report keep its code. Steven asked for every what-if a panel could raise to have an
+answer, so the staff side was walked as [1.151.0] walked the patient's. Five things came of it.
+
+**A released report can be withdrawn.** `POST /results/:visitTestId/withdraw` (`results:release`, own
+department, a reason). An amendment leaves the old version readable until the new one is released, right
+for a figure and wrong for someone else's report. Every authorised version of the test loses
+`authorised_at`, which is all "released" means to any reader, and `is_current`, so the test reads as having
+no report: it returns to the worklist as `Processing`, a click cannot release that file again, and the next
+save is a new version (`createResult` numbers from `MAX(version)`, as there may be no current row). A draft
+correction already being written stays current. The file and row stay, the history shows "Withdrawn" and
+why, the public check answers `withdrawn` with no initials and no test name (it may be the wrong person),
+the visit reopens and "results ready" is owed again. The patient gets an email that says nothing of what the
+report was, if they could have seen it; the reply names any address a copy was already emailed to, because
+that cannot be recalled. History: `WithdrawReport`.
+
+**A check-in can be undone.** `POST /appointments/:id/undo-check-in` (`appointments:update`, a reason), until
+a department has started (`findWorkStartedOnVisit`: a saved report, an exam done). The booking goes back to
+Pending, the ticket and its waiting-room calls go, the visit returns to when the booking was made, and a
+booking the check-in moved to today returns to its date if that time is still free and not past; otherwise
+it stays on today for the desk to move, and the reply says so. Checked in again, it gets a new ticket. The
+Desk: `UndoCheckIn` on a row where `appointment_status` is Confirmed and `work_started` is false.
+
+**A patient agrees at sign-up.** A required tick, `acceptedTerms === true` on `POST /auth/register` (400
+otherwise), stamped as `terms_accepted_at` when the account is created. A line under Google's button says the
+same, as Google creates the account on first use. The links open `/?legal=terms` and `/?legal=privacy` in
+their own tab, so nothing typed is lost. Staff accounts and accounts older than this stay NULL.
+
+**A patient who lost their sign-in inbox is helped at the clinic.** `POST /patients/:id/account-email` and
+`/confirm` (`patients:unlink`, Admin), from Portal access on a linked record, after an ID check. No password,
+since that is what they cannot reset; the code still goes to the NEW address and is read out, so an account
+cannot be moved to an address that is not in the room. Sessions end (`revokeSessions`), the old address is
+told, and it is `auth.email_changed_at_clinic` in the Activity Log. A patient adding a profile is told to ask
+the front desk if they have visited before, the cheap half of the duplicate-profile problem.
+
+**Whoever is deactivated is signed out.** `verifyToken` answered a deactivated account 403, and the app signs
+out only on 401, so their screen stayed open with whatever patient data it had fetched. It answers 401 now.
+Staff Accounts also scrolled sideways on a phone once a long address was on it: the row wraps, and a name or
+address is no longer cut short below `sm`.
+
+**Tests:** `corrections.spec.js`. `helpers/accounts.js` and the sign-up specs send `acceptedTerms`.
+
+## [1.155.0] - 2026-11-05 (Refunds, for the two cases a final receipt cannot answer)
+
+`migrateRefunds.js` (`--rollback` reverses it): `payment_refunds` and `payment_refund_tests`. Older reversals
+are copied in as kind `legacy`, so the cash book reads one table. [1.121.0] removed refunds because one person
+could take money and hand it back alone, a refunded receipt still read as paid, only a whole receipt could be
+reversed, and nothing recorded how the money went back. Steven reopened it for a defense question "final" could
+not answer: the clinic took money for a test it then cannot perform. Each of the four objections has its answer:
+- **Two people.** `GET` and `POST /payments/:id/refund` are `authorizeRoles('SuperAdmin')`, not a permission, so
+  it cannot be granted on the grid, and never on a receipt the SuperAdmin took themselves (`processed_by`).
+- **It says so.** The receipt prints "Refunded — not valid as proof of payment", each refunded test "(refunded)";
+  the patient is emailed and the portal's Payments shows it; audited as `payment.refunded`.
+- **Per test.** `clinic_cannot_perform` picks tests not yet done. Shares follow price across the tests the patient
+  paid for, the centavo remainder on the largest, so they sum to the receipt exactly (`utils/refundRules.js`,
+  unit-tested). Those tests go `Cancelled` and leave the worklist; the receipt stays Paid unless nothing is left,
+  then the visit and any booking are cancelled and the slot freed.
+- **How it went back.** `returned_via` and a reference, because the drawer only answers for cash: the cash count
+  subtracts cash refunds alone.
+
+`recorded_by_mistake` is the whole receipt: Refunded, tests and visit back to Pending, a booking back on its time
+to pay, and the partial unique index allows the correct payment after it. A reference stops being spent when the
+payment behind its proof is refunded. A patient's change of mind is on neither list, and the Terms say so. The
+period cash book takes `reversed` from `payment_refunds.refunded_at` (`moneyRange.js`). Sales by service counts
+each RECEIPT, not each visit: a visit paid, reversed as a mistake and paid again has two receipts in `collected`,
+and read per visit the breakdown fell short of the takings by the reversed amount. **Tests:** `refunds.spec.js`,
+which replaced `refunds-removed.spec.js`; 6 more unit tests.
+
 ## [1.154.0] - 2026-11-05 (An archived record is read, not booked)
 
 No migration. Steven: "do whats best", after the usual process was explained: an inactive record is

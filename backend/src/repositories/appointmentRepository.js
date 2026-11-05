@@ -603,10 +603,43 @@ class AppointmentRepository {
    * A booking checked in on another day than its own is moved to today. [1.124.0] Its old date's
    * slot is freed, and the patient's portal shows the day they were actually seen.
    */
+  /** Has anything been done on this visit since check-in? A saved report, or an exam marked done. [1.156.0] */
+  async findWorkStartedOnVisit(visitId) {
+    const { rows } = await db.query(
+      `SELECT t.name
+         FROM visit_tests vt
+         JOIN tests t ON t.id = vt.test_id
+        WHERE vt.patient_visit_id = $1
+          AND (vt.status IN ('Waiting for Release', 'Completed') OR vt.performed_at IS NOT NULL
+               OR EXISTS (SELECT 1 FROM test_results tr WHERE tr.visit_test_id = vt.id))
+        LIMIT 1`,
+      [visitId]
+    );
+    return rows[0];
+  }
+
+  /** Back to not checked in, on the date it should have, with the move that check-in made forgotten. */
+  async undoCheckIn(id, { backToDate }) {
+    const { rows } = await db.query(
+      `UPDATE appointments
+          SET status = 'Pending',
+              scheduled_date = COALESCE($2::date, scheduled_date),
+              checked_in_from_date = NULL,
+              reschedule_reason = CASE WHEN $2::date IS NULL THEN reschedule_reason ELSE NULL END,
+              rescheduled_at = CASE WHEN $2::date IS NULL THEN rescheduled_at ELSE NULL END,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND status = 'Confirmed'
+        RETURNING *`,
+      [id, backToDate]
+    );
+    return rows[0];
+  }
+
   async moveToTodayAtCheckIn(id, reason) {
     const { rows } = await db.query(
       `UPDATE appointments
-          SET scheduled_date = CURRENT_DATE, reschedule_reason = $2,
+          SET checked_in_from_date = scheduled_date,
+              scheduled_date = CURRENT_DATE, reschedule_reason = $2,
               rescheduled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
         WHERE id = $1 AND scheduled_date <> CURRENT_DATE
         RETURNING *`,

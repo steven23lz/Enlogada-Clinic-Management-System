@@ -23,6 +23,28 @@ class PatientInvitationController {
     }
   }
 
+  async startAccountEmailChange(req, res, next) {
+    try {
+      const id = positiveId(req.params.id);
+      if (!id) return badId(res);
+      const data = await patientInvitationService.startAccountEmailChange(id, { newEmail: req.body?.newEmail }, req.user);
+      return res.status(201).json({ status: 'success', message: `We sent a 6-digit code to ${data.email}.`, data });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async confirmAccountEmailChange(req, res, next) {
+    try {
+      const id = positiveId(req.params.id);
+      if (!id) return badId(res);
+      const data = await patientInvitationService.confirmAccountEmailChange(id, { ticket: req.body?.ticket, code: req.body?.code }, req.user);
+      return res.status(200).json({ status: 'success', message: `The sign-in email is now ${data.email}.`, data });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async checkAddress(req, res, next) {
     try {
       if (!positiveId(req.params.id)) return badId(res);

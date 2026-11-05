@@ -8,6 +8,7 @@ const { sendEmail } = require('../config/email');
 const notificationService = require('./notificationService');
 const { UPLOAD_ROOT } = require('../config/upload');
 const auditService = require('./auditService');
+const appointmentEmailService = require('./appointmentEmailService');
 const logger = require('../config/logger');
 const { digitalCopy, digitalCopyName, isMarkable } = require('../utils/digitalCopy');
 const { generateCode, formatCode, stampFor } = require('../utils/verificationCode');
@@ -714,6 +715,66 @@ class ResultService {
    * patient's portal; emailing it is a separate choice (`emailResult`), because not every patient
    * wants their result sent to them.
    */
+  /**
+   * Pulls a released report back from the patient. [1.156.0]
+   *
+   * An amendment keeps the old version readable until the new one is released, which is right for a
+   * figure being corrected. For a report released on the wrong patient it left someone else's report on
+   * show for as long as the correction took. The same people who may release may withdraw, in their own
+   * department. An emailed copy cannot be recalled, so the reply says where one went.
+   */
+  async withdrawResult({ visitTestId, reason }, requestingUser) {
+    await assertStaffOwnsVisitTest(requestingUser, visitTestId);
+    const why = String(reason ?? '').trim();
+    if (!why) {
+      const error = new Error('Say why it is being withdrawn. It is kept in the Activity Log.');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (why.length > 500) {
+      const error = new Error('Keep the reason under 500 characters.');
+      error.statusCode = 400;
+      throw error;
+    }
+    const state = await resultRepository.findVisitReleaseStateByVisitTestId(visitTestId);
+    const withdrawn = await db.withTransaction(async () => {
+      const rows = await resultRepository.withdrawAuthorisedVersions(visitTestId, { withdrawnBy: requestingUser.userId, reason: why });
+      if (!rows.length) return rows;
+      // Back on the worklist, as a test with no report yet. A correction being drafted keeps its place.
+      const draft = await resultRepository.findResultByVisitTestId(visitTestId);
+      if (!draft) await testRepository.updateVisitTestStatus(visitTestId, 'Processing');
+      if (state) {
+        await visitRepository.updateVisitStatus(state.visit_id, 'Processing');
+        await visitRepository.clearResultsReadyEmail(state.visit_id);
+      }
+      await auditService.log({
+        actorId: requestingUser.userId,
+        action: 'result.withdrawn',
+        entityType: 'test_result',
+        entityId: rows[0].id,
+        description: `Withdrew the released report on visit test ${visitTestId} (${rows.map((r) => `version ${r.version}: ${r.file_original_name || 'no file'}`).join(', ')}). ${why}`,
+      });
+      return rows;
+    });
+    if (!withdrawn.length) {
+      const error = new Error('This report has not been released, so there is nothing to withdraw.');
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // An emailed copy cannot be recalled, so whoever withdrew it is told where one went. Whoever could
+    // have seen it is told it is withdrawn; a walk-in with no portal who was sent nothing saw nothing.
+    const emailedTo = withdrawn.find((r) => r.emailed_to)?.emailed_to || null;
+    const patientInfo = await resultRepository.findPatientEmailByVisitTestId(visitTestId);
+    if (patientInfo?.email && (patientInfo.has_portal_account || emailedTo)) {
+      appointmentEmailService.sendReportWithdrawn({
+        to: patientInfo.email,
+        patientName: `${patientInfo.first_name} ${patientInfo.last_name}`,
+      }).catch((err) => logger.error(`Report-withdrawn email failed: ${err.message}`));
+    }
+    return { versions: withdrawn.map((r) => r.version), emailedTo };
+  }
+
   async releaseResult({ visitTestId, releasedBy }, requestingUser) {
     await assertStaffOwnsVisitTest(requestingUser, visitTestId);
     await assertDepartmentIssuesReports(visitTestId);

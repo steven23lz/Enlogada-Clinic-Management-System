@@ -62,6 +62,12 @@ export default function PaymentsTab({ payments }) {
                             <span data-testid="visit-origin" data-origin={visitOrigin(pay).key}> · {visitOrigin(pay).label}</span>
                           )}
                         </span>
+                        {/* [1.155.0] What went back, and why: they were emailed, and this is where they look. */}
+                        {(pay.refunds || []).map((r) => (
+                          <span key={r.id} data-testid="payment-refund" className="mt-0.5 block text-fine font-semibold text-rose-700">
+                            {formatCurrency(r.amount)} refunded by {r.returnedVia}. {r.reason}
+                          </span>
+                        ))}
                       </div>
                       <StatusBadge status={pay.payment_status} />
                     </div>

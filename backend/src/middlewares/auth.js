@@ -35,9 +35,9 @@ const { isStaffUser } = require('../constants/roles');
  * @returns {Promise<void>} Populates `req.user` with `{ userId, email, roles, permissions,
  *   departments }` and calls `next()`, or responds 401/403 and calls neither.
  *
- * Four ways this refuses, and they are different failures: no/invalid token (401), the account has
- * since been deleted (401), it has been deactivated (403), or the token predates a password change
- * (401). The last is what makes "reset the password" a real response to a stolen token.
+ * Four ways this refuses, and they are different failures: no/invalid token, the account has since
+ * been deleted, it has been deactivated, or the token predates a password change. All 401, so the
+ * app signs out on each. The last is what makes "reset the password" a real response to a stolen token.
  *
  * `departments` is `null` for unrestricted (Admin/SuperAdmin) and that is deliberately NOT the
  * same as `[]`. Collapsing the two inverts every downstream scope check.
@@ -80,8 +80,10 @@ const verifyToken = async (req, res, next) => {
 
     // Deactivated since the token was issued. Previously this was only checked at login, so a
     // deactivated member of staff kept full access until their token ran out.
+    // [1.156.0] 401, the one answer the app signs out on. As a 403 the screen stayed open, with whatever
+    // patient data it had already fetched, in front of someone who no longer works here.
     if (user.status === false) {
-      return res.status(403).json({
+      return res.status(401).json({
         status: 'error',
         message: 'This account has been deactivated.'
       });

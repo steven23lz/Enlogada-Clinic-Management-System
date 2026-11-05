@@ -15,6 +15,8 @@ const { normalizeCode, formatCode, patientInitials } = require('../utils/verific
  * Two answers besides "genuine", and both matter:
  *   replaced   a correction was released after this report. The paper is real but out of date,
  *              which an employer reading a fitness result needs to know.
+ *   withdrawn  [1.156.0] the clinic took it back. The paper must not be relied on. It says nothing
+ *              about the patient or the test: it may have been released on the wrong person.
  *   not found  no report carries this code. The page says to call the clinic rather than
  *              "this is a forgery": a code misread off a crumpled print reads the same way.
  */
@@ -30,6 +32,16 @@ class VerificationService {
       throw new NotFoundError(
         'No report from this clinic carries that code. Check it against the report, or call the clinic to confirm it.'
       );
+    }
+
+    if (report.withdrawn_at) {
+      return {
+        code: formatCode(code),
+        status: 'withdrawn',
+        clinic: env.CLINIC_NAME,
+        clinicPhone: env.CLINIC_PHONE,
+        withdrawnAt: report.withdrawn_at,
+      };
     }
 
     return {

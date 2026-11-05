@@ -38,6 +38,14 @@ const StaffShellHost = lazyScreen(() => import('./components/StaffShellHost'));
 const hadLegacyResetLink = () =>
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('reset_token');
 
+// `?legal=terms` / `?legal=privacy`: the sign-up form's links, opened in their own tab so nothing typed
+// is lost. [1.156.0]
+const legalPageLink = () => {
+  if (typeof window === 'undefined') return null;
+  const page = new URLSearchParams(window.location.search).get('legal');
+  return page === 'terms' || page === 'privacy' ? page : null;
+};
+
 const LEGACY_RESET_NOTICE =
   'Reset links are no longer used. Enter your email below and we will send you a 6-digit code instead.';
 
@@ -93,7 +101,7 @@ const MainApp = () => {
   const [legacyResetLink] = useState(hadLegacyResetLink);
   const [receiptNumber, setReceiptNumber] = useState(getInitialReceipt);
   const [verifyCode, setVerifyCode] = useState(getInitialVerify);
-  const [currentTab, setCurrentTab] = useState(() => (hadLegacyResetLink() ? 'forgot-password' : savedScreen()?.tab ?? 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'dashboard', 'account'
+  const [currentTab, setCurrentTab] = useState(() => (hadLegacyResetLink() ? 'forgot-password' : savedScreen()?.tab ?? legalPageLink() ?? 'home')); // 'home', 'services', 'about', 'login', 'register', 'forgot-password', 'dashboard', 'account'
   const [activeNav, setActiveNav] = useState(() => savedScreen()?.nav ?? null); // Active nav in staff/admin sidebar
   // A section of the destination page to scroll to on arrival — the header's FAQ link sends a
   // visitor to Home's #faq from any other page. [1.72.0] Cleared by any plain navigation.

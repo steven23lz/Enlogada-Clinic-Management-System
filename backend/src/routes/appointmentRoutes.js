@@ -27,7 +27,7 @@ router.get('/availability', verifyToken, appointmentController.getAvailability);
 router.get('/verify/:reference', verifyToken, authorizeStaff, authorizePermissions('appointments:read'), appointmentController.verifyReference);
 
 // [1.131.0] No cancel route: an unpaid booking is released on its own when its time is up, and a
-// paid one is moved, never cancelled (no refunds). appointmentService.updateStatus says the same.
+// paid one is moved, never cancelled (a receipt is final). appointmentService.updateStatus says the same.
 //
 // [1.146.0] Except that a patient may let go of their OWN unpaid booking sooner: their HMO said no,
 // or they changed their mind. Paid ones still cannot be (appointmentService.releaseUnpaid decides).
@@ -37,6 +37,9 @@ router.post('/:id/release', verifyToken, authorizeRoles('Client'), appointmentCo
 // than authorizeStaff: a patient moves their own booking, staff move one on a patient's behalf.
 //
 router.put('/:id/reschedule', verifyToken, authorizeRoles('SuperAdmin', 'Admin', 'Receptionist', 'Client'), authorizePermissions('appointments:reschedule'), appointmentController.reschedule);
+
+// [1.156.0] A check-in made by mistake is taken back, until a department has started on it.
+router.post('/:id/undo-check-in', verifyToken, authorizeStaff, authorizePermissions('appointments:update'), appointmentController.undoCheckIn);
 
 // Staff check a booking in ('Confirmed'), the one status set by hand. [1.131.0]
 router.put('/:id/status', verifyToken, authorizeStaff, authorizePermissions('appointments:update'), appointmentController.updateStatus);

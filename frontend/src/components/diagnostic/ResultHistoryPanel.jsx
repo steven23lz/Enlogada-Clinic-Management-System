@@ -1,3 +1,4 @@
+import WithdrawReport from './WithdrawReport';
 import React from 'react';
 import { categoryLabel as categoryLabelFor, issuesReports } from '../../lib/categories';
 import { Eye, History, Pencil, Mail, MailCheck, MailX, WifiOff } from 'lucide-react';
@@ -225,6 +226,9 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                             <Pencil className="h-3 w-3" />
                             <span>Edit</span>
                           </Button>
+                        )}
+                        {canSend && reportsHere && test.result_id && (
+                          <WithdrawReport test={test} onDone={worklist.refresh} />
                         )}
                       </div>
                     </TableCell>

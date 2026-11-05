@@ -85,14 +85,15 @@ export const AuthProvider = ({ children }) => {
 
   // Sign-up is two steps now. [1.73.0] This one creates nothing: it returns the ticket that, with
   // the code emailed to the address, finishes the sign-up in verifySignup below.
-  const register = async ({ firstName, lastName, email, password, contactNumber }) => {
+  const register = async ({ firstName, lastName, email, password, contactNumber, acceptedTerms }) => {
     try {
       const response = await api.post('/auth/register', {
         firstName,
         lastName,
         email,
         password,
-        contactNumber
+        contactNumber,
+        acceptedTerms
       });
       return response.data.data; // { ticket, email, expiresInSeconds, resendAfterSeconds }
     } catch (err) {

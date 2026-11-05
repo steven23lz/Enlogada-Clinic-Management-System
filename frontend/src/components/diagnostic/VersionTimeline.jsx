@@ -60,7 +60,11 @@ const VersionEntry = ({ version, isLatest }) => {
             Version {version.version}
           </span>
 
-          {current ? (
+          {version.withdrawn_at ? (
+            <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wide text-rose-700" data-testid="version-withdrawn">
+              Withdrawn
+            </span>
+          ) : current ? (
             <span className="rounded-md bg-brand-50 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wide text-brand-800 ring-1 ring-inset ring-brand-200">
               Current
             </span>
@@ -81,6 +85,13 @@ const VersionEntry = ({ version, isLatest }) => {
             <> · recorded by {version.recorded_by_first_name} {version.recorded_by_last_name}</>
           )}
         </p>
+
+        {version.withdrawn_reason && (
+          <p className="m-0 rounded-md bg-rose-50 px-2 py-1.5 text-fine leading-relaxed text-rose-900">
+            <span className="font-semibold">Why it was withdrawn: </span>
+            {version.withdrawn_reason}
+          </p>
+        )}
 
         {/* Why it was re-issued. Full contrast, never collapsed — this is the record that a
             released clinical document was changed, and the reason it was. */}

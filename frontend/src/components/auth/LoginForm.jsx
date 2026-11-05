@@ -228,6 +228,13 @@ const LoginForm = ({ onForgotPassword, onCreateAccount, initialEmail = '' }) => 
               width={googleWidth}
             />
           </div>
+          {/* [1.156.0] Google creates the account on first use, so this is where it agrees. */}
+          <p className="m-0 mt-2 text-center text-fine leading-relaxed text-ink-soft" data-testid="google-terms">
+            By continuing with Google you agree to the{' '}
+            <a href="/?legal=terms" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">Terms of Service</a>
+            {' '}and{' '}
+            <a href="/?legal=privacy" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">Privacy Policy</a>.
+          </p>
         </div>
       )}
 

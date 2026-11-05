@@ -77,7 +77,7 @@ test.describe('Final tests, then a final receipt', () => {
     const dialog = page.getByRole('dialog', { name: 'Are these the final tests?' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByTestId('final-tests')).toContainText(labTest.name);
-    await expect(dialog).toContainText("can't be refunded");
+    await expect(dialog).toContainText("isn't refunded");
 
     const take = dialog.getByRole('button', { name: /^Take ₱/ });
     await expect(take, 'not until the patient has confirmed').toBeDisabled();

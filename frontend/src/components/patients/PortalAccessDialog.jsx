@@ -8,6 +8,8 @@ import { SkeletonList } from '../ui/skeleton';
 import api from '../../config/api';
 import { formatDate } from '../../lib/date';
 import { toastSuccess } from '../../lib/toast';
+import { useAuth } from '../../contexts/AuthContext';
+import LostInboxPanel from './LostInboxPanel';
 
 /**
  * Give a patient's record to a portal account, by invitation. [1.136.0]
@@ -54,6 +56,7 @@ const blankForm = (email) => ({
 });
 
 export default function PortalAccessDialog({ open, onOpenChange, patientId, patientName, canInvite, onChanged }) {
+  const { hasPermission } = useAuth();
   const [access, setAccess] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [form, setForm] = useState(blankForm(''));
@@ -190,6 +193,9 @@ export default function PortalAccessDialog({ open, onOpenChange, patientId, pati
                   {access.account.relationshipLabel ? `, as ${access.account.relationshipLabel.toLowerCase()}` : ''}.
                 </span>
               </p>
+            )}
+            {state === 'linked' && hasPermission('patients:unlink') && (
+              <LostInboxPanel patientId={patientId} onChanged={load} />
             )}
             {state === 'archived' && (
               <p className="m-0 text-note text-slate-600">This record is archived. Restore it before inviting anyone to it.</p>
