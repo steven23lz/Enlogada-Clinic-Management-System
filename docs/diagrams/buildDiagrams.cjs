@@ -100,24 +100,50 @@ function kindStyle(k) {
   return k === 'dec' ? S.dec : k === 'io' ? S.io : k === 'term' ? S.term : S.proc;
 }
 
+// What a refused login leads to, the same on every chart: try again, or reset by emailed code. Both
+// return to Login with a line and an arrowhead of their own [1.135.0]: the retry into its left, the
+// reset round the outside and into its top, clear of the arrow arriving at the top's centre.
+const FORGOT_W = 170, FORGOT_GAP = 60, FORGOT_LANE = 24;
+const FORGOT_REACH = FORGOT_W + FORGOT_GAP + FORGOT_LANE;
+
+function forgotPasswordLoop(p, login, gate, loginStyle) {
+  const midY = gate.y + gate.h / 2;
+  const x = gate.x - FORGOT_GAP - FORGOT_W;
+  const asked = p.node('Forgot Password?', x, midY - 40, FORGOT_W, 80, S.dec);
+  const reset = p.node('Reset password with emailed code', x, midY + 76, FORGOT_W, NODE_H, S.proc);
+  p.edge(gate, asked, 'no', S.edge + 'exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;');
+  p.edge(asked, login, 'no', S.edge + 'exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;',
+    [[x + FORGOT_W / 2, login.y + login.h / 2]]);
+  p.edge(asked, reset, 'yes', S.edge + 'exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;');
+  // A fifth of the way along Login's top. On an ellipse the top is lower there, so the end is fixed
+  // on the curve itself, as End's entries are.
+  const entryX = 0.2;
+  const entryY = loginStyle === S.term ? (1 - Math.sqrt(1 - (2 * entryX - 1) ** 2)) / 2 : 0;
+  const laneY = login.y - 22;
+  p.edge(reset, login, '', `${S.edge}exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=${entryX};entryY=${entryY.toFixed(4)};entryDx=0;entryDy=0;entryPerimeter=0;`,
+    [[x - FORGOT_LANE, reset.y + reset.h / 2], [x - FORGOT_LANE, laneY], [login.x + entryX * login.w, laneY]]);
+}
+
 function flowchart(spec) {
   const p = new Page(spec.name);
   const columns = spec.columns;
-  // Column x positions: a column is wider when one of its steps has a side branch.
+  // Column x positions: a column is wider when one of its steps has a side branch. A chart with
+  // its login inside the first column starts further right, because the loop sits to its left.
   const widths = columns.map((col) => NODE_W + (col.some((s) => s.side) ? SIDE_W + 36 : 0));
+  const left = columns[0].some((s) => s.forgot) ? 60 + FORGOT_REACH : 60;
   const xs = [];
-  let x = 60;
+  let x = left;
   widths.forEach((w) => { xs.push(x); x += w + COL_GAP; });
-  const totalW = x - COL_GAP - 60;
+  const totalW = x - COL_GAP - left;
 
   // The paper's own header, which Steven asked for: the actor, Login, the access check and the
-  // landing screen in ONE centred stack above the columns, with the no branch looping back up the
-  // left side into Login. The columns then fan out from the landing screen below it.
+  // landing screen in ONE centred stack above the columns, with the no branch going left to the
+  // forgot password loop. The columns then fan out from the landing screen below it.
   //
   // Centred over the whole block, except on a chained chart, where the sequence starts at the
   // first column and the header belongs over that one — a fan that reached left across the other
   // columns would cross the link corridor that carries the chain.
-  const headX = spec.chain ? xs[0] + NODE_W / 2 : 60 + totalW / 2;
+  const headX = spec.chain ? xs[0] + NODE_W / 2 : left + totalW / 2;
   p.node(spec.actor, headX - 15, 44, 30, 50, S.actor);
   const start = p.node(spec.start || 'Login', headX - 75, 118, 150, 44, S.term);
   let landing;
@@ -129,9 +155,7 @@ function flowchart(spec) {
     landing = p.node(spec.landing, headX - NODE_W / 2, 310, NODE_W, NODE_H, S.proc);
     p.edge(start, gate);
     p.edge(gate, landing, 'yes');
-    // Out of the diamond's left point, up the outside of the stack, and back into Login's left.
-    p.edge(gate, start, 'no', S.edge + 'exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;',
-      [[headX - 155, 234], [headX - 155, 140]]);
+    forgotPasswordLoop(p, start, gate, S.term);
   }
 
   const topY = 440;
@@ -154,6 +178,7 @@ function flowchart(spec) {
     });
     main.forEach((at, si) => {
       const step = col[si];
+      if (step.forgot) forgotPasswordLoop(p, main[si - 1].cell, at.cell, S.proc);
       // `chain` means the columns are one sequence wrapped into columns, not a menu of parallel
       // branches: the client's story runs book, confirm, pay, collect, and drawing those four as
       // independent branches off the landing screen says the patient does them all at once.
@@ -252,7 +277,7 @@ function flowchart(spec) {
       ? { cell: m.cell, x: m.cell.x + m.cell.w / 2, from: 'bottom', hop: true }
       : { cell: m.cell, x: m.lane, from: 'side' })),
   ].sort((a, b) => a.x - b.x);
-  const endCx = 60 + totalW / 2;
+  const endCx = left + totalW / 2;
   const span = (into.length - 1) * ENTRY_GAP;
   into.forEach((l, i) => { l.entry = endCx - span / 2 + i * ENTRY_GAP; });
   // Slide the whole row of entries, by up to half a gap, so the line nearest one drops straight in:
@@ -412,8 +437,12 @@ const CLIENT_FLOW = {
   name: 'Client Patient', actor: 'Client / Patient', landing: 'View services', gate: false,
   start: 'Open website', chain: true,
   columns: [
+    // Services are public, so a patient's login comes here rather than in the header. Entering the
+    // emailed code finishes a sign-up already signed in, so a new account rejoins past the login.
     [{ k: 'proc', l: 'Book a visit' },
-      { k: 'dec', l: 'Have an account?', mainLabel: 'yes', side: { l: 'Register and verify code', label: 'no' } },
+      { k: 'dec', l: 'Have an account?', mainLabel: 'yes', side: { l: 'Register and verify code', label: 'no', mergeTo: 3 } },
+      { k: 'proc', l: 'Login' },
+      { k: 'dec', l: 'Access Granted?', mainLabel: 'yes', forgot: true },
       { k: 'proc', l: 'Choose patient profile' },
       { k: 'proc', l: 'Pick date, time and tests' },
       { k: 'dec', l: 'HMO patient?', mainLabel: 'no', side: { l: 'Attach HMO card and request', label: 'yes' } },

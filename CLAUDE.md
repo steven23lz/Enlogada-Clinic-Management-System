@@ -1747,7 +1747,7 @@ Services Catalogue.
   (`labelX` as `{at, dx, dy}`), because a label floated along the path lands in a different place
   on every flow. **Never draw the same actor more than once.**
   **A flowchart has the paper's header** `[1.102.0]`: the actor, Login, Access Granted? and the
-  landing screen in one CENTRED stack, the no branch looping back up the left into Login, and the
+  landing screen in one CENTRED stack, the no branch going left to the forgot password loop (`forgotPasswordLoop`, on all eight charts; the patient's login is in its first column), and the
   columns fanning out below off one shared bus (on a chained chart the header sits over the first
   column, or its fan crosses the chain's link corridor). **It says a thing once**: the Desk's
   walk-in path was drawn three times, each ending in its own queue ticket. A branch that rejoins
