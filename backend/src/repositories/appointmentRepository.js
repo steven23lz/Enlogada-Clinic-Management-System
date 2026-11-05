@@ -341,6 +341,13 @@ class AppointmentRepository {
                JOIN tests t ON vt.test_id = t.id
                WHERE vt.patient_visit_id = pv.id
              ) AS booked_tests,
+             -- [1.159.0] Packages the HMO covers only part of, so the portal can say why the figure moved.
+             (
+               SELECT COALESCE(json_agg(DISTINCT tp.name), '[]'::json)
+               FROM visit_tests vt
+               JOIN test_packages tp ON tp.id = vt.package_id
+               WHERE vt.patient_visit_id = pv.id AND vt.package_share IS NOT NULL AND vt.price_at_time <> vt.package_share
+             ) AS packages_at_own_price,
              -- What the patient has to do before this appointment. [1.24.0] put these in the
              -- booking wizard and the confirmation email, and then the patient's own list of
              -- bookings — the screen they open the day before to check the time — could not show

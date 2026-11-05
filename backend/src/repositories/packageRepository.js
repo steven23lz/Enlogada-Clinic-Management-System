@@ -38,6 +38,8 @@ class PackageRepository {
   async findAllWithItems() {
     const queryText = `
       SELECT p.id, p.code, p.name, p.price, p.description, p.is_active,
+             (SELECT COALESCE(json_agg(json_build_object('id', r.id, 'name', r.name, 'isActive', r.is_active) ORDER BY r.name), '[]'::json)
+                FROM tests r WHERE r.id = ANY(p.retired_test_ids)) AS retired_tests,
              t.id           AS test_id,
              t.name         AS test_name,
              t.price        AS test_price,
@@ -77,6 +79,8 @@ class PackageRepository {
               price       = COALESCE($4, price),
               description = COALESCE($5, description),
               is_active   = COALESCE($6, is_active),
+              -- Offered again, so the note about what came out of it has done its work. [1.159.0]
+              retired_test_ids = CASE WHEN $6::boolean IS TRUE THEN '{}' ELSE retired_test_ids END,
               updated_at  = CURRENT_TIMESTAMP
         WHERE id = $1
       RETURNING *`,
@@ -99,6 +103,21 @@ class PackageRepository {
         [packageId, testId]
       );
     }
+    // A test put back is no longer one that came out. [1.159.0]
+    await db.query(
+      `UPDATE test_packages
+          SET retired_test_ids = ARRAY(SELECT r FROM unnest(retired_test_ids) r WHERE r <> ALL($2::int[]))
+        WHERE id = $1`,
+      [packageId, testIds]
+    );
+  }
+
+  /** Off sale because this test came out: its note names the test until it is offered again. [1.159.0] */
+  async noteRetiredTest(packageId, testId) {
+    await db.query(
+      `UPDATE test_packages SET retired_test_ids = array_append(array_remove(retired_test_ids, $2::int), $2::int) WHERE id = $1`,
+      [packageId, testId]
+    );
   }
 
   /** Another package on offer under this name, whatever its case or spacing. */

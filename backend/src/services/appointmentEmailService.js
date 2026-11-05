@@ -246,7 +246,7 @@ class AppointmentEmailService {
    * booking is kept as if paid; a refused one is the patient's to pay, within the time given, or
    * its slot is released. The portal has no bell, so this is how the patient hears.
    */
-  async sendHmoDecision({ to, patientName, reference, date, time, approved, refusedTests = [], reason = null, payBy = null }) {
+  async sendHmoDecision({ to, patientName, reference, date, time, approved, refusedTests = [], reason = null, payBy = null, atOwnPrice = [] }) {
     if (!to) return { skipped: true };
 
     const when = `<strong>${esc(readableDate(date))}</strong> at <strong>${esc(readableTime(time))}</strong>`;
@@ -263,6 +263,9 @@ class AppointmentEmailService {
              with your HMO card.</p>
           ${refusedTests.length ? `<p style="font-size:14px;">Not covered, and paid at the clinic:
              ${esc(refusedTests.join(', '))}.${why}</p>` : ''}
+          ${atOwnPrice.length ? `<p style="font-size:14px;">Your HMO covers only part of ${esc(atOwnPrice.join(', '))},
+             so the package price no longer applies and each test is charged at its own price. Your
+             patient portal shows what is left for you to pay.</p>` : ''}
           <p style="font-size:14px;">Please arrive about 10 minutes early.</p>
         `),
       });

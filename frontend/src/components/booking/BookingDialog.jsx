@@ -440,6 +440,12 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                               <p className="m-0 text-fine text-slate-500">
                                 Choose your HMO to claim coverage — you will need a photo of your HMO card and your doctor&apos;s request. Choose Self-Pay to pay for this visit yourself.
                               </p>
+                              {/* [1.159.0] Said before they book, not found out at the till. */}
+                              {bookingData.packageIds.length > 0 && (
+                                <p data-testid="booking-package-hmo-rule" className="m-0 text-fine text-slate-500">
+                                  A package price is for the whole package. If your HMO covers only part of it, each test goes back to its own price.
+                                </p>
+                              )}
                               <Select
                                 value={bookingData.hmoProviderId}
                                 onValueChange={val => setBookingData({...bookingData, hmoProviderId: val})}

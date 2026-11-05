@@ -354,6 +354,7 @@ class PaymentRepository {
              -- ₱226.96 for a CBC invites a question at the counter that nobody can answer.
              vt.package_id, tp.code as package_code, tp.name as package_name,
              tp.price as package_price,
+             vt.package_share, vt.list_price,
              -- Both decisions, the claim's and the test's [1.125.0]: see constants/hmoEffectiveStatus.
              (
                SELECT ${hmoEffectiveStatus('hr', 'hrt')}

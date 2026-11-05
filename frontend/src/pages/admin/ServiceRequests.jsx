@@ -395,6 +395,19 @@ const ServiceRequests = () => {
                 }
               />
 
+              {/* [1.159.0] A decision here can end a package's price, for every test in it. */}
+              {(detailRequest?.packages || []).map((pkg) => (
+                <div key={pkg.name} data-testid="claim-package-note" className="alert alert-warning text-fine">
+                  <span>
+                    {pkg.atOwnPrice ? (
+                      <><strong>{pkg.name}</strong> is at its tests&apos; own prices, {formatCurrency(pkg.ownPriceTotal)} in place of {formatCurrency(pkg.packagePrice)}, because the HMO covers only part of it.</>
+                    ) : (
+                      <>This claim covers {pkg.onThisClaim} of the {pkg.tests} tests in <strong>{pkg.name}</strong>. If the HMO covers only part of the package, its price ends and every test goes back to its own price: {formatCurrency(pkg.ownPriceTotal)} in place of {formatCurrency(pkg.packagePrice)}.</>
+                    )}
+                  </span>
+                </div>
+              ))}
+
               {/* The decision. [1.28.0] This used to be an approve-only form, and it appeared for
                   any claim that was not already Approved — so a refused one still offered an
                   Approve button and nothing else, which is how a refusal gets recorded as an

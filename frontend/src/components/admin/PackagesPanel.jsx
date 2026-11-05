@@ -81,6 +81,13 @@ export default function PackagesPanel({ packageAdmin }) {
                         <span className="block text-fine leading-relaxed text-slate-600">
                           {(pkg.tests || []).map((t) => t.name).join(', ') || '— nothing yet'}
                         </span>
+                        {/* [1.159.0] What to fix before patients can see it. From the server, so it
+                            cannot say something the save would then refuse. */}
+                        {pkg.offSaleNote && (
+                          <span data-testid="package-off-sale-note" className="mt-1 block text-fine font-medium leading-relaxed text-amber-700">
+                            {pkg.offSaleNote}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell label="Price" className="text-right font-bold tabular-nums text-slate-900">
                         {formatCurrency(pkg.price)}
@@ -103,7 +110,7 @@ export default function PackagesPanel({ packageAdmin }) {
                           className="cursor-pointer border-0 bg-transparent p-0"
                         >
                           <Badge variant={pkg.isActive ? 'default' : 'secondary'}>
-                            {pkg.isActive ? 'Offered' : 'Retired'}
+                            {pkg.isActive ? 'Offered' : pkg.offSaleNote ? 'Off sale' : 'Retired'}
                           </Badge>
                         </button>
                       </TableCell>

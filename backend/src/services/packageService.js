@@ -4,7 +4,9 @@ const visitRepository = require('../repositories/visitRepository');
 const db = require('../config/database');
 const { ValidationError, ConflictError } = require('../errors');
 const { findOverlap, sharedTests, overlapMessage, onVisitMessage } = require('../utils/packageOverlap');
-const { whyOffSale, describeChanges } = require('../utils/packageFit');
+const paymentRepository = require('../repositories/paymentRepository');
+const { whyOffSale, describeChanges, offSaleNote } = require('../utils/packageFit');
+const { pricePackages } = require('../utils/packageHmoPrice');
 const auditService = require('./auditService');
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -54,7 +56,7 @@ class PackageService {
         byId.set(r.id, {
           id: r.id, code: r.code, name: r.name, price: r.price,
           description: r.description,
-          ...(includeInactive ? { isActive: r.is_active } : {}),
+          ...(includeInactive ? { isActive: r.is_active, retiredTests: r.retired_tests || [] } : {}),
           tests: [],
         });
       }
@@ -67,7 +69,18 @@ class PackageService {
         });
       }
     }
-    return [...byId.values()];
+    const packages = [...byId.values()];
+    if (!includeInactive) return packages;
+    return packages.map((pkg) => ({
+      ...pkg,
+      // [1.159.0] What to fix before patients can see it, in a sentence, on the screen where it is fixed.
+      offSaleNote: pkg.isActive ? null : offSaleNote({
+        price: pkg.price,
+        testsLeft: pkg.tests.length,
+        listTotal: pkg.tests.reduce((sum, t) => sum + Number(t.price || 0), 0),
+        retiredTests: pkg.retiredTests,
+      }),
+    }));
   }
 
   /**
@@ -153,6 +166,9 @@ class PackageService {
       const testsLeft = pkg.tests_left + (retired ? 0 : 1);
       const offSale = pkg.is_active ? whyOffSale({ price: pkg.price, testsLeft, listTotal }) : null;
       if (offSale) await packageRepository.update(pkg.id, { isActive: false });
+      // [1.159.0] Named on the package's note until it is offered again. One staying on sale has nothing
+      // to fix, and was told about at the moment it happened.
+      if (retired && (offSale || !pkg.is_active)) await packageRepository.noteRetiredTest(pkg.id, testId);
       if (!retired && !offSale) continue;
       changes.push({
         id: pkg.id, name: pkg.name, price: pkg.price, testsLeft, listTotal, wasOffered: pkg.is_active, offSale,
@@ -334,11 +350,66 @@ class PackageService {
           testId,
           priceAtTime,
           packageId: pkg.id,
+          listPrice: pkg.components.find((c) => c.testId === testId)?.price ?? null,
         });
       }
     }
+    // A package that took over a loose test the HMO already approved starts out partly covered.
+    if (toAttach.length > 0) await this.repriceForHmo(patientVisitId);
 
     return await testRepository.findTestsByVisitId(patientVisitId);
+  }
+
+  /**
+   * Steven's rule: an HMO covering only part of a package ends the package price, and every test in it
+   * goes back to its own (utils/packageHmoPrice.js). [1.159.0] Called in the transaction of whatever
+   * changed a decision, and worked out from where the decisions now stand, so approving the rest puts
+   * the package price back. price_at_time is rewritten because everything already reads it: the bill,
+   * the discount base, the HMO report, the department sales and the refund shares.
+   *
+   * A paid visit is never touched: the patient holds a receipt for that bill.
+   *
+   * @returns {Promise<{ changed: object[], atOwnPrice: string[] }>} what moved, and the packages now at
+   *   their tests' own prices, by name
+   */
+  async repriceForHmo(visitId, requestingUser = null) {
+    await visitRepository.lockVisit(visitId);
+    const lines = await testRepository.findPackageLinesForPricing(visitId);
+    if (lines.length === 0) return { changed: [], atOwnPrice: [] };
+    if (await paymentRepository.hasPaidPayment(visitId)) return { changed: [], atOwnPrice: [] };
+
+    const packages = pricePackages(lines);
+    const changed = packages.filter((p) => p.changes.length > 0);
+    for (const pkg of changed) {
+      for (const { id, price } of pkg.changes) await testRepository.setLinePrice(id, price);
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: pkg.atOwnPrice ? 'visit.package_at_own_prices' : 'visit.package_price_restored',
+        entityType: 'patient_visit',
+        entityId: visitId,
+        description: pkg.atOwnPrice
+          ? `${pkg.name}: the HMO covers only part of it, so each test is at its own price (${peso(pkg.before)} became ${peso(pkg.after)})`
+          : `${pkg.name}: the HMO's decisions no longer split it, so the package price is back (${peso(pkg.before)} became ${peso(pkg.after)})`,
+      });
+    }
+    return { changed, atOwnPrice: packages.filter((p) => p.atOwnPrice).map((p) => p.name) };
+  }
+
+  /** Each package on a visit, against what a claim covers, for whoever decides that claim. [1.159.0] */
+  async describeForClaim(visitId, claimedLineIds) {
+    const lines = await testRepository.findPackageLinesForPricing(visitId);
+    const claimed = new Set(claimedLineIds.map(Number));
+    return pricePackages(lines).map((pkg) => {
+      const group = lines.filter((l) => l.packageId === pkg.packageId);
+      return {
+        name: pkg.name,
+        packagePrice: pkg.packagePrice,
+        ownPriceTotal: pkg.ownPriceTotal,
+        atOwnPrice: pkg.atOwnPrice,
+        tests: group.length,
+        onThisClaim: group.filter((l) => claimed.has(Number(l.id))).length,
+      };
+    }).filter((p) => p.onThisClaim > 0);
   }
 }
 

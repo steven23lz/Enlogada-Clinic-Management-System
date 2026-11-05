@@ -181,6 +181,12 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
               </div>
             ))}
           </div>
+          {/* [1.159.0] A patient keeps this, and will ask why the lines are not the package they chose. */}
+          {(bill.packagesAtOwnPrice ?? []).map((pkg) => (
+            <p key={pkg.packageId} data-testid="receipt-package-own-price" className="m-0 mt-1 text-micro text-slate-600">
+              {pkg.name}: the HMO covers only part of it, so each test is at its own price.
+            </p>
+          ))}
           <Rule dashed />
         </>
       )}

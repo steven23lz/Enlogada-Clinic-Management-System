@@ -119,13 +119,15 @@ class TestRepository {
   //
   // Still returns undefined for a row left untouched, so callers re-read rather than trusting
   // RETURNING — the [1.45.0] trap.
-  async addTestToVisit({ patientVisitId, testId, priceAtTime, packageId = null }) {
+  async addTestToVisit({ patientVisitId, testId, priceAtTime, packageId = null, listPrice = null }) {
     const queryText = `
-      INSERT INTO visit_tests (patient_visit_id, test_id, price_at_time, package_id)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO visit_tests (patient_visit_id, test_id, price_at_time, package_id, package_share, list_price)
+      VALUES ($1, $2, $3::numeric, $4::int, CASE WHEN $4::int IS NULL THEN NULL ELSE $3::numeric END, $5::numeric)
       ON CONFLICT (patient_visit_id, test_id) DO UPDATE
         SET price_at_time = EXCLUDED.price_at_time,
-            package_id    = EXCLUDED.package_id
+            package_id    = EXCLUDED.package_id,
+            package_share = EXCLUDED.package_share,
+            list_price    = EXCLUDED.list_price
         WHERE visit_tests.package_id IS NULL
           AND EXCLUDED.package_id IS NOT NULL
           AND NOT EXISTS (
@@ -135,8 +137,41 @@ class TestRepository {
               )
       RETURNING *
     `;
-    const result = await db.query(queryText, [patientVisitId, testId, priceAtTime, packageId]);
+    const result = await db.query(queryText, [patientVisitId, testId, priceAtTime, packageId, listPrice]);
     return result.rows[0];
+  }
+
+  /**
+   * A visit's package lines with where each stands with its HMO. [1.159.0] The latest claim on a line,
+   * read as the bill reads it: a refused claim and its retry can both exist.
+   */
+  async findPackageLinesForPricing(patientVisitId) {
+    const { rows } = await db.query(
+      `SELECT vt.id, vt.package_id AS "packageId", tp.name AS "packageName", vt.price_at_time AS price,
+              vt.package_share AS share, vt.list_price AS "listPrice", t.name AS "testName",
+              (
+                SELECT ${hmoEffectiveStatus('hr', 'hrt')}
+                  FROM hmo_request_tests hrt
+                  JOIN hmo_requests hr ON hr.id = hrt.hmo_request_id
+                 WHERE hrt.visit_test_id = vt.id
+                 ORDER BY hrt.created_at DESC
+                 LIMIT 1
+              ) AS "hmoStatus"
+         FROM visit_tests vt
+         JOIN tests t ON t.id = vt.test_id
+         LEFT JOIN test_packages tp ON tp.id = vt.package_id
+        WHERE vt.patient_visit_id = $1 AND vt.package_id IS NOT NULL
+        ORDER BY vt.package_id, vt.id`,
+      [patientVisitId]
+    );
+    return rows;
+  }
+
+  async setLinePrice(visitTestId, price) {
+    await db.query(
+      'UPDATE visit_tests SET price_at_time = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [visitTestId, price]
+    );
   }
 
   async findTestsByVisitId(patientVisitId) {

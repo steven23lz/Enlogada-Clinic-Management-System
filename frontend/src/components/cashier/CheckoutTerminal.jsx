@@ -120,6 +120,17 @@ export default function CheckoutTerminal({ checkout, queue }) {
                   </div>
                 </div>
 
+                {/* [1.159.0] Why these lines do not add up to the package the patient chose. */}
+                {(checkout.bill.packagesAtOwnPrice ?? []).map((pkg) => (
+                  <div key={pkg.packageId} data-testid="package-own-price" className="alert alert-warning text-fine">
+                    <span>
+                      <strong>{pkg.name}:</strong> the HMO covers only part of it, so the package price of{' '}
+                      {formatCurrency(pkg.packagePrice)} no longer applies. Each test is at its own price,{' '}
+                      {formatCurrency(pkg.ownPriceTotal)} in all.
+                    </span>
+                  </div>
+                ))}
+
                 {/* Subtotal & HMO Breakdown Card */}
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-200/80 space-y-2 text-xs">
                   <div className="flex justify-between items-center text-gray-600">

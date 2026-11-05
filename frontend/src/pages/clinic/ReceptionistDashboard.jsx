@@ -397,6 +397,11 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
             <DialogHeader>
               <DialogTitle>Log HMO Pre-Authorization</DialogTitle>
               <DialogDescription>
+                {hmo.visitTest?.package_name && (
+                  <span data-testid="hmo-log-package-rule" className="mb-1 block">
+                    This test is part of {hmo.visitTest.package_name}. If the HMO covers only part of the package, its price ends and every test goes back to its own price.
+                  </span>
+                )}
                 For <strong>{hmo.visitTest?.test_name}</strong>. This logs the request for Admin review — it does not approve coverage on its own, even if a code is entered below.
               </DialogDescription>
             </DialogHeader>

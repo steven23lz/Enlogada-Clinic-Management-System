@@ -23,7 +23,8 @@ const SECTIONS = [
     title: 'Billing & Payment',
     body: `Prices shown for each test reflect the rate at the time of your visit and may change for future
       visits. HMO coverage is applied per test based on an approved pre-authorization on file; any portion
-      not covered is payable at the clinic. A booking made online is paid within the time shown when you
+      not covered is payable at the clinic. A package price is for the whole package: if your HMO covers
+      only part of a package, each test in it is charged at its own price. A booking made online is paid within the time shown when you
       book, and a walk-in visit is paid before its tests go ahead. A paid receipt is final: the tests on
       it cannot be changed and a change of mind is not refunded, so please check your tests before you
       pay. The clinic refunds a test it cannot perform, and a payment recorded by mistake.`,

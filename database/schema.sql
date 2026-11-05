@@ -501,6 +501,9 @@ CREATE TABLE test_packages (
     -- Retiring is not deleting: booked visits keep their price, the bundle just stops being
     -- offered. The server refuses to book a retired one.
     is_active BOOLEAN DEFAULT TRUE,
+    -- Tests that came out of it while it is off sale, so its note can name them. Cleared when it is
+    -- offered again. [1.159.0]
+    retired_test_ids INT[] NOT NULL DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_test_packages_price CHECK (price >= 0)
@@ -530,6 +533,10 @@ CREATE TABLE visit_tests (
     -- Which bundle this line came from, when it came from one. [1.45.0] NULL for a test picked
     -- individually. What makes the allocated share traceable back to the package that set it.
     package_id INT,
+    -- A package line's two possible prices. [1.159.0] price_at_time is the one every total reads: it
+    -- holds the share, or the list price once an HMO covers only part of the package.
+    package_share NUMERIC(10,2),
+    list_price NUMERIC(10,2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- When an exam was done, and by whom, in a department that issues no report here (X-ray):

@@ -220,6 +220,14 @@ export default function AppointmentsTab({ bookings, visits = null }) {
           </p>
         )}
 
+        {/* [1.159.0] Why the figure is higher than the package they chose. */}
+        {(appt.packages_at_own_price || []).length > 0 && (
+          <p data-testid="booking-package-own-price" className="m-0 rounded-lg border border-line bg-slate-100 p-2.5 text-fine text-slate-700">
+            <strong>Your HMO covers only part of {appt.packages_at_own_price.join(', ')}.</strong> The package
+            price no longer applies, so each test is charged at its own price.
+          </p>
+        )}
+
         {/* A hold is live only while held_until is in the future. Compared against
             the browser clock, which is the same clock the countdown is read on; the
             server's value is authoritative for capacity and this is only the telling. */}

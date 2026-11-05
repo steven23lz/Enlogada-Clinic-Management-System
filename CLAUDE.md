@@ -116,6 +116,7 @@ node src/scripts/migrateQueueCalls.js            # [1.149.0] queue_calls: who ea
 node src/scripts/migrateCashCounts.js            # [1.150.0] cash_counts: the end-of-day count of the drawer (--rollback reverses it)
 node src/scripts/migrateRefunds.js               # [1.155.0] payment_refunds + payment_refund_tests: the two recorded refund cases (--rollback reverses it)
 node src/scripts/migrateCorrections.js           # [1.156.0] withdrawn reports, undoing a check-in, sign-up agreement (--rollback reverses it)
+node src/scripts/migratePackageOwnPrice.js       # [1.159.0] a package line's share and own price; which tests came out of a package off sale (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -1076,6 +1077,18 @@ and the bill was ₱3,214.40, since all five share six tests and a test is on a 
   every package when retired, and a package that no longer fits goes off sale (`utils/packageFit.js`), a lower price included.
   Reactivating does not put it back. Visits already made keep their lines. `package-retired-test.spec.js`.
 - **A test on an HMO claim comes off once refused**, never while waiting or approved (`removeTestFromVisit`, `hmo-package.spec.js`).
+- **An HMO covering only part of a package ends its price.** `[1.159.0]` Steven's rule, the same for every package: each test goes back to
+  its own price, so Package A with only HIV covered is ₱500 to the HMO and ₱1,150 to the patient, not ₱439.40 and ₱1,010.60. Nothing covered, or
+  all of it, keeps the package price. `packageService.repriceForHmo`, in the transaction of any decision (`utils/packageHmoPrice.js`), rewrites
+  `price_at_time` from `visit_tests.package_share` / `list_price`, both snapshotted at booking, so approving the rest puts it back to the centavo and
+  everything that reads the column follows. Never on a paid visit. A new door that changes a decision calls it. The Admin is told before deciding
+  (`claim-package-note`), the desk when raising a claim, the patient when choosing their HMO (`booking-package-hmo-rule`) and after
+  (`booking-package-own-price`, the email), the cashier on the bill (`package-own-price`), and it prints on the receipt. A proof waiting holds claims
+  and decisions too (`assertNoProofWaiting`), and a paid visit's decisions are final: a covered test cannot be refused under a receipt already issued.
+- **A package off sale says why, until it is fixed.** `[1.159.0]` `offSaleNote` (`utils/packageFit.js`), computed by the server for the management
+  list: which test is inactive and came out (`test_packages.retired_test_ids`, cleared when offered again or put back) and what to fix. Three places on
+  Services Catalog: `packages-to-fix` at the top (hidden while `package-notice` has just said it), `package-off-sale-note` on the package, whose status
+  reads "Off sale", and `test-package-note` on the inactive test. A package retired on purpose with nothing wrong has no note and reads "Retired".
 
 **Packages are managed on Services Catalog, behind `tests:manage`.** `[1.47.0]` Deliberately the
 same permission that governs pricing a test, because a package IS a price — a separate one would

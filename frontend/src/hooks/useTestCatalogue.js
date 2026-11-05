@@ -20,9 +20,10 @@ export function useTestCatalogue({ onPackagesChanged } = {}) {
   // up until dismissed: a package going off sale is not something to read in a passing toast.
   const [packageNotice, setPackageNotice] = useState('');
   const heard = (test) => {
-    if (!test?.packagesChanged?.length) return;
-    setPackageNotice(test.packageNotice || '');
+    if (!test) return;
+    // Every change: a test switched back on rewrites the note on the package it came out of. [1.159.0]
     onPackagesChanged?.();
+    if (test.packagesChanged?.length) setPackageNotice(test.packageNotice || '');
   };
   const [tests, setTests] = useState([]);
   const [categories, setCategories] = useState([]);

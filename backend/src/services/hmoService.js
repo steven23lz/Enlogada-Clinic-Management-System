@@ -11,6 +11,8 @@ const visitRepository = require('../repositories/visitRepository');
 const appointmentRepository = require('../repositories/appointmentRepository');
 const appointmentEmailService = require('./appointmentEmailService');
 const logger = require('../config/logger');
+const packageService = require('./packageService');
+const { assertNoProofWaiting } = require('./billLock');
 const {
   assertReferralIfRequired, assertDoctorRequestIfRequired, normaliseReferral, isNamed,
 } = require('./referralService');
@@ -78,7 +80,7 @@ async function handOffToCashier(request, { type, title, detail }) {
  *     from now, after which it is released like any unpaid booking.
  * Runs in the decision's transaction. Returns what to tell the patient, which is sent after it.
  */
-async function settleBookingAfterDecision(visitId) {
+async function settleBookingAfterDecision(visitId, atOwnPrice = []) {
   const hold = await appointmentRepository.findHoldByVisitId(visitId);
   if (!hold || hold.status !== 'Pending' || !hold.held_until) return null;
   const decision = await hmoRepository.findDecisionForVisit(visitId);
@@ -86,7 +88,7 @@ async function settleBookingAfterDecision(visitId) {
 
   if (decision.approved > 0) {
     const kept = await appointmentRepository.confirmHold(visitId);
-    return kept && { appointmentId: kept.id, approved: true, refusedTests: decision.refused_tests, reason: decision.reason };
+    return kept && { appointmentId: kept.id, approved: true, refusedTests: decision.refused_tests, reason: decision.reason, atOwnPrice };
   }
   const held = await appointmentRepository.holdForPaymentAfterHmo(visitId);
   return held && { appointmentId: held.id, approved: false, reason: decision.reason, payBy: held.held_until };
@@ -107,8 +109,12 @@ async function tellPatient(outcome) {
     refusedTests: outcome.refusedTests || [],
     reason: outcome.reason,
     payBy: outcome.payBy || null,
+    atOwnPrice: outcome.atOwnPrice || [],
   });
 }
+const ownPriceSentence = (names) => (names.length
+  ? ` ${names.join(', ')}: the HMO covers only part of it, so each test is at its own price.`
+  : '');
 const tellPatientLater = (outcome) => {
   tellPatient(outcome).catch((err) => logger.error(`HMO decision email failed: ${err.message}`));
 };
@@ -279,6 +285,8 @@ class HmoService {
       error.statusCode = 409;
       throw error;
     }
+    // [1.159.0] A decision can reprice a package, so a claim waits behind a payment already sent.
+    for (const v of visits) await assertNoProofWaiting(v.id, 'its HMO claims');
     const over = visits.find((v) => v.status === 'Cancelled' || v.status === 'Completed');
     if (over) {
       const error = new Error(`This visit is ${over.status.toLowerCase()}, so its tests cannot be claimed.`);
@@ -427,12 +435,18 @@ class HmoService {
       }
     }
 
-    const { approved, told } = await db.withTransaction(async () => {
+    await assertNoProofWaiting(request.patient_visit_id, 'its HMO claims');
+    const { approved, told, atOwnPrice } = await db.withTransaction(async () => {
       const row = await hmoRepository.approveRequest(id, {
         approvalCode,
         decidedBy: requestingUser?.userId ?? null,
       });
-      return { approved: row, told: await settleBookingAfterDecision(request.patient_visit_id) };
+      const priced = await packageService.repriceForHmo(request.patient_visit_id, requestingUser);
+      return {
+        approved: row,
+        atOwnPrice: priced.atOwnPrice,
+        told: await settleBookingAfterDecision(request.patient_visit_id, priced.atOwnPrice),
+      };
     });
     tellPatientLater(told);
 
@@ -447,7 +461,7 @@ class HmoService {
     await handOffToCashier(request, {
       type: 'success',
       title: 'HMO claim approved',
-      detail: `${request.provider_name} approved the claim (code ${approvalCode}). The bill is ready to settle.`,
+      detail: `${request.provider_name} approved the claim (code ${approvalCode}). The bill is ready to settle.${ownPriceSentence(atOwnPrice)}`,
     });
 
     return approved;
@@ -485,12 +499,26 @@ class HmoService {
       throw error;
     }
 
+    // [1.159.0] Refusing the claim would take back a test covered on a receipt already issued.
+    if (await paymentRepository.hasPaidPayment(request.patient_visit_id)) {
+      const lines = await hmoRepository.findTestsByRequestId(id);
+      if (lines.some((t) => t.approval_status === 'Approved')) {
+        const error = new Error('This visit has been paid, and its receipt was issued with this claim covering a test, so the claim can no longer be refused.');
+        error.statusCode = 409;
+        throw error;
+      }
+    }
+    await assertNoProofWaiting(request.patient_visit_id, 'its HMO claims');
     const { rejected, told } = await db.withTransaction(async () => {
       const row = await hmoRepository.rejectRequest(id, {
         decisionReason: reason,
         decidedBy: requestingUser?.userId ?? null,
       });
-      return { rejected: row, told: await settleBookingAfterDecision(request.patient_visit_id) };
+      const priced = await packageService.repriceForHmo(request.patient_visit_id, requestingUser);
+      return {
+        rejected: row,
+        told: await settleBookingAfterDecision(request.patient_visit_id, priced.atOwnPrice),
+      };
     });
     tellPatientLater(told);
 
@@ -531,7 +559,9 @@ class HmoService {
     }
 
     const tests = await hmoRepository.findTestsByRequestId(id);
-    return { ...request, tests };
+    // [1.159.0] A decision here can end a package's price, so whoever decides is told before they do.
+    const packages = await packageService.describeForClaim(request.patient_visit_id, tests.map((t) => t.visit_test_id));
+    return { ...request, tests, packages };
   }
 
   /**
@@ -564,15 +594,20 @@ class HmoService {
     }
 
     // A test the patient already paid for in full is not the insurer's to decide. [1.123.0]
+    // [1.159.0] Nor a test already decided: refusing an approved one after payment left a receipt that
+    // charged for it less than the bill now said, and the sales report ₱190 away from the cash taken.
     const line = await hmoRepository.findRequestTestContext(hmoRequestTestId);
-    if (line && line.approval_status === 'Pending' && await paymentRepository.hasPaidPayment(line.patient_visit_id)) {
+    if (line && await paymentRepository.hasPaidPayment(line.patient_visit_id)) {
       const error = new Error(
-        'This test was already paid in full at the counter, so the HMO\'s decision no longer changes what anyone owes.'
+        line.approval_status === 'Pending'
+          ? 'This test was already paid in full at the counter, so the HMO\'s decision no longer changes what anyone owes.'
+          : 'This visit has been paid, and its receipt was issued on this decision, so it can no longer change.'
       );
       error.statusCode = 409;
       throw error;
     }
 
+    if (line) await assertNoProofWaiting(line.patient_visit_id, 'its HMO claims');
     const { updated, told } = await db.withTransaction(async () => {
       const row = await hmoRepository.updateTestApprovalStatus(hmoRequestTestId, approvalStatus, {
         // A reason on an approval would read as a caveat on cover the HMO did not attach; the field
@@ -580,7 +615,9 @@ class HmoService {
         decisionReason: approvalStatus === 'Rejected' ? reason : null,
         decidedBy: requestingUser?.userId ?? null,
       });
-      return { updated: row, told: row && line ? await settleBookingAfterDecision(line.patient_visit_id) : null };
+      if (!row || !line) return { updated: row, told: null };
+      const priced = await packageService.repriceForHmo(line.patient_visit_id, requestingUser);
+      return { updated: row, told: await settleBookingAfterDecision(line.patient_visit_id, priced.atOwnPrice) };
     });
 
     if (!updated) {

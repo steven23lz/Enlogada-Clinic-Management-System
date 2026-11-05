@@ -1,5 +1,35 @@
 # Database Migration & Schema History
 
+## [1.159.0] - 2026-11-05 (An HMO covering part of a package ends its price; a package off sale says why)
+
+`migratePackageOwnPrice.js`: `visit_tests.package_share`, `visit_tests.list_price`, `test_packages.retired_test_ids`.
+
+**Part-covered, own prices.** Steven: "if only the test is cover in a package of course it will fall back to the individual
+price same to all since thats the rule we will enforce." [1.158.0] credited the HMO the test's share of the package. Now any real split
+(something approved, something not) puts EVERY test in that package at its own price. Package A (₱1,450, six tests worth ₱1,650):
+
+| The HMO | HMO | Patient |
+|---|---|---|
+| Covers HIV Screening only | ₱500.00 | ₱1,150.00 |
+| Covers all of it | ₱1,450.00 | ₱0.00 |
+| Refuses all of it | ₱0.00 | ₱1,450.00 |
+
+The rule is pure (`utils/packageHmoPrice.js`) and worked out from where the decisions stand, so the desk's one-claim-per-test path is at own prices
+only until the last is approved, and a changed decision goes back to the same shares, to the centavo. That is why both prices are stored at booking:
+the package's or a test's catalogue price may have moved since. `price_at_time` stays the one figure every total reads, so the bill, discount base,
+portal amount, HMO report, department sales and refund shares all follow without changes. The migration fills lines already booked with today's list
+price, the only one on record. A paid visit never moves.
+
+Found on the way: an HMO decision or a new claim could move a bill while a patient's online payment waited to be checked ([1.146.0]'s promise). Both
+now answer 409 with the discount's and the tests' wording. And a decision could change after payment: only a test still Pending was refused, so an approved
+one could be refused under a receipt already issued, which left the Departments report's sales ₱190 away from the cash collected
+(`operations-report.spec.js` caught it). A paid visit's decisions are final, line and claim alike.
+
+**A package off sale says why.** Steven: a note that the retired test is inactive and part of a package that has to be fixed before it shows. The notice
+from [1.158.0] went when dismissed. `offSaleNote` (`utils/packageFit.js`) now stays on the package until it is fixed, names the test and says what to do;
+the test's row and the top of Services Catalog say so too. The badge reads "Off sale"; "Retired" is kept for a package retired on purpose with nothing wrong.
+**Tests:** `hmo-package.spec.js`, `package-retired-test.spec.js`, `packageHmoPrice.test.js`, `packageFit.test.js`.
+
 ## [1.158.0] - 2026-11-05 (A retired test leaves its packages; a refused test can come off)
 
 No schema change. Steven: "of course it should be out of the package if it is inactive". It stayed in, on the

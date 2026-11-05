@@ -20,7 +20,7 @@ import Pagination from '../ui/pagination';
  * many Ultrasound services do we offer" and "show me the Ultrasound services" are the same
  * question, so they belong on the same element.
  */
-export default function ServicesTablePanel({ catalogue }) {
+export default function ServicesTablePanel({ catalogue, packages = [] }) {
   return (
       <div>
         {/* Category filter. The counts live in the control rather than in a separate KPI row:
@@ -118,6 +118,12 @@ export default function ServicesTablePanel({ catalogue }) {
                         >
                           <Info className="mt-px h-3 w-3 flex-shrink-0 text-brand-600" />
                           <span className="line-clamp-1">{test.preparation}</span>
+                        </span>
+                      )}
+                      {/* [1.159.0] Which packages this test's retirement left waiting to be fixed. */}
+                      {!test.is_active && packages.filter((p) => !p.isActive && (p.retiredTests || []).some((r) => r.id === test.id)).length > 0 && (
+                        <span data-testid="test-package-note" className="mt-0.5 block text-fine font-normal text-amber-700">
+                          Inactive, and came out of {packages.filter((p) => !p.isActive && (p.retiredTests || []).some((r) => r.id === test.id)).map((p) => p.name).join(', ')}, off sale until fixed.
                         </span>
                       )}
                     </TableCell>

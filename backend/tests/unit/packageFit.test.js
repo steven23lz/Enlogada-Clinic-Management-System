@@ -38,3 +38,24 @@ test('a price change names only what went off sale, and nothing when nothing did
     /A, B now cost more than their tests bought separately, so they are off sale/
   );
 });
+
+test('the note on a package off sale names the test and what to fix', () => {
+  const { offSaleNote } = require('../../src/utils/packageFit');
+  const hiv = { name: 'HIV Screening', isActive: false };
+  const dearer = offSaleNote({ price: 1450, testsLeft: 5, listTotal: 1150, retiredTests: [hiv] });
+  assert.match(dearer, /HIV Screening is inactive and came out of this package/);
+  assert.match(dearer, /costs ₱1,450\.00 and its tests now come to ₱1,150\.00/);
+  assert.match(offSaleNote({ price: 500, testsLeft: 1, listTotal: 300, retiredTests: [hiv] }), /1 test left and needs at least two/);
+  assert.match(offSaleNote({ price: 900, testsLeft: 5, listTotal: 1150, retiredTests: [hiv] }), /fits as it stands/);
+  assert.match(offSaleNote({ price: 900, testsLeft: 5, listTotal: 1150, retiredTests: [{ name: 'CBC', isActive: true }] }), /CBC came out of this package and is active again/);
+});
+
+test('a package retired on purpose, with nothing wrong and nothing taken out, has no note', () => {
+  const { offSaleNote } = require('../../src/utils/packageFit');
+  assert.equal(offSaleNote({ price: 900, testsLeft: 5, listTotal: 1150 }), null);
+});
+
+test('a price falling with no test taken out still says what to fix', () => {
+  const { offSaleNote } = require('../../src/utils/packageFit');
+  assert.match(offSaleNote({ price: 900, testsLeft: 2, listTotal: 600 }), /Lower the price or add a test/);
+});

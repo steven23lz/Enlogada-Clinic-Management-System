@@ -118,6 +118,56 @@ test.describe('A retired test is out of its packages [1.158.0]', () => {
     expect((await onOffer(pkg.id)).tests).toHaveLength(2);
   });
 
+  test('its note says which test came out and what to fix, and goes once it is offered again', async () => {
+    const [a, b, c] = [await makeTest(300), await makeTest(300), await makeTest(500)];
+    const pkg = await makePackage(900, [a, b, c]);
+    await retire(c);
+
+    let row = await managed(pkg.id);
+    expect(row.retiredTests.map((t) => t.id)).toEqual([c.id]);
+    expect(row.offSaleNote).toContain(`${c.name} is inactive and came out of this package`);
+    expect(row.offSaleNote).toContain('₱900.00');
+    expect(row.offSaleNote).toContain('₱600.00');
+    expect(row.offSaleNote).toContain('Lower the price or add a test');
+
+    // Patients are shown no note and no package: only the management list carries it.
+    expect(await onOffer(pkg.id)).toBeFalsy();
+
+    // The test back on: the note says so, and the package still is not fixed by that alone.
+    await ctx.put(`${API}/tests/${c.id}`, { headers: auth(su), data: { categoryId: c.category_id, name: c.name, price: 500, isActive: true } });
+    row = await managed(pkg.id);
+    expect(row.offSaleNote).toContain('active again: add it back');
+
+    // Put back into the package, it no longer counts as one that came out.
+    expect((await ctx.patch(`${API}/packages/${pkg.id}`, { headers: auth(su), data: { testIds: [a.id, b.id, c.id] } })).status()).toBe(200);
+    row = await managed(pkg.id);
+    expect(row.retiredTests).toEqual([]);
+    expect(row.offSaleNote, 'nothing wrong and nothing taken out: an ordinary retired package').toBeNull();
+
+    expect((await ctx.patch(`${API}/packages/${pkg.id}`, { headers: auth(su), data: { isActive: true } })).status()).toBe(200);
+    row = await managed(pkg.id);
+    expect(row.isActive).toBe(true);
+    expect(row.offSaleNote).toBeNull();
+  });
+
+  test('offered again after a fix, what came out is forgotten; one that stayed on sale never carried a note', async () => {
+    const [a, b, c] = [await makeTest(300), await makeTest(300), await makeTest(500)];
+    const pkg = await makePackage(900, [a, b, c]);
+    await retire(c);
+    expect((await ctx.patch(`${API}/packages/${pkg.id}`, { headers: auth(su), data: { price: 550 } })).status()).toBe(200);
+    expect((await managed(pkg.id)).offSaleNote).toContain('It fits as it stands');
+    expect((await ctx.patch(`${API}/packages/${pkg.id}`, { headers: auth(su), data: { isActive: true } })).status()).toBe(200);
+    expect((await managed(pkg.id)).retiredTests).toEqual([]);
+
+    const [d, e, f] = [await makeTest(500), await makeTest(500), await makeTest(100)];
+    const stays = await makePackage(600, [d, e, f]);
+    await retire(f);
+    const row = await managed(stays.id);
+    expect(row.isActive).toBe(true);
+    expect(row.retiredTests).toEqual([]);
+    expect(row.offSaleNote).toBeNull();
+  });
+
   test('a package left with one test goes off sale, and cannot be offered until it has two', async () => {
     const [a, b] = [await makeTest(300), await makeTest(300)];
     const pkg = await makePackage(500, [a, b]);
@@ -197,8 +247,16 @@ test.describe('A retired test is out of its packages [1.158.0]', () => {
     const notice = page.getByTestId('package-notice');
     await expect(notice).toContainText(pkg.name);
     await expect(notice).toContainText('off sale until repriced');
+    // The notice was for the moment it happened. This stays until the package is fixed. [1.159.0]
+    await expect(page.getByTestId('packages-to-fix')).toHaveCount(0);
     await notice.getByRole('button', { name: 'Dismiss' }).click();
     await expect(notice).toHaveCount(0);
+    await expect(page.getByTestId('packages-to-fix')).toContainText(pkg.name);
+    await expect(row.getByTestId('test-package-note')).toContainText(`came out of ${pkg.name}`);
+    const packageRow = page.locator('tr', { hasText: pkg.name }).filter({ has: page.getByTestId('package-off-sale-note') });
+    await expect(packageRow.getByTestId('package-off-sale-note')).toContainText(`${c.name} is inactive and came out of this package`);
+    await expect(packageRow.getByTestId('package-off-sale-note')).toContainText('Patients cannot see it until it is fixed');
+    await expect(packageRow.getByRole('button', { name: 'Off sale' })).toBeVisible();
 
     const log = await (await ctx.get(`${API}/admin/activity`, { headers: auth(su), params: { limit: 10 } })).text();
     expect(log).toContain(`${pkg.name} taken off sale`);

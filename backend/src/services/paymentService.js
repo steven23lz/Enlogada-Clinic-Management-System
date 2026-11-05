@@ -10,6 +10,7 @@ const patientRepository = require('../repositories/patientRepository');
 const hmoRepository = require('../repositories/hmoRepository');
 const appointmentRepository = require('../repositories/appointmentRepository');
 const paymentSubmissionRepository = require('../repositories/paymentSubmissionRepository');
+const { packagesAtOwnPrice } = require('../utils/packageHmoPrice');
 
 // There is no reversal path. [1.121.0] 'Refunded' and a paid 'Cancelled' are statuses that only
 // receipts from before then carry; nothing sets them now. A paid receipt is final.
@@ -100,6 +101,15 @@ class PaymentService {
       visitStatus: visitInfo.visit_status,
       patientType: visitInfo.patient_type_name,
       items: formattedItems,
+      // [1.159.0] A package the HMO covers only part of: each test is at its own price, and the bill
+      // has to say why they do not add up to the package the patient chose.
+      packagesAtOwnPrice: packagesAtOwnPrice(items.map((item) => ({
+        packageId: item.package_id,
+        packageName: item.package_name,
+        price: item.price_at_time,
+        share: item.package_share,
+        listPrice: item.list_price,
+      }))),
       subtotal: subtotal.toFixed(2),
       hmoCoverage: hmoCoverage.toFixed(2),
       // How much of this bill is riding on a claim nobody has answered yet.

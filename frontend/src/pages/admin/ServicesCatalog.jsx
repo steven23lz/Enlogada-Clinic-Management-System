@@ -33,6 +33,8 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
     ? packageAdmin.packages.filter((p) => p.isActive && (p.tests || []).some((t) => t.id === retiring.id))
     : [];
 
+  const toFix = packageAdmin.packages.filter((p) => p.offSaleNote);
+
   // One control, three lists. It used to reload only the services, so a package or a provider
   // added by someone else stayed missing from a screen the reader had just deliberately
   // refreshed — which is worse than no button, because it answers the question wrongly.
@@ -71,7 +73,16 @@ const ServicesCatalog = ({ activeNav = 'services-cat', onSelectNav }) => {
           </div>
         )}
 
-        <ServicesTablePanel catalogue={catalogue} />
+        {/* [1.159.0] It stays until the package is fixed. Not beside the notice above, which has just said it. */}
+        {!catalogue.packageNotice && toFix.length > 0 && (
+          <div data-testid="packages-to-fix" role="status" className="alert alert-warning">
+            <span>
+              <strong>{toFix.map((p) => p.name).join(', ')}</strong> {toFix.length === 1 ? 'is' : 'are'} off sale until fixed, so patients cannot see {toFix.length === 1 ? 'it' : 'them'}. Package Deals, below, says what to do.
+            </span>
+          </div>
+        )}
+
+        <ServicesTablePanel catalogue={catalogue} packages={packageAdmin.packages} />
         <PackagesPanel packageAdmin={packageAdmin} />
         <HmoProvidersPanel hmoAdmin={hmoAdmin} />
 
