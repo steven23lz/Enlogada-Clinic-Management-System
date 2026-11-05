@@ -1,5 +1,11 @@
 # Database Migration & Schema History
 
+## [1.165.0] - 2026-11-06 (The waiting-room screen and Call become a future recommendation)
+
+`migrateRemoveQueueCalls.js` drops `queue_calls`. Steven: remove the screen feature and everything related to it, including the call, and put it in the paper's future recommendations. `?display=queue`, `GET /queue/now-serving`, `POST /queue/calls`, their limiter, the Desk's button and the Call button on the Desk, the Billing Queue and each worklist are gone. Nothing is archived: a press of Call says nothing about a patient's care, and was kept for 30 days. All of it is [1.149.0] in git history.
+
+The final walk through every screen, as every role, found two things. The worklist, the release dialog and "Who sees what" still spoke of writing findings, though a result has been its attached report since [1.94.0]; they say report now. Transaction History's Reprint was cut off by 25 px at a 1280 px screen; its inner columns sit closer.
+
 ## [1.164.0] - 2026-11-06 (A notification opens what it is about)
 
 `migrateNotificationTargets.js`: `notification_events.target`. Steven: clicking a notification took nobody anywhere; it only marked it read. Every notification now says what it is about, and

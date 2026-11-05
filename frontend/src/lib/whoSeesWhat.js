@@ -174,7 +174,7 @@ const AREAS = [
     key: 'results', label: 'Results and reports',
     permissions: [
       { name: 'results:read', label: 'See worklists and released results' },
-      { name: 'results:write', label: 'Write findings' },
+      { name: 'results:write', label: 'Attach a report' },
       { name: 'results:release', label: 'Release a result to the patient' },
     ],
     summarize: (h, all, column) => {

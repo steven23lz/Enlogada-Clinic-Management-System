@@ -112,7 +112,7 @@ node src/scripts/migratePatientInvitations.js    # [1.136.0] portal invitations,
 node src/scripts/migrateDiscountDeclaration.js   # [1.146.0] patient_visits.discount_id_*: a Senior Citizen / PWD discount declared online with an ID photo (--rollback reverses it)
 node src/scripts/migrateEmailChange.js           # [1.147.0] auth_codes accepts 'email_change': a patient moving their sign-in to a new address (--rollback reverses it)
 node src/scripts/migratePatientMessages.js       # [1.148.0] the stamps behind three automatic patient emails: results ready, missed paid booking, feedback (--rollback reverses it)
-node src/scripts/migrateQueueCalls.js            # [1.149.0] queue_calls: who each station called, for the waiting-room screen (--rollback reverses it)
+node src/scripts/migrateRemoveQueueCalls.js      # [1.165.0] drops queue_calls: the waiting-room screen and Call are a future recommendation (--rollback restores it, empty)
 node src/scripts/migrateCashCounts.js            # [1.150.0] cash_counts: the end-of-day count of the drawer (--rollback reverses it)
 node src/scripts/migrateRefunds.js               # [1.155.0] payment_refunds + payment_refund_tests: the two recorded refund cases (--rollback reverses it)
 node src/scripts/migrateCorrections.js           # [1.156.0] withdrawn reports, undoing a check-in, sign-up agreement (--rollback reverses it)
@@ -646,19 +646,7 @@ unit-tested), enforced in `patientInvitationService`:
   account with a same-name, same-birthdate profile is warned and may keep both.
 - Production caps: 5 invitation emails an address a day, `INVITE_DAILY_CAP` (50) per staff member.
 
-**The waiting room's TV is `?display=queue`, and it names nobody.** `[1.149.0]` Five tiles that
-never move, each station's current ticket, lit when called, with a chime and the spoken number once
-someone presses "Turn on sound" (a browser allows sound only after a press). No sign-in, because a TV
-has no account, so the privacy control is the SELECT in `queueCallRepository.findTodays` and the copy
-in `utils/nowServing.js`: a ticket, a station, a time. Never add a name, a visit id or a test. The one
-Call button (`components/queue/CallButton.jsx`) records a row in `queue_calls` and changes no status;
-a station answers to its screen's permission in the service (`constants/queueStations.js`: Front Desk
-`visits:create`, Cashier `billing:process`, a department `results:write` and cover for it), so there
-is no new permission. Tickets restart each day, so one from an earlier day cannot be called (409) and
-the worklist offers no button for it. With no screen open (`displayOpen`, nothing has asked in 20
-seconds) the calling PC says it aloud. The screen polls every 4 seconds, which production's shared
-limit of 100 per 15 minutes cannot take, so it has its own limiter; keep its answer free of anything
-that changes between calls, or every poll stops being a 304. `now-serving.spec.js` holds it.
+**There is no waiting-room screen and no Call button.** `[1.165.0]` Steven took both out, as a future recommendation in the paper: [1.149.0]'s `?display=queue`, `GET /queue/now-serving`, `POST /queue/calls`, the buttons and `queue_calls`. Don't bring them back without asking; they are in git history.
 
 **A visit says how it came about.** `[1.136.0]` `patient_visits.booked_online`, stored when a booking
 is made, read by `CAME_IN_AS` (`constants/visits.js`) as `walk_in` / `online` / `clinic` on

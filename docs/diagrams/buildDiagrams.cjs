@@ -475,21 +475,21 @@ const USE_CASES = [
     cases: ['Login', 'View Today', 'Decide HMO Claims', 'Manage Staff Accounts', 'View Appointments', 'Manage Patient Records', 'Archive and Restore Patient Records', 'Monitor Cashier Transactions', 'Generate Reports', 'View Patient Feedback', 'View Activity Log', 'Logout'],
     relations: [{ from: 'Monitor Cashier Transactions', to: 'View Daily Cash Counts', kind: 'extend' }, { from: 'Manage Patient Records', to: 'Print Records and Results', kind: 'extend' }, { from: 'Generate Reports', to: 'Print or Export Report', kind: 'extend' }, { from: 'View Patient Feedback', to: 'Manage Feedback Questions', kind: 'extend' }] },
   { name: 'Receptionist', actor: 'Receptionist',
-    cases: ['Login', 'View Today', 'Find Patient or Booking', 'Verify QR Code', 'Check In Patient', 'Register Walk-In', 'Assign Tests to a Visit', 'Raise HMO Claim', 'Reschedule Booking', 'Call Patient to the Waiting-Room Screen', 'View Patient Records', 'View Visit History', 'Logout'],
+    cases: ['Login', 'View Today', 'Find Patient or Booking', 'Verify QR Code', 'Check In Patient', 'Register Walk-In', 'Assign Tests to a Visit', 'Raise HMO Claim', 'Reschedule Booking', 'View Patient Records', 'View Visit History', 'Logout'],
     relations: [{ from: 'Check In Patient', to: 'Issue Queue Ticket', kind: 'include' }, { from: 'Register Walk-In', to: 'Create Patient Record', kind: 'include' }, { from: 'View Patient Records', to: 'Link Walk-In to Account', kind: 'extend' }, { from: 'View Visit History', to: 'Record Paper Feedback', kind: 'extend' }] },
   { name: 'Cashier', actor: 'Cashier',
-    cases: ['Login', 'View Today', 'Confirm Final Tests', 'Process Billing and Payment', 'Apply Statutory Discount', 'Withdraw HMO Claim', 'Review Online Payment Proof', 'Call Patient to the Waiting-Room Screen', 'View Transaction History', 'Count the Drawer', 'Logout'],
+    cases: ['Login', 'View Today', 'Confirm Final Tests', 'Process Billing and Payment', 'Apply Statutory Discount', 'Withdraw HMO Claim', 'Review Online Payment Proof', 'View Transaction History', 'Count the Drawer', 'Logout'],
     // [1.146.0] A Senior Citizen / PWD discount declared online is granted once its ID is checked.
     relations: [{ from: 'Process Billing and Payment', to: 'Issue Receipt', kind: 'include' }, { from: 'Count the Drawer', to: 'Print Cash Count Sheet', kind: 'extend' }, { from: 'View Transaction History', to: 'Print Receipt Copy', kind: 'extend' }, { from: 'Review Online Payment Proof', to: 'Check Declared Senior/PWD ID', kind: 'extend' }] },
   { name: 'Laboratory Staff', actor: 'Laboratory Staff',
-    cases: ['Login', 'View Today', 'View Laboratory Worklist', 'Call Patient to the Waiting-Room Screen', 'Upload Laboratory Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
+    cases: ['Login', 'View Today', 'View Laboratory Worklist', 'Upload Laboratory Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
     relations: [{ from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: 'Print Laboratory Result', kind: 'extend' }] },
   { name: 'Ultrasound Staff', actor: 'Ultrasound Staff',
-    cases: ['Login', 'View Today', 'View Ultrasound Worklist', 'Call Patient to the Waiting-Room Screen', 'Upload Ultrasound Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
+    cases: ['Login', 'View Today', 'View Ultrasound Worklist', 'Upload Ultrasound Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
     relations: [{ from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: 'Print Ultrasound Result', kind: 'extend' }] },
   // [1.143.0] X-ray uploads and releases its reports here again, as the other departments do.
   { name: 'Xray Staff', actor: 'X-Ray Staff',
-    cases: ['Login', 'View Today', 'View X-Ray Worklist', 'Call Patient to the Waiting-Room Screen', 'Upload X-Ray Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
+    cases: ['Login', 'View Today', 'View X-Ray Worklist', 'Upload X-Ray Report', 'Release Result', 'Replace Released Report', 'Search Result History', 'View Patient Records', 'Logout'],
     relations: [{ from: 'Release Result', to: 'Email Result to Patient', kind: 'extend' }, { from: 'Search Result History', to: 'Print X-Ray Result', kind: 'extend' }] },
   { name: 'Client Patient', actor: 'Client / Patient',
     // [1.146.0] An unpaid booking can be released by the patient, and a Senior / PWD discount declared.
@@ -762,7 +762,7 @@ const DFD1 = [
 
 // ── 5. ERD, read from the live database ─────────────────────────────────────────────────────────
 const SHEETS = [
-  { name: 'Clinical Core', tables: ['patients', 'patient_types', 'patient_invitations', 'patient_visits', 'appointments', 'queue_calls', 'visit_tests', 'tests', 'test_categories', 'test_packages', 'test_package_items', 'test_results', 'feedback_questions', 'visit_feedback_answers'] },
+  { name: 'Clinical Core', tables: ['patients', 'patient_types', 'patient_invitations', 'patient_visits', 'appointments', 'visit_tests', 'tests', 'test_categories', 'test_packages', 'test_package_items', 'test_results', 'feedback_questions', 'visit_feedback_answers'] },
   { name: 'Money and HMO', tables: ['payments', 'payment_methods', 'payment_submissions', 'cash_counts', 'discount_types', 'daily_counters', 'hmo_providers', 'hmo_requests', 'hmo_request_tests'] },
   { name: 'Access Schedule and System', tables: ['users', 'roles', 'permissions', 'role_permissions', 'user_roles', 'user_permissions', 'user_departments', 'auth_codes', 'clinic_operating_hours', 'clinic_schedule_overrides', 'audit_log', 'notification_events', 'notification_reads'] },
 ];

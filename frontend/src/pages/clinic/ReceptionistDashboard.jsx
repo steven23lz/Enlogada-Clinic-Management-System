@@ -30,7 +30,7 @@ import CarriedOverPanel from '../../components/reception/CarriedOverPanel';
 import { useVisitDisposition } from '../../hooks/useVisitDisposition';
 import { useTestAssignment } from '../../hooks/useTestAssignment';
 import { useHmoLogging } from '../../hooks/useHmoLogging';
-import { UserCheck, UserPlus, AlertCircle, History, X, MonitorPlay } from 'lucide-react';
+import { UserCheck, UserPlus, AlertCircle, History, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import LoadingState from '../../components/ui/loading-state';
 import { formatCurrency } from '../../lib/currency';
@@ -92,8 +92,6 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
     seeBookings: hasPermission('appointments:read'),
     // [1.112.0] Typing in a walk-in's paper feedback form, from Visit History.
     recordFeedback: hasPermission('feedback:record'),
-    // [1.149.0] What a call to the Front Desk asks (constants/queueStations.js).
-    callPatient: hasPermission('visits:create'),
   };
   const showWho = can.checkIn || can.startVisit;
 
@@ -189,15 +187,8 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
                endpoint itself demands, so the button and the API agree. The one Register button on
                the screen: the queue's empty state and the box's "nobody found" line point here
                rather than carrying a second copy of it. */
-            onDesk && (can.registerPatient || can.callPatient) ? (
+            onDesk && can.registerPatient ? (
               <>
-                {/* [1.149.0] Opens the TV's page in a tab of its own, to drag onto the TV. */}
-                {can.callPatient && (
-                  <Button variant="outline" onClick={() => window.open('/?display=queue', '_blank', 'noopener')}>
-                    <MonitorPlay className="h-4 w-4" />
-                    Waiting-room screen
-                  </Button>
-                )}
                 {/* Phones only: from `lg` up the same button is in the rail. [1.76.0] */}
                 {can.registerPatient && (
                   <Button variant="outline" className="lg:hidden" onClick={() => setRegistering(true)}>

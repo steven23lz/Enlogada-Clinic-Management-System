@@ -3,7 +3,6 @@ const path = require('path');
 const notificationRepository = require('../repositories/notificationRepository');
 const auditRepository = require('../repositories/auditRepository');
 const hmoRepository = require('../repositories/hmoRepository');
-const queueCallRepository = require('../repositories/queueCallRepository');
 const auditService = require('./auditService');
 const patientRepository = require('../repositories/patientRepository');
 const env = require('../config/environment');
@@ -26,7 +25,6 @@ const RETENTION = Object.freeze({
   auditOtherDays: 3650,      // money, accounts, results: 10 years, like the records they describe [1.162.0]
   recordYears: 10,           // a patient record with nothing happening for this long is archived, never deleted
   hmoCardDays: 365,          // evidence for one claim, long settled by then
-  queueCallDays: 30,         // a press of Call: of use on its day, and for a question soon after
 });
 
 class RetentionService {
@@ -95,9 +93,8 @@ class RetentionService {
     const notifications = await this.pruneNotifications();
     const auditRows = await this.pruneAuditLog();
     const hmoCards = await this.pruneHmoCards();
-    const queueCalls = await queueCallRepository.pruneOlderThan(RETENTION.queueCallDays);
     if (env.RECORD_AUTO_ARCHIVE) await this.archiveDormantRecords();
-    const summary = { notifications, auditRows, hmoCards, queueCalls };
+    const summary = { notifications, auditRows, hmoCards };
 
     const parts = [
       notifications.readRows + notifications.staleRows && `${notifications.readRows + notifications.staleRows} old notification(s)`,

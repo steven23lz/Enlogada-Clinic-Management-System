@@ -16,8 +16,6 @@ import Pagination from '../ui/pagination';
 import { ageFromBirthdate } from '../../lib/date';
 import WaitBadge from '../ui/wait-badge';
 import { overTarget } from '../../lib/turnaroundTarget';
-import CallButton from '../queue/CallButton';
-import { isFromToday } from '../../lib/nowServing';
 import { SkeletonRows } from '../ui/skeleton';
 import { useAuth } from '../../contexts/AuthContext';
 import { ConfirmDialog } from '../ui/confirm-dialog';
@@ -61,7 +59,7 @@ function Referrer({ test }) {
  * One test's examination, status and actions: the last three cells of a plain row, and the whole
  * of a row under a patient's name.
  */
-function TestCells({ test, entry, examDone, canRecord, canRelease, showReferrer = true, call = null }) {
+function TestCells({ test, entry, examDone, canRecord, canRelease, showReferrer = true }) {
   // A department that issues no report here marks the exam done instead. [1.129.0] None does
   // since [1.143.0] (`NO_REPORT_CATEGORIES`), when X-ray attached and released reports again.
   const reportsHere = issuesReports(test.category_name);
@@ -90,7 +88,6 @@ function TestCells({ test, entry, examDone, canRecord, canRelease, showReferrer 
 
       <TableCell className="py-3.5 text-right">
         <div className="flex flex-wrap items-start justify-end gap-2">
-          {call}
           {canRecord && !reportsHere && (test.test_status === 'Processing' || test.test_status === 'Waiting for Release') && (
             <Button onClick={() => examDone?.ask(test)} size="xs">
               <CheckCircle2 className="h-3 w-3" />
@@ -248,17 +245,6 @@ export default function WorklistPanel({ worklist, entry, examDone }) {
                       <DataBadge variant="queue" label="Queue ticket">{first.queue_number || `VT-${first.visit_test_id}`}</DataBadge>
                     </TableCell>
                   );
-                  // [1.149.0] Tickets restart each day, so one from an earlier day cannot be called:
-                  // someone else may hold today's same number.
-                  const call = canRecord && first.queue_number && isFromToday(first.visit_created_at) ? (
-                    <CallButton
-                      visitId={first.visit_id}
-                      ticket={first.queue_number}
-                      station={first.category_name}
-                      patientName={name}
-                      calledAt={first.last_called_at}
-                    />
-                  ) : null;
 
                   if (tests.length === 1) {
                     return (
@@ -272,7 +258,7 @@ export default function WorklistPanel({ worklist, entry, examDone }) {
                           </div>
                           <PatientDetails test={first} />
                         </TableCell>
-                        <TestCells test={first} entry={entry} examDone={examDone} canRecord={canRecord} canRelease={canRelease} call={call} />
+                        <TestCells test={first} entry={entry} examDone={examDone} canRecord={canRecord} canRelease={canRelease} />
                       </TableRow>
                     );
                   }
@@ -322,7 +308,7 @@ export default function WorklistPanel({ worklist, entry, examDone }) {
                           </div>
                         </TableCell>
                         {/* The patient is called once, here: their tests' rows underneath are the work. */}
-                        <TableCell className="py-3.5 text-right">{call}</TableCell>
+                        <TableCell className="py-3.5" />
                       </TableRow>
 
                       {open && tests.map((test) => (

@@ -1,20 +1,21 @@
 /**
- * [1.149.0] The waiting-room "Now serving" screen: who each station has called.
+ * [1.165.0] Removes queue_calls. Steven took the waiting-room screen and the Call button out, as a future
+ * recommendation in the paper, and this table only recorded who was called to it. A press of Call says nothing
+ * about a patient's care and was kept for 30 days anyway, so nothing is archived.
  *
- * One table, `queue_calls`, one row per press of Call: which visit, to which station, who pressed
- * it and when. Only the visit's TICKET ever leaves it for the public screen, never a name.
- *
- * A call means nothing without its visit, so deleting the visit (an unpaid one whose time is up, the
- * demo reset, the test purge) takes its calls with it. The retention pass removes old ones.
- *
- *   node src/scripts/migrateQueueCalls.js
- *   node src/scripts/migrateQueueCalls.js --rollback
+ *   node src/scripts/migrateRemoveQueueCalls.js
+ *   node src/scripts/migrateRemoveQueueCalls.js --rollback    the table again, empty
  */
 
 require('dotenv').config();
 const db = require('../config/database');
 
 async function apply() {
+  await db.query('DROP TABLE IF EXISTS queue_calls');
+  console.log('\n  queue_calls is gone.\n');
+}
+
+async function rollback() {
   await db.withTransaction(async () => {
     await db.query(`
       CREATE TABLE IF NOT EXISTS queue_calls (
@@ -26,27 +27,19 @@ async function apply() {
         CONSTRAINT fk_queue_calls_visit FOREIGN KEY (patient_visit_id) REFERENCES patient_visits(id) ON DELETE CASCADE,
         CONSTRAINT fk_queue_calls_called_by FOREIGN KEY (called_by) REFERENCES users(id) ON DELETE SET NULL,
         CONSTRAINT chk_queue_calls_station CHECK (station IN ('Front Desk', 'Cashier', 'Laboratory', 'Ultrasound', 'Xray'))
-      )
-    `);
+      )`);
     await db.query('CREATE INDEX IF NOT EXISTS idx_queue_calls_called_at ON queue_calls (called_at)');
     await db.query('CREATE INDEX IF NOT EXISTS idx_queue_calls_visit ON queue_calls (patient_visit_id, station, called_at)');
   });
-  console.log('\n  queue_calls is in place.\n');
-}
-
-async function rollback() {
-  await db.query('DROP TABLE IF EXISTS queue_calls');
-  console.log('\n  Rolled back: queue_calls is gone, and with it the record of who was called.\n');
+  console.log('\n  Rolled back: queue_calls is back, empty.\n');
 }
 
 (async () => {
   try {
-    if (process.argv.includes('--rollback')) await rollback();
-    else await apply();
+    await (process.argv.includes('--rollback') ? rollback() : apply());
+    process.exit(0);
   } catch (err) {
-    console.error('\n  Failed:', err.message, '\n');
-    process.exitCode = 1;
-  } finally {
-    await db.pool.end();
+    console.error(err.message);
+    process.exit(1);
   }
 })();

@@ -45,7 +45,6 @@ const PROTECTED_EMAILS = [
 // matters: deleting a parent first fails the constraint and aborts the whole transaction.
 const TRANSACTIONAL_TABLES = [
   'cash_counts',
-  'queue_calls',
   'payment_refund_tests',
   'payment_refunds',
   'notification_reads',

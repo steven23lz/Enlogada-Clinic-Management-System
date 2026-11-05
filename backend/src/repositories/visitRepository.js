@@ -363,10 +363,6 @@ class VisitRepository {
                   AND (wvt.status IN ('Waiting for Release', 'Completed') OR wvt.performed_at IS NOT NULL
                        OR EXISTS (SELECT 1 FROM test_results wtr WHERE wtr.visit_test_id = wvt.id))
              ) AS work_started,
-             -- [1.149.0] When this visit was last called, per station: { "Cashier": "2026-…" }.
-             (SELECT jsonb_object_agg(s.station, s.last)
-                FROM (SELECT qc.station, MAX(qc.called_at) AS last FROM queue_calls qc
-                       WHERE qc.patient_visit_id = pv.id GROUP BY qc.station) s) AS calls,
              -- [1.122.0] A paid visit cannot be cancelled; the Desk hides Cancel on it.
              EXISTS (
                SELECT 1 FROM payments pay
@@ -735,8 +731,6 @@ class VisitRepository {
    * since a booking's visit dates from its check-in. [1.156.0]
    */
   async leaveTodaysQueue(visitId, bookedAt) {
-    // The waiting room's screen must not go on showing a ticket that is gone.
-    await db.query('DELETE FROM queue_calls WHERE patient_visit_id = $1', [visitId]);
     await db.query(
       `UPDATE visit_tests SET status = 'Pending', updated_at = CURRENT_TIMESTAMP
         WHERE patient_visit_id = $1 AND status = 'Processing'`,

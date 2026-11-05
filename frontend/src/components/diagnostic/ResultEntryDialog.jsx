@@ -245,7 +245,7 @@ export default function ResultEntryDialog({ entry, patientHistory }) {
         description={entry.activeTest ? (
           entry.isEditing
             ? `Save the corrected ${entry.activeTest.test_name} report for ${entry.activeTest.first_name} ${entry.activeTest.last_name}? It replaces the old one in their portal. It is not emailed unless you send it.`
-            : `Release ${entry.activeTest.test_name} findings for ${entry.activeTest.first_name} ${entry.activeTest.last_name}? This finalizes the result and cannot be undone from this screen.`
+            : `Release the ${entry.activeTest.test_name} report for ${entry.activeTest.first_name} ${entry.activeTest.last_name}? This finalizes the result and cannot be undone from this screen.`
         ) : ''}
         confirmLabel={entry.isEditing ? 'Save Correction' : 'Authorize & Release'}
         onConfirm={entry.release}

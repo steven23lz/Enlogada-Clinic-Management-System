@@ -83,7 +83,8 @@ export default function TransactionHistoryPanel({ history, receipt, operations }
               heading is how a text-based selector starts matching the wrong thing. */}
           <PanelHeader title="Completed Transactions" description="Receipts issued in this range" icon={History} />
           <PanelBody flush>
-            <Table stack>
+            {/* Seven columns at the width of a laptop: the inner ones sit closer, or Reprint is cut off. */}
+            <Table stack className="sm:[&_td:not(:first-child):not(:last-child)]:px-2.5 sm:[&_th:not(:first-child):not(:last-child)]:px-2.5">
               <TableHeader sticky>
                 <TableRow>
                   <TableHead>Receipt #</TableHead>

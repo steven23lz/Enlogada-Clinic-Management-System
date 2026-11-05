@@ -38,12 +38,7 @@ sentence. Left:
 - **[1.150.0] Cash count.** On another database run `node src/scripts/migrateCashCounts.js`. It assumes
   one drawer for the clinic, a choice made without Steven, to confirm: two drawers would need a count
   per cashier. The flowcharts and DFDs do not show calling or counting yet; the use cases and ERD do.
-- **[1.149.0] "Now serving" screen.** On another database run `node src/scripts/migrateQueueCalls.js`.
-  Set up: open the Desk's "Waiting-room screen" on the TV's PC, press Full screen and Turn on sound
-  (the browser asks for that press every time the page is opened). Production's shared limit of 100
-  requests per 15 minutes per address looks low for a clinic where every PC shares one address on a
-  cloud host: the screen has its own allowance now, but the staff screens do not. Decide with the
-  deployment question below.
+- **[1.165.0] No waiting-room screen or Call button.** Removed, as a future recommendation in the paper. On another database run `node src/scripts/migrateRemoveQueueCalls.js`.
 - **[1.148.0] Seven automations** (backups, three patient emails, retention, HMO countdown,
   worklist target). On another database run `node src/scripts/migratePatientMessages.js`. Left for
   Steven:

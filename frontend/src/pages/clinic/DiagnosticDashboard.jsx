@@ -109,7 +109,7 @@ const DiagnosticDashboard = ({ activeNav = 'lab-ops', onSelectNav, intent }) => 
                 : `Patients whose ${categoryLabel} exam has been paid for and released to this department. Mark each exam done once it has been taken; results are given through the ${categoryLabel} department's own system.`)
               : mode === 'history'
                 ? `Every ${categoryLabel} result this department has released, including amended versions.`
-                : `Patients whose ${categoryLabel} exam has been paid for and released to this department. Record findings, then authorise the release of the report.`
+                : `Patients whose ${categoryLabel} exam has been paid for and released to this department. Attach each report, then authorise its release.`
           }
         />
 

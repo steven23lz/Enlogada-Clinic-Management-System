@@ -100,9 +100,6 @@ class ResultRepository {
              -- patient walks in; arrival alone would count the wait at the till. What a turnaround
              -- target is judged against on the worklist.
              GREATEST(pv.created_at, pay.paid_at) AS ready_at,
-             -- [1.149.0] When this department last called this visit to the waiting-room screen.
-             (SELECT MAX(qc.called_at) FROM queue_calls qc
-               WHERE qc.patient_visit_id = pv.id AND qc.station = tc.name) AS last_called_at,
              -- Who asked for the test. A diagnostic report goes back to this doctor, so the
              -- worklist and the report both need to be able to name them. [1.23.0]
              pv.referring_physician, pv.referring_physician_prc,

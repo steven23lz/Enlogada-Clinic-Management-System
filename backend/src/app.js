@@ -105,9 +105,6 @@ app.use(morgan(morganFormat, {
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: process.env.NODE_ENV === 'production' ? (Number(process.env.RATE_LIMIT_MAX) || 3000) : 20000,
-  // [1.149.0] The waiting-room screen asks every few seconds all day: 225 times in this window, so
-  // the shared allowance would stop it by mid-morning. displayLimiter below is its own.
-  skip: (req) => req.path === '/queue/now-serving',
   message: {
     status: 'error',
     message: 'Too many requests from this IP, please try again after 15 minutes.'
@@ -197,17 +194,6 @@ const verifyLimiter = rateLimit({
 });
 app.use('/api/verify', verifyLimiter);
 
-// The waiting-room screen, on its own bucket. [1.149.0] A few screens on one address, each asking
-// every 4 seconds, with room to spare; what it returns is a ticket number and a station.
-const displayLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1500,
-  message: { status: 'error', message: 'Too many requests for the waiting-room screen.' },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-app.use('/api/queue/now-serving', displayLimiter);
-
 // 5. Health Check Endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -239,7 +225,6 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const clinicRoutes = require('./routes/clinicRoutes');
 const discountRoutes = require('./routes/discountRoutes');
 const verificationRoutes = require('./routes/verificationRoutes');
-const queueRoutes = require('./routes/queueRoutes');
 const cashCountRoutes = require('./routes/cashCountRoutes');
 
 app.use('/api/auth', authRoutes);
@@ -263,7 +248,6 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/clinic', clinicRoutes);
 app.use('/api/verify', verificationRoutes);
-app.use('/api/queue', queueRoutes);
 app.use('/api/cash-counts', cashCountRoutes);
 
 // 6. Global Catch-all Error Handling Middleware

@@ -7,8 +7,6 @@ import { Badge } from '../ui/badge';
 import { SearchInput } from '../ui/search-input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import WaitBadge from '../ui/wait-badge';
-import CallButton from '../queue/CallButton';
-import { CASHIER } from '../../lib/nowServing';
 import { SkeletonList } from '../ui/skeleton';
 import DataBadge from '../ui/data-badge';
 
@@ -141,18 +139,6 @@ export default function BillingQueuePanel({ queue, checkout }) {
                         </span>
                       </span>
                     </button>
-                    {/* [1.149.0] Beside the row's button, not inside it: a button cannot hold a button. */}
-                    {visit.queue_number && (
-                      <div className="border-t border-line-soft px-3 py-1.5">
-                        <CallButton
-                          visitId={visit.id}
-                          ticket={visit.queue_number}
-                          station={CASHIER}
-                          patientName={`${visit.first_name} ${visit.last_name}`}
-                          calledAt={visit.calls?.[CASHIER]}
-                        />
-                      </div>
-                    )}
                     </div>
                   );
                 })

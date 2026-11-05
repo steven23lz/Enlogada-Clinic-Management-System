@@ -1263,7 +1263,6 @@ async function main() {
     ...bookings.map((b) => b.patient_visit_id),
   ]);
 
-  await seedCalls(today.map((v) => v.visit.id));
   await seedCashCounts();
 
   // ── Summary ──────────────────────────────────────────────────────────────────────────────
@@ -1423,38 +1422,6 @@ async function renumberSeeded(visitIds) {
   });
 }
 
-/**
- * So the waiting-room screen has something on it on demo day. [1.149.0] The next patient at the till
- * and in each department, called a few minutes apart, as the Call buttons would have.
- */
-async function seedCalls(visitIds) {
-  const oldest = (where, params = []) => db.query(
-    `SELECT pv.id FROM patient_visits pv
-      WHERE pv.id = ANY($1) AND pv.queue_number IS NOT NULL AND ${where}
-      ORDER BY pv.created_at, pv.id LIMIT 1`,
-    [visitIds, ...params]
-  );
-  const stations = [
-    ['Cashier', await oldest(`pv.status = 'Pending' AND NOT EXISTS (
-       SELECT 1 FROM payments pay WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid')`)],
-  ];
-  for (const department of ['Laboratory', 'Ultrasound', 'Xray']) {
-    stations.push([department, await oldest(`pv.status = 'Processing' AND EXISTS (
-       SELECT 1 FROM visit_tests vt
-         JOIN tests t ON t.id = vt.test_id
-         JOIN test_categories tc ON tc.id = t.category_id
-        WHERE vt.patient_visit_id = pv.id AND tc.name = $2 AND vt.status = 'Processing')`, [department])]);
-  }
-  for (const [i, [station, found]] of stations.entries()) {
-    if (!found.rows[0]) continue;
-    await db.query(
-      `INSERT INTO queue_calls (patient_visit_id, station, called_at)
-       VALUES ($1, $2, CURRENT_TIMESTAMP - ($3 || ' minutes')::interval)`,
-      [found.rows[0].id, station, String((stations.length - i) * 3)]
-    );
-  }
-}
-
 /** A GCash or bank reference: thirteen digits, as the app shows one, different for each visit. */
 function transferReference(seed) {
   return String(1000000000000 + (Number(seed) * 7919) % 8999999999999);
@@ -1517,4 +1484,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { labFormFor, labReportRows, signatoriesFor, splitImpression, FORM_PATIENT_TYPE, ULTRASOUND_REPORT, seedCalls, seedCashCounts };
+module.exports = { labFormFor, labReportRows, signatoriesFor, splitImpression, FORM_PATIENT_TYPE, ULTRASOUND_REPORT, seedCashCounts };

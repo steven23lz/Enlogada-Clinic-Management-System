@@ -27,7 +27,6 @@ const StaffAccountSettings = lazyScreen(() => import('./pages/StaffAccountSettin
 const Today = lazyScreen(() => import('./pages/Today'));
 const ReceiptView = lazyScreen(() => import('./pages/ReceiptView'));
 const VerifyReport = lazyScreen(() => import('./pages/public/VerifyReport'));
-const NowServing = lazyScreen(() => import('./pages/public/NowServing'));
 const StaffShellHost = lazyScreen(() => import('./components/StaffShellHost'));
 
 // An emailed password-reset LINK, from before [1.73.0] replaced links with a 6-digit code. Some are
@@ -79,13 +78,6 @@ const getInitialVerify = () => {
   const params = new URLSearchParams(window.location.search);
   return params.has('verify') ? params.get('verify') || '' : null;
 };
-
-/**
- * `?display=queue`: the waiting-room TV. [1.149.0] Open to everyone, signed in or not, because a TV
- * has no account; it shows ticket numbers and nothing that names a person.
- */
-const isQueueDisplay = () =>
-  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('display') === 'queue';
 
 // The one loading screen: while the session is checked, and while a screen's code arrives the
 // first time it is opened. [1.87.0]
@@ -224,10 +216,6 @@ const MainApp = () => {
    * Closing clears the param as well as the state, so a refresh of a tab the reader has closed
    * out of does not silently reopen the receipt.
    */
-  if (isQueueDisplay()) {
-    return <NowServing />;
-  }
-
   if (verifyCode !== null) {
     return <VerifyReport initialCode={verifyCode} onNavigate={handleNavigate} />;
   }

@@ -4,7 +4,6 @@
 -- Drop existing tables to allow clean recreation
 DROP TABLE IF EXISTS clinic_settings CASCADE;
 DROP TABLE IF EXISTS cash_counts CASCADE;
-DROP TABLE IF EXISTS queue_calls CASCADE;
 DROP TABLE IF EXISTS daily_counters CASCADE;
 DROP TABLE IF EXISTS discount_types CASCADE;
 DROP TABLE IF EXISTS audit_log CASCADE;
@@ -1027,21 +1026,6 @@ CREATE TABLE clinic_settings (
     CONSTRAINT fk_clinic_settings_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cash_counts_date ON cash_counts (business_date, counted_at);
-
--- Who each station has called. [1.149.0] One row per press of Call; the waiting-room screen shows
--- each station's newest. A call means nothing without its visit, so it goes with the visit.
-CREATE TABLE queue_calls (
-    id SERIAL PRIMARY KEY,
-    patient_visit_id INT NOT NULL,
-    station VARCHAR(20) NOT NULL,
-    called_by INT,
-    called_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_queue_calls_visit FOREIGN KEY (patient_visit_id) REFERENCES patient_visits(id) ON DELETE CASCADE,
-    CONSTRAINT fk_queue_calls_called_by FOREIGN KEY (called_by) REFERENCES users(id) ON DELETE SET NULL,
-    CONSTRAINT chk_queue_calls_station CHECK (station IN ('Front Desk', 'Cashier', 'Laboratory', 'Ultrasound', 'Xray'))
-);
-CREATE INDEX IF NOT EXISTS idx_queue_calls_called_at ON queue_calls (called_at);
-CREATE INDEX IF NOT EXISTS idx_queue_calls_visit ON queue_calls (patient_visit_id, station, called_at);
 
 CREATE TABLE audit_log (
     id SERIAL PRIMARY KEY,

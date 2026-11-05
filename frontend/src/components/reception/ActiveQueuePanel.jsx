@@ -1,8 +1,6 @@
 import React from 'react';
 import { AlertCircle, ShieldAlert, UserCheck } from 'lucide-react';
-import CallButton from '../queue/CallButton';
 import UndoCheckIn from './UndoCheckIn';
-import { FRONT_DESK } from '../../lib/nowServing';
 import DataBadge from '../ui/data-badge';
 import EtaBadge from '../ui/eta-badge';
 import WaitBadge from '../ui/wait-badge';
@@ -53,7 +51,6 @@ export default function ActiveQueuePanel({ queue, hmo, testAssignment, showSearc
   const canRegisterWalkIn = hasPermission('visits:create') && hasPermission('tests:assign') && hasPermission('patients:create');
   const canAttachTests = hasPermission('tests:assign');
   const canUndoCheckIn = hasPermission('appointments:update');
-  const canCall = hasPermission('visits:create'); // constants/queueStations.js: what the Front Desk asks [1.149.0]
   const canRaiseHmo = hasPermission('hmo:request');
 
   return (
@@ -283,17 +280,6 @@ export default function ActiveQueuePanel({ queue, hmo, testAssignment, showSearc
 
                         <TableCell className="text-right">
                           <div className="flex flex-wrap items-start justify-end gap-1.5">
-                            {/* [1.149.0] Records the call and puts it on the waiting-room screen.
-                                It only spoke on this PC before, for a ticket or for none. */}
-                            {canCall && visit.queue_number && (
-                              <CallButton
-                                visitId={visit.id}
-                                ticket={visit.queue_number}
-                                station={FRONT_DESK}
-                                patientName={`${visit.first_name} ${visit.last_name}`}
-                                calledAt={visit.calls?.[FRONT_DESK]}
-                              />
-                            )}
                             {/* Edit, not attach. [1.55.0] Tests are chosen at registration, so by
                                 the time a visit is in this queue the list already exists and what
                                 the desk needs is to CHANGE it. "Attach" described a dialog that
