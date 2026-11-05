@@ -24,7 +24,7 @@ import { todayStr } from '../../lib/date';
 /** The mark on a required field. Declared outside the dialog, so it is one component type. */
 const Required = () => <span className="text-rose-600">*</span>;
 
-export default function ProfileFormDialog({ profiles, reference, mode }) {
+export default function ProfileFormDialog({ profiles, mode }) {
   const editing = mode === 'edit';
   const open = editing ? profiles.showEdit : profiles.showAdd;
   const onOpenChange = editing ? profiles.closeEdit : profiles.openAdd;
@@ -122,7 +122,7 @@ export default function ProfileFormDialog({ profiles, reference, mode }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
             <div className="space-y-1.5">
               <label htmlFor={id('contact-number')} className="field-label">Contact number</label>
               <Input
@@ -132,21 +132,6 @@ export default function ProfileFormDialog({ profiles, reference, mode }) {
                 onChange={(e) => set('contactNumber')(e.target.value)}
                 disabled={busy}
               />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor={id('billing-category')} className="field-label">Billing category <Required /></label>
-              <Select value={draft.patientTypeId} onValueChange={set('patientTypeId')} disabled={busy}>
-                <SelectTrigger id={id('billing-category')}>
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(reference?.patientTypes || []).map((type) => (
-                    <SelectItem key={type.id} value={type.id.toString()}>
-                      {type.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
 

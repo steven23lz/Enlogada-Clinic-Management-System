@@ -27,7 +27,7 @@ export default function PatientSwitcher({ profiles }) {
       <SelectContent>
         {profiles.profiles.map((p) => (
           <SelectItem key={p.id} value={p.id.toString()}>
-            {p.first_name} {p.last_name} ({p.patient_type_name || 'Patient'})
+            {p.first_name} {p.last_name}
           </SelectItem>
         ))}
       </SelectContent>

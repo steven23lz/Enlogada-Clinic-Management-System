@@ -118,6 +118,7 @@ node src/scripts/migrateRefunds.js               # [1.155.0] payment_refunds + p
 node src/scripts/migrateCorrections.js           # [1.156.0] withdrawn reports, undoing a check-in, sign-up agreement (--rollback reverses it)
 node src/scripts/migratePackageOwnPrice.js       # [1.159.0] a package line's share and own price; which tests came out of a package off sale (--rollback reverses it)
 node src/scripts/migrateRefusedClaimLines.js     # [1.160.0] data only: tests on a refused claim are free for a new claim
+node src/scripts/migrateRetirePrivate.js         # [1.161.0] Private patients become Self Pay, and the type goes (--rollback restores them)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -255,6 +256,8 @@ too, which turns a "the cashier cannot" assertion into a 201.
 Run it before and after any non-trivial change and compare the pass/fail counts — the specs assert RBAC boundaries and some UI copy, so intentional changes to those will legitimately turn specs red and the spec must be updated alongside the code. A run takes ~25 seconds; it runs on a single worker because the specs share one database and seeded accounts (see the note in `playwright.config.js`).
 
 Three notes learned the hard way. The dev rate limiter allows 20,000 requests per 15 minutes; running the suite many times back to back trips it, and the resulting 429s surface as scattered, unrelated-looking failures — restart the backend to reset the counter. (There is now a second, tighter limiter on the credential endpoints, but it only counts *failed* attempts and allows 2,000 outside production, so the suite does not touch it.) Editing a backend file mid-run has the same signature: nodemon restarts, in-flight requests are dropped, and several unrelated specs go red at once — re-run on a settled server before believing a failure. And navigation/role changes need `multirole@enlogada.com` (see `TEST_ACCOUNTS.md`) to exercise properly: a single-role account cannot reveal the class of bug where the sidebar offers a screen the router refuses to open. `[1.123.0]` Never start a second `playwright test` while one is running: both write their start time to `test-results/.e2e-run-started`, so the first run's teardown purges only from the second run's start and leaves its own early rows behind (29 visits, found afterwards). If it happens, run `purgeE2eData.js --since=<first run's start> --dry-run`, then without `--dry-run`.
+
+**There is no Private patient type.** `[1.161.0]` Steven: the clinic accepts a patient without a doctor's note. Only an HMO claim asks for the doctor. A patient is not asked for a category at all (`addPatientProfile` saves Self Pay, an edit keeps what the desk recorded); the desk still sets HMO or Self Pay, which prints on the report. The paragraphs below that say "or a Private patient" predate this.
 
 **A patient's HMO booking carries the doctor's signed request; self-pay may.** `[1.106.0]` It
 replaced the typed referring physician and clinical notes in the patient's booking dialog, labelled
@@ -1507,6 +1510,8 @@ with a link to the printable document.
     `data-tile`; `portal-need` with `data-need` (`pay-<id>`, `prepare-<id>`, `bookings-failed`,
     `no-profile`, and `[1.136.0]` `record-<id>`, `record-email-check`, `invites-failed`); `portal-tab-bar`; the "Account menu" button and `account-menu`; the chip's name
     "Active patient profile"; "Back to the portal".
+- **The portal keeps up by itself.** `[1.161.0]` Quiet re-reads (`reload({ quiet: true })`: no skeleton, a failure changes nothing) on a tab change, on coming back to the
+  window and every 90 seconds, at most every 15. A new portal data hook takes `quiet` too, and joins `keepUp` in `ClientDashboard`.
 - **A portal spec names a tab by what it is.** `[1.80.0]` `tests/e2e/helpers/portal.js` holds the
   patient portal's tab names (`PORTAL_TABS`), `openPortalTab(page, 'appointments')` and
   `openBooking(page)`. Nine specs clicked a tab or "Book Schedule" by its words, and the portal's

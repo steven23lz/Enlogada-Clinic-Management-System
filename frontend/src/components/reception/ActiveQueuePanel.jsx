@@ -243,10 +243,15 @@ export default function ActiveQueuePanel({ queue, hmo, testAssignment, showSearc
                                     {t.test_name}
                                     <span className="text-slate-400">({t.test_status})</span>
                                   </Badge>
-                                  {canRaiseHmo && (
+                                  {canRaiseHmo && ['Pending', 'Approved'].includes(t.hmo_status) && (
+                                    <span data-testid="test-hmo-status" className="text-micro font-semibold text-slate-500">
+                                      HMO {t.hmo_status === 'Pending' ? 'waiting' : 'approved'}
+                                    </span>
+                                  )}
+                                  {canRaiseHmo && !['Pending', 'Approved'].includes(t.hmo_status) && (
                                     <button
                                       type="button"
-                                      onClick={() => hmo.openFor(t)}
+                                      onClick={() => hmo.openFor(t, visit)}
                                       title="Log HMO pre-authorization for this test"
                                       aria-label={`Log HMO pre-authorization for ${t.test_name}`}
                                       className="flex h-5 w-5 cursor-pointer items-center justify-center rounded border-0 bg-transparent text-slate-300 hover:bg-brand-50 hover:text-brand-600"

@@ -17,8 +17,8 @@ export function useMyVisits(profileList = []) {
   const [error, setError] = useState('');
   const key = profileList.map((p) => p.id).join(',');
 
-  const reload = useCallback(async () => {
-    setError('');
+  const reload = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) setError('');
     if (!key) {
       setWalkIns([]);
       setLoading(false);
@@ -34,6 +34,7 @@ export function useMyVisits(profileList = []) {
       }));
       setWalkIns(lists.flat().sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
     } catch (err) {
+      if (quiet) return;
       setError(err.response?.data?.message || "Couldn't load your walk-in visits.");
     } finally {
       setLoading(false);

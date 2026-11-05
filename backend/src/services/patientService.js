@@ -136,6 +136,9 @@ class PatientService {
 
   async addPatientProfile(userId, patientData) {
     const fields = normalisePatientFields(patientData, localToday());
+    // [1.161.0] Patients are no longer asked: who pays is answered by each booking, and a category they
+    // chose decided nothing. The desk still sets it, and it prints on the report.
+    fields.patientTypeId = await patientRepository.findPatientTypeIdByName('Self Pay');
     // [1.160.0] Nothing stopped one account adding the same person twice, a double-click included, and
     // each profile then held half of that person's visits. The desk has been asked since [1.129.0].
     const same = await patientRepository.findSameOnAccount(userId, fields);
@@ -204,6 +207,8 @@ class PatientService {
       : normaliseEmail(patientData.email);
 
     const fields = normalisePatientFields(patientData, localToday());
+    // [1.161.0] Whatever the desk recorded stays: a patient no longer sets it.
+    if (!isStaffUser(requestingUser)) fields.patientTypeId = before.patient_type_id;
 
     // [1.152.0] Steven's call. A released report went out under this name, birthdate and sex, and the
     // record is what every screen and the verification page read them from: a patient could rewrite

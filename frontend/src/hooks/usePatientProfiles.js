@@ -102,7 +102,7 @@ export function usePatientProfiles() {
     e?.preventDefault();
     setAddError('');
 
-    const invalid = validatePatientProfile(addDraft);
+    const invalid = validatePatientProfile(addDraft, { needsType: false });
     if (invalid) {
       setAddError(invalid);
       return;
@@ -147,7 +147,7 @@ export function usePatientProfiles() {
     e?.preventDefault();
     setEditError('');
 
-    const invalid = validatePatientProfile(editDraft);
+    const invalid = validatePatientProfile(editDraft, { needsType: false });
     if (invalid) {
       setEditError(invalid);
       return;

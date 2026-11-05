@@ -20,6 +20,12 @@ import { toastSuccess } from '../lib/toast';
 export function useHmoLogging({ onLogged } = {}) {
   const [open, setOpen] = useState(false);
   const [visitTest, setVisitTest] = useState(null);
+  // [1.161.0] The visit it came from: a card usually covers more than one test, and the claim may
+  // need the doctor's name, which the server asked for and this dialog had no box for.
+  const [visit, setVisit] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [physician, setPhysician] = useState('');
+  const [physicianPrc, setPhysicianPrc] = useState('');
   const [providerId, setProviderId] = useState('');
   const [approvalCode, setApprovalCode] = useState('');
   const [memberNumber, setMemberNumber] = useState('');
@@ -44,8 +50,12 @@ export function useHmoLogging({ onLogged } = {}) {
     loadPending();
   }, [loadPending]);
 
-  const openFor = (test) => {
+  const openFor = (test, ofVisit = null) => {
     setVisitTest(test);
+    setVisit(ofVisit);
+    setSelectedIds([test.id]);
+    setPhysician('');
+    setPhysicianPrc('');
     setProviderId('');
     setApprovalCode('');
     setError('');
@@ -53,6 +63,12 @@ export function useHmoLogging({ onLogged } = {}) {
   };
 
   const close = () => setOpen(false);
+
+  // A test may join this claim unless one is already waiting on it or approved it.
+  const claimable = (visit?.tests || []).filter((t) => !['Pending', 'Approved'].includes(t.hmo_status));
+  const toggleTest = (id) => setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const selectAll = () => setSelectedIds(claimable.map((t) => t.id));
+  const needsPhysician = Boolean(visit) && !visit.referring_physician && !visit.doctor_request_file_path;
 
   const submit = async (e) => {
     e?.preventDefault();
@@ -65,13 +81,22 @@ export function useHmoLogging({ onLogged } = {}) {
       setError('Choose the HMO provider before logging the claim.');
       return;
     }
+    if (selectedIds.length === 0) {
+      setError('Tick at least one test for this claim.');
+      return;
+    }
+    if (needsPhysician && !physician.trim()) {
+      setError('Give the requesting doctor\'s name: the HMO issues its LOA against it.');
+      return;
+    }
 
     try {
       await api.post('/hmo/request', {
         hmoProviderId: parseInt(providerId, 10),
         approvalCode,
         memberNumber,
-        visitTestIds: [visitTest.id],
+        visitTestIds: selectedIds,
+        ...(needsPhysician ? { referringPhysician: physician.trim(), referringPhysicianPrc: physicianPrc.trim() } : {}),
       });
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to log HMO authorization');
@@ -88,7 +113,9 @@ export function useHmoLogging({ onLogged } = {}) {
   };
 
   return {
-    open, visitTest,
+    open, visitTest, visit,
+    claimable, selectedIds, toggleTest, selectAll,
+    needsPhysician, physician, setPhysician, physicianPrc, setPhysicianPrc,
     providerId, setProviderId,
     approvalCode, setApprovalCode,
     memberNumber, setMemberNumber,

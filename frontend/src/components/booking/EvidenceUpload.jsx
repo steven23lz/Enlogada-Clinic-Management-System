@@ -3,7 +3,7 @@ import React from 'react';
 /**
  * An upload in the booking wizard: the HMO card, or the doctor's signed request. [1.106.0]
  * Driven by `useEvidenceFile`. The card is always required; the doctor's request only on an HMO
- * booking or a Private patient's, and optional for self-pay [1.107.0] — hence `required`, which is
+ * booking, and optional for self-pay [1.107.0] — hence `required`, which is
  * presentation only. referralService on the server decides.
  *
  * The preview is shown large enough to actually read. No API detects blur, glare, a thumb over

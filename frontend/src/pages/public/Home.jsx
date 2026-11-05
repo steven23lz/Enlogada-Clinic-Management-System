@@ -178,8 +178,8 @@ const Home = ({ onNavigate, section = null }) => {
               Your results appear in your patient portal as soon as they are released, and a copy is
               emailed on request.
             </FeatureCard>
-            <FeatureCard index={2} icon={Award} title="HMO & Private Support">
-              Accredited HMO providers, private and self-pay billing, and the Senior Citizen and PWD discount
+            <FeatureCard index={2} icon={Award} title="HMO & Self-Pay Support">
+              Accredited HMO providers, self-pay billing, and the Senior Citizen and PWD discount
               at the counter.
             </FeatureCard>
           </div>

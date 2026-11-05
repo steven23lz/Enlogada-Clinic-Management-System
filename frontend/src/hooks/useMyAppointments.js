@@ -32,17 +32,21 @@ export function useMyAppointments() {
   const [payingId, setPayingId] = useState(null);
   const [payError, setPayError] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  // [1.161.0] `quiet`: the portal re-reading by itself, with no skeleton, and a failure changes nothing.
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const response = await api.get('/appointments/my-bookings');
       setAppointments(response.data.data.bookings || []);
     } catch (err) {
+      if (quiet) return;
       console.error('Failed to fetch appointments:', err);
       setError(err.response?.data?.message || 'Your bookings are safe; this screen could not read them.');
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, []);
 

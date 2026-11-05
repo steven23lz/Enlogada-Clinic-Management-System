@@ -624,10 +624,10 @@ function PatientResults({ id, entry, scoped, onRetry, onView, onPrint }) {
               className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:pl-10"
             >
               <div className="min-w-0">
-                <p className="m-0 flex flex-wrap items-center gap-1.5 text-note font-semibold text-slate-900">
+                <div className="m-0 flex flex-wrap items-center gap-1.5 text-note font-semibold text-slate-900">
                   {row.test_name}
                   <Badge variant="outline">{categoryLabel(row.category_name)}</Badge>
-                </p>
+                </div>
                 <p className="m-0 text-fine text-slate-500">
                   Visit {formatDate(row.visit_date)} · Done {formatDate(row.performed_at)}
                   {doneBy ? ` by ${doneBy}` : ''}
@@ -646,11 +646,11 @@ function PatientResults({ id, entry, scoped, onRetry, onView, onPrint }) {
             className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:pl-10"
           >
             <div className="min-w-0">
-              <p className="m-0 flex flex-wrap items-center gap-1.5 text-note font-semibold text-slate-900">
+              <div className="m-0 flex flex-wrap items-center gap-1.5 text-note font-semibold text-slate-900">
                 {row.test_name}
                 <Badge variant="outline">{row.category_name}</Badge>
                 {Number(row.version) > 1 && <Badge variant="outline">Amended</Badge>}
-              </p>
+              </div>
               <p className="m-0 text-fine text-slate-500">
                 Visit {formatDate(row.visit_date)} · Released {formatDate(row.authorised_at)}
                 {releasedBy ? ` by ${releasedBy}` : ''}

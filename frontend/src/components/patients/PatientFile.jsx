@@ -136,11 +136,11 @@ export default function PatientFile({ id, entry, patientName, archived, canStart
               {shown.map((v) => (
                 <li key={v.id} data-testid="patient-file-visit" className="space-y-1.5 px-3 py-2.5">
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="m-0 flex flex-wrap items-center gap-2 text-fine font-semibold text-slate-900">
+                    <div className="m-0 flex flex-wrap items-center gap-2 text-fine font-semibold text-slate-900">
                       {formatDate(v.created_at)}
                       {v.queue_number && <DataBadge variant="queue" label="Queue ticket">{v.queue_number}</DataBadge>}
                       <span className="font-normal text-slate-500">{v.visit_type}</span>
-                    </p>
+                    </div>
                     <StatusBadge status={v.status} className="px-2 py-0.5" />
                   </div>
                   {v.tests?.length ? (

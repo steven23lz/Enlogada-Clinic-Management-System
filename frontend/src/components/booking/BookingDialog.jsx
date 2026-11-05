@@ -113,10 +113,8 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
   // truthiness check treated self-pay as an HMO selection. Nothing chosen is self-pay too.
   const isHmo = Boolean(bookingData.hmoProviderId) && bookingData.hmoProviderId !== 'none';
   // [1.107.0] When the doctor's request is required: referralService.referralRequirement's rule,
-  // said here so the field is marked before the patient submits rather than refused after. A
-  // Private patient is one a physician referred, whoever pays.
-  const isReferred = selectedProfile?.patient_type_name === 'Private';
-  const needsDoctorRequest = isHmo || isReferred;
+  // said here so the field is marked before the patient submits rather than refused after.
+  const needsDoctorRequest = isHmo;
   // [1.146.0] Senior Citizen is offered to a profile 60 or over (the server checks it again); PWD to
   // anyone. An online booking is paid before the visit, so the discount is claimed here or never.
   const profileAge = ageFromBirthdate(selectedProfile?.birthdate);
@@ -142,9 +140,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
     // The same two rules the server holds (referralService, hmoService), said before the request
     // rather than after it.
     if (needsDoctorRequest && !doctorRequest.file) {
-      setBookingError(isHmo
-        ? "Please upload your doctor's request / notes — your HMO approves these tests against it."
-        : "Please upload your doctor's request / notes — this profile is a Private (doctor-referred) patient.");
+      setBookingError("Please upload your doctor's request / notes — your HMO approves these tests against it.");
       return;
     }
     if (hmo && !cardPhoto.file) {
@@ -498,9 +494,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                               label="Doctor's Request / Doctor's Notes"
                               hint={isHmo
                                 ? "Your HMO approves these tests against it. Attach a photo or scan of the request your doctor signed — make sure the doctor's name, signature and the tests are clear."
-                                : isReferred
-                                  ? "This profile is a Private (doctor-referred) patient, so the clinic needs the request your doctor signed. Attach a photo or scan — make sure the doctor's name, signature and the tests are clear."
-                                  : "Not needed when you pay for the visit yourself. If your doctor gave you a signed request or notes for these tests, attach a photo or scan and the clinic will have it ready when you arrive."}
+                                : "Not needed when you pay for the visit yourself. If your doctor gave you a signed request or notes for these tests, attach a photo or scan and the clinic will have it ready when you arrive."}
                               previewAlt="The doctor's request you attached"
                               readCheck="Can you clearly read the doctor's name, signature and the tests? If not, take another photo."
                               pdfCheck="Check it shows the doctor's name, signature and the tests."

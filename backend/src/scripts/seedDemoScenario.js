@@ -246,7 +246,7 @@ const signatoriesFor = (category) => SIGNATORIES
   .sort((a, b) => a.order - b.order);
 
 // How the clinic's form names a patient's type. [1.125.0]
-const FORM_PATIENT_TYPE = { 'Self Pay': 'WALK-IN', HMO: 'HMO', Private: 'PRIVATE' };
+const FORM_PATIENT_TYPE = { 'Self Pay': 'WALK-IN', HMO: 'HMO' };
 
 /** "IMPRESSION:\n..." split off the written report, for the form's own Impression block. */
 const splitImpression = (text) => {

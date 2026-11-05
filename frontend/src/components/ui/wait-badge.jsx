@@ -47,7 +47,7 @@ const WaitBadge = ({ since, overTarget = null, className }) => {
       className={cn(
         // Squared to match StatusBadge — the two sit side by side in every queue row, and one
         // being a pill while the other is a tag made them look like different kinds of thing.
-        'inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-micro font-semibold tabular-nums leading-5',
+        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-micro font-semibold tabular-nums leading-5',
         level.tone,
         className
       )}

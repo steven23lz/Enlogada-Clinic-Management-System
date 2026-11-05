@@ -345,10 +345,10 @@ function FeedbackQuestions() {
                       disabled={i === questions.length - 1 || Boolean(busy)} onClick={() => move(i, 1)}><ArrowDown className="h-3 w-3" /></Button>
                   </div>
                   <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="m-0 text-note font-semibold text-slate-900">
+                    <div className="m-0 text-note font-semibold text-slate-900">
                       {q.prompt_ceb}
                       <Badge variant="outline" className="ml-2 align-middle">{q.is_active ? 'Asked' : 'Turned off'}</Badge>
-                    </p>
+                    </div>
                     <p className="m-0 text-fine text-slate-500">{q.prompt_tl}</p>
                     <p className="m-0 text-fine text-slate-500">{q.prompt_en}</p>
                     <p className="m-0 text-micro text-slate-400">

@@ -9,7 +9,7 @@ const db = require('../config/database');
  * shown on request, never deleted: on the clinic's database they are the only remaining copy of
  * what the dropped tables held.
  */
-const ARCHIVE_ACTIONS = ['result.measurements_archived', 'clinic.signatory_archived', 'result.critical_flag_retired'];
+const ARCHIVE_ACTIONS = ['patient_type.private_retired', 'result.measurements_archived', 'clinic.signatory_archived', 'result.critical_flag_retired'];
 
 class AuditRepository {
   async create({ actorId, actorName, action, entityType, entityId, description }) {

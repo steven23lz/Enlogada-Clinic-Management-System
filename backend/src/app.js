@@ -93,14 +93,17 @@ app.use(morgan(morganFormat, {
 }));
 
 // 4. Rate Limiting Middleware
-// Production stays deliberately tight at 100/15min. The dev ceiling exists only so the
+// [1.161.0] Production was 100/15min per address. One idle reception terminal makes about 60 in that
+// time, and a clinic's PCs all share one address, so a normal morning would have started answering
+// every screen "Too many requests". The credential endpoints keep their own tight limit below. RATE_LIMIT_MAX
+// overrides it. The dev ceiling exists only so the
 // frontend/tests/e2e Playwright suite can run: that suite is now ~190 tests, most of which
 // perform several authenticated API calls, and it comfortably exceeded the previous 1000 —
 // exhausting the window mid-run and failing ~25 specs with a misleading
 // "Cannot read properties of undefined (reading 'token')" rather than an obvious 429.
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 20000,
+  max: process.env.NODE_ENV === 'production' ? (Number(process.env.RATE_LIMIT_MAX) || 3000) : 20000,
   // [1.149.0] The waiting-room screen asks every few seconds all day: 225 times in this window, so
   // the shared allowance would stop it by mid-morning. displayLimiter below is its own.
   skip: (req) => req.path === '/queue/now-serving',

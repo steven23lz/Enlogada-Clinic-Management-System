@@ -164,7 +164,7 @@ export default function TransactionHistoryPanel({ history, receipt, operations }
                           </span>
                         )}
                       </TableCell>
-                      <TableCell label="Paid at" className="whitespace-nowrap text-right text-fine text-slate-500">
+                      <TableCell label="Paid at" className="text-right text-fine text-slate-500">
                         <DateTime value={t.paid_at} />
                         {/* The case the log could not represent before this range matched on
                             either date: taken on one day, reversed on another. Flagged because
@@ -180,7 +180,7 @@ export default function TransactionHistoryPanel({ history, receipt, operations }
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
                           {/* Two different jobs, so two buttons. Reprint opens the dialog in
                               place — fastest when the patient is standing at the counter. Open
                               gives the receipt its own tab, which is what you want when you need

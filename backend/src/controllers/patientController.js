@@ -65,10 +65,10 @@ class PatientController {
       const linkedUserId = isClient ? req.user.userId : null;
 
       // Validations
-      if (!patientTypeId || !firstName || !lastName || !birthdate || !sex) {
+      if ((!isClient && !patientTypeId) || !firstName || !lastName || !birthdate || !sex) {
         return res.status(400).json({
           status: 'error',
-          message: 'Patient type, first name, last name, birthdate, and sex are required.'
+          message: 'First name, last name, birthdate, and sex are required, and at the desk the patient type.'
         });
       }
       if (rejectBadBirthdate(birthdate, res)) return undefined;
@@ -156,10 +156,10 @@ class PatientController {
       const { id } = req.params;
       const { patientTypeId, firstName, lastName, birthdate, sex, address, contactNumber, emergencyContact, email } = req.body;
 
-      if (!patientTypeId || !firstName || !lastName || !birthdate || !sex) {
+      if ((!req.user?.roles?.includes('Client') && !patientTypeId) || !firstName || !lastName || !birthdate || !sex) {
         return res.status(400).json({
           status: 'error',
-          message: 'Patient type, first name, last name, birthdate, and sex are required.'
+          message: 'First name, last name, birthdate, and sex are required, and at the desk the patient type.'
         });
       }
       if (rejectBadBirthdate(birthdate, res)) return undefined;

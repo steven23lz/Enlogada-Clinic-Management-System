@@ -78,7 +78,8 @@ const Receipt = ({ payment, bill, cashier, tendered, change, reprint = false }) 
   const net = parseFloat(payment.amount || 0);
   // The receipt reconciles from the payment row alone, so it stays correct even if the bill
   // object is unavailable on a reprint: amount + discount + vat === the VAT-inclusive gross.
-  const gross = net + discount + vat;
+  // [1.161.0] With what the HMO covers, or the lines below it do not add up to what was paid.
+  const gross = net + discount + vat + parseFloat(bill?.hmoCoverage || 0);
   const isCash = payment.payment_method === 'Cash';
 
   const sampleIdentity = isSampleIdentity(CLINIC);

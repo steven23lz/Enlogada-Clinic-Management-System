@@ -1,4 +1,5 @@
 // @ts-check
+import { dayWithNoBooking } from './helpers/booking.js';
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
 import { openBooking, attachDoctorRequest } from './helpers/portal.js';
@@ -101,20 +102,6 @@ test('a self-pay booking is confirmed without issuing the pass', async ({ page }
   expect(errors, `console errors: ${errors.join(' | ')}`).toHaveLength(0);
 });
 
-/**
- * A week clear of `farWorkingDay()`. Both tests in this file book, and `Date.now() % 40` is fixed
- * for the run, so they would otherwise land on the same date — where `POST /appointments` returns
- * the EXISTING booking with 200 instead of 201 and the second test quietly asserts against the
- * first one's visit. That is the trap CLAUDE.md records under "A booking spec must claim its own
- * slot".
- */
-function anotherWorkingDay() {
-  const d = new Date();
-  d.setDate(d.getDate() + 247 + (Date.now() % 40));
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 test('the patient can pay on the confirmation itself, without going to Appointments', async ({ page }) => {
   const ctx = await request.newContext();
 
@@ -127,7 +114,7 @@ test('the patient can pay on the confirmation itself, without going to Appointme
   const methods = (await (await ctx.get(`${API}/payment-methods`)).json()).data.methods || [];
   test.skip(methods.length === 0, 'Need a published payment method — SuperAdmin → Payment Methods.');
 
-  const date = anotherWorkingDay();
+  const date = await dayWithNoBooking(ctx, token, 335);
   const free = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, {
     headers: { Authorization: `Bearer ${token}` },
   })).json()).data.slots.filter((s) => s.available);

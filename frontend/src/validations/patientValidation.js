@@ -1,15 +1,16 @@
 // Mirrors backend/src/controllers/patientController.js's authoritative required-field list
 // (patientTypeId, firstName, lastName, birthdate, sex), which itself mirrors the NOT NULL
 // columns on the `patients` table in database/schema.sql.
-export function validatePatientProfile({ patientTypeId, firstName, lastName, birthdate, sex, email }) {
+// [1.161.0] A patient is not asked for a type, so only the desk's forms pass `needsType`.
+export function validatePatientProfile({ patientTypeId, firstName, lastName, birthdate, sex, email }, { needsType = true } = {}) {
   if (
-    !patientTypeId ||
+    (needsType && !patientTypeId) ||
     !String(firstName ?? '').trim() ||
     !String(lastName ?? '').trim() ||
     !birthdate ||
     !sex
   ) {
-    return 'Patient type, first name, last name, birthdate, and sex are required.';
+    return `${needsType ? 'Patient type, first' : 'First'} name, last name, birthdate, and sex are required.`;
   }
 
   // Optional, and it stays optional — a patient entitled to their result is never turned away for

@@ -195,7 +195,7 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                     )}
 
                     <TableCell className="py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
                         {test.result_id && (
                           <Button onClick={() => onViewResult(test)} variant="outline" size="xs">
                             <Eye className="h-3 w-3" />

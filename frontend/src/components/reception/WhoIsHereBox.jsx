@@ -229,6 +229,11 @@ export default function WhoIsHereBox({ lookup, checkIn, disposition, arrivals, q
                         </span>
                       )}
                     </span>
+                    {can.checkIn && p.next_booking && !checkIn.result && !checkIn.notice && (
+                      <Button type="button" size="sm" data-testid="match-next-booking" onClick={() => checkIn.verify(null, p.next_booking.reference)}>
+                        Booked {new Date(`${String(p.next_booking.date).slice(0, 10)}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}: Check in
+                      </Button>
+                    )}
                     {can.startVisit && (
                       <Button type="button" size="sm" variant="outline" onClick={() => checkIn.request('walkin', p)}>
                         {paidToday.has(p.id) ? 'Start another visit' : 'Start visit'}

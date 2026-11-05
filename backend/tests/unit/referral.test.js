@@ -11,7 +11,7 @@ const {
  *
  * A patient booking online stopped typing the doctor's name: they upload the doctor's signed
  * request instead, and that paper has to satisfy every rule the typed name used to — the HMO's
- * LOA and the Private patient type — or an HMO booking from home could never be made. These pin
+ * LOA — or an HMO booking from home could never be made. These pin
  * both directions, so the paper never becomes optional for a patient by accident and the typed
  * name never becomes the only way through.
  *
@@ -28,11 +28,6 @@ test('an HMO claim needs the doctor named, by a typed name or by the signed requ
   assertReferralIfRequired({ hasHmoClaim: true, hasDoctorRequest: true });
 });
 
-test('a Private patient is one a physician referred, and the request says who', () => {
-  refused(() => assertReferralIfRequired({ patientTypeName: 'Private' }));
-  assertReferralIfRequired({ patientTypeName: 'Private', hasDoctorRequest: true });
-});
-
 test('a Self Pay visit at the desk needs neither', () => {
   assertReferralIfRequired({ patientTypeName: 'Self Pay' });
 });
@@ -45,13 +40,6 @@ test("a patient's HMO booking must carry the signed request", () => {
     missingPaper
   );
   assertDoctorRequestIfRequired({ isStaff: false, hasDoctorRequest: true, hasHmoClaim: true });
-});
-
-test("a Private patient's booking must carry it too, whoever pays", () => {
-  assert.throws(
-    () => assertDoctorRequestIfRequired({ isStaff: false, hasDoctorRequest: false, patientTypeName: 'Private' }),
-    missingPaper
-  );
 });
 
 test('a self-pay booking may carry it and does not have to', () => {

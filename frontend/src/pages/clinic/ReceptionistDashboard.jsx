@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import SidebarLayout from '../../components/SidebarLayout';
+import ReferringPhysicianFields from '../../components/booking/ReferringPhysicianFields';
 import { Button } from '../../components/ui/button';
 import PageHeader from '../../components/ui/page-header';
 import { Input } from '../../components/ui/input';
@@ -402,7 +403,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
                     This test is part of {hmo.visitTest.package_name}. If the HMO covers only part of the package, its price ends and every test goes back to its own price.
                   </span>
                 )}
-                For <strong>{hmo.visitTest?.test_name}</strong>. This logs the request for Admin review — it does not approve coverage on its own, even if a code is entered below.
+                {hmo.claimable.length > 1 ? null : <>For <strong>{hmo.visitTest?.test_name}</strong>. </>}This logs the request for Admin review — it does not approve coverage on its own, even if a code is entered below.
               </DialogDescription>
             </DialogHeader>
 
@@ -412,6 +413,29 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   <span>{hmo.error}</span>
                 </div>
+              )}
+              {/* [1.161.0] A card usually covers the visit: a six-test package took six of this dialog. */}
+              {hmo.claimable.length > 1 && (
+                <fieldset data-testid="hmo-log-tests" className="m-0 space-y-1.5 border-0 p-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <legend className="field-label p-0">Tests on this claim</legend>
+                    <button
+                      type="button"
+                      onClick={hmo.selectAll}
+                      className="cursor-pointer border-0 bg-transparent p-0 text-fine font-semibold text-brand-700 underline underline-offset-2"
+                    >
+                      All {hmo.claimable.length}
+                    </button>
+                  </div>
+                  <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border border-line p-2">
+                    {hmo.claimable.map((t) => (
+                      <label key={t.id} className="flex cursor-pointer items-center gap-2 text-fine text-slate-700">
+                        <input type="checkbox" checked={hmo.selectedIds.includes(t.id)} onChange={() => hmo.toggleTest(t.id)} />
+                        {t.test_name}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               )}
               <div className="space-y-1.5">
                 <label className="field-label" htmlFor="receptionistdashboard-hmo-provider">HMO Provider <span className="text-rose-600">*</span></label>
@@ -465,6 +489,18 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
                   onChange={e => hmo.setApprovalCode(e.target.value)}
                 />
               </div>
+
+              {hmo.needsPhysician && (
+                <ReferringPhysicianFields
+                  idPrefix="hmo-ref"
+                  physician={hmo.physician}
+                  prc={hmo.physicianPrc}
+                  onPhysicianChange={hmo.setPhysician}
+                  onPrcChange={hmo.setPhysicianPrc}
+                  required
+                  reason="The HMO issues its LOA against the doctor who asked for these tests."
+                />
+              )}
 
               <div className="flex justify-end space-x-2 pt-2 border-t border-line">
                 <Button type="button" variant="outline" onClick={hmo.close}>Cancel</Button>

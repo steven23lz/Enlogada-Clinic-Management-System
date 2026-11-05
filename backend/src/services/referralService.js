@@ -11,20 +11,9 @@
  * physician, and a claim that cannot name one is difficult to reimburse. The clinic is left
  * chasing a doctor's details weeks later, against a patient who has long since gone home.
  *
- * Required for the 'Private' patient type, because at this clinic that type *means* "referred by
- * a private physician" — as opposed to a walk-in. A Private visit with no referring physician is
- * not a gap in the record, it is a record that contradicts itself.
- *
- * Not required for Self Pay. That leaves one case knowingly unenforced — a self-paying walk-in
- * can be given an X-ray with no requesting physician on file, and diagnostic radiography is
- * normally performed on a licensed physician's request regardless of who is paying. If the
- * clinic's licensing says otherwise, the fix is a `requires_referral` flag per test_categories
- * row rather than anything payer-shaped, because the requirement would then be about the
- * modality. Written down in migrations.md [1.23.0] so it stays a decision somebody can revisit.
+ * Not required otherwise. [1.161.0] Steven: the clinic accepts a patient without a doctor's note. A 'Private'
+ * patient type used to demand one, and it was the only thing that type did; it is retired.
  */
-
-/** The patient type that means "a physician sent them", as opposed to a walk-in. */
-const REFERRED_PATIENT_TYPE = 'Private';
 
 /**
  * Does this visit need a referring physician on it?
@@ -37,9 +26,6 @@ const REFERRED_PATIENT_TYPE = 'Private';
 function referralRequirement({ patientTypeName = null, hasHmoClaim = false } = {}) {
   if (hasHmoClaim) {
     return { required: true, because: 'an HMO claim needs the referring physician for the LOA' };
-  }
-  if (patientTypeName === REFERRED_PATIENT_TYPE) {
-    return { required: true, because: `a ${REFERRED_PATIENT_TYPE} patient is one a physician referred` };
   }
   return { required: false, because: null };
 }
@@ -70,8 +56,7 @@ function assertReferralIfRequired({ patientTypeName, hasHmoClaim, referringPhysi
  * When a patient's own booking must carry the doctor's signed request. [1.107.0]
  *
  * Exactly when `referralRequirement` says the visit must name its referring physician: an HMO
- * claim, whose LOA is issued against that paper, or a Private patient, which means "a physician
- * referred them". The patient no longer types the doctor's name [1.106.0], so on those bookings
+ * claim, whose LOA is issued against that paper. The patient no longer types the doctor's name [1.106.0], so on those bookings
  * the paper is the only way they can satisfy the rule, and one predicate keeps the two from
  * drifting apart.
  *
@@ -103,7 +88,6 @@ function normaliseReferral({ referringPhysician, referringPhysicianPrc } = {}) {
 }
 
 module.exports = {
-  REFERRED_PATIENT_TYPE,
   referralRequirement,
   assertReferralIfRequired,
   assertDoctorRequestIfRequired,

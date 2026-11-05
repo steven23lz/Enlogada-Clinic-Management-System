@@ -90,7 +90,7 @@ function DayRow({ day, onSave, onShowBookings, saving }) {
         {draft.isOpen ? (
           // On a phone card the pair wraps as "07:30 AM" over "to 05:00 PM": "to" stays with the
           // closing time instead of dangling after the opening one.
-          <div className="flex flex-wrap items-center justify-end gap-1.5 sm:flex-nowrap sm:justify-start">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 sm:justify-start 2xl:flex-nowrap">
             <Input
               type="time" value={draft.openTime} aria-label={day.day_name + ' opening time'}
               onChange={(e) => setDraft((d) => ({ ...d, openTime: e.target.value }))}

@@ -11,9 +11,7 @@ import { fixturePerson } from './helpers/people.js';
 // code implies:
 //
 //   - required on an HMO claim, because the LOA is issued against the referring physician;
-//   - required for the 'Private' patient type, which at this clinic means "a physician referred
-//     them" — such a visit naming nobody is a record that contradicts itself;
-//   - optional for Self Pay.
+//   - optional otherwise: the clinic accepts a patient without a doctor's note [1.161.0].
 //
 // The last line is a deliberate gap, recorded in migrations.md: a self-paying walk-in can be
 // X-rayed with no requesting physician on file. If the clinic's licensing says otherwise the fix
@@ -82,13 +80,11 @@ test.describe('Referring physician', () => {
     expect((await res.json()).data.visit.referring_physician).toBeNull();
   });
 
-  test('a Private walk-in is refused without one, and accepted with one', async () => {
-    const patient = await makePatient('Private');
+  test('Private is gone: a doctor is optional without an HMO claim, and kept when given', async () => {
+    const types = (await (await ctx.get(`${API}/patients/types`, { headers: auth(recToken) })).json()).data;
+    expect(JSON.stringify(types)).not.toContain('Private');
 
-    const without = await registerVisit(patient.id);
-    expect(without.status()).toBe(400);
-    expect((await without.json()).message).toMatch(/referring physician/i);
-
+    const patient = await makePatient('Self Pay');
     const withDoc = await registerVisit(patient.id, {
       referringPhysician: 'Dr. Amelia Santos',
       referringPhysicianPrc: '0142887',
@@ -97,12 +93,6 @@ test.describe('Referring physician', () => {
     const visit = (await withDoc.json()).data.visit;
     expect(visit.referring_physician).toBe('Dr. Amelia Santos');
     expect(visit.referring_physician_prc).toBe('0142887');
-  });
-
-  test('whitespace is not a doctor', async () => {
-    const patient = await makePatient('Private');
-    const res = await registerVisit(patient.id, { referringPhysician: '   ' });
-    expect(res.status()).toBe(400);
   });
 
   test('a licence number without a name is discarded rather than stored alone', async () => {
@@ -149,7 +139,7 @@ test.describe('Referring physician', () => {
   test('a later claim does not overwrite a physician the visit already names', async () => {
     // The first name may already be on a released report. Two documents naming different doctors
     // for one episode is worse than either of them being wrong.
-    const patient = await makePatient('Private');
+    const patient = await makePatient('Self Pay');
     const visit = (await (await registerVisit(patient.id, {
       referringPhysician: 'Dr. First Recorded',
     })).json()).data.visit;
@@ -174,7 +164,7 @@ test.describe('Referring physician', () => {
   });
 
   test('the physician reaches the report the department and the patient read', async () => {
-    const patient = await makePatient('Private');
+    const patient = await makePatient('Self Pay');
     const visit = (await (await registerVisit(patient.id, {
       referringPhysician: 'Dr. Corazon Villanueva', referringPhysicianPrc: '0176520',
     })).json()).data.visit;

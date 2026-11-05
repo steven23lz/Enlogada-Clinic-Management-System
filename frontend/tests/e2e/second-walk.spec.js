@@ -3,6 +3,10 @@ import { test, expect, request } from 'playwright/test';
 import { fixturePerson, FIXTURE_CONTACT } from './helpers/people.js';
 import { patientTypeId } from './helpers/patients.js';
 import { registerClient } from './helpers/accounts.js';
+import { signIn, signInTo } from './helpers/auth.js';
+import { openPortalTab } from './helpers/portal.js';
+import { appointmentForm } from './helpers/booking.js';
+import { nthWorkingDay } from './helpers/dates.js';
 import { API, CREDS, loginAs } from './helpers/payments.js';
 
 /**
@@ -44,7 +48,8 @@ test.describe('A second walk through the combinations [1.160.0]', () => {
     })).json()).data.patient;
     const res = await ctx.post(`${API}/visits`, { headers: auth(desk), data: { patientId: patient.id, visitType: 'Walk in', testIds: [lab[0].id, lab[1].id] } });
     expect(res.status(), await res.text()).toBe(201);
-    return { patient, visitId: (await res.json()).data.visit.id };
+    const { id, queue_number: ticket } = (await res.json()).data.visit;
+    return { patient, visitId: id, ticket };
   }
   const lines = async (v) => (await (await ctx.get(`${API}/tests/visit-tests/${v}`, { headers: auth(desk) })).json()).data.visitTests;
   const billOf = async (v) => (await (await ctx.get(`${API}/payments/bill/${v}`, { headers: auth(cashier) })).json()).data.bill;
@@ -126,6 +131,145 @@ test.describe('A second walk through the combinations [1.160.0]', () => {
 
     expect((await ctx.delete(`${API}/discounts/visit/${visitId}`, { headers: auth(cashier) })).status()).toBe(200);
     expect((await pay()).status(), 'at the full price it goes through').toBe(201);
+  });
+
+  test('[1.161.0] saving a staff account works: every edit answered 500', async () => {
+    const su = await loginAs(ctx, CREDS.superadmin);
+    const list = (await (await ctx.get(`${API}/admin/staff`, { headers: auth(su), params: { limit: 50 } })).json()).data;
+    const person = (list.staff || list.accounts || list.users || list).find((s) => s.email === 'lab@enlogada.com');
+    const res = await ctx.patch(`${API}/admin/staff/${person.id}`, {
+      headers: auth(su),
+      data: { firstName: person.first_name, lastName: person.last_name, email: person.email, contactNumber: person.contact_number || '09000000000' },
+    });
+    expect(res.status(), await res.text()).toBe(200);
+  });
+
+  test('[1.161.0] the Desk can raise a claim for a walk-in with no doctor named, on several tests at once', async ({ page }) => {
+    const { patient, visitId, ticket } = await patientAndVisit();
+    const all = await lines(visitId);
+    await signInTo(page, 'receptionist@enlogada.com', 'Desk');
+    await page.getByRole('searchbox', { name: "Who's here?" }).fill(patient.last_name);
+    const row = page.locator('tr', { hasText: ticket }).filter({ hasText: patient.last_name }).first();
+    await row.getByRole('button', { name: new RegExp(`Log HMO pre-authorization for ${all[0].test_name}`) }).click({ timeout: 20000 });
+
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('combobox').first().click();
+    await page.getByRole('option', { name: provider.name, exact: true }).click();
+    await dialog.getByRole('button', { name: 'Log HMO Request', exact: true }).click();
+    await expect(dialog, 'not sent without one').toBeVisible();
+    expect(await dialog.getByPlaceholder(/Dr\./).first().evaluate((el) => el.validity.valueMissing), 'asked for here, where it can be typed').toBe(true);
+
+    await dialog.getByTestId('hmo-log-tests').getByRole('button', { name: /^All \d+$/ }).click();
+    await dialog.getByPlaceholder(/Dr\./).first().fill('Dr. Reyes');
+    await dialog.getByRole('button', { name: 'Log HMO Request', exact: true }).click();
+    await expect(dialog).toBeHidden({ timeout: 15000 });
+
+    const bill = await billOf(visitId);
+    expect(bill.hmoPendingCount, 'one dialog, every test').toBe(all.length);
+    await expect(row.getByTestId('test-hmo-status').first()).toContainText('HMO waiting', { timeout: 20000 });
+    await expect(row.getByRole('button', { name: /Log HMO pre-authorization/ }), 'not offered twice').toHaveCount(0);
+  });
+
+  test('[1.161.0] the receipt adds up when an HMO covers part of the bill', async ({ page }) => {
+    const { patient, visitId, ticket } = await patientAndVisit();
+    const [first, second] = await lines(visitId);
+    await approve(await idOf(await claim([first.id])));
+    await signInTo(page, 'multirole@enlogada.com', 'Billing Queue');
+    await page.getByPlaceholder('Search ticket # or name...').fill(ticket);
+    await page.getByRole('button', { name: new RegExp(patient.last_name) }).first().click({ timeout: 20000 });
+    await page.locator('#cashierdashboard-cash-tendered').fill('100000');
+    await page.getByRole('button', { name: 'Take Payment', exact: true }).first().click();
+    const final = page.getByRole('dialog');
+    await final.getByRole('checkbox').first().check();
+    await final.getByRole('button', { name: /^Take ₱/ }).click();
+    const receipt = page.locator('.print-area').first();
+    const gross = Number(first.price_at_time) + Number(second.price_at_time);
+    await expect(receipt.getByText('Gross amount').locator('..')).toContainText(gross.toLocaleString('en-PH', { minimumFractionDigits: 2 }), { timeout: 20000 });
+  });
+
+  test('[1.161.0] someone early for a booking is offered it, not only a new visit', async ({ page }) => {
+    const person = fixturePerson();
+    const email = `second-walk-early-${Date.now()}@enlogada-e2e.test`;
+    const { token } = await registerClient(ctx, { ...person, email, password: 'Password123!' });
+    const profile = (await (await ctx.post(`${API}/patients`, {
+      headers: auth(token), data: { firstName: person.firstName, lastName: person.lastName, birthdate: '1991-09-19', sex: 'Male', contactNumber: FIXTURE_CONTACT },
+    })).json()).data.patient;
+    expect(profile.patient_type_name ?? 'Self Pay', 'a patient is not asked').toBe('Self Pay');
+    const date = nthWorkingDay(30);
+    const slot = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth(desk) })).json()).data.slots.find((s) => s.available);
+    const booked = await ctx.post(`${API}/appointments`, {
+      headers: auth(token),
+      multipart: appointmentForm({ patientId: profile.id, scheduledDate: date, scheduledTime: slot.time, testIds: [lab[0].id] }, { doctorRequest: false }),
+    });
+    expect(booked.status(), await booked.text()).toBe(201);
+
+    await signInTo(page, 'receptionist@enlogada.com', 'Desk');
+    await page.getByRole('searchbox', { name: "Who's here?" }).fill(person.lastName);
+    const match = page.getByTestId('desk-match').filter({ hasText: person.fullName }).first();
+    await match.getByTestId('match-next-booking').click({ timeout: 20000 });
+    await expect(page.getByTestId('booking-card')).toContainText(person.fullName);
+    await expect(page.getByTestId('booking-other-day')).toBeVisible();
+  });
+
+  test('[1.161.0] an open portal keeps up with what the clinic did, with no Refresh', async ({ page }) => {
+    test.setTimeout(90000);
+    const person = fixturePerson();
+    const email = `second-walk-open-${Date.now()}@enlogada-e2e.test`;
+    const { token } = await registerClient(ctx, { ...person, email, password: 'Password123!' });
+    const profile = (await (await ctx.post(`${API}/patients`, {
+      headers: auth(token), data: { firstName: person.firstName, lastName: person.lastName, birthdate: '1991-09-19', sex: 'Male', contactNumber: FIXTURE_CONTACT },
+    })).json()).data.patient;
+    const date = nthWorkingDay(31);
+    const slot = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth(desk) })).json()).data.slots.find((s) => s.available);
+    const { appointment } = (await (await ctx.post(`${API}/appointments`, {
+      headers: auth(token),
+      multipart: appointmentForm({ patientId: profile.id, scheduledDate: date, scheduledTime: slot.time, testIds: [lab[0].id] }, { doctorRequest: false }),
+    })).json()).data;
+
+    await signIn(page, email, 'Password123!');
+    const pay = page.locator(`[data-testid="portal-need"][data-need="pay-${appointment.id}"]`);
+    await expect(pay).toBeVisible({ timeout: 20000 });
+
+    const paid = await ctx.post(`${API}/payments`, {
+      headers: auth(cashier), data: { patientVisitId: appointment.patient_visit_id, paymentMethod: 'Cash', amount: Number((await billOf(appointment.patient_visit_id)).totalAmount) },
+    });
+    expect(paid.status(), await paid.text()).toBe(201);
+
+    await page.waitForTimeout(16000);
+    await openPortalTab(page, 'appointments');
+    await openPortalTab(page, 'home');
+    await expect(pay, 'no longer told to pay what is paid').toHaveCount(0, { timeout: 15000 });
+  });
+
+  test('[1.161.0] sales by service still add up after a receipt is reversed and the visit re-billed at another price', async () => {
+    const su = await loginAs(ctx, CREDS.superadmin);
+    const pkg = (await (await ctx.get(`${API}/packages`)).json()).data.packages.find((p) => !p.name.startsWith('E2E '));
+    const person = fixturePerson();
+    const patient = (await (await ctx.post(`${API}/patients`, {
+      headers: auth(desk),
+      data: { patientTypeId: await patientTypeId(ctx, API, desk, 'Self Pay'), firstName: person.firstName, lastName: person.lastName, birthdate: '1985-06-20', sex: 'Female', contactNumber: FIXTURE_CONTACT },
+    })).json()).data.patient;
+    const visitId = (await (await ctx.post(`${API}/visits`, { headers: auth(desk), data: { patientId: patient.id, visitType: 'Walk in', packageIds: [pkg.id] } })).json()).data.visit.id;
+    const [line] = await lines(visitId);
+    const id = await idOf(await claim([line.id]));
+    await approve(id);
+    const pay = async () => ctx.post(`${API}/payments`, {
+      headers: auth(cashier), data: { patientVisitId: visitId, paymentMethod: 'Cash', amount: Number((await billOf(visitId)).totalAmount) },
+    });
+    const first = (await (await pay()).json()).data.payment;
+    const back = await ctx.post(`${API}/payments/${first.id}/refund`, {
+      headers: auth(su), data: { kind: 'recorded_by_mistake', reason: 'Recorded on the wrong visit', returnedVia: 'Cash' },
+    });
+    expect(back.status(), await back.text()).toBe(201);
+    const row = (await (await ctx.get(`${API}/hmo/request/${id}`, { headers: auth(admin) })).json()).data.request.tests[0];
+    await ctx.put(`${API}/hmo/request-test/${row.id}`, { headers: auth(admin), data: { approvalStatus: 'Rejected', decisionReason: REASON } });
+    expect((await pay()).status()).toBe(201);
+
+    const day = new Date();
+    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    const { report } = (await (await ctx.get(`${API}/reports/operations`, { headers: auth(su), params: { startDate: date, endDate: date } })).json()).data;
+    const summed = report.billing.byService.reduce((total, r) => total + Number(r.net), 0);
+    expect(Math.abs(summed - Number(report.billing.totals.collected))).toBeLessThan(1);
   });
 
   test('a name is a name, a phone has digits, and one account holds one of each person', async () => {

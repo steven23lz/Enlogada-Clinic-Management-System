@@ -231,9 +231,9 @@ class UserRepository {
   async updateStaffDetails(userId, { firstName, lastName, email, contactNumber }) {
     const queryText = `
       UPDATE users
-      SET first_name = $1, last_name = $2, email = $3, contact_number = $4, updated_at = CURRENT_TIMESTAMP,
+      SET first_name = $1, last_name = $2, email = $3::text, contact_number = $4, updated_at = CURRENT_TIMESTAMP,
           -- A new address has proven nothing yet. [1.136.0]
-          email_verified_at = CASE WHEN LOWER(email) = LOWER($3) THEN email_verified_at END
+          email_verified_at = CASE WHEN LOWER(email) = LOWER($3::text) THEN email_verified_at END
       WHERE id = $5
       RETURNING id, first_name, last_name, email, contact_number, status, created_at
     `;

@@ -265,7 +265,10 @@ class ReportRepository {
              COUNT(*)::int                                              AS sold,
              SUM(l.price_at_time)::numeric(12,2)                        AS gross,
              SUM(CASE WHEN l.covered THEN 0
-                      ELSE l.price_at_time - (p.deducted * COALESCE(l.share, 0)) END)::numeric(12,2) AS net
+                      -- What the receipt took, spread by share. [1.161.0] Price less the deduction was ₱10 out
+                      -- when a receipt was reversed and the visit re-billed at another price before paying again:
+                      -- the first receipt was being read against prices it was never issued on.
+                      ELSE p.collected * COALESCE(l.share, 0) END)::numeric(12,2) AS net
         FROM shared l
         JOIN paid p ON p.patient_visit_id = l.patient_visit_id
        GROUP BY l.test_name, l.category_name

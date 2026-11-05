@@ -1055,7 +1055,6 @@ INSERT INTO roles (name) VALUES
 
 INSERT INTO patient_types (name) VALUES
 ('HMO'),
-('Private'),
 ('Self Pay');
 
 -- [1.50.0] '2D Echo' removed: the clinic does not offer it. 'ECG' is likewise not offered and its

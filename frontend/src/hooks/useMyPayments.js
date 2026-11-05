@@ -16,18 +16,21 @@ export function useMyPayments() {
   // record of it. Same omission as useMyResultHistory had, and the same fix.
   const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const load = useCallback(async ({ quiet = false } = {}) => {
+    if (!quiet) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const response = await api.get('/payments/my-payments');
       setPayments(response.data.data.payments || []);
     } catch (err) {
+      if (quiet) return;
       console.error('Failed to fetch payment history:', err);
       setPayments([]);
       setError('Your payment history could not be loaded just now. Please try again.');
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, []);
 

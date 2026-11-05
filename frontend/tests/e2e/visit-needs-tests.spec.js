@@ -55,12 +55,13 @@ test.describe('A visit carries its tests from the start', () => {
 
   test('a visit with no tests is refused, and nothing is created', async () => {
     const person = fixturePerson();
+    const before = (await search(person)).length;
     const res = await ctx.post(`${API}/visits`, {
       headers: auth(reception), data: { patient: newPatient(person), visitType: 'Walk in' },
     });
     expect(res.status()).toBe(400);
     expect((await res.json()).message).toMatch(/at least one test or package/i);
-    expect(await search(person), 'no record without its visit').toHaveLength(0);
+    expect(await search(person), 'no record without its visit').toHaveLength(before);
   });
 
   test('a new patient, the visit, its ticket and its tests come from one request', async () => {
@@ -79,11 +80,12 @@ test.describe('A visit carries its tests from the start', () => {
 
   test('a test that cannot be attached leaves no record behind', async () => {
     const person = fixturePerson();
+    const before = (await search(person)).length;
     const res = await ctx.post(`${API}/visits`, {
       headers: auth(reception), data: { patient: newPatient(person), visitType: 'Walk in', testIds: [99999999] },
     });
     expect(res.status()).toBe(404);
-    expect(await search(person), 'all or nothing').toHaveLength(0);
+    expect(await search(person), 'all or nothing').toHaveLength(before);
   });
 
   test('someone already on file is asked about, not copied', async () => {

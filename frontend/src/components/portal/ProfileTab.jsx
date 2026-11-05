@@ -1,7 +1,6 @@
 import React from 'react';
 import { Inbox, Pencil, ShieldCheck, UserPlus, UserRound, Users } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
 import { Panel, PanelHeader, PanelBody } from '../ui/panel';
 import ProfileFormDialog from './ProfileFormDialog';
 
@@ -81,14 +80,6 @@ export default function ProfileTab({ profiles, reference, invitations = null, on
                       <dd className="m-0 text-note font-semibold text-ink">{value}</dd>
                     </div>
                   ))}
-                  <div className="flex items-center justify-between gap-3 px-5 py-3">
-                    <dt className="text-fine text-ink-muted">Billing category</dt>
-                    <dd className="m-0">
-                      <Badge variant="secondary" className="bg-brand-50 text-meta font-bold text-brand-700">
-                        {patient.patient_type_name}
-                      </Badge>
-                    </dd>
-                  </div>
                 </dl>
               </PanelBody>
             </Panel>
@@ -121,7 +112,6 @@ export default function ProfileTab({ profiles, reference, invitations = null, on
                       <span className="min-w-0">
                         <span className="block truncate text-note font-semibold text-ink">{p.first_name} {p.last_name}</span>
                         <span className="block text-fine text-ink-muted">
-                          {p.patient_type_name || 'Patient'}
                           {/* Put here by the clinic, by invitation, rather than added by hand. [1.136.0] */}
                           {p.from_clinic && <span data-testid="family-from-clinic"> · From the clinic</span>}
                         </span>
@@ -150,8 +140,8 @@ export default function ProfileTab({ profiles, reference, invitations = null, on
             </p>
           </Panel>
 
-          <ProfileFormDialog profiles={profiles} reference={reference} mode="add" />
-          <ProfileFormDialog profiles={profiles} reference={reference} mode="edit" />
+          <ProfileFormDialog profiles={profiles} mode="add" />
+          <ProfileFormDialog profiles={profiles} mode="edit" />
         </div>
   );
 }

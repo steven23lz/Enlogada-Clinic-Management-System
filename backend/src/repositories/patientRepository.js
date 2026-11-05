@@ -128,6 +128,11 @@ class PatientRepository {
     return rows.length > 0;
   }
 
+  async findPatientTypeIdByName(name) {
+    const { rows } = await db.query('SELECT id FROM patient_types WHERE name = $1', [name]);
+    return rows[0]?.id ?? null;
+  }
+
   /** A profile on this account with the same name and birthdate, whatever its case or spacing. [1.160.0] */
   async findSameOnAccount(userId, { firstName, lastName, birthdate }) {
     const { rows } = await db.query(
@@ -445,6 +450,16 @@ class PatientRepository {
               WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid'
             )
         ) as unpaid_visit_count,
+        -- [1.161.0] The next booking not checked in. Someone arriving a day early was only offered
+        -- Start visit, under "1 unpaid visit", with nothing to say that visit was this booking.
+        (
+          SELECT json_build_object('reference', a.appointment_reference, 'date', a.scheduled_date, 'time', a.scheduled_time)
+            FROM appointments a
+            JOIN patient_visits pv ON pv.id = a.patient_visit_id
+           WHERE pv.patient_id = p.id AND a.status = 'Pending' AND a.scheduled_date >= CURRENT_DATE
+           ORDER BY a.scheduled_date, a.scheduled_time
+           LIMIT 1
+        ) as next_booking,
         (
           SELECT COUNT(*) FROM visit_tests vt
           JOIN patient_visits pv ON pv.id = vt.patient_visit_id

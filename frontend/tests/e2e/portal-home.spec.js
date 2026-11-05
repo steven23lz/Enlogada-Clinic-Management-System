@@ -134,8 +134,7 @@ test('a new account adds its first patient from Profile, and the chip then shows
   await dialog.getByLabel('First name').fill(person.firstName);
   await dialog.getByLabel('Last name').fill(person.lastName);
   await dialog.locator('#add-profile-birthdate').fill('1992-03-14');
-  await dialog.getByLabel('Billing category').click();
-  await page.getByRole('option', { name: 'Self Pay', exact: true }).click();
+  await expect(dialog.getByLabel('Billing category'), 'a patient is not asked [1.161.0]').toHaveCount(0);
   await dialog.getByRole('button', { name: 'Save profile' }).click();
 
   await expect(dialog).toBeHidden({ timeout: 15000 });

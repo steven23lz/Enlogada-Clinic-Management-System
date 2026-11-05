@@ -21,23 +21,26 @@ export function useMyResultHistory({ patientId } = {}) {
   // failed is the worst version of the mistake failure-states.spec.js was written about.
   const [error, setError] = useState('');
 
-  const load = useCallback(async (id) => {
+  const load = useCallback(async (id, { quiet = false } = {}) => {
     if (!id) {
       setHistory([]);
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError('');
+    if (!quiet) {
+      setLoading(true);
+      setError('');
+    }
     try {
       const response = await api.get(`/results/history/${id}`);
       setHistory(response.data.data.results);
     } catch (err) {
+      if (quiet) return;
       console.error('Failed to fetch diagnostic history:', err);
       setHistory([]);
       setError('Your results could not be loaded just now. Please try again.');
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, []);
 
@@ -100,7 +103,7 @@ export function useMyResultHistory({ patientId } = {}) {
     search, setSearch,
     pendingCount, completedCount,
     loading, error,
-    reload: () => load(patientId),
+    reload: (options) => load(patientId, options),
   };
 }
 

@@ -411,11 +411,6 @@ class AppointmentService {
         throw error;
       }
 
-      // The same rule the front desk applies when it registers a walk-in: a 'Private' patient is
-      // by definition one a physician referred, so the booking has to say who. It was enforced at
-      // the desk and on any HMO claim, but not on an online self-pay booking — so a patient could
-      // book from home in a state reception would have refused at the counter.
-      //
       // Still ahead of the transaction, so a booking that cannot succeed never takes the slot's
       // advisory lock, and inside the try so a rejection still discards the uploaded card.
       //
@@ -439,9 +434,8 @@ class AppointmentService {
         throw error;
       }
       payerName = `${bookingPatient.first_name} ${bookingPatient.last_name}`;
-      // [1.107.0] A patient's HMO booking, or a Private patient's, carries the doctor's signed
-      // request, and that paper also answers "who referred them" — so a patient no longer types
-      // the doctor's name. Optional for self-pay.
+      // [1.107.0] A patient's HMO booking carries the doctor's signed request, and that paper also
+      // answers "who referred them", so a patient no longer types the doctor's name. Optional otherwise.
       assertDoctorRequestIfRequired({
         isStaff: isStaffUser(requestingUser),
         hasDoctorRequest: Boolean(doctorRequestFile),

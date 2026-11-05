@@ -397,10 +397,20 @@ class VisitRepository {
     // multi-second load once the daily active-visit count grew large during the UI/UX audit).
     if (visits.length > 0) {
       const testsQuery = `
-        SELECT vt.id, vt.patient_visit_id, vt.status as test_status, vt.price_at_time, t.name as test_name, tc.name as category_name
+        SELECT vt.id, vt.patient_visit_id, vt.status as test_status, vt.price_at_time, t.name as test_name, tc.name as category_name,
+               -- [1.161.0] What the Desk's HMO dialog needs: without these it offered a claim on a test that
+               -- already had one, and never showed the package rule.
+               vt.package_id, tp.name AS package_name,
+               (SELECT ${hmoEffectiveStatus('hr', 'hrt')}
+                  FROM hmo_request_tests hrt
+                  JOIN hmo_requests hr ON hr.id = hrt.hmo_request_id
+                 WHERE hrt.visit_test_id = vt.id
+                 ORDER BY hrt.created_at DESC
+                 LIMIT 1) AS hmo_status
         FROM visit_tests vt
         JOIN tests t ON vt.test_id = t.id
         JOIN test_categories tc ON t.category_id = tc.id
+        LEFT JOIN test_packages tp ON tp.id = vt.package_id
         WHERE vt.patient_visit_id = ANY($1::int[])
       `;
       const testsRes = await db.query(testsQuery, [visits.map(v => v.id)]);

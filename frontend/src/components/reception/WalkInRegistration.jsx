@@ -72,9 +72,6 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
   // at the bottom of a long form, and the number the receptionist reads out is at the top.
   const registrationSuccessRef = useScrollIntoViewOnSet(registrationSuccess);
   const [isRegistering, setIsRegistering] = useState(false);
-  const selectedPatientTypeName = patientTypes.find(
-    (t) => String(t.id) === String(newPatient.patientTypeId)
-  )?.name;
 
 
   // A record already on file for this name and birthdate. [1.129.0] The server refuses to make a
@@ -369,11 +366,6 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                     </div>
                   </div>
 
-                  {/* Shown for every patient type, because a self-paying patient who was referred
-                      still needs the doctor on the record — the report goes back to them. Only
-                      'Private' makes it mandatory, since at this clinic that type means "a physician
-                      sent them". The server enforces the same rule; this mirrors it so the
-                      receptionist is not told at submit what could have been said while typing. */}
                   <div className="space-y-1">
                     <label className="field-label" htmlFor="wi-address">Home Address</label>
                     <Input
@@ -448,12 +440,6 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                     prc={referringPhysicianPrc}
                     onPhysicianChange={setReferringPhysician}
                     onPrcChange={setReferringPhysicianPrc}
-                    required={selectedPatientTypeName === 'Private'}
-                    reason={
-                      selectedPatientTypeName === 'Private'
-                        ? 'A Private patient is one a physician referred, so the record needs to name them.'
-                        : null
-                    }
                     disabled={isRegistering}
                   />
 

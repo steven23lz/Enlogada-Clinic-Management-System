@@ -1,5 +1,22 @@
 # Database Migration & Schema History
 
+## [1.161.0] - 2026-11-05 (Clicking every screen as a real user)
+
+`migrateRetirePrivate.js`. Steven: "self pay and private it doesnt matter cause the clinic accept without doctors note", and to click every screen like a real user. A temporary walker signed
+in as all eight accounts and opened every screen, tab, button and dialog at desktop width, submitted each form empty, and opened each screen at 360 px; a patient and a walk-in were then taken through their whole journey by clicking. The walker was deleted afterwards at Steven's request; each find keeps its own test in `second-walk.spec.js`.
+
+- **Private is retired.** Its patients are Self Pay, and only an HMO claim asks for the doctor. A patient is not asked for a category at all; the desk still sets HMO or Self Pay, which prints on the report.
+- **Every staff account edit answered 500.** `$3` was read as varchar by the column and as text by `LOWER()`, and Postgres refuses. Since [1.136.0], and no spec saved one.
+- **An open portal did not keep up.** "Pay for your visit" stayed up after the cashier verified the payment, and "Not released yet" over a released report, until Refresh. It re-reads quietly now.
+- **The Desk could not raise an HMO claim for a walk-in with no doctor named.** The server asked for a name and the dialog had no box for it: a dead end.
+- **A six-test package took six claim dialogs and six Admin reviews.** The dialog ticks any tests on the visit, "All N" at once, and a test with a live claim no longer offers another.
+- **The receipt's sum was wrong under an HMO.** Gross ₱1,150, less HMO ₱500, paid ₱1,150. Gross now includes what the HMO covers.
+- **Someone early for a booking was offered only Start visit**, beside "1 unpaid visit" with nothing to say that was the booking. Their row offers the check-in now.
+- **The package rule never showed at the Desk**: the queue's tests did not carry the package name ([1.159.0]).
+- **Sales by service could be off the cash** when a reversed receipt's visit was re-billed before paying again. It spreads what each receipt took, so it always adds up.
+- **Production's request limit would have stopped a normal morning.** 100 per 15 minutes per address, when one idle reception terminal makes about 60 and a clinic's PCs share one address. It is 3,000 (`RATE_LIMIT_MAX`); sign-in keeps its own limit of 10.
+- Three `<div>` inside `<p>`, which browsers repair by breaking the page structure.
+
 ## [1.160.0] - 2026-11-05 (What a second walk through the combinations found)
 
 `migrateRefusedClaimLines.js` is data only. Steven: "can u check if theres more bug". Every portal figure matched its bill; these did not hold.

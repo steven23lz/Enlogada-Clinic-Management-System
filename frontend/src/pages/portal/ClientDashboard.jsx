@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LoadingState from '../../components/ui/loading-state';
 import { TabsContent } from '../../components/ui/tabs';
 import RescheduleDialog from '../../components/booking/RescheduleDialog';
@@ -22,6 +22,7 @@ import AppointmentsTab from '../../components/portal/AppointmentsTab';
 import PaymentsTab from '../../components/portal/PaymentsTab';
 import ProfileTab from '../../components/portal/ProfileTab';
 import RefreshButton from '../../components/ui/refresh-button';
+import { usePolling } from '../../hooks/usePolling';
 import { useFreshness } from '../../hooks/useFreshness';
 
 /**
@@ -80,7 +81,26 @@ const ClientDashboard = ({ onNavigate, tab = 'home', onTabChange }) => {
   // One control for all three lists. A patient thinks "has anything changed?", not "reload my
   // payments"; and their own data is a handful of rows, so fetching all three costs nothing.
   const portalLoading = results.loading || bookings.loading || payments.loading;
-  const updatedAt = useFreshness(portalLoading, results.error || bookings.error || payments.error);
+  const pressedAt = useFreshness(portalLoading, results.error || bookings.error || payments.error);
+
+  // [1.161.0] It keeps up by itself. A patient with this open saw "Pay for your visit" after the cashier
+  // had verified the payment, and "Not released yet" over a released report, until they pressed Refresh:
+  // on a tab change, on coming back to the window, and every 90 seconds. At most every 15 seconds, and
+  // quietly: no skeleton, and a failed read leaves what is on screen.
+  const lastRead = useRef(Date.now());
+  const [quietAt, setQuietAt] = useState(null);
+  const keepUp = async () => {
+    if (Date.now() - lastRead.current < 15000) return;
+    lastRead.current = Date.now();
+    await Promise.all([
+      results.reload?.({ quiet: true }), bookings.reload?.({ quiet: true }),
+      payments.reload?.({ quiet: true }), visits.reload?.({ quiet: true }),
+    ]);
+    setQuietAt(new Date());
+  };
+  usePolling(keepUp, 90000);
+  useEffect(() => { keepUp(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tab]);
+  const updatedAt = quietAt && (!pressedAt || quietAt > pressedAt) ? quietAt : pressedAt;
   const refreshEverything = () => {
     results.reload?.();
     bookings.reload?.();
