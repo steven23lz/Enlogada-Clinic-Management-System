@@ -403,7 +403,8 @@ export default function PayBookingPanel({ visitId, amountDue, tests = [], onSett
     return (
       <div className="rounded-xl border border-line bg-slate-50 p-3.5">
         <p className="m-0 text-fine leading-relaxed text-slate-600">
-          Online payment is not set up yet. Please pay at the counter when you arrive.
+          Online payment is not available right now. Please call the clinic, or pay at the counter
+          before your time to pay runs out.
         </p>
       </div>
     );

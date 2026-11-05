@@ -51,7 +51,7 @@ export default function PaymentMethodsPanel({ paymentMethods }) {
           <EmptyState
             compact
             title="No payment methods yet"
-            description="Until one is added, patients have nowhere to send money and can only pay at the counter."
+            description="Until one is added, patients have nowhere to send money, so they cannot book online."
             action={<Button size="sm" onClick={paymentMethods.openAdd}>Add the first one</Button>}
           />
         ) : (
@@ -134,7 +134,7 @@ export default function PaymentMethodsPanel({ paymentMethods }) {
             {active.length === 0 && (
               <div className="border-t border-line bg-rose-50 px-4 py-2.5">
                 <p className="m-0 text-fine font-semibold text-rose-800">
-                  Every method is hidden, so patients cannot pay online at all — only at the counter.
+                  Every method is hidden, so patients cannot book online until one is offered again.
                 </p>
               </div>
             )}

@@ -14,8 +14,9 @@ import api from '../config/api';
 import { daysAgoStr, todayStr } from '../lib/date';
 import { categoryLabel } from '../lib/categories';
 import {
-  backupNeed, decisionNeed, departmentNeeds, deskNeeds, drawerNeed, failedNeed, greeting, tillNeeds, waitingToPay,
+  backupNeed, decisionNeed, departmentNeeds, deskNeeds, drawerNeed, failedNeed, greeting, paymentAccountNeed, tillNeeds, waitingToPay,
 } from '../lib/today';
+import { readOnlineBooking } from '../lib/onlineBooking';
 
 /** The department worklists, and the History each one's sent-or-not lives on. */
 const WORKLISTS = [
@@ -57,7 +58,7 @@ const body = (res) => res.data.data;
  * names what it could not check. No Try again beside each: they would all do what Refresh does.
  */
 const Today = ({ onSelectNav }) => {
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, hasRole } = useAuth();
   const home = homeNavIds(user?.roles || [], user?.permissions || [], user?.departments ?? null);
 
   const desk = home.includes('reception-queue');
@@ -77,6 +78,10 @@ const Today = ({ onSelectNav }) => {
     takeMoney: hasPermission('billing:process'),
     // [1.148.0] Whoever reads the Activity Log is told when the backups behind it are not working.
     backups: hasPermission('audit:view'),
+    // [1.153.0] Whoever oversees the clinic is told when patients cannot book. Publishing an account
+    // is SuperAdmin alone, by role (paymentMethodRoutes.js).
+    oversee: hasRole('Admin') || hasRole('SuperAdmin'),
+    publish: hasRole('SuperAdmin'),
   };
 
   const today = todayStr();
@@ -105,6 +110,7 @@ const Today = ({ onSelectNav }) => {
     // [1.150.0] Whoever closes the till, on the permission that counts the drawer.
     drawer: till && can.takeMoney && can.billing && (() => api.get('/cash-counts/status').then(body)),
     backup: can.backups && (() => api.get('/admin/backups').then(body)),
+    accounts: can.oversee && readOnlineBooking,
     // One request for every section's figures: the server returns only the slices this account holds.
     ops: (desk || till || worklists.length > 0 || clinic) && (() => api.get('/reports/operations', { params: range }).then((r) => body(r).report)),
     analytics: (worklists.length > 0 || clinic) && (can.results || can.visits)
@@ -132,6 +138,7 @@ const Today = ({ onSelectNav }) => {
   const analytics = reads.read('analytics');
   const before = reads.read('yesterday');
   const backup = reads.read('backup');
+  const accounts = reads.read('accounts');
   const drawer = reads.read('drawer');
   const hours = reads.read('hours');
 
@@ -170,6 +177,10 @@ const Today = ({ onSelectNav }) => {
   if (clinic && can.decide) {
     if (hmo.failed) couldNot.push('HMO requests');
     needs.push(...decisionNeed(hmo.data || [], now));
+  }
+  if (can.oversee) {
+    if (accounts.failed) couldNot.push('whether patients can book online');
+    needs.unshift(...paymentAccountNeed(accounts.data, { canPublish: can.publish }));
   }
   if (can.backups) {
     if (backup.failed) couldNot.push('the backups');

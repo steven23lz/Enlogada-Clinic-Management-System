@@ -19,7 +19,7 @@ import { usePaymentMethodAdmin } from '../../hooks/usePaymentMethodAdmin';
  * values each, plus this wrapper, in 774 lines. They are separate screens that happen to share a
  * tab strip, so they are separate files now, and their state is in a hook apiece.
  */
-const SuperAdminManagement = () => {
+const SuperAdminManagement = ({ intent = null }) => {
   const access = useAccessControl();
   // Held here rather than inside the grid, so switching to another tab and back keeps unsaved
   // changes instead of dropping them with the tab's content.
@@ -36,7 +36,8 @@ const SuperAdminManagement = () => {
         description="Who sees what, elevated accounts, and the clinic's own payment accounts — the capabilities an Admin account deliberately does not have."
       />
 
-      <Tabs defaultValue="matrix" className="w-full space-y-4">
+      {/* Today's "Publish an account" arrives on its tab. [1.153.0] */}
+      <Tabs defaultValue={intent?.tab || 'matrix'} className="w-full space-y-4">
         {/* Wraps on a phone: four tabs are wider than 390 px, and a fixed strip cut the last one to
             "Payment M". */}
         <TabsList className="max-w-full flex-wrap">
@@ -66,7 +67,12 @@ const SuperAdminManagement = () => {
         title={paymentMethods.confirmTarget?.is_active ? 'Hide from patients' : 'Offer to patients'}
         description={paymentMethods.confirmTarget && (
           paymentMethods.confirmTarget.is_active
-            ? `Stop offering "${paymentMethods.confirmTarget.label}"? Patients will no longer be shown this account. Payments already verified against it are untouched.`
+            ? `Stop offering "${paymentMethods.confirmTarget.label}"? Patients will no longer be shown this account. Payments already verified against it are untouched.${
+              // [1.153.0] The last one closes online booking, which should not be a surprise.
+              paymentMethods.methods.filter((m) => m.is_active).length === 1
+                ? ' This is the only account offered, so patients will not be able to book online until one is offered again.'
+                : ''
+            }`
             : `Offer "${paymentMethods.confirmTarget.label}" again? Patients will be shown this account when they pay online.`
         )}
         confirmLabel={paymentMethods.confirmTarget?.is_active ? 'Hide it' : 'Offer it'}

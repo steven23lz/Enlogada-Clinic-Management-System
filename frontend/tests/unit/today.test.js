@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   greeting, minutesBetween, listWords, waitingToPay, bookingState, todaysBookings,
-  deskNeeds, NO_TESTS_SHOWN, tillNeeds, departmentNeeds, decisionNeed, failedNeed, backupNeed, timeLeft, drawerNeed,
+  deskNeeds, NO_TESTS_SHOWN, tillNeeds, departmentNeeds, decisionNeed, failedNeed, backupNeed, paymentAccountNeed, timeLeft, drawerNeed,
   topServices, hoursSoFar, departmentRows, nextSevenDays,
 } from '../../src/lib/today.js';
 import { formatTime12 } from '../../src/lib/date.js';
@@ -243,6 +243,25 @@ describe('drawerNeed', () => {
 });
 
 // [1.148.0] Said only when something is wrong: a working backup is not something to do.
+describe('paymentAccountNeed', () => {
+  it('says nothing while booking is open, or before the read has come back', () => {
+    expect(paymentAccountNeed({ open: true }, { canPublish: true })).toEqual([]);
+    expect(paymentAccountNeed(null, { canPublish: true })).toEqual([]);
+  });
+
+  it('gives the SuperAdmin the button to the place that fixes it', () => {
+    const [need] = paymentAccountNeed({ open: false }, { canPublish: true });
+    expect(need.id).toBe('payment-account');
+    expect(need.action).toEqual({ label: 'Publish an account', go: 'superadmin', intent: { tab: 'payments' } });
+  });
+
+  it('tells an Admin who to ask, with no button for a screen it cannot open', () => {
+    const [need] = paymentAccountNeed({ open: false });
+    expect(need.action).toBeUndefined();
+    expect(need.detail).toMatch(/only the superadmin/i);
+  });
+});
+
 describe('backupNeed', () => {
   const now = at(10);
   const hoursAgo = (h) => new Date(now.getTime() - h * 3600000).toISOString();

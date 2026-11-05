@@ -1,6 +1,6 @@
 # Handoff: open threads
 
-Last updated 2026-11-05, after [1.152.0]. For the next Claude Code agent working in this repo.
+Last updated 2026-11-05, after [1.153.0]. For the next Claude Code agent working in this repo.
 CLAUDE.md and the project memory load on their own; this file holds what they do not.
 
 The diagram update this file used to brief is done: [1.133.0] made it and [1.134.0] checked it
@@ -36,12 +36,10 @@ built; each fix below is what was agreed. If built, in this order: 3, then 2, th
 - **[1.151.0] / [1.152.0] What the patient walk left open.** Steven decided four of the six: no limit on
   unpaid bookings per account (one account may hold every slot of a day for its time to pay); a patient
   cannot rewrite the identity on a record with a released report; one transfer pays for one booking;
-  Back closes dialogs and moves between screens. Two were explained and await an answer:
-  1. **No payment account published and the gateway off.** A self-pay booking then has no time limit and
-     keeps its slot until its day has passed. Recommended refusing it and telling the patient to
-     contact the clinic.
-  2. **Booking on an archived record** succeeds, and archived records leave the Desk's search.
-     Recommended refusing it online.
+  Back closes dialogs and moves between screens. [1.153.0] closed online booking when no payment account
+  is published. One still awaits an answer:
+  - **Booking on an archived record** succeeds, though the Desk refuses a visit on one
+    (`visitService`) and archived records leave its search. Recommended refusing it online the same way.
   Also: the Terms now say a paid receipt is final and not refunded, which the clinic should read.
 - **[1.150.0] Cash count.** On another database run `node src/scripts/migrateCashCounts.js`. It assumes
   one drawer for the clinic, a choice made without Steven, to confirm: two drawers would need a count

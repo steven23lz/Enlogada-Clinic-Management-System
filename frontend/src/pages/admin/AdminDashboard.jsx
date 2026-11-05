@@ -24,7 +24,7 @@ import { findNavItem } from '../../config/navigation';
  * App routes only a destination this person holds (consoleForNav), so nothing below needs a screen
  * to fall back to.
  */
-const AdminDashboard = ({ activeNav = 'staff', onSelectNav }) => {
+const AdminDashboard = ({ activeNav = 'staff', onSelectNav, intent = null }) => {
   const { user } = useAuth();
 
   const renderContent = () => {
@@ -50,7 +50,7 @@ const AdminDashboard = ({ activeNav = 'staff', onSelectNav }) => {
       case 'superadmin':
         // The API enforces SuperAdmin-only and the nav item is hidden from Admin; this only avoids
         // drawing a broken screen for an activeNav that somehow ended up here.
-        return user?.roles?.includes('SuperAdmin') ? <SuperAdminManagement /> : null;
+        return user?.roles?.includes('SuperAdmin') ? <SuperAdminManagement intent={intent} /> : null;
       default:
         return null;
     }

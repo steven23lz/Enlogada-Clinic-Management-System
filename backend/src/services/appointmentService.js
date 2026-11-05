@@ -399,6 +399,17 @@ class AppointmentService {
       // booking waits on its HMO instead (see `provisional` below).
       assertMayBook(requestingUser, { hmo: Boolean(hmo), payNow });
 
+      // [1.153.0] Steven: no account published, no booking. Payment first has nothing to stand on
+      // otherwise: the patient has nowhere to send money, and with no time to pay, an unpaid booking
+      // held its slot until its day passed. An HMO booking too: refused, it has to be paid. A booking
+      // at the desk is paid there, so it needs no account. An Admin's Today says why nobody is booking.
+      if (!isStaffUser(requestingUser) && !paymentGatewayService.isConfigured()
+        && (await paymentMethodRepository.findActive()).length === 0) {
+        const error = new Error('Online booking is closed for now, because the clinic has no payment account set up. Please call the clinic, or come in as a walk-in.');
+        error.statusCode = 409;
+        throw error;
+      }
+
       // The same rule the front desk applies when it registers a walk-in: a 'Private' patient is
       // by definition one a physician referred, so the booking has to say who. It was enforced at
       // the desk and on any HMO claim, but not on an online self-pay booking — so a patient could
@@ -565,8 +576,8 @@ class AppointmentService {
         // this transaction, so it takes its slot outright.
         const selfPayOnline = !isStaffUser(requestingUser) && !hmo;
         const gatewayOn = paymentGatewayService.isConfigured();
-        const manualOn = selfPayOnline && !gatewayOn && (await paymentMethodRepository.findActive()).length > 0;
-        const payingOnline = (selfPayOnline && gatewayOn) ? true : manualOn ? 'manual' : false;
+        // [1.153.0] Without an account or the gateway a patient's booking was refused above.
+        const payingOnline = selfPayOnline ? (gatewayOn ? true : 'manual') : false;
 
         const appointment = await appointmentRepository.createAppointment({
           patientVisitId: visit.id,

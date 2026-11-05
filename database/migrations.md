@@ -1,5 +1,27 @@
 # Database Migration & Schema History
 
+## [1.153.0] - 2026-11-05 (No payment account published, no online booking)
+
+No migration. Steven: "of course no account payment published then of course no booking right? it
+should prompt in the admin side or super admin side". Before, with no account and the gateway off, a
+patient's booking went through with no time limit and held its slot until its day had passed.
+
+- **The server refuses a patient's booking** (409, `createAppointment`), HMO ones too, because a
+  refused claim has to be paid. A booking at the desk is paid there and needs no account. Bookings
+  already made keep their time to pay.
+- **The booking dialog says so before the form** (`booking-closed`, `lib/onlineBooking.js`), read each
+  time it opens. A failed read leaves the form up, and the server has the last word.
+- **Today tells whoever oversees the clinic** (`paymentAccountNeed`, first in "Needs you now",
+  `data-need="payment-account"`). The SuperAdmin's has "Publish an account", which arrives on the Payment
+  Methods tab (`intent.tab`); an Admin's says only the SuperAdmin can, with no button for a screen it
+  cannot open. Hiding the last account says what it will do before it does it.
+- **A spec's database needs an account published.** Every patient booking now does, so on a database
+  just built from `schema.sql` publish one first (`helpers/payments.js` `ensureMethod`). The demo seed's
+  online bookings log "skipped" without one.
+
+**Tests:** `no-payment-account.spec.js` (7). The real accounts are never hidden: the server's half runs in
+a rolled-back transaction (`e2eNoPaymentAccount.js`), and the screens get an empty list.
+
 ## [1.152.0] - 2026-11-05 (Steven's calls on what the patient walk found)
 
 No migration. Of the six rules [1.151.0] left open: a limit on unpaid bookings per account was

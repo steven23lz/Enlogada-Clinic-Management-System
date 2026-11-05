@@ -9,6 +9,8 @@ import EvidenceUpload from './EvidenceUpload';
 import BookingConfirmation from '../BookingConfirmation';
 import api from '../../config/api';
 import { ageFromBirthdate, formatAppointmentDate } from '../../lib/date';
+import { readOnlineBooking } from '../../lib/onlineBooking';
+import { useClinic } from '../../lib/clinic';
 import { DOCUMENT_MAX_EDGE } from '../../lib/cardImage';
 import { useEvidenceFile } from '../../hooks/useEvidenceFile';
 import { PlusCircle, AlertCircle } from 'lucide-react';
@@ -65,6 +67,18 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
   // slot the patient chose turned out to have gone.
   const [slotsRefreshKey, setSlotsRefreshKey] = useState(0);
 
+  // [1.153.0] No payment account published means no online booking, so say so before the form. Read
+  // each time the dialog opens. A failed read leaves it open: the server has the last word.
+  const clinic = useClinic();
+  const [bookingClosed, setBookingClosed] = useState(false);
+  useEffect(() => {
+    if (!showBooking) return undefined;
+    let current = true;
+    readOnlineBooking()
+      .then(({ open }) => { if (current) setBookingClosed(!open); })
+      .catch(() => { if (current) setBookingClosed(false); });
+    return () => { current = false; };
+  }, [showBooking]);
 
   // The card is identity evidence, so it must never outlive the context it was attached in.
   // Left in state it would follow the patient selector: attach your own card, close the dialog,
@@ -274,7 +288,25 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-xl">
-                      {bookingConfirmation ? (
+                      {bookingClosed && !bookingConfirmation ? (
+                        <div data-testid="booking-closed" className="space-y-4">
+                          <DialogHeader>
+                            <DialogTitle className="text-lg font-bold text-slate-900">
+                              Online booking is closed for now
+                            </DialogTitle>
+                            <DialogDescription>
+                              The clinic has no online payment account set up at the moment, and a booking
+                              online is paid for online. Please call {clinic.phone}, or come to the clinic
+                              as a walk-in.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="flex justify-end">
+                            <Button type="button" variant="outline" onClick={() => setShowBooking(false)}>
+                              Close
+                            </Button>
+                          </div>
+                        </div>
+                      ) : bookingConfirmation ? (
                         <BookingConfirmation
                           {...bookingConfirmation}
                           onClose={() => setShowBooking(false)}

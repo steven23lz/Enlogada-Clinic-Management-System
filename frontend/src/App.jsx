@@ -334,7 +334,7 @@ const MainApp = () => {
     [CONSOLE.CASHIER]: () => <CashierDashboard activeNav={resolvedNav} onSelectNav={selectNav} intent={navIntent} />,
     [CONSOLE.DIAGNOSTIC]: () => <DiagnosticDashboard activeNav={resolvedNav} onSelectNav={selectNav} intent={navIntent} />,
     [CONSOLE.SERVICES_CATALOG]: () => <ServicesCatalog activeNav={resolvedNav} onSelectNav={selectNav} />,
-    [CONSOLE.ADMIN]: () => <AdminDashboard activeNav={resolvedNav} onSelectNav={selectNav} />,
+    [CONSOLE.ADMIN]: () => <AdminDashboard activeNav={resolvedNav} onSelectNav={selectNav} intent={navIntent} />,
   }[targetConsole];
   if (screen) {
     return (

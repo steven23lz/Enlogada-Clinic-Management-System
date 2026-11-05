@@ -359,6 +359,28 @@ export function backupNeed(status, now = new Date()) {
 }
 
 /**
+ * No payment account published, so no patient can book online. [1.153.0] Told to whoever oversees the
+ * clinic, and it is the SuperAdmin alone who can publish one, so an Admin is told who to ask and gets
+ * no button for a screen it cannot open. Says nothing until the read has come back.
+ *
+ * @param {{open: boolean}|null} status  lib/onlineBooking.js
+ * @param {{canPublish?: boolean}} [options]
+ */
+export function paymentAccountNeed(status, { canPublish = false } = {}) {
+  if (!status || status.open) return [];
+  return [{
+    id: 'payment-account',
+    tone: 'rose',
+    icon: 'wallet',
+    title: 'Patients cannot book online',
+    detail: canPublish
+      ? 'No payment account is published, so online booking is closed. Publish one to open it again.'
+      : 'No payment account is published, so online booking is closed. Only the SuperAdmin can publish one: please ask them.',
+    ...(canPublish ? { action: { label: 'Publish an account', go: 'superadmin', intent: { tab: 'payments' } } } : {}),
+  }];
+}
+
+/**
  * What could not be checked, said once. Without it an empty list would read "nothing needs you"
  * over a request that failed — the most confident possible way to be wrong. [1.74.0]
  */
