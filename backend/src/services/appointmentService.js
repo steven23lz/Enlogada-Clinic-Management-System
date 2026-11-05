@@ -427,6 +427,16 @@ class AppointmentService {
         error.statusCode = 404;
         throw error;
       }
+      // [1.154.0] An archived record is read, not worked on. The Desk has refused a visit on one since
+      // [1.56.0], and a booking was the way round it: made online, for a record the front desk then
+      // could not find when the patient arrived. Past results stay readable; the clinic restores it.
+      if (bookingPatient.archived_at) {
+        const error = new Error(isStaffUser(requestingUser)
+          ? `${bookingPatient.first_name} ${bookingPatient.last_name}'s record is archived. Restore it on Patient Records before booking.`
+          : 'This patient record is inactive, so it cannot be booked online. Please contact the clinic, who can restore it.');
+        error.statusCode = 409;
+        throw error;
+      }
       payerName = `${bookingPatient.first_name} ${bookingPatient.last_name}`;
       // [1.107.0] A patient's HMO booking, or a Private patient's, carries the doctor's signed
       // request, and that paper also answers "who referred them" — so a patient no longer types

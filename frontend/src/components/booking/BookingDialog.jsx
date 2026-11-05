@@ -288,7 +288,26 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-xl">
-                      {bookingClosed && !bookingConfirmation ? (
+                      {selectedProfile?.archived_at && !bookingConfirmation ? (
+                        // [1.154.0] Said before the form, as for a clinic with no payment account.
+                        <div data-testid="booking-record-inactive" className="space-y-4">
+                          <DialogHeader>
+                            <DialogTitle className="text-lg font-bold text-slate-900">
+                              This record is inactive
+                            </DialogTitle>
+                            <DialogDescription>
+                              {selectedProfile.first_name}&apos;s record has been archived by the clinic, so it
+                              cannot be booked online. Past results can still be read here. Please call{' '}
+                              {clinic.phone}, and the clinic can restore it.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="flex justify-end">
+                            <Button type="button" variant="outline" onClick={() => setShowBooking(false)}>
+                              Close
+                            </Button>
+                          </div>
+                        </div>
+                      ) : bookingClosed && !bookingConfirmation ? (
                         <div data-testid="booking-closed" className="space-y-4">
                           <DialogHeader>
                             <DialogTitle className="text-lg font-bold text-slate-900">

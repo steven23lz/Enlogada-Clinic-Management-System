@@ -1,5 +1,15 @@
 # Database Migration & Schema History
 
+## [1.154.0] - 2026-11-05 (An archived record is read, not booked)
+
+No migration. Steven: "do whats best", after the usual process was explained: an inactive record is
+kept and readable, no new work starts on it, and the clinic restores it if the patient returns. The Desk
+has refused a visit on one since [1.56.0]; a booking was the way round it, made online for a record the
+front desk could not then find. `createAppointment` now refuses it (409), for a patient and for staff,
+each in their own words. The booking dialog says so before the form (`booking-record-inactive`), and past
+results stay readable. A paid booking missed before the record was archived can still be moved: that is
+money already taken. **Tests:** two more in `record-and-reference.spec.js`.
+
 ## [1.153.0] - 2026-11-05 (No payment account published, no online booking)
 
 No migration. Steven: "of course no account payment published then of course no booking right? it

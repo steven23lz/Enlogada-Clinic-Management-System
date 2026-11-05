@@ -161,6 +161,54 @@ test.describe('Records and references [1.152.0]', () => {
     await expect(dialog.locator('#edit-profile-first-name')).toBeEnabled();
   });
 
+  test('an archived record is not booked, by a patient or the desk, until the clinic restores it', async () => {
+    const owner = await client();
+    const adminToken = await loginAs(ctx, CREDS.admin);
+    const archive = (archived) => ctx.patch(`${API}/patients/${owner.profile.id}/archive`, { headers: auth(adminToken), data: { archived } });
+    expect((await archive(true)).status()).toBe(200);
+
+    const date = nthWorkingDay(100 + (Date.now() % 25));
+    const free = (await (await ctx.get(`${API}/appointments/availability`, { headers: auth(owner.token), params: { date } })).json())
+      .data.slots.filter((s) => s.available);
+    const form = () => appointmentForm({ patientId: owner.profile.id, scheduledDate: date, scheduledTime: free[0].time, testIds: [testId] }, { doctorRequest: false });
+
+    const refused = await ctx.post(`${API}/appointments`, { headers: auth(owner.token), multipart: form() });
+    expect(refused.status()).toBe(409);
+    expect((await refused.json()).message).toMatch(/inactive/i);
+
+    const multirole = await loginAs(ctx, { email: 'multirole@enlogada.com', password: PASSWORD });
+    const atDesk = await ctx.post(`${API}/appointments`, {
+      headers: auth(multirole),
+      data: {
+        patientId: owner.profile.id, scheduledDate: date, scheduledTime: free[0].time, testIds: [testId],
+        payment: { paymentMethod: 'Cash', amount: 1 },
+      },
+    });
+    expect(atDesk.status()).toBe(409);
+    expect((await atDesk.json()).message).toMatch(/archived/i);
+
+    // Still theirs to read.
+    const rows = (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth(owner.token) })).json()).data;
+    expect((rows.profiles || rows.patients || rows).map((p) => p.id)).toContain(owner.profile.id);
+    expect((await ctx.get(`${API}/results/history/${owner.profile.id}`, { headers: auth(owner.token) })).status()).toBe(200);
+
+    expect((await archive(false)).status()).toBe(200);
+    const restored = await ctx.post(`${API}/appointments`, { headers: auth(owner.token), multipart: form() });
+    expect(restored.status(), await restored.text()).toBe(201);
+  });
+
+  test('the patient is told before filling in a booking for an archived record', async ({ page }) => {
+    const owner = await client();
+    const adminToken = await loginAs(ctx, CREDS.admin);
+    expect((await ctx.patch(`${API}/patients/${owner.profile.id}/archive`, { headers: auth(adminToken), data: { archived: true } })).status()).toBe(200);
+
+    await signIn(page, owner.email, PASSWORD);
+    await page.getByRole('button', { name: 'Book a visit' }).first().click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByTestId('booking-record-inactive')).toBeVisible();
+    await expect(dialog.locator('#slotpicker-label'), 'no form to fill in').toHaveCount(0);
+  });
+
   test('a reference on another booking is refused, and says nothing of whose it was', async () => {
     const reference = uniqueReference();
     const a = await client();
