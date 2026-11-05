@@ -6,7 +6,7 @@ class VisitController {
     try {
       const {
         patientId, patient, confirmNewPatient, visitType, notes, referringPhysician, referringPhysicianPrc,
-        testIds, packageIds,
+        testIds, packageIds, confirmRepeatTests,
       } = req.body;
       const createdBy = req.user.userId;
 
@@ -31,6 +31,7 @@ class VisitController {
         referringPhysicianPrc,
         testIds,
         packageIds,
+        confirmRepeatTests: confirmRepeatTests === true,
         requestingUser: req.user,
       });
 

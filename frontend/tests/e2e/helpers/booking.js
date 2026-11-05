@@ -20,10 +20,14 @@ import { runScript } from './backendScript.js';
 
 const API_BASE = `${process.env.E2E_API_URL || 'http://localhost:5000'}/api`;
 let bookableCache;
+let nextBookable = 0;
 
 /**
  * An active Laboratory test to put on a booking. [1.124.0] A booking with no tests is refused
  * now, as the booking screen always required; specs that only need "a booking" book this one.
+ *
+ * A different one each call. [1.157.0] A patient cannot book the same test twice on one day, and
+ * these specs book the seeded client many times a day, each claiming its own slot.
  *
  * @param {import('playwright/test').APIRequestContext} ctx
  * @returns {Promise<number>}
@@ -31,9 +35,11 @@ let bookableCache;
 export async function bookableTestId(ctx) {
   if (!bookableCache) {
     const tests = (await (await ctx.get(`${API_BASE}/tests`)).json()).data.tests;
-    bookableCache = tests.find((t) => t.category_name === 'Laboratory' && t.is_active).id;
+    bookableCache = tests.filter((t) => t.category_name === 'Laboratory' && t.is_active).map((t) => t.id);
   }
-  return bookableCache;
+  const id = bookableCache[nextBookable % bookableCache.length];
+  nextBookable += 1;
+  return id;
 }
 
 /** A 1x1 PNG: genuinely an image, so the server's mime filter sees a real one. */

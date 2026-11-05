@@ -47,7 +47,7 @@ async function createLabVisitTest(apiContext, recToken) {
   // [1.129.0] A visit is opened with its tests.
   const visitRes = await apiContext.post(`${API}/visits`, {
     headers: { Authorization: `Bearer ${recToken}` },
-    data: { patientId: patient.id, visitType: 'Walk in', notes: '', testIds: [labTest.id] },
+    data: { patientId: patient.id, visitType: 'Walk in', confirmRepeatTests: true, notes: '', testIds: [labTest.id] },
   });
   const visit = (await visitRes.json()).data.visit;
 

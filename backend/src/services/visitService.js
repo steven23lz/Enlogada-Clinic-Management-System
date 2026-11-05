@@ -15,6 +15,7 @@ const testService = require('./testService');
 const packageService = require('./packageService');
 const patientService = require('./patientService');
 const { ValidationError, ConflictError, ForbiddenError } = require('../errors');
+const { assertNoRepeat, logConfirmed } = require('./repeatTestGuard');
 
 /** SuperAdmin bypasses, as `authorizePermissions` does; everyone else holds it or not. */
 const holds = (user, permission) =>
@@ -75,6 +76,7 @@ class VisitService {
   async registerVisit({
     patientId, patient: newPatient, confirmNewPatient = false, visitType, notes, createdBy,
     referringPhysician, referringPhysicianPrc, testIds = [], packageIds = [], requestingUser = null,
+    confirmRepeatTests = false,
   }) {
     const referral = normaliseReferral({ referringPhysician, referringPhysicianPrc });
     const ids = (list) => [...new Set((Array.isArray(list) ? list : [list]).filter((v) => v !== undefined && v !== null && v !== '').map((v) => parseInt(v, 10)))];
@@ -157,6 +159,16 @@ class VisitService {
       hasHmoClaim: false,
       referringPhysician: referral.referringPhysician,
     });
+    // [1.157.0] A second visit the same day for a test they already have. Asked before the ticket is
+    // drawn, for the reason above.
+    const repeats = await assertNoRepeat({
+      patientId,
+      patientName: `${patient.first_name} ${patient.last_name}`,
+      testIds: tests,
+      packageIds: packages,
+      requestingUser,
+      confirmed: confirmRepeatTests,
+    });
 
     // The ticket, the visit and its tests together: a visit is never in the queue empty.
     return await db.withTransaction(async () => {
@@ -173,6 +185,7 @@ class VisitService {
       // the bundle's share of the price.
       await packageService.attachPackages(visit.id, packages);
       await testService.attachTests(visit.id, tests);
+      await logConfirmed(repeats, { visitId: visit.id, requestingUser });
       return visit;
     });
   }

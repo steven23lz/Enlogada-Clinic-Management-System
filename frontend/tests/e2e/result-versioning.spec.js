@@ -71,7 +71,7 @@ test.describe('Result versioning', () => {
       .find((t) => t.category_name === 'Laboratory' && parseFloat(t.price) > 0);
     const visit = await (await apiContext.post(`${API}/visits`, {
       headers: auth(reception),
-      data: { patientId: patient.data.patient.id, visitType: 'Walk in', notes: 'e2e versioning', testIds: [firstLab.id] },
+      data: { patientId: patient.data.patient.id, visitType: 'Walk in', confirmRepeatTests: true, notes: 'e2e versioning', testIds: [firstLab.id] },
     })).json();
     const visitId = visit.data.visit.id;
 
@@ -234,7 +234,7 @@ test.describe('Amending an already-released result', () => {
       .find((t) => t.category_name === 'Laboratory' && parseFloat(t.price) > 0);
     const visit = await (await apiContext.post(`${API}/visits`, {
       headers: auth(reception),
-      data: { patientId: patient.data.patient.id, visitType: 'Walk in', notes: 'e2e amendment', testIds: [firstLab.id] },
+      data: { patientId: patient.data.patient.id, visitType: 'Walk in', confirmRepeatTests: true, notes: 'e2e amendment', testIds: [firstLab.id] },
     })).json();
     visitId = visit.data.visit.id;
 

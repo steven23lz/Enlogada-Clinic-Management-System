@@ -1,5 +1,46 @@
 # Database Migration & Schema History
 
+## [1.157.0] - 2026-11-05 (The same test twice)
+
+No schema change. Steven ticked every package and it was accepted. All five packages hold the same six
+tests, and `visit_tests` allows a test on a visit once, so the first package kept each shared test and the
+others were cut down to what was left, at whatever share of their price those few tests carried. Measured:
+
+| What was done | Screen | Bill |
+|---|---|---|
+| All five packages | ₱9,490.00 | ₱3,214.40 (C added nothing at all) |
+| A + B, or B added to a visit with A, or a booked slot re-sent with B | ₱3,390.00 | ₱1,887.18, under B's own ₱1,940 |
+| A + B, then A taken off | | "Package B": 2 tests, ₱437.18 |
+| CBC, or Package A, in two slots on one day | accepted | two bills, each final |
+| A package at ₱99,999 for two tests worth ₱370 | saved | |
+
+**Two packages sharing a test cannot be on one visit.** `packageService.attachPackages`, the one door for
+booking, the Desk and Edit Tests: 400 in one request, 409 against a package already on the visit, the visit's
+row locked first. The same package again changes nothing, so a lost reply can be re-sent, paid or not.
+`utils/packageOverlap.js`, unit-tested. Packages that share nothing still go together, each at its own price.
+A package and a test inside it stays one price, and a package still takes over a test the visit has alone
+([1.71.0]). `TestPicker` stops at the tick (`lib/packageOverlap.js`), dims the row, says which package it shares
+with, and states the rule once. Given `onVisit`, Edit Tests marks what the visit already has, and its total is
+what the bill would gain rather than the package's whole price.
+
+**One patient, one test, one day** (`services/repeatTestGuard.js`). Each booking is paid separately and a receipt
+is final, so a double booking cost the patient for good. A different test that day is still fine (fasting bloods,
+then an ultrasound), as are another day and another profile on the account. A patient is refused 409 when booking
+or when MOVING a booking onto that day (`confirmRepeatTests` means nothing from a Client token). A booking whose
+time to pay ran out does not count. The desk is ASKED, because a doctor may want a second reading:
+`POST /visits` and `POST /tests/visit-tests` answer 409 with `details.repeatTests`, `RepeatTestPrompt` asks, and
+`confirmRepeatTests: true` goes through and writes `visit_test.repeat_confirmed` to the Activity Log. Staff bookings
+and staff moves are exempt: no screen asks there, and a paid booking nobody came for has to be movable.
+
+**A package costs no more than its tests bought separately** (`packageService.assertWorthBuying`), checked when the
+price or the tests are set, never when retiring one. **Two on offer cannot share a name** (`assertNameFree`, 409): the
+booking screen could not tell them apart, and a service's name was already unique in its department.
+
+Left as it is, on purpose: a test switched off stays inside a package that holds it (`packageRepository`'s note: it
+can stop being sold alone and stay in the bundle). `seedDemoScenario.js` passes `confirmRepeatTests`, because its
+history is created today and backdated afterwards, and removes those log lines. `bookableTestId` returns a different
+test each call, because specs book the seeded client many times a day. **Tests:** `package-overlap.spec.js`, two unit files.
+
 ## [1.156.0] - 2026-11-05 (Taking a mistake back, and what a patient agrees to)
 
 `migrateCorrections.js` (`--rollback` reverses it): `test_results.withdrawn_at/_by/_reason`,

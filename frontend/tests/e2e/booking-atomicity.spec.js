@@ -342,7 +342,7 @@ test.describe('Booking atomicity (API)', () => {
     const reception = await loginAs(apiContext, API, RECEPTION);
     const opened = await apiContext.post(`${API}/visits`, {
       headers: { Authorization: `Bearer ${reception}` },
-      data: { patientId, visitType: 'Walk in', testIds },
+      data: { patientId, visitType: 'Walk in', confirmRepeatTests: true, testIds },
     });
     expect(opened.status(), 'the desk opens a visit without the paper').toBe(201);
     const visitId = (await opened.json()).data.visit.id;

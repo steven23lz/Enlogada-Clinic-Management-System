@@ -4,6 +4,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import TestPicker from '../booking/TestPicker';
+import RepeatTestPrompt from './RepeatTestPrompt';
 import ReferringPhysicianFields from '../booking/ReferringPhysicianFields';
 import api from '../../config/api';
 import { useScrollIntoViewOnSet } from '../../hooks/useScrollIntoViewOnSet';
@@ -79,6 +80,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
   // A record already on file for this name and birthdate. [1.129.0] The server refuses to make a
   // second one unless told this is a different person; the form asks the receptionist which.
   const [possibleDuplicate, setPossibleDuplicate] = useState(null);
+  const [repeatAsked, setRepeatAsked] = useState(null);
 
   const resetForm = () => {
     setNewPatient({
@@ -111,10 +113,11 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
    * between the requests also left a patient record with no visit. `asRecord` starts the visit on
    * a record already on file instead; `confirmNew` says the match on file is someone else.
    */
-  const register = async ({ asRecord = null, confirmNew = false } = {}) => {
+  const register = async ({ asRecord = null, confirmNew = false, confirmRepeat = false } = {}) => {
     setRegistrationSuccess('');
     setRegistrationError('');
     setRegistered(null);
+    setRepeatAsked(null);
     setIsRegistering(true);
     try {
       const vRes = await api.post('/visits', {
@@ -127,6 +130,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
         ...(asRecord
           ? { patientId: asRecord.id }
           : { patient: newPatient, confirmNewPatient: confirmNew }),
+        ...(confirmRepeat ? { confirmRepeatTests: true } : {}),
       });
       const visit = vRes.data.data.visit;
       const parts = [
@@ -148,6 +152,10 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
       const duplicate = err.response?.status === 409 && err.response?.data?.details?.possibleDuplicate;
       if (duplicate) {
         setPossibleDuplicate(duplicate);
+      } else if (err.response?.data?.details?.repeatTests) {
+        // The record on file already has one of these tests today. [1.157.0]
+        setPossibleDuplicate(null);
+        setRepeatAsked({ message: err.response.data.message, asRecord });
       } else {
         setRegistrationError(err.response?.data?.message || 'Failed to register walk-in patient');
       }
@@ -210,6 +218,17 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                     patientName={registered.name}
                     canInvite={canInvite}
                   />
+                )}
+
+                {repeatAsked && (
+                  <div className="mb-4">
+                    <RepeatTestPrompt
+                      message={repeatAsked.message}
+                      loading={isRegistering}
+                      onConfirm={() => register({ asRecord: repeatAsked.asRecord, confirmRepeat: true })}
+                      onBack={() => setRepeatAsked(null)}
+                    />
+                  </div>
                 )}
 
                 {possibleDuplicate && (

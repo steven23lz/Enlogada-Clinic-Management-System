@@ -4,6 +4,7 @@ const paymentSubmissionRepository = require('../repositories/paymentSubmissionRe
 const db = require('../config/database');
 const { formatTime12 } = require('../constants/clockFormat');
 const { isStaffUser } = require('../constants/roles');
+const { assertNoRepeat } = require('./repeatTestGuard');
 const paymentGatewayService = require('./paymentGatewayService');
 const { OCCUPIES_SLOT, BOOKING_NOTICE_MINUTES } = require('../constants/slotHold');
 const { minuteOfDay, isTooSoon, earliestSlotToday, noticeLabel } = require('../utils/bookingNotice');
@@ -484,8 +485,13 @@ class AppointmentService {
           // [1.124.0] A re-sent booking ADDS its tests to the one already made, and that one may
           // be paid: the tests went on a settled visit nobody would charge for, which [1.55.0]
           // closed at the Desk and this path still allowed.
-          const onIt = new Set((await testRepository.findTestsByVisitId(existing.patient_visit_id)).map((t) => t.test_id));
-          const adding = packageIds.length > 0 || testIds.some((id) => !onIt.has(parseInt(id, 10)));
+          // [1.157.0] A package already on it is not an addition: a lost reply re-sent after paying
+          // was refused as if the patient were changing a paid booking.
+          const lines = await testRepository.findTestsByVisitId(existing.patient_visit_id);
+          const onIt = new Set(lines.map((t) => t.test_id));
+          const packagesOnIt = new Set(lines.map((t) => t.package_id).filter(Boolean));
+          const adding = packageIds.some((id) => !packagesOnIt.has(parseInt(id, 10)))
+            || testIds.some((id) => !onIt.has(parseInt(id, 10)));
           if (adding && await paymentRepository.hasPaidPayment(existing.patient_visit_id)) {
             const error = new Error('This booking has already been paid, so its tests are final. Book another day for the extra tests.');
             error.statusCode = 409;
@@ -497,6 +503,12 @@ class AppointmentService {
             const error = new Error('Your payment for this booking is waiting to be checked, so its tests cannot change. Book another time for the extra tests.');
             error.statusCode = 409;
             throw error;
+          }
+          if (adding && !isStaffUser(requestingUser)) {
+            await assertNoRepeat({
+              patientId, patientName: payerName, day: scheduledDate, testIds, packageIds,
+              exceptVisitId: existing.patient_visit_id, requestingUser,
+            });
           }
           let visitTests;
           if (packageIds.length) {
@@ -515,6 +527,16 @@ class AppointmentService {
             : null;
 
           return { appointment: existing, visitTests, hmoRequest: null, payment, alreadyBooked: true, testsAdded: adding };
+        }
+
+        // [1.157.0] The same test in another slot that day. The slot's lock above does not cover two
+        // tabs booking DIFFERENT slots, so this patient's day has a lock of its own, always taken
+        // after the slot's, so the two can never wait on each other in a circle.
+        if (!isStaffUser(requestingUser)) {
+          await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`patient-day|${patientId}|${scheduledDate}`]);
+          await assertNoRepeat({
+            patientId, patientName: payerName, day: scheduledDate, testIds, packageIds, requestingUser,
+          });
         }
 
         const { rows } = await db.query(
@@ -915,6 +937,21 @@ class AppointmentService {
         const error = new Error('This patient already has a booking at that time.');
         error.statusCode = 409;
         throw error;
+      }
+
+      // [1.157.0] Booking CBC on two days and moving one onto the other's day was the way round
+      // the same-day rule. The desk moves a booking on its own judgement, as it does a repeat.
+      if (!isStaffUser(requestingUser) && previous.date !== scheduledDate) {
+        await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`patient-day|${appointment.patient_id}|${scheduledDate}`]);
+        const lines = await testRepository.findTestsByVisitId(appointment.patient_visit_id);
+        await assertNoRepeat({
+          patientId: appointment.patient_id,
+          patientName: `${appointment.first_name} ${appointment.last_name}`,
+          day: scheduledDate,
+          testIds: lines.map((line) => line.test_id),
+          exceptVisitId: appointment.patient_visit_id,
+          requestingUser,
+        });
       }
 
       // Excluding itself, so moving to a different date at the same time of day is not blocked

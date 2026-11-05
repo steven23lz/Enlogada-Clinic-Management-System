@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { SearchInput } from '../ui/search-input';
 import { formatCurrency } from '../../lib/currency';
+import { blockedPackages, claimedByPackages } from '../../lib/packageOverlap';
 import { AlertTriangle, ChevronRight, Package } from 'lucide-react';
 
 /**
@@ -45,6 +46,11 @@ const TestPicker = ({
    * addressed to whoever is holding the screen.
    */
   audience = 'staff',
+  /**
+   * What the visit already carries, when adding to one. [1.157.0] Those tests and packages are shown
+   * as on it rather than offered again, and the total says what the bill would actually gain.
+   */
+  onVisit = [],
 }) => {
   const [query, setQuery] = useState('');
 
@@ -127,14 +133,22 @@ const TestPicker = ({
     }
   }
 
-  // Ticked AND not already inside a chosen bundle — the only tests the total may add on top.
-  const billable = selected.filter((t) => !coveredBy.has(t.id.toString()));
+  // [1.157.0] Two packages sharing a test cannot both be on a visit, and the picker says so at the
+  // tick: all five of the clinic's share six tests, and ticking them quoted ₱9,490 for a ₱3,214.40 bill.
+  const blocked = blockedPackages({ packages, selectedPackageIds, onVisit });
+  const alreadyOnVisit = new Set((onVisit || []).map((line) => line.test_id?.toString()));
+
+  // Ticked, not already inside a chosen bundle, and not already on the visit: the only tests the
+  // total may add on top.
+  const billable = selected.filter((t) => !coveredBy.has(t.id.toString()) && !alreadyOnVisit.has(t.id.toString()));
 
   // The package contributes its fixed price, never the sum of its components — and a component
-  // already inside one contributes nothing further.
+  // already inside one contributes nothing further. A test the visit has on its own stops being
+  // charged once a chosen package takes it over.
   const total =
     billable.reduce((sum, t) => sum + parseFloat(t.price || 0), 0) +
-    selectedPackages.reduce((sum, p) => sum + parseFloat(p.price || 0), 0);
+    selectedPackages.reduce((sum, p) => sum + parseFloat(p.price || 0), 0) -
+    claimedByPackages({ packages, selectedPackageIds, onVisit });
 
   // Preparation from both, de-duplicated by test id: booking Package A and a Pelvic Ultrasound
   // separately must not print the same "do not empty your bladder" line twice.
@@ -166,8 +180,21 @@ const TestPicker = ({
           <p className="m-0 px-1 text-micro font-semibold uppercase tracking-[0.08em] text-slate-500">
             Package deals
           </p>
-          {packages.map((p) => (
-            <div key={p.id} className="overflow-hidden rounded-lg border border-azure-200 bg-azure-50/50 transition-colors hover:border-azure-300">
+          {/* The rule, once, however many packages it stops. */}
+          {[...blocked.values()].some((b) => b.kind === 'shares') && (
+            <p data-testid="package-rule" className="m-0 px-1 text-fine leading-snug text-slate-600">
+              Packages that share tests cannot go together: each is one fixed price, and a test is sold under one of them only.
+            </p>
+          )}
+          {packages.map((p) => {
+            const block = blocked.get(p.id.toString());
+            return (
+            <div
+              key={p.id}
+              data-testid="picker-package"
+              data-package-code={p.code}
+              className={`overflow-hidden rounded-lg border border-azure-200 transition-colors ${block ? 'bg-slate-50' : 'bg-azure-50/50 hover:border-azure-300'}`}
+            >
               {/* ONE row per bundle. [1.54.0] Spelling out every component inline, five packages
                   of six-to-nine tests each filled the picker before the individual list began —
                   which is the "scroll past everything to reach the tests" complaint. Name, size
@@ -184,12 +211,12 @@ const TestPicker = ({
                   takes its own line under the name; `items-start` keeps the checkbox, price and
                   chevron level with the first line when the name runs to two. */}
               <div className="flex items-start gap-2 pr-2">
-                <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 p-2.5 sm:gap-3">
+                <label className={`flex min-w-0 flex-1 items-start gap-2 p-2.5 sm:gap-3 ${block ? 'cursor-default opacity-60' : 'cursor-pointer'}`}>
                   <input
                     type="checkbox"
-                    checked={selectedPackageIds.includes(p.id.toString())}
+                    checked={selectedPackageIds.includes(p.id.toString()) || block?.kind === 'on-visit'}
                     onChange={() => onTogglePackage?.(p.id.toString())}
-                    disabled={disabled}
+                    disabled={disabled || Boolean(block)}
                     className="mt-0.5 rounded text-azure-600 focus:ring-azure-500"
                   />
                   <Package className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-azure-600" aria-hidden="true" />
@@ -216,6 +243,13 @@ const TestPicker = ({
                   />
                 </button>
               </div>
+              {/* Says why, as a covered test does below: a control merely dead reads as broken. Under
+                  the row rather than beside the price, so on a phone it is a line and not a column. */}
+              {block && (
+                <p data-testid="package-blocked" className="m-0 px-2.5 pb-2 text-meta font-medium leading-snug text-slate-600">
+                  {block.kind === 'on-visit' ? 'Already on this visit' : `Shares tests with ${block.withName}`}
+                </p>
+              )}
               <div className="disclosure" data-open={openPackages.has(p.id.toString())}>
                 <div>
                   <p
@@ -227,7 +261,8 @@ const TestPicker = ({
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -283,11 +318,12 @@ const TestPicker = ({
                       // The bundle that already covers it, if any — the chip's text and the reason
                       // the control is inert.
                       const inPackage = coveredBy.get(t.id.toString());
+                      const onThisVisit = alreadyOnVisit.has(t.id.toString());
                       return (
                       <label
                         key={t.id}
                         className={`flex items-center gap-3 rounded-lg border border-line bg-surface p-2 text-xs transition-colors ${
-                          inPackage
+                          inPackage || onThisVisit
                             ? 'cursor-default opacity-60'
                             : 'cursor-pointer hover:border-brand-300 hover:bg-brand-50/40'
                         }`}
@@ -297,9 +333,9 @@ const TestPicker = ({
                           // Shown ticked because the patient IS getting it. The tick is never
                           // cleared: a component covered by a bundle they later remove has to come
                           // back, rather than the bundle silently discarding an earlier choice.
-                          checked={!!inPackage || selectedIds.includes(t.id.toString())}
+                          checked={!!inPackage || onThisVisit || selectedIds.includes(t.id.toString())}
                           onChange={() => onToggle(t.id.toString())}
-                          disabled={disabled || !!inPackage}
+                          disabled={disabled || !!inPackage || onThisVisit}
                           className="rounded text-brand-600 focus:ring-brand-500"
                         />
                         <span className="flex flex-1 items-center justify-between gap-2">
@@ -311,6 +347,11 @@ const TestPicker = ({
                             {inPackage && (
                               <span className="rounded-md bg-brand-100 px-1.5 py-px text-micro font-bold text-brand-700">
                                 in {inPackage}
+                              </span>
+                            )}
+                            {onThisVisit && !inPackage && (
+                              <span className="rounded-md bg-brand-100 px-1.5 py-px text-micro font-bold text-brand-700">
+                                on this visit
                               </span>
                             )}
                             <span className="font-extrabold tabular-nums text-slate-900">{formatCurrency(t.price)}</span>

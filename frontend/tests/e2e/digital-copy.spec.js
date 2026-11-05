@@ -59,7 +59,7 @@ test.describe('Digital copy for the patient, original for the clinic', () => {
     expect(labTests.length, 'need three active laboratory tests').toBe(3);
     const visit = (await (await ctx.post(`${API}/visits`, {
       headers: auth(reception),
-      data: { patientId: profile.id, visitType: 'Walk in', notes: 'digital copy spec', testIds: labTests.map((t) => t.id) },
+      data: { patientId: profile.id, visitType: 'Walk in', confirmRepeatTests: true, notes: 'digital copy spec', testIds: labTests.map((t) => t.id) },
     })).json()).data.visit;
     await payAndReleaseWalkIn(ctx, API, visit.id, cashier);
     [pdfId, imageId, wordId] = ((await (await ctx.get(`${API}/tests/visit-tests/${visit.id}`, { headers: auth(reception) })).json())

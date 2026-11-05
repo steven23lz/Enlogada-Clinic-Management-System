@@ -208,7 +208,8 @@ test.describe('Package deals', () => {
     const reception = await loginAs(api, RECEPTIONIST);
 
     const tests = (await (await api.get(`${API}/tests`)).json()).data.tests;
-    const two = [tests[0].id, tests[1].id];
+    // [1.157.0] The dearest two, so the ₱250 reprice below stays under what they cost separately.
+    const two = [...tests].sort((a, b) => Number(b.price) - Number(a.price)).slice(0, 2).map((t) => t.id);
     // 'E2E ' prefix so purgeE2eData.js removes it — a package this spec creates would otherwise
     // accumulate in the catalogue one per run, which is the bug [1.46.0] fixed for test rows.
     const body = { name: 'E2E Package Probe', price: 100, testIds: two };

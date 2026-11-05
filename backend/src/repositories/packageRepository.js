@@ -101,6 +101,17 @@ class PackageRepository {
     }
   }
 
+  /** Another package on offer under this name, whatever its case or spacing. */
+  async findOfferedByName(name, exceptId = null) {
+    const { rows } = await db.query(
+      `SELECT id, code, name, price, is_active FROM test_packages
+        WHERE is_active AND LOWER(BTRIM(name)) = LOWER(BTRIM($1)) AND ($2::int IS NULL OR id <> $2::int)
+        LIMIT 1`,
+      [name, exceptId]
+    );
+    return rows[0] || null;
+  }
+
   /** One package and its components, by id. Same non-filtering of `t.is_active` as above. */
   async findByIdsWithItems(packageIds) {
     if (!packageIds || packageIds.length === 0) return [];

@@ -78,7 +78,7 @@ test.describe('Report verification', () => {
       .find((t) => t.category_name === 'Laboratory' && t.is_active);
     const visit = (await (await ctx.post(`${API}/visits`, {
       headers: auth(reception),
-      data: { patientId: patient.id, visitType: 'Walk in', notes: 'verification spec', testIds: [labTest.id] },
+      data: { patientId: patient.id, visitType: 'Walk in', confirmRepeatTests: true, notes: 'verification spec', testIds: [labTest.id] },
     })).json()).data.visit;
     await payAndReleaseWalkIn(ctx, API, visit.id, cashier);
     visitTestId = ((await (await ctx.get(`${API}/tests/visit-tests/${visit.id}`, { headers: auth(reception) })).json())

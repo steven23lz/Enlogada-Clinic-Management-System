@@ -6,6 +6,7 @@ const patientService = require('./patientService');
 const auditService = require('./auditService');
 const paymentRepository = require('../repositories/paymentRepository');
 const { assertNoProofWaiting } = require('./billLock');
+const { assertNoRepeat, logConfirmed } = require('./repeatTestGuard');
 const { DIAGNOSTIC_CATEGORIES } = require('../constants/modality');
 
 // Mirrors appointmentService.js's assertClientOwnsPatient exactly. POST /tests/visit-tests
@@ -316,7 +317,7 @@ class TestService {
     return { removed: removed.length, packageName: removedPackage, testName: line.test_name };
   }
 
-  async addTestsToVisit(patientVisitId, testIds, requestingUser, packageIds = []) {
+  async addTestsToVisit(patientVisitId, testIds, requestingUser, packageIds = [], { confirmRepeatTests = false } = {}) {
     await assertClientOwnsVisit(requestingUser, patientVisitId);
 
     // ── A settled visit takes no more work ──────────────────────────────────────────────────
@@ -356,6 +357,18 @@ class TestService {
       throw error;
     }
 
+    // [1.157.0] The same test on another of this patient's visits that day: this door too.
+    const repeats = await assertNoRepeat({
+      patientId: visit.patient_id,
+      patientName: `${visit.first_name || 'This patient'} ${visit.last_name || ''}`.trim(),
+      day: await visitRepository.findDayOfVisit(patientVisitId),
+      testIds,
+      packageIds,
+      exceptVisitId: patientVisitId,
+      requestingUser,
+      confirmed: confirmRepeatTests,
+    });
+
     // Standalone callers (Reception's walk-in flow) get their own transaction. Previously this
     // looped bare db.query calls, so a failure partway through left a half-attached visit.
     //
@@ -370,6 +383,7 @@ class TestService {
     return await db.withTransaction(async () => {
       await packageService.attachPackages(patientVisitId, packageIds);
       await this.attachTests(patientVisitId, testIds);
+      await logConfirmed(repeats, { visitId: patientVisitId, requestingUser });
       // Re-read rather than returning attachTests' value: it short-circuits to [] when there are
       // no loose tests, which for a package-only booking discarded the rows the line above had
       // just written and reported "0 test(s) added" for a visit carrying six.

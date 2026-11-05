@@ -52,7 +52,7 @@ test.describe('X-ray: reported here, like every department', () => {
       })).json()).data.patient.id;
     }
     const created = await ctx.post(`${API}/visits`, {
-      headers: auth(reception), data: { patientId, visitType: 'Walk in', notes: 'xray spec', testIds },
+      headers: auth(reception), data: { patientId, visitType: 'Walk in', confirmRepeatTests: true, notes: 'xray spec', testIds },
     });
     expect(created.status(), await created.text()).toBe(201);
     const visit = (await created.json()).data.visit;

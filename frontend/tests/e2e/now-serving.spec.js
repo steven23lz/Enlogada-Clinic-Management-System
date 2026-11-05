@@ -42,7 +42,7 @@ test.describe('Now serving', () => {
     })).json()).data.patient;
     const res = await ctx.post(`${API}/visits`, {
       headers: auth(reception),
-      data: { patientId: patient.id, visitType: 'Walk in', notes: '', testIds: [labTest.id] },
+      data: { patientId: patient.id, visitType: 'Walk in', confirmRepeatTests: true, notes: '', testIds: [labTest.id] },
     });
     expect(res.status(), await res.text()).toBe(201);
     const { visit } = (await res.json()).data;

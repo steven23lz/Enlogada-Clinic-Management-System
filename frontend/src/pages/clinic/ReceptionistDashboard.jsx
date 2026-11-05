@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { toastSuccess } from '../../lib/toast';
 import RescheduleDialog from '../../components/booking/RescheduleDialog';
 import TestPicker from '../../components/booking/TestPicker';
+import RepeatTestPrompt from '../../components/reception/RepeatTestPrompt';
 import useOperationsReport from '../../hooks/useOperationsReport';
 import ActiveQueuePanel from '../../components/reception/ActiveQueuePanel';
 import VisitHistoryPanel from '../../components/reception/VisitHistoryPanel';
@@ -359,7 +360,17 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
                 selectedPackageIds={testAssignment.selectedPackageIds}
                 onTogglePackage={testAssignment.togglePackage}
                 disabled={testAssignment.submitting}
+                onVisit={testAssignment.existing}
               />
+
+              {testAssignment.repeatMessage && (
+                <RepeatTestPrompt
+                  message={testAssignment.repeatMessage}
+                  loading={testAssignment.submitting}
+                  onConfirm={testAssignment.confirmRepeat}
+                  onBack={testAssignment.dismissRepeat}
+                />
+              )}
 
               <div className="flex justify-end space-x-2 pt-2 border-t border-line">
                 <Button type="button" variant="outline" onClick={testAssignment.close}>Cancel</Button>
@@ -367,8 +378,9 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
                   type="submit"
                   loading={testAssignment.submitting}
                   disabled={
-                    testAssignment.selectedTestIds.length === 0
-                    && testAssignment.selectedPackageIds.length === 0
+                    Boolean(testAssignment.repeatMessage)
+                    || (testAssignment.selectedTestIds.length === 0
+                    && testAssignment.selectedPackageIds.length === 0)
                   }
                   className="font-bold"
                 >
@@ -476,7 +488,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
           error={checkIn.error}
           // A walk-in visit is for something [1.129.0]: it is never opened empty.
           wide={checkIn.target?.type === 'walkin'}
-          confirmDisabled={checkIn.target?.type === 'walkin' && !checkIn.walkInChosen}
+          confirmDisabled={checkIn.target?.type === 'walkin' && (!checkIn.walkInChosen || Boolean(checkIn.repeatMessage))}
         >
           {checkIn.target?.type === 'walkin' && (
             <div className="space-y-1.5">
@@ -493,6 +505,14 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
                 disabled={checkIn.submitting}
                 maxHeight="max-h-56"
               />
+              {checkIn.repeatMessage && (
+                <RepeatTestPrompt
+                  message={checkIn.repeatMessage}
+                  loading={checkIn.submitting}
+                  onConfirm={checkIn.confirmRepeat}
+                  onBack={checkIn.dismissRepeat}
+                />
+              )}
             </div>
           )}
         </ConfirmDialog>

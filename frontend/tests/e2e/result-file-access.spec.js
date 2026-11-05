@@ -75,7 +75,7 @@ test.describe('Who may open a result file', () => {
 
     const visit = (await (await ctx.post(`${API}/visits`, {
       headers: auth(reception),
-      data: { patientId, visitType: 'Walk in', notes: 'E2E result file access', testIds: [labTest.id] },
+      data: { patientId, visitType: 'Walk in', confirmRepeatTests: true, notes: 'E2E result file access', testIds: [labTest.id] },
     })).json()).data.visit;
 
     // Payment is what releases the ticket to the department worklist.

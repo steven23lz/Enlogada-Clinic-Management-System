@@ -72,7 +72,7 @@ test.describe('Statutory discounts (Senior Citizen / PWD)', () => {
     // [1.129.0] A visit is opened with its tests.
     const visit = await (await apiContext.post(`${API}/visits`, {
       headers: auth(reception),
-      data: { patientId: patient.data.patient.id, visitType: 'Walk in', notes: 'e2e discount', testIds: [chosen.id] },
+      data: { patientId: patient.data.patient.id, visitType: 'Walk in', confirmRepeatTests: true, notes: 'e2e discount', testIds: [chosen.id] },
     })).json();
     visitId = visit.data.visit.id;
   });

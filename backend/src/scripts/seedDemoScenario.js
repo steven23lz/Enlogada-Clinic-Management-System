@@ -559,6 +559,9 @@ async function main() {
         patientId: patient.id, visitType: 'Walk in', notes,
         referringPhysician: referrer?.[0], referringPhysicianPrc: referrer?.[1],
         testIds: [...new Set(chosen.map((t) => t.id))], packageIds,
+        // [1.157.0] The history is created today and backdated at the end, so someone returning a
+        // month later looks, for now, like the same test twice in one day. Those lines go below.
+        confirmRepeatTests: true,
       },
     })).data.visit;
     const attached = (await call(`/tests/visit-tests/${visit.id}`, { token: tok.receptionist })).data.visitTests;
@@ -1047,6 +1050,11 @@ async function main() {
     [historyStartedAt]
   );
   await db.query('DELETE FROM notification_events WHERE created_at >= $1', [historyStartedAt]);
+  // [1.157.0] Nobody confirmed a same-day repeat: these visits are a month apart once backdated.
+  await db.query(
+    "DELETE FROM audit_log WHERE action = 'visit_test.repeat_confirmed' AND created_at >= $1",
+    [historyStartedAt]
+  );
 
   // ── Patient feedback [1.112.0] ────────────────────────────────────────────────────────────
   // The paper forms reception typed in for the fortnight's walk-ins, as the clinic's own form

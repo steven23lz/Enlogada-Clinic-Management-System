@@ -67,7 +67,8 @@ test.describe('Records and references [1.152.0]', () => {
       if (!free.length) continue;
       const res = await ctx.post(`${API}/appointments`, {
         headers: auth(owner.token),
-        multipart: appointmentForm({ patientId: owner.profile.id, scheduledDate: date, scheduledTime: free[0].time, testIds: [testId] }, { doctorRequest: false }),
+        // Another test each time: two of these can land on one day, and one test twice is refused.
+        multipart: appointmentForm({ patientId: owner.profile.id, scheduledDate: date, scheduledTime: free[0].time, testIds: [await bookableTestId(ctx)] }, { doctorRequest: false }),
       });
       expect(res.status(), await res.text()).toBe(201);
       return (await res.json()).data.appointment;

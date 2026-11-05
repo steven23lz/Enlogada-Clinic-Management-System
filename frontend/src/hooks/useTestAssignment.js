@@ -36,6 +36,8 @@ export function useTestAssignment({ onAssigned } = {}) {
   const [removing, setRemoving] = useState(null);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // [1.157.0] The server's question when a test is already on another of today's visits.
+  const [repeatMessage, setRepeatMessage] = useState('');
 
   /** A line the server will refuse to remove, and the reason to show beside it. */
   const lockReason = (line) => {
@@ -71,6 +73,7 @@ export function useTestAssignment({ onAssigned } = {}) {
     // Packages clear here for the same reason. A bundle left in state would be attached to the
     // NEXT patient opened, and a package is ₱1,450 of tests they never asked for.
     setSelectedPackageIds([]);
+    setRepeatMessage('');
     setExisting([]);
     setOpen(true);
     loadExisting(id);
@@ -82,12 +85,14 @@ export function useTestAssignment({ onAssigned } = {}) {
   };
 
   const togglePackage = (packageId) => {
+    setRepeatMessage('');
     setSelectedPackageIds((prev) => (
       prev.includes(packageId) ? prev.filter((id) => id !== packageId) : [...prev, packageId]
     ));
   };
 
   const toggleTest = (testId) => {
+    setRepeatMessage('');
     setSelectedTestIds((current) =>
       current.includes(testId) ? current.filter((id) => id !== testId) : [...current, testId]
     );
@@ -117,7 +122,7 @@ export function useTestAssignment({ onAssigned } = {}) {
     }
   };
 
-  const submit = async (e) => {
+  const submit = async (e, { confirmRepeat = false } = {}) => {
     e?.preventDefault();
     if (!visitId || (selectedTestIds.length === 0 && selectedPackageIds.length === 0)) return;
     if (submitting) return; // the guard that keeps a slow connection from billing twice
@@ -128,10 +133,16 @@ export function useTestAssignment({ onAssigned } = {}) {
         patientVisitId: visitId,
         testIds: selectedTestIds.map((id) => parseInt(id, 10)),
         packageIds: selectedPackageIds.map((id) => parseInt(id, 10)),
+        ...(confirmRepeat ? { confirmRepeatTests: true } : {}),
       });
+      setRepeatMessage('');
       setOpen(false);
     } catch (err) {
-      toastError(err.response?.data?.message || 'Failed to assign tests to visit');
+      if (err.response?.data?.details?.repeatTests) {
+        setRepeatMessage(err.response.data.message);
+      } else {
+        toastError(err.response?.data?.message || 'Failed to assign tests to visit');
+      }
       return;
     } finally {
       setSubmitting(false);
@@ -140,8 +151,12 @@ export function useTestAssignment({ onAssigned } = {}) {
     onAssigned?.();
   };
 
+  const confirmRepeat = () => submit(null, { confirmRepeat: true });
+  const dismissRepeat = () => setRepeatMessage('');
+
   return {
     visitId, open, submitting, openFor, close, submit,
+    repeatMessage, confirmRepeat, dismissRepeat,
     existing, loading, remove, removing, lockReason,
     selectedTestIds, toggleTest,
     selectedPackageIds, togglePackage,

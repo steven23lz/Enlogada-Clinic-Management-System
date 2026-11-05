@@ -70,7 +70,7 @@ test.describe('Today', () => {
     // the row stays. The visit is made with a test and served WITHOUT it, as such a visit reads.
     const anyTest = (await (await ctx.get(`${API}/tests`)).json()).data.tests.find((t) => t.is_active);
     const created = await ctx.post(`${API}/visits`, {
-      headers: H, data: { patientId: patient.id, visitType: 'Walk in', notes: 'e2e today no tests', testIds: [anyTest.id] },
+      headers: H, data: { patientId: patient.id, visitType: 'Walk in', confirmRepeatTests: true, notes: 'e2e today no tests', testIds: [anyTest.id] },
     });
     expect(created.status()).toBe(201);
     const visitId = (await created.json()).data.visit.id;

@@ -2,6 +2,7 @@ const db = require('../config/database');
 const { inTodaysQueue } = require('../constants/queueMembership');
 const { hmoEffectiveStatus } = require('../constants/hmoEffectiveStatus');
 const { CAME_IN_AS } = require('../constants/visits');
+const { OCCUPIES_SLOT } = require('../constants/slotHold');
 
 class VisitRepository {
   // `doctorRequest` is the multer file of the doctor's signed request [1.106.0], or null. Only
@@ -804,6 +805,60 @@ class VisitRepository {
    *
    * @returns {Promise<object|null>} The visit with its new ticket, or null if it did not move.
    */
+  async lockVisit(visitId) {
+    await db.query('SELECT id FROM patient_visits WHERE id = $1 FOR UPDATE', [visitId]);
+  }
+
+  /** The day a visit is for: its booking's date, or the day it was opened. As text, never a Date. */
+  async findDayOfVisit(visitId) {
+    const { rows } = await db.query(
+      `SELECT COALESCE(a.scheduled_date, pv.created_at::date)::text AS day
+         FROM patient_visits pv
+         LEFT JOIN appointments a ON a.patient_visit_id = pv.id
+        WHERE pv.id = $1`,
+      [visitId]
+    );
+    return rows[0]?.day || null;
+  }
+
+  /**
+   * Of these tests, the ones a patient already has on a given day. [1.157.0]
+   *
+   * A booking counts while it holds its slot (or has been checked in): one whose time to pay ran out
+   * is on its way to being removed, and must not stop the patient booking it again. A walk-in counts
+   * for the day it was opened. A test refunded as not performed does not count.
+   *
+   * @param {{ patientId: number, day: string|null, testIds: number[], exceptVisitId?: number|null }} args
+   *   `day` null means today, read from the database's clock.
+   */
+  async findTestsOnPatientsDay({ patientId, day = null, testIds, exceptVisitId = null }) {
+    const { rows } = await db.query(
+      `SELECT vt.test_id, t.name AS test_name, pv.id AS visit_id, pv.queue_number,
+              a.scheduled_time::text AS scheduled_time,
+              EXISTS (SELECT 1 FROM payments pay
+                       WHERE pay.patient_visit_id = pv.id AND pay.payment_status = 'Paid') AS paid
+         FROM visit_tests vt
+         JOIN patient_visits pv ON pv.id = vt.patient_visit_id
+         JOIN tests t ON t.id = vt.test_id
+         LEFT JOIN appointments a ON a.patient_visit_id = pv.id
+        WHERE pv.patient_id = $1
+          AND vt.test_id = ANY($3::int[])
+          AND vt.status <> 'Cancelled'
+          AND pv.status <> 'Cancelled'
+          AND ($4::int IS NULL OR pv.id <> $4::int)
+          AND (
+            (a.id IS NOT NULL AND a.scheduled_date = COALESCE($2::date, CURRENT_DATE)
+              AND (a.status = 'Confirmed' OR (${OCCUPIES_SLOT('a')})))
+            OR (a.id IS NULL
+              AND pv.created_at >= COALESCE($2::date, CURRENT_DATE)
+              AND pv.created_at < (COALESCE($2::date, CURRENT_DATE) + 1))
+          )
+        ORDER BY a.scheduled_time NULLS FIRST, t.name`,
+      [patientId, day, testIds, exceptVisitId]
+    );
+    return rows;
+  }
+
   async joinTodaysQueue(visitId) {
     const { rows } = await db.query('SELECT status FROM patient_visits WHERE id = $1 FOR UPDATE', [visitId]);
     if (rows[0]?.status !== 'Pending') return null;

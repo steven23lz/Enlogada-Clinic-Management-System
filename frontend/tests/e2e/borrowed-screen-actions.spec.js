@@ -67,7 +67,7 @@ test.describe('Borrowed screens offer only what the borrower can do', () => {
     const labTest = tests.find((t) => t.category_name === 'Laboratory' && parseFloat(t.price) > 0);
     // [1.129.0] A visit is opened with its tests.
     const created = await ctx.post(`${API}/visits`, {
-      headers: H, data: { patientId: patient.id, visitType: 'Walk in', notes: 'e2e borrowed queue', testIds: [labTest.id] },
+      headers: H, data: { patientId: patient.id, visitType: 'Walk in', confirmRepeatTests: true, notes: 'e2e borrowed queue', testIds: [labTest.id] },
     });
     expect(created.ok(), 'the queue needs a row for these checks to mean anything').toBeTruthy();
     await ctx.dispose();
@@ -142,7 +142,7 @@ test.describe('Borrowed screens offer only what the borrower can do', () => {
       'the Cashier must be able to READ the queue').toBe(200);
 
     expect((await ctx.post(`${API}/visits`, {
-      headers: auth, data: { patientId: 1, visitType: 'Walk in' },
+      headers: auth, data: { patientId: 1, visitType: 'Walk in', confirmRepeatTests: true },
     })).status(), 'visits:create').toBe(403);
 
     expect((await ctx.post(`${API}/tests/visit-tests`, {
@@ -182,7 +182,7 @@ test.describe('An Admin reads the diagnostic screens without being offered what 
   const paidLabTicket = async (reception, patientId, labTestId) => {
     const H = { Authorization: `Bearer ${reception}` };
     const visit = (await (await ctx.post(`${API}/visits`, {
-      headers: H, data: { patientId, visitType: 'Walk in', notes: 'e2e borrowed diagnostic screens', testIds: [labTestId] },
+      headers: H, data: { patientId, visitType: 'Walk in', confirmRepeatTests: true, notes: 'e2e borrowed diagnostic screens', testIds: [labTestId] },
     })).json()).data.visit;
     const attached = (await (await ctx.get(`${API}/tests/visit-tests/${visit.id}`, { headers: H })).json()).data.visitTests;
     const paid = await payAndReleaseWalkIn(ctx, API, visit.id);

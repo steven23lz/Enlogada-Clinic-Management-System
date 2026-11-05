@@ -58,7 +58,7 @@ test.describe('Report file types', () => {
     expect(labTests.length, 'need three active laboratory tests').toBe(3);
     const visit = (await (await ctx.post(`${API}/visits`, {
       headers: auth(reception),
-      data: { patientId: profiles[0].id, visitType: 'Walk in', notes: 'E2E report file types', testIds: labTests.map((t) => t.id) },
+      data: { patientId: profiles[0].id, visitType: 'Walk in', confirmRepeatTests: true, notes: 'E2E report file types', testIds: labTests.map((t) => t.id) },
     })).json()).data.visit;
     await payAndReleaseWalkIn(ctx, API, visit.id, cashier);
 

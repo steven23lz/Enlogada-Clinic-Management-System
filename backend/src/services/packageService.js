@@ -1,8 +1,13 @@
 const packageRepository = require('../repositories/packageRepository');
 const testRepository = require('../repositories/testRepository');
+const visitRepository = require('../repositories/visitRepository');
 const db = require('../config/database');
+const { ValidationError, ConflictError } = require('../errors');
+const { findOverlap, sharedTests, overlapMessage, onVisitMessage } = require('../utils/packageOverlap');
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+const peso = (n) => `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /**
  * The clinic's package deals. See migrations.md [1.45.0].
@@ -71,6 +76,7 @@ class PackageService {
    * charge for. Both are wrong in a way that reaches a patient's bill.
    */
   async save(id, { code, name, price, description, isActive, testIds }) {
+    let chosenTests = null;
     if (testIds !== undefined) {
       if (!Array.isArray(testIds)) {
         const error = new Error('List the tests in the package.');
@@ -98,7 +104,11 @@ class PackageService {
         error.statusCode = 400;
         throw error;
       }
+      chosenTests = found;
     }
+
+    await this.assertWorthBuying(id, { price, isActive, chosenTests });
+    await this.assertNameFree(id, { name, isActive });
 
     return await db.withTransaction(async () => {
       let pkg;
@@ -117,6 +127,45 @@ class PackageService {
       }
       return pkg;
     });
+  }
+
+  /**
+   * Two packages on offer under one name cannot be told apart on the booking screen. [1.157.0] A
+   * service's name was already unique in its department; a package's code was, and its name was not.
+   * Checked when naming one or offering one again, so a retired one may share a name until then.
+   */
+  async assertNameFree(id, { name, isActive }) {
+    if (isActive === false || (name === undefined && isActive !== true)) return;
+    const wanted = name !== undefined ? name : (await packageRepository.findByIdsWithItems([id]))[0]?.name;
+    if (!wanted) return;
+    const taken = await packageRepository.findOfferedByName(wanted, id ? Number(id) : null);
+    if (taken) throw new ConflictError(`${taken.name} is already on offer under that name. Give this one another name.`);
+  }
+
+  /**
+   * A package never costs more than its tests bought separately. [1.157.0] A probe priced two tests
+   * worth ₱370 at ₱99,999 and it saved: a bundle dearer than its parts is a surcharge wearing the word
+   * "package", and the booking screen offers it above the tests as the cheaper way to buy them.
+   *
+   * Asked only when the price or the tests are being set. Retiring a package, or a list price falling
+   * later, must never stop a package being taken off sale.
+   */
+  async assertWorthBuying(id, { price, isActive, chosenTests }) {
+    if (isActive === false || (price === undefined && !chosenTests)) return;
+
+    const current = id ? await packageRepository.findByIdsWithItems([id]) : [];
+    const priceNow = price !== undefined ? price : current[0]?.price;
+    const parts = chosenTests
+      ? chosenTests.map((t) => t.price)
+      : current.map((r) => r.test_price);
+    const listTotal = parts.reduce((sum, p) => sum + Number(p || 0), 0);
+
+    if (priceNow === undefined || listTotal === 0) return;
+    if (Number(priceNow) > listTotal) {
+      throw new ValidationError(
+        `A package has to cost less than its tests bought separately, and these come to ${peso(listTotal)}. Lower the price of ${peso(priceNow)}.`
+      );
+    }
   }
 
   /**
@@ -164,6 +213,11 @@ class PackageService {
    * `uq_visit_tests_visit_test`. `addTestToVisit` is ON CONFLICT DO NOTHING, so the row that
    * landed first wins and the patient is not charged twice for one test — which is the right
    * outcome, and the reason the caller re-reads rather than trusting what it inserted.
+   *
+   * [1.157.0] Two PACKAGES sharing a test are refused, in one request (400) or against a package the
+   * visit already carries (409): see utils/packageOverlap.js for what they billed. A package already on
+   * the visit is left exactly as it is, which is what makes a re-sent booking safe. The visit's row is
+   * locked first, so two requests at once cannot each find the other's package missing.
    */
   async attachPackages(patientVisitId, packageIds) {
     const uniqueIds = [...new Set((packageIds || []).map((id) => parseInt(id, 10)))]
@@ -177,9 +231,9 @@ class PackageService {
     const packages = new Map();
     for (const r of rows) {
       if (!packages.has(r.id)) {
-        packages.set(r.id, { id: r.id, code: r.code, price: r.price, isActive: r.is_active, components: [] });
+        packages.set(r.id, { id: r.id, code: r.code, name: r.name, price: r.price, isActive: r.is_active, components: [] });
       }
-      packages.get(r.id).components.push({ testId: r.test_id, price: r.test_price });
+      packages.get(r.id).components.push({ testId: r.test_id, name: r.test_name, price: r.test_price });
     }
 
     const missing = uniqueIds.filter((id) => !packages.has(id));
@@ -200,7 +254,31 @@ class PackageService {
       throw error;
     }
 
-    for (const pkg of packages.values()) {
+    const chosen = [...packages.values()];
+    const together = findOverlap(chosen);
+    if (together) throw new ValidationError(overlapMessage(together));
+
+    await visitRepository.lockVisit(patientVisitId);
+    const onVisit = new Map();
+    for (const line of await testRepository.findTestsByVisitId(patientVisitId)) {
+      if (!line.package_id) continue;
+      if (!onVisit.has(line.package_id)) {
+        onVisit.set(line.package_id, { name: line.package_name, components: [] });
+      }
+      onVisit.get(line.package_id).components.push({ testId: line.test_id, name: line.test_name });
+    }
+
+    const toAttach = chosen.filter((pkg) => !onVisit.has(pkg.id));
+    for (const pkg of toAttach) {
+      for (const carried of onVisit.values()) {
+        const shared = sharedTests(carried, pkg);
+        if (shared.length > 0) {
+          throw new ConflictError(onVisitMessage({ first: carried, second: pkg, shared }));
+        }
+      }
+    }
+
+    for (const pkg of toAttach) {
       for (const { testId, priceAtTime } of this.allocate(pkg.price, pkg.components)) {
         await testRepository.addTestToVisit({
           patientVisitId,

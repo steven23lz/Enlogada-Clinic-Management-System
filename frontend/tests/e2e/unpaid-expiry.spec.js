@@ -50,7 +50,7 @@ test.describe('Unpaid is temporary', () => {
           firstName: person.firstName, lastName: person.lastName,
           birthdate: '1977-07-17', sex: 'Female', contactNumber: FIXTURE_CONTACT,
         },
-        visitType: 'Walk in', testIds: [labTest.id],
+        visitType: 'Walk in', confirmRepeatTests: true, testIds: [labTest.id],
       },
     });
     expect(res.status(), await res.text()).toBe(201);

@@ -45,7 +45,7 @@ test.describe('Patient feedback', () => {
     const labTest = ((await (await ctx.get(`${API}/tests`)).json()).data.tests || [])
       .find((t) => t.category_name === 'Laboratory' && t.is_active);
     const visit = (await (await ctx.post(`${API}/visits`, {
-      headers: auth(reception), data: { patientId, visitType: 'Walk in', notes: 'feedback spec', testIds: [labTest.id] },
+      headers: auth(reception), data: { patientId, visitType: 'Walk in', confirmRepeatTests: true, notes: 'feedback spec', testIds: [labTest.id] },
     })).json()).data.visit;
     await payAndReleaseWalkIn(ctx, API, visit.id, cashier);
     if (release) {

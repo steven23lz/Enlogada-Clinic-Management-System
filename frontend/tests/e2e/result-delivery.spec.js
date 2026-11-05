@@ -72,7 +72,7 @@ test.describe('Emailing a released report', () => {
     const labTest = (await (await ctx.get(`${API}/tests`)).json()).data.tests
       .find((t) => t.is_active && t.category_name === 'Laboratory' && Number(t.price) > 0);
     const visit = (await (await ctx.post(`${API}/visits`, {
-      headers: auth(rec), data: { patientId: patient.id, visitType: 'Walk in', testIds: [labTest.id] },
+      headers: auth(rec), data: { patientId: patient.id, visitType: 'Walk in', confirmRepeatTests: true, testIds: [labTest.id] },
     })).json()).data.visit;
 
     const bill = (await (await ctx.get(`${API}/payments/bill/${visit.id}`, { headers: auth(cash) })).json()).data.bill;

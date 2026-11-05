@@ -235,7 +235,7 @@ with no tests, so a spec that only needs "a booking" passes `testIds: [await boo
 a day as closed, so a spec booking further out SKIPS itself rather than failing: `hmo-card-review`
 booked at +500 days and went quiet that way. Keep booking dates within ~360 days, and watch the skip
 count. A patient may hold more than one booking a day (fasting bloods in the morning, an ultrasound
-later), so only the same SLOT is a duplicate. A spec that checks in a booking for the seeded client
+later), so the same SLOT is a duplicate, and `[1.157.0]` so is the same TEST that day. A spec that checks in a booking for the seeded client
 removes it afterwards if unpaid (`ticket-release-gating`): a checked-in, unpaid booking is that
 patient waiting, and the next spec's walk-in for them is then refused as a second unpaid visit.
 `[1.131.0]` Nothing is cancelled any more, so a spec frees what it booked or opened unpaid with
@@ -1061,6 +1061,17 @@ replacing them, because `visit_tests.price_at_time` snapshots the sale price and
 point at these ids; a demo row with no equivalent on a sheet is **deactivated, never deleted**.
 Do not assert a literal price in a spec — read it from `GET /api/tests`, as
 `booking-communication.spec.js` does.
+
+**The same test twice.** `[1.157.0]` Steven ticked every package and it was accepted: the screen quoted ₱9,490
+and the bill was ₱3,214.40, since all five share six tests and a test is on a visit once. `package-overlap.spec.js`.
+- **Two packages sharing a test cannot be on one visit**: `attachPackages` is the one door (400 together, 409
+  against one already on the visit; the same one again changes nothing). `TestPicker` stops at the tick
+  (`lib/packageOverlap.js`, mirroring `utils/packageOverlap.js`). Pass `onVisit` when adding to a visit.
+- **One patient, one test, one day** (`services/repeatTestGuard.js`): a patient is refused, booking or moving; the desk
+  is asked (`details.repeatTests`, `RepeatTestPrompt`, `confirmRepeatTests`, on the Activity Log). A new way to put
+  a test on a visit asks it too. A spec opening a second visit for one patient today with the same test sends
+  `confirmRepeatTests: true` or a different test; `bookableTestId` already varies.
+- **A package costs no more than its tests bought separately.**
 
 **Packages are managed on Services Catalog, behind `tests:manage`.** `[1.47.0]` Deliberately the
 same permission that governs pricing a test, because a package IS a price — a separate one would

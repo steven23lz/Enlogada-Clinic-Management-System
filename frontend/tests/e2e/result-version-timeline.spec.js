@@ -135,10 +135,14 @@ test.describe('Result version history', () => {
     // so `locator('tr', { hasText: 'Amended' })` found nothing whenever the amendment was not among
     // the ten most recent — which is how this test failed. It passes today only because the
     // fixture happens to sort first, which is luck rather than a property worth relying on.
-    const search = page.getByPlaceholder(/search/i).first();
-    if (await search.count()) await search.fill(amended.test_name);
+    //
+    // [1.157.0] Once the screen is really there, and for this patient: the screen arrives after the
+    // click, so an unawaited count found no box, and a bare 'tr' then matched the AMENDED column of
+    // Today's department table, which vanished a moment later.
+    await expect(page.getByRole('heading', { name: 'Laboratory History', level: 1 })).toBeVisible({ timeout: 20000 });
+    await page.getByPlaceholder(/search/i).first().fill(amended.last_name);
 
-    const row = page.locator('tr', { hasText: 'Amended' }).first();
+    const row = page.locator('tbody tr', { hasText: 'Amended' }).filter({ hasText: amended.test_name }).first();
     await expect(
       row,
       `no amended row for ${amended.test_name} — the fixture may have paged out of the history`

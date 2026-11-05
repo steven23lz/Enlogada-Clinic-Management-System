@@ -55,7 +55,7 @@ async function paidLabTicket(apiContext, { referringPhysician, sex = 'Female', b
   const visit = (await (await apiContext.post(`${API}/visits`, {
     headers: auth(rec),
     data: {
-      patientId: patient.id, visitType: 'Walk in', notes: 'e2e worklist context', testIds: [labTest.id],
+      patientId: patient.id, visitType: 'Walk in', confirmRepeatTests: true, notes: 'e2e worklist context', testIds: [labTest.id],
       ...(referringPhysician ? { referringPhysician, referringPhysicianPrc: '0142887' } : {}),
     },
   })).json()).data.visit;

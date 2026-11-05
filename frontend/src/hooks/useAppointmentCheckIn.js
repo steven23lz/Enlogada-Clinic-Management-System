@@ -41,7 +41,12 @@ export function useAppointmentCheckIn({ onCheckedIn } = {}) {
   // and sent WITH the visit: a visit is never opened empty.
   const [walkInTestIds, setWalkInTestIds] = useState([]);
   const [walkInPackageIds, setWalkInPackageIds] = useState([]);
-  const toggleIn = (setter) => (id) => setter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // [1.157.0] The server's question when a chosen test is already on another of today's visits.
+  const [repeatMessage, setRepeatMessage] = useState('');
+  const toggleIn = (setter) => (id) => {
+    setRepeatMessage('');
+    setter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
   const toggleWalkInTest = toggleIn(setWalkInTestIds);
   const toggleWalkInPackage = toggleIn(setWalkInPackageIds);
   const walkInChosen = walkInTestIds.length + walkInPackageIds.length > 0;
@@ -80,6 +85,7 @@ export function useAppointmentCheckIn({ onCheckedIn } = {}) {
     setNotice('');
     setWalkInTestIds([]);
     setWalkInPackageIds([]);
+    setRepeatMessage('');
     setTarget({ type, data });
   };
 
@@ -88,7 +94,8 @@ export function useAppointmentCheckIn({ onCheckedIn } = {}) {
     setTarget(null);
   };
 
-  const confirm = async () => {
+  // `repeatOk` is compared with true: the dialog's button passes its click event here.
+  const confirm = async (repeatOk) => {
     if (!target) return;
     setSubmitting(true);
     setError('');
@@ -127,12 +134,18 @@ export function useAppointmentCheckIn({ onCheckedIn } = {}) {
           visitType: 'Walk in',
           testIds: walkInTestIds.map((id) => parseInt(id, 10)),
           packageIds: walkInPackageIds.map((id) => parseInt(id, 10)),
+          ...(repeatOk === true ? { confirmRepeatTests: true } : {}),
         });
         outcome = { type: 'walkin', patient, visit: vRes.data.data.visit };
       }
+      setRepeatMessage('');
       setTarget(null);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to check in patient');
+      if (err.response?.data?.details?.repeatTests) {
+        setRepeatMessage(err.response.data.message);
+      } else {
+        setError(err.response?.data?.message || 'Failed to check in patient');
+      }
       return;
     } finally {
       setSubmitting(false);
@@ -166,6 +179,7 @@ export function useAppointmentCheckIn({ onCheckedIn } = {}) {
     reference, setReference,
     result, verifyError, scanMode, guidance,
     target, submitting, error, notice,
+    repeatMessage, confirmRepeat: () => confirm(true), dismissRepeat: () => setRepeatMessage(''),
     walkInTestIds, walkInPackageIds, toggleWalkInTest, toggleWalkInPackage, walkInChosen,
     verify, scanned, toggleScanMode, request, cancel, confirm,
     clearResult, reportError, applyToResult,

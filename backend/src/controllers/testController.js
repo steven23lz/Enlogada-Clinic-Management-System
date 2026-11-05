@@ -119,7 +119,7 @@ class TestController {
 
   async addTestsToVisit(req, res, next) {
     try {
-      const { patientVisitId, testIds, packageIds } = req.body;
+      const { patientVisitId, testIds, packageIds, confirmRepeatTests } = req.body;
 
       const tests = Array.isArray(testIds) ? testIds : [];
       const packages = Array.isArray(packageIds) ? packageIds : [];
@@ -132,7 +132,9 @@ class TestController {
         });
       }
 
-      const visitTests = await testService.addTestsToVisit(patientVisitId, tests, req.user, packages);
+      const visitTests = await testService.addTestsToVisit(patientVisitId, tests, req.user, packages, {
+        confirmRepeatTests: confirmRepeatTests === true,
+      });
       return res.status(201).json({
         status: 'success',
         message: `${visitTests.length} test(s) added to visit.`,
