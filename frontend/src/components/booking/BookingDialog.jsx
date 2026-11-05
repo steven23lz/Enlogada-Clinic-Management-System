@@ -13,6 +13,7 @@ import { readOnlineBooking } from '../../lib/onlineBooking';
 import { useClinic } from '../../lib/clinic';
 import { DOCUMENT_MAX_EDGE } from '../../lib/cardImage';
 import { useEvidenceFile } from '../../hooks/useEvidenceFile';
+import { useScrollIntoViewOnSet } from '../../hooks/useScrollIntoViewOnSet';
 import { PlusCircle, AlertCircle } from 'lucide-react';
 
 const DOCTOR_REQUEST_IMAGE = { name: 'doctor-request.jpg', maxEdge: DOCUMENT_MAX_EDGE };
@@ -61,6 +62,9 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
   // instead of the old plain-text message that auto-closed after 4 seconds.
   const [bookingConfirmation, setBookingConfirmation] = useState(null);
   const [bookingError, setBookingError] = useState('');
+  // [1.157.0] The error sits above the form and Submit below it: a patient refused after scrolling
+  // down saw nothing happen at all.
+  const bookingErrorRef = useScrollIntoViewOnSet(bookingError);
 
   // Slot availability lives in SlotPicker, which fetches it itself. This counter is the one thing
   // the page still needs to say about it: bump it to make the grid refetch after a 409, when the
@@ -344,7 +348,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
 
                       <form onSubmit={handleBookAppointment} className="space-y-4 pt-2">
                         {bookingError && (
-                          <div role="alert" className="alert alert-error">
+                          <div ref={bookingErrorRef} role="alert" className="alert alert-error">
                             <AlertCircle className="w-4 h-4 flex-shrink-0" />
                             <span>{bookingError}</span>
                           </div>

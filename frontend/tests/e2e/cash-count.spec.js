@@ -234,8 +234,7 @@ test.describe('The cash count', () => {
   });
 
   /** Counting began before the days these specs leave uncounted. */
-  async function countingBeganLastWeek() {
-    const date = daysAgo(6);
+  async function countingBeganLastWeek(date = daysAgo(6)) {
     const earlier = await dayOf(date);
     const res = await save({
       date, changeFund: 0, ...piecesFor(earlier.expected.cash), note: earlier.current ? 'Counted again by the spec.' : '',
@@ -264,10 +263,14 @@ test.describe('The cash count', () => {
   });
 
   test('Today tells whoever closes about a drawer left uncounted, and its button opens that day', async ({ page }) => {
-    await countingBeganLastWeek();
+    // A day nobody counted, and a count before it. The demo seed counts every open day, so on a
+    // seeded database "three days ago" is already counted; a closed Sunday never is. [1.157.0]
+    let back = 1;
+    while (back < 6 && (await dayOf(daysAgo(back))).current) back += 1;
+    await countingBeganLastWeek(daysAgo(back + 1));
     const { payment } = await paidInCash();
-    backdatePayment(payment.id, 3);
-    const day = daysAgo(3);
+    backdatePayment(payment.id, back);
+    const day = daysAgo(back);
     const status = (await (await ctx.get(`${API}/cash-counts/status`, { headers: auth(desk) })).json()).data;
     expect(status.uncounted, `${day} took cash and was not counted`).toContain(day);
 

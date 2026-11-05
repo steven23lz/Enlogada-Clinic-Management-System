@@ -38,7 +38,9 @@ export default function UndoCheckIn({ visit, onDone }) {
     <>
       <Button type="button" variant="outline" size="xs" data-testid="undo-check-in" onClick={() => { setError(''); setOpen(true); }}>
         <Undo2 className="h-3 w-3" />
-        Undo check-in
+        {/* The name says what it undoes; the row's Actions column has no room for it at 1280 wide. */}
+        <span aria-hidden="true">Undo</span>
+        <span className="sr-only">Undo check-in</span>
       </Button>
       <ConfirmDialog
         open={open}

@@ -20,7 +20,8 @@ import { runScript } from './backendScript.js';
 
 const API_BASE = `${process.env.E2E_API_URL || 'http://localhost:5000'}/api`;
 let bookableCache;
-let nextBookable = 0;
+// From a different place each run, so two spec files do not begin on the same test.
+let nextBookable = Date.now() % 997;
 
 /**
  * An active Laboratory test to put on a booking. [1.124.0] A booking with no tests is refused
@@ -40,6 +41,28 @@ export async function bookableTestId(ctx) {
   const id = bookableCache[nextBookable % bookableCache.length];
   nextBookable += 1;
   return id;
+}
+
+/**
+ * A far-off full weekday on which this account has no booking. [1.157.0] The seeded client books many
+ * times a run, and a test already booked that day is refused, so a spec booking a package or a chosen
+ * test as that client picks a day of its own rather than a random one.
+ *
+ * @param {import('playwright/test').APIRequestContext} ctx
+ * @param {string} token
+ * @param {number} daysAhead  where to start looking
+ * @returns {Promise<string>} 'YYYY-MM-DD'
+ */
+export async function dayWithNoBooking(ctx, token, daysAhead = 200) {
+  const local = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const bookings = (await (await ctx.get(`${API_BASE}/appointments/my-bookings`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })).json()).data.bookings || [];
+  const taken = new Set(bookings.map((b) => local(new Date(b.scheduled_date))));
+  const day = new Date();
+  day.setDate(day.getDate() + daysAhead);
+  while (day.getDay() === 0 || day.getDay() === 6 || taken.has(local(day))) day.setDate(day.getDate() + 1);
+  return local(day);
 }
 
 /** A 1x1 PNG: genuinely an image, so the server's mime filter sees a real one. */

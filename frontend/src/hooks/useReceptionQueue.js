@@ -51,8 +51,9 @@ export function useReceptionQueue({ enabled = true } = {}) {
    * the handler runs.
    */
   const fetch = useCallback(async ({ page: nextPage = 1, search: term = '', status: state = 'All' } = {}) => {
-    setLoading(true);
-    setError('');
+    // [1.157.0] The skeleton is for the first load only, as on the worklist [1.128.0]. Every 30-second
+    // poll used to swap the rows for it, so the queue blinked, and a dialog belonging to a row (Undo
+    // check-in) closed itself and lost what was being typed in it.
     try {
       const response = await api.get('/visits/active', {
         params: {
@@ -71,6 +72,7 @@ export function useReceptionQueue({ enabled = true } = {}) {
       setWalkinCount(data.walkinCount || 0);
       setPage(data.page || nextPage);
       setAppliedSearch(term || '');
+      setError('');
     } catch (err) {
       console.error('Failed to fetch active visits:', err);
       setError('Could not load the active queue. Please try again.');

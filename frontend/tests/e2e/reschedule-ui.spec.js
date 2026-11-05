@@ -4,7 +4,7 @@ import { signIn } from './helpers/auth.js';
 import { openPortalTab } from './helpers/portal.js';
 import { selfPayProfile } from './helpers/patients.js';
 import { formatTime12 } from '../../src/lib/date.js';
-import { appointmentForm, bookableTestId } from './helpers/booking.js';
+import { appointmentForm, bookableTestId, dayWithNoBooking } from './helpers/booking.js';
 
 // The reschedule dialog, driven through the browser.
 //
@@ -32,13 +32,9 @@ test('a patient reschedules from their own booking list', async ({ page }) => {
     (await (await ctx.get(`${API}/patients/my-profiles`, { headers: auth })).json()).data.patients
   ).id;
 
-  const day = new Date();
-  day.setDate(day.getDate() + 300 + (Date.now() % 30));
-  // Saturday too, not just Sunday: the clinic is open 08:00-17:00 on weekdays but only
-  // 08:00-12:00 on a Saturday, so a booking spec that lands there has 8 slots instead of 18
-  // and starts failing on the day of the week rather than on anything in the app.
-  while (day.getDay() === 0 || day.getDay() === 6) day.setDate(day.getDate() + 1);
-  const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+  // A weekday, not a Saturday: 08:00-12:00 is 8 slots instead of 18, and a spec that lands there
+  // starts failing on the day of the week rather than on anything in the app.
+  const date = await dayWithNoBooking(ctx, token, 300);
 
   const free = (await (await ctx.get(`${API}/appointments/availability?date=${date}`, { headers: auth })).json())
     .data.slots.filter((s) => s.available);

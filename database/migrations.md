@@ -36,6 +36,13 @@ and staff moves are exempt: no screen asks there, and a paid booking nobody came
 price or the tests are set, never when retiring one. **Two on offer cannot share a name** (`assertNameFree`, 409): the
 booking screen could not tell them apart, and a service's name was already unique in its department.
 
+**Found running the suite on a freshly seeded copy.** A refused patient saw nothing happen: the booking dialog's
+error sits above the form and Submit below it, so it now scrolls into view. The Desk queue swapped its rows for a
+skeleton on every 30-second poll, so it blinked, and Undo check-in's dialog, which belongs to a row, closed itself
+and lost the reason being typed; the skeleton is now for the first load only, as on the worklist. And Actions ran
+103 px off a 1280 screen, 17 px off 1366: the button reads "Undo" (its accessible name is still "Undo check-in") and
+the Patient Category heading wraps, leaving no overflow.
+
 Left as it is, on purpose: a test switched off stays inside a package that holds it (`packageRepository`'s note: it
 can stop being sold alone and stay in the bundle). `seedDemoScenario.js` passes `confirmRepeatTests`, because its
 history is created today and backdated afterwards, and removes those log lines. `bookableTestId` returns a different

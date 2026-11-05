@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect, request } from 'playwright/test';
 import { signIn } from './helpers/auth.js';
+import { dayWithNoBooking } from './helpers/booking.js';
 import { openBooking as openBookingDialog, attachDoctorRequest } from './helpers/portal.js';
 
 /**
@@ -118,15 +119,15 @@ test.describe('Booking: choosing what to book', () => {
     const active = (await (await ctx.get(`${API}/packages`)).json()).data.packages;
     test.skip(active.length === 0, 'Need an active package.');
     const pkg = active[0];
+
+    // A far-out weekday this patient has nothing on: their earlier bookings hold the package's tests.
+    const token = (await (await ctx.post(`${API}/auth/login`, {
+      data: { email: 'client@enlogada.com', password: 'Password123!' },
+    })).json()).data.token;
+    const date = await dayWithNoBooking(ctx, token, 200);
     await ctx.dispose();
 
     const dialog = await openBooking(page);
-
-    // A far-out weekday, so this never competes for a slot another spec claimed.
-    const d = new Date();
-    d.setDate(d.getDate() + 200 + (Date.now() % 30));
-    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     await dialog.locator('#slotpicker-label').fill(date);
     // The first BOOKABLE slot, not the first slot. [1.62.0]

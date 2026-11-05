@@ -280,6 +280,15 @@ test.describe('Corrections [1.156.0]', () => {
       const confirm = dialog.getByRole('button', { name: 'Undo check-in' });
       await expect(confirm).toBeDisabled();
       await dialog.getByRole('textbox').fill('Checked in the wrong patient');
+
+      // [1.157.0] The queue reads itself again every 30 seconds, and this dialog belongs to a row.
+      // Returning to the tab reads it at once. The row used to be replaced by a skeleton for it,
+      // which closed the dialog and lost the reason half typed.
+      const reread = page.waitForResponse((r) => r.url().includes('/visits/active'));
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+      await reread;
+      await expect(dialog.getByRole('textbox')).toHaveValue('Checked in the wrong patient');
+
       await confirm.click();
       await expect(dialog).toHaveCount(0);
       await expect(page.locator('tr').filter({ hasText: owner.patient.last_name }).filter({ has: page.getByTestId('undo-check-in') })).toHaveCount(0);

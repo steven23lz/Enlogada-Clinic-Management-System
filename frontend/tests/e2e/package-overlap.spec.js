@@ -407,7 +407,8 @@ test.describe('The same test twice [1.157.0]', () => {
     await dialog.getByRole('button', { name: BOOKING_STEP_TWO }).click();
     await dialog.getByRole('button', { name: /submit schedule request/i }).click();
 
-    await expect(dialog.getByText(/cannot be booked twice on one day/i)).toBeVisible({ timeout: 20000 });
+    // In view, not merely on the page: the alert sits above the form, and Submit is below it.
+    await expect(dialog.getByText(/cannot be booked twice on one day/i)).toBeInViewport({ timeout: 20000 });
     // Back on the step with the tests on it, with what they chose still chosen.
     await expect(dialog.locator(`[data-package-code="${A.code}"]`).getByRole('checkbox')).toBeChecked();
   });

@@ -142,7 +142,8 @@ export default function ActiveQueuePanel({ queue, hmo, testAssignment, showSearc
                     <TableHead>Queue Ticket</TableHead>
                     <TableHead>Patient Name</TableHead>
                     <TableHead>Visit Type</TableHead>
-                    <TableHead>Patient Category</TableHead>
+                    {/* Two lines: on one it was wider than anything under it, and took the room Actions needs at 1280. */}
+                    <TableHead className="whitespace-normal">Patient Category</TableHead>
                     <TableHead>Assigned Tests</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
