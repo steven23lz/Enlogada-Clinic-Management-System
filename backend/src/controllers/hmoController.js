@@ -66,14 +66,15 @@ class HmoController {
       const { id } = req.params;
       const { approvalCode } = req.body;
 
-      if (!approvalCode) {
+      // [1.160.0] Spaces are not a code. The screen stopped them and the API did not.
+      if (!String(approvalCode ?? '').trim()) {
         return res.status(400).json({
           status: 'error',
           message: 'Approval code is required.'
         });
       }
 
-      const request = await hmoService.approveRequest(id, { approvalCode }, req.user);
+      const request = await hmoService.approveRequest(id, { approvalCode: String(approvalCode).trim() }, req.user);
       return res.status(200).json({
         status: 'success',
         message: 'HMO request approved. The cashier has been notified.',

@@ -190,6 +190,17 @@ class HmoRepository {
       RETURNING *
     `;
     const result = await db.query(queryText, [decisionReason, decidedBy, id]);
+    // [1.160.0] Its tests too, or uq_hmo_one_live_claim_per_test reads them as a claim still open and a
+    // corrected claim can never be raised: "That test already has an HMO claim open", for good.
+    await db.query(
+      `UPDATE hmo_request_tests
+          SET approval_status = 'Rejected',
+              decision_reason = COALESCE(decision_reason, $1),
+              decided_by = $2,
+              decided_at = CURRENT_TIMESTAMP
+        WHERE hmo_request_id = $3 AND approval_status <> 'Rejected'`,
+      [decisionReason, decidedBy, id]
+    );
     return result.rows[0];
   }
 
@@ -265,7 +276,11 @@ class HmoRepository {
                  JOIN hmo_requests hr ON hr.id = hrt.hmo_request_id
                  JOIN visit_tests vt ON vt.id = hrt.visit_test_id
                  JOIN tests t ON t.id = vt.test_id
-                WHERE vt.patient_visit_id = $1) x`,
+                WHERE vt.patient_visit_id = $1
+                  -- The latest claim on each test, as the bill reads it. [1.160.0] A test refused and
+                  -- then approved on a retry was emailed as "not covered".
+                  AND NOT EXISTS (SELECT 1 FROM hmo_request_tests newer
+                                   WHERE newer.visit_test_id = hrt.visit_test_id AND newer.created_at > hrt.created_at)) x`,
       [visitId]
     );
     return rows[0];

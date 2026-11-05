@@ -299,7 +299,7 @@ test.describe('HMO claims and packages [1.158.0]', () => {
       },
     })).json()).data.patient;
     const res = await ctx.post(`${API}/visits`, { headers: auth(desk), data: { patientId: patient.id, visitType: 'Walk in', packageIds: [pkg.id] } });
-    const v = (await res.json()).data.visit.id;
+    const { id: v, queue_number: ticket } = (await res.json()).data.visit;
     const [line] = await lines(v);
     const id = await claim([line.id]);
 
@@ -308,7 +308,7 @@ test.describe('HMO claims and packages [1.158.0]', () => {
     expect(about[0]).toMatchObject({ name: pkg.name, atOwnPrice: false, onThisClaim: 1, tests: pkg.tests.length });
 
     await signInTo(page, 'clinicadmin@enlogada.com', 'Service Requests');
-    await page.getByRole('row', { name: new RegExp(person.lastName) }).getByRole('button', { name: 'Review' }).click({ timeout: 20000 });
+    await page.getByRole('row', { name: new RegExp(`${person.lastName}.*Ticket ${ticket}`) }).getByRole('button', { name: 'Review' }).click({ timeout: 20000 });
     const note = page.getByRole('dialog').getByTestId('claim-package-note');
     await expect(note).toContainText(`1 of the ${pkg.tests.length} tests in ${pkg.name}`);
     await expect(note).toContainText('goes back to its own price');

@@ -14,6 +14,10 @@ const { ValidationError } = require('../errors');
 const EARLIEST_BIRTHDATE = '1900-01-01';
 const NAME_MAX = 100; // patients.first_name / last_name are VARCHAR(100)
 const PHONE = /^[0-9+()\-\s]{7,20}$/;
+// [1.160.0] Letters from any language, and what a real name uses: "Ma. Teresa", "O'Brien", "Dela Cruz-Reyes",
+// "Juan III". A probe saved "12345" and "<script>" as first names.
+const NAME_CHARS = /^[\p{L}\p{M}\d .,'’\-()]+$/u;
+const NAME_LETTER = /\p{L}/u;
 
 const isRealDate = (value) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -40,6 +44,9 @@ function normalisePatientFields(data, today) {
     if (typeof data[key] !== 'string' || !data[key].trim()) throw new ValidationError(`${label} is required.`);
     const value = data[key].trim().replace(/\s+/g, ' ');
     if (value.length > NAME_MAX) throw new ValidationError(`${label} is too long (${NAME_MAX} characters at most).`);
+    if (!NAME_CHARS.test(value) || !NAME_LETTER.test(value)) {
+      throw new ValidationError(`${label} should be a name, in letters, like Juan or Dela Cruz.`);
+    }
     out[key] = value;
   }
 
@@ -57,7 +64,8 @@ function normalisePatientFields(data, today) {
 
   if (data.contactNumber !== undefined && data.contactNumber !== null) {
     const value = String(data.contactNumber).trim();
-    if (value && !PHONE.test(value)) {
+    // [1.160.0] Seven digits, not seven characters: "-------" passed.
+    if (value && (!PHONE.test(value) || value.replace(/\D/g, '').length < 7)) {
       throw new ValidationError('Contact number should be digits only, like 09171234567.');
     }
     out.contactNumber = value || null;

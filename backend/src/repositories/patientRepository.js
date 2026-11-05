@@ -128,6 +128,18 @@ class PatientRepository {
     return rows.length > 0;
   }
 
+  /** A profile on this account with the same name and birthdate, whatever its case or spacing. [1.160.0] */
+  async findSameOnAccount(userId, { firstName, lastName, birthdate }) {
+    const { rows } = await db.query(
+      `SELECT id, first_name, last_name FROM patients
+        WHERE user_id = $1 AND archived_at IS NULL AND birthdate = $4::date
+          AND LOWER(BTRIM(first_name)) = LOWER(BTRIM($2)) AND LOWER(BTRIM(last_name)) = LOWER(BTRIM($3))
+        LIMIT 1`,
+      [userId, firstName, lastName, birthdate]
+    );
+    return rows[0] || null;
+  }
+
   async findPatientsByUserId(userId) {
     const queryText = `
       SELECT p.*, pt.name as patient_type_name,

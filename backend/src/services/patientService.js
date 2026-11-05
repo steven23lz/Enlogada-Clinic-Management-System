@@ -135,9 +135,18 @@ class PatientService {
   }
 
   async addPatientProfile(userId, patientData) {
+    const fields = normalisePatientFields(patientData, localToday());
+    // [1.160.0] Nothing stopped one account adding the same person twice, a double-click included, and
+    // each profile then held half of that person's visits. The desk has been asked since [1.129.0].
+    const same = await patientRepository.findSameOnAccount(userId, fields);
+    if (same) {
+      const error = new Error(`${same.first_name} ${same.last_name}, with this birthdate, is already on your account. Choose that profile instead.`);
+      error.statusCode = 409;
+      throw error;
+    }
     return await patientRepository.createPatient({
       userId,
-      ...normalisePatientFields(patientData, localToday()),
+      ...fields,
       email: normaliseEmail(patientData.email),
     });
   }

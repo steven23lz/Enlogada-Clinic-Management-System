@@ -25,6 +25,22 @@ test('a blank or overlong name, an unknown sex and a phone in words are refused'
   }
 });
 
+test('a name is letters, in any language, with what real names use', () => {
+  for (const firstName of ['12345', '<script>alert(1)</script>', '😀😀', '---', '...']) {
+    assert.throws(() => normalisePatientFields({ ...ok, firstName }, TODAY), { statusCode: 400 }, firstName);
+  }
+  for (const firstName of ['Ma. Teresa', "O'Brien", 'Niño', 'Dela Cruz-Reyes', 'Juan III', 'José (Jojo)', 'A']) {
+    assert.equal(normalisePatientFields({ ...ok, firstName }, TODAY).firstName, firstName);
+  }
+});
+
+test('a phone number has seven digits in it, not seven characters', () => {
+  for (const contactNumber of ['-------', '(((((((', '123-456']) {
+    assert.throws(() => normalisePatientFields({ ...ok, contactNumber }, TODAY), { statusCode: 400 }, contactNumber);
+  }
+  assert.equal(normalisePatientFields({ ...ok, contactNumber: '(088) 123-4567' }, TODAY).contactNumber, '(088) 123-4567');
+});
+
 test('a field left out stays left out', () => {
   assert.deepEqual(normalisePatientFields({ address: 'Bugo' }, TODAY), { address: 'Bugo' });
 });

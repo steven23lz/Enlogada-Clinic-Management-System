@@ -241,6 +241,18 @@ class PaymentService {
       throw error;
     }
 
+    // [1.160.0] Asked again as the money is taken: a senior discount given, and the birthdate then
+    // corrected to someone of 31, still took 20% off a receipt that cannot be taken back.
+    if (bill.discount) {
+      const visit = await visitRepository.findVisitById(patientVisitId);
+      try {
+        discountService.assertEligible({ name: bill.discount.name }, await patientRepository.findPatientById(visit.patient_id));
+      } catch (err) {
+        err.message = `${err.message} Otherwise remove the discount.`;
+        throw err;
+      }
+    }
+
     const undecided = Number(bill.hmoPendingCount) || 0;
     if (undecided > 0 && !withdrawPendingClaims) {
       const error = new Error(

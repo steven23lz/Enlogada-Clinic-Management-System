@@ -275,7 +275,8 @@ export default function CheckoutTerminal({ checkout, queue }) {
                   {/* Reflects the real, per-test-approved coverage computed server-side
                       (Module 14) — an HMO-category patient is not guaranteed full coverage
                       just from their billing category alone. */}
-                  {checkout.bill?.patientType === 'HMO' && (
+                  {/* [1.160.0] Coverage is said whatever the record's category: a Self Pay record with an approved claim showed nothing here. */}
+                  {(parseFloat(checkout.bill?.hmoCoverage || 0) > 0 || checkout.bill?.patientType === 'HMO') && (
                     parseFloat(checkout.bill.hmoCoverage) > 0 ? (
                       <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 flex items-center space-x-2 text-xs font-semibold">
                         <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />

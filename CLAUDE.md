@@ -117,6 +117,7 @@ node src/scripts/migrateCashCounts.js            # [1.150.0] cash_counts: the en
 node src/scripts/migrateRefunds.js               # [1.155.0] payment_refunds + payment_refund_tests: the two recorded refund cases (--rollback reverses it)
 node src/scripts/migrateCorrections.js           # [1.156.0] withdrawn reports, undoing a check-in, sign-up agreement (--rollback reverses it)
 node src/scripts/migratePackageOwnPrice.js       # [1.159.0] a package line's share and own price; which tests came out of a package off sale (--rollback reverses it)
+node src/scripts/migrateRefusedClaimLines.js     # [1.160.0] data only: tests on a refused claim are free for a new claim
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.

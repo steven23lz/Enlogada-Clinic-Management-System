@@ -1,5 +1,19 @@
 # Database Migration & Schema History
 
+## [1.160.0] - 2026-11-05 (What a second walk through the combinations found)
+
+`migrateRefusedClaimLines.js` is data only. Steven: "can u check if theres more bug". Every portal figure matched its bill; these did not hold.
+
+- **A claim refused as a whole could never be raised again.** Refusing set the claim's status and left each test 'Pending', which
+  `uq_hmo_one_live_claim_per_test` reads as a live claim: "That test already has an HMO claim open", for good, on the wrong-member-number case a retry exists for.
+  Refusing closes the lines in the same write. Reading the latest claim per test now also holds for the decision email and the HMO report: a test refused
+  and approved on a retry was emailed as "not covered" and reported as both refused and approved.
+- **A senior discount outlived the birthdate it rested on.** Correcting the record to someone of 31 left 20% off, and the till took it, on a final receipt. `processPayment` asks again.
+- **Spaces passed as an LOA code**: the screen stopped them and the API did not.
+- **"12345" and "<script>" were first names, and "-------" a phone number.** `validations/patientFields.js`: letters in any language and what real names use; seven digits.
+- **One account could add the same person twice** (409 now). The walk-in matching in the parked list is a different case and stays parked.
+- **The till's coverage line read the record's category**, so a Self Pay record with an approved claim showed none.
+
 ## [1.159.0] - 2026-11-05 (An HMO covering part of a package ends its price; a package off sale says why)
 
 `migratePackageOwnPrice.js`: `visit_tests.package_share`, `visit_tests.list_price`, `test_packages.retired_test_ids`.

@@ -56,6 +56,10 @@ const CLAIM_LINES = `
           JOIN test_categories tc   ON tc.id = t.category_id
           JOIN patient_visits pv    ON pv.id = vt.patient_visit_id
          WHERE pv.created_at >= $1::date AND pv.created_at < ($2::date + 1)
+           -- The latest claim on each test, as the bill reads it. [1.160.0] A test refused and approved on
+           -- a retry was reported as both, so the refused figure held money nobody had lost.
+           AND NOT EXISTS (SELECT 1 FROM hmo_request_tests newer
+                            WHERE newer.visit_test_id = hrt.visit_test_id AND newer.created_at > hrt.created_at)
 `;
 
 class ReportRepository {
