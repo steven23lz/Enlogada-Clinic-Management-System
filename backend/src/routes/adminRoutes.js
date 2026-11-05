@@ -1,11 +1,15 @@
 const express = require('express');
 const adminController = require('../controllers/adminController');
-const { verifyToken, authorizeStaff, authorizePermissions } = require('../middlewares/auth');
+const cashCountController = require('../controllers/cashCountController');
+const { verifyToken, authorizeStaff, authorizePermissions, authorizeRoles } = require('../middlewares/auth');
 
 const router = express.Router();
 
 // Module 12 (Admin Dashboard): staff account management, scoped to the 5 operational roles
 // only. Admin/SuperAdmin account management is Module 13's responsibility.
+// [1.162.0] How the clinic counts its cash. A setting of the clinic's, so SuperAdmin's.
+router.get('/settings/cash-drawers', verifyToken, authorizeRoles('SuperAdmin'), cashCountController.getDrawers);
+router.put('/settings/cash-drawers', verifyToken, authorizeRoles('SuperAdmin'), cashCountController.setDrawers);
 router.get('/staff', verifyToken, authorizeStaff, authorizePermissions('staff:manage'), adminController.getStaff);
 router.post('/staff', verifyToken, authorizeStaff, authorizePermissions('staff:manage'), adminController.createStaff);
 router.patch('/staff/:id/status', verifyToken, authorizeStaff, authorizePermissions('staff:manage'), adminController.updateStaffStatus);

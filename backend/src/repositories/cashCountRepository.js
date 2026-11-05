@@ -8,10 +8,16 @@ const COUNT_COLUMNS = `c.id, c.business_date, c.change_fund, c.expected_cash, c.
 
 const sqlList = (values) => values.map((v) => `'${v}'`).join(', ');
 
-/** One row per day from a window of payments: the same receipts, on the same rule, as the cash book. */
-const TAKINGS_BY_DAY = `
+/**
+ * One row per day from a window of payments: the same receipts, on the same rule, as the cash book.
+ * [1.162.0] With `perCashier`, one row per day and cashier: each cashier answers for the receipts they took,
+ * and for cash handed back on those receipts.
+ */
+const takingsByDay = (perCashier) => {
+  const drawer = perCashier ? 'pay.processed_by' : 'NULL::int';
+  return `
   WITH paid AS (
-    SELECT pay.paid_at::date AS day,
+    SELECT pay.paid_at::date AS day, ${drawer} AS drawer,
            COUNT(*)::int AS receipts,
            COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method = '${CASH_METHOD}'), 0) AS cash,
            COALESCE(SUM(pay.amount) FILTER (WHERE pay.payment_method IN (${sqlList(EWALLET_METHODS)})), 0) AS gcash,
@@ -19,43 +25,47 @@ const TAKINGS_BY_DAY = `
       FROM payments pay
      WHERE ${ISSUED_RECEIPT_CLAUSE}
        AND pay.paid_at >= $1::date AND pay.paid_at < ($2::date + 1)
-     GROUP BY 1
+     GROUP BY 1, 2
   ),
   -- [1.155.0] Cash handed back left the drawer that day, whenever the receipt was taken. The drawer only
   -- answers for cash: money returned by GCash or bank never was in it.
   handed_back AS (
-    SELECT r.refunded_at::date AS day, SUM(r.amount) AS cash
+    SELECT r.refunded_at::date AS day, ${drawer} AS drawer, SUM(r.amount) AS cash
       FROM payment_refunds r
+      JOIN payments pay ON pay.id = r.payment_id
      WHERE r.returned_via = '${CASH_METHOD}'
        AND r.refunded_at >= $1::date AND r.refunded_at < ($2::date + 1)
-     GROUP BY 1
+     GROUP BY 1, 2
   )
   SELECT COALESCE(p.day, b.day) AS day,
+         COALESCE(p.drawer, b.drawer) AS drawer,
          COALESCE(p.receipts, 0)::int AS receipts,
          (COALESCE(p.cash, 0) - COALESCE(b.cash, 0))::numeric(12,2) AS cash,
          COALESCE(p.gcash, 0)::numeric(12,2) AS gcash,
          COALESCE(p.bank, 0)::numeric(12,2) AS bank
     FROM paid p
-    FULL JOIN handed_back b ON b.day = p.day`;
+    FULL JOIN handed_back b ON b.day = p.day AND COALESCE(b.drawer, 0) = COALESCE(p.drawer, 0)`;
+};
 
 class CashCountRepository {
   /** Every count of one day, newest first: the current one, and any it replaced. */
-  async findVersions(date) {
+  async findVersions(date, drawerOf = null) {
     const { rows } = await db.query(
       `SELECT ${COUNT_COLUMNS}
          FROM cash_counts c
          LEFT JOIN users u ON u.id = c.counted_by
-        WHERE c.business_date = $1::date
+        WHERE c.business_date = $1::date AND c.drawer_of IS NOT DISTINCT FROM $2::int
         ORDER BY c.counted_at DESC, c.id DESC`,
-      [date]
+      [date, drawerOf]
     );
     return rows;
   }
 
   /** The change fund on the latest count: what the drawer most likely starts with again. */
-  async findLastChangeFund() {
+  async findLastChangeFund(drawerOf = null) {
     const { rows } = await db.query(
-      `SELECT change_fund FROM cash_counts WHERE is_current ORDER BY business_date DESC LIMIT 1`
+      `SELECT change_fund FROM cash_counts WHERE is_current AND drawer_of IS NOT DISTINCT FROM $1::int ORDER BY business_date DESC LIMIT 1`,
+      [drawerOf]
     );
     return rows[0]?.change_fund ?? null;
   }
@@ -64,13 +74,13 @@ class CashCountRepository {
     await db.query('UPDATE cash_counts SET is_current = FALSE WHERE id = $1', [id]);
   }
 
-  async create({ date, changeFund, expected, counted, pieces, note, countedBy }) {
+  async create({ date, changeFund, expected, counted, pieces, note, countedBy, drawerOf = null }) {
     const { rows } = await db.query(
       `INSERT INTO cash_counts
-         (business_date, change_fund, expected_cash, expected_gcash, expected_bank, receipts, counted_cash, pieces, note, counted_by)
-       VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
+         (business_date, change_fund, expected_cash, expected_gcash, expected_bank, receipts, counted_cash, pieces, note, counted_by, drawer_of)
+       VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
        RETURNING id`,
-      [date, changeFund, expected.cash, expected.gcash, expected.bank, expected.receipts, counted, JSON.stringify(pieces), note, countedBy]
+      [date, changeFund, expected.cash, expected.gcash, expected.bank, expected.receipts, counted, JSON.stringify(pieces), note, countedBy, drawerOf]
     );
     return rows[0].id;
   }
@@ -83,15 +93,17 @@ class CashCountRepository {
    * list that grows with the clinic pages at the server; the money totals are `findDaysSummary`,
    * never the rows on a page.
    */
-  async findDays({ startDate, endDate, limit, offset }) {
+  async findDays({ startDate, endDate, limit, offset, perCashier = false }) {
     const { rows } = await db.query(
-      `WITH takings AS (${TAKINGS_BY_DAY}),
+      `WITH takings AS (${takingsByDay(perCashier)}),
             days AS (
-              SELECT day FROM takings
+              SELECT day, drawer FROM takings
               UNION
-              SELECT business_date FROM cash_counts WHERE is_current AND business_date >= $1::date AND business_date <= $2::date
+              SELECT business_date, drawer_of FROM cash_counts WHERE is_current AND business_date >= $1::date AND business_date <= $2::date
             )
        SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
+              d.drawer,
+              NULLIF(TRIM(CONCAT(dr.first_name, ' ', dr.last_name)), '') AS drawer_name,
               COALESCE(t.receipts, 0) AS receipts_now,
               COALESCE(t.cash, 0)::numeric(12,2) AS cash_now,
               COALESCE(t.gcash, 0)::numeric(12,2) AS gcash_now,
@@ -99,32 +111,33 @@ class CashCountRepository {
               (COALESCE(t.cash, 0) - c.expected_cash)::numeric(12,2) AS taken_after,
               COALESCE(d.day < (SELECT MIN(f.business_date) FROM cash_counts f), TRUE) AS before_counting,
               ${COUNT_COLUMNS},
-              (SELECT COUNT(*)::int - 1 FROM cash_counts v WHERE v.business_date = d.day) AS recounts
+              (SELECT COUNT(*)::int - 1 FROM cash_counts v WHERE v.business_date = d.day AND v.drawer_of IS NOT DISTINCT FROM d.drawer) AS recounts
          FROM days d
-         LEFT JOIN takings t ON t.day = d.day
-         LEFT JOIN cash_counts c ON c.business_date = d.day AND c.is_current
+         LEFT JOIN takings t ON t.day = d.day AND t.drawer IS NOT DISTINCT FROM d.drawer
+         LEFT JOIN cash_counts c ON c.business_date = d.day AND c.is_current AND c.drawer_of IS NOT DISTINCT FROM d.drawer
          LEFT JOIN users u ON u.id = c.counted_by
-        ORDER BY d.day DESC
+         LEFT JOIN users dr ON dr.id = d.drawer
+        ORDER BY d.day DESC, drawer_name
         LIMIT $3 OFFSET $4`,
       [startDate, endDate, limit, offset]
     );
     return rows;
   }
 
-  async findDaysSummary({ startDate, endDate }) {
+  async findDaysSummary({ startDate, endDate, perCashier = false }) {
     const { rows } = await db.query(
-      `WITH takings AS (${TAKINGS_BY_DAY}),
+      `WITH takings AS (${takingsByDay(perCashier)}),
             counted AS (
-              SELECT business_date AS day, difference FROM cash_counts
+              SELECT business_date AS day, drawer_of AS drawer, difference FROM cash_counts
                WHERE is_current AND business_date >= $1::date AND business_date <= $2::date
             ),
-            days AS (SELECT day FROM takings UNION SELECT day FROM counted)
+            days AS (SELECT day, drawer FROM takings UNION SELECT day, drawer FROM counted)
        SELECT (SELECT COUNT(*)::int FROM days) AS days,
               (SELECT COUNT(*)::int FROM counted) AS counted,
               (SELECT COUNT(*)::int FROM days d
                 WHERE d.day < CURRENT_DATE
                   AND d.day >= (SELECT MIN(f.business_date) FROM cash_counts f)
-                  AND NOT EXISTS (SELECT 1 FROM counted c WHERE c.day = d.day)) AS not_counted,
+                  AND NOT EXISTS (SELECT 1 FROM counted c WHERE c.day = d.day AND c.drawer IS NOT DISTINCT FROM d.drawer)) AS not_counted,
               (SELECT COALESCE(SUM(-difference) FILTER (WHERE difference < 0), 0)::numeric(12,2) FROM counted) AS short,
               (SELECT COALESCE(SUM(difference) FILTER (WHERE difference > 0), 0)::numeric(12,2) FROM counted) AS over`,
       [startDate, endDate]
@@ -138,7 +151,7 @@ class CashCountRepository {
    * with no count yet the MIN is NULL and this finds nothing, so the clinic's first week is not a
    * list of counts nobody could have made.
    */
-  async findUncountedDays(days) {
+  async findUncountedDays(days, drawerOf = null) {
     const { rows } = await db.query(
       `SELECT DISTINCT to_char(pay.paid_at::date, 'YYYY-MM-DD') AS day
          FROM payments pay
@@ -146,19 +159,29 @@ class CashCountRepository {
           AND pay.payment_method = '${CASH_METHOD}'
           AND pay.paid_at >= CURRENT_DATE - $1::int AND pay.paid_at < CURRENT_DATE
           AND pay.paid_at >= (SELECT MIN(f.business_date) FROM cash_counts f)
-          AND NOT EXISTS (SELECT 1 FROM cash_counts c WHERE c.is_current AND c.business_date = pay.paid_at::date)
+          AND ($2::int IS NULL OR pay.processed_by = $2::int)
+          AND NOT EXISTS (SELECT 1 FROM cash_counts c WHERE c.is_current AND c.business_date = pay.paid_at::date AND c.drawer_of IS NOT DISTINCT FROM $2::int)
         ORDER BY 1 DESC`,
-      [days]
+      [days, drawerOf]
     );
     return rows.map((r) => r.day);
   }
 
-  async hasCurrent(date) {
+  async hasCurrent(date, drawerOf = null) {
     const { rows } = await db.query(
-      'SELECT 1 FROM cash_counts WHERE is_current AND business_date = $1::date',
-      [date]
+      'SELECT 1 FROM cash_counts WHERE is_current AND business_date = $1::date AND drawer_of IS NOT DISTINCT FROM $2::int',
+      [date, drawerOf]
     );
     return rows.length > 0;
+  }
+
+  /** One cashier's day: their receipts, and cash handed back on them. Shared drawers read the cash book. [1.162.0] */
+  async findCashierDay(date, cashierId) {
+    const { rows } = await db.query(
+      `${takingsByDay(true)} WHERE COALESCE(p.drawer, b.drawer) = $3::int AND COALESCE(p.day, b.day) = $1::date`,
+      [date, date, cashierId]
+    );
+    return rows[0] || { receipts: 0, cash: 0, gcash: 0, bank: 0 };
   }
 }
 

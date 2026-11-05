@@ -119,6 +119,7 @@ node src/scripts/migrateCorrections.js           # [1.156.0] withdrawn reports, 
 node src/scripts/migratePackageOwnPrice.js       # [1.159.0] a package line's share and own price; which tests came out of a package off sale (--rollback reverses it)
 node src/scripts/migrateRefusedClaimLines.js     # [1.160.0] data only: tests on a refused claim are free for a new claim
 node src/scripts/migrateRetirePrivate.js         # [1.161.0] Private patients become Self Pay, and the type goes (--rollback restores them)
+node src/scripts/migrateCashDrawers.js           # [1.162.0] clinic_settings, cash_counts.drawer_of: one shared drawer until Super Admin says otherwise (--rollback reverses it)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -1004,6 +1005,10 @@ pair and the evidence: `#53843b`/`#0a71a9` pass every check on both theme surfac
 the normal-vision floor. Same steps in both themes. Tritan separation is 5.2, so every chart using
 the pair also carries a legend and names both series in its tooltip; colour is never the only
 encoding. Median and p90 share one hue at two lightnesses because they are one distribution.
+
+**One shared drawer, or one per cashier.** `[1.162.0]` Super Admin → Payment Methods → Cash drawers (`clinic_settings`). Per cashier, each counts only the receipts they took (`cash_counts.drawer_of`, NULL for the shared drawer) and the days list has a row per day and cashier. Below, "one drawer" means the default.
+
+**Records are kept 10 years, then archived, never deleted.** `[1.162.0]` Steven's rule. The daily retention pass archives a record with no visit, edit or booking ahead for 10 years (`patient.auto_archived`, `RECORD_AUTO_ARCHIVE=off` stops it); the Archive button still works any time, and an edit or a restore counts as activity. The Activity Log's own window went from 7 years to 10 to match. **The system runs online:** `docs/DEPLOYMENT.md`.
 
 **The drawer is counted at the end of the day, and the count is never overwritten.** `[1.150.0]`
 Cash Count (`billing:process`; an Admin reads the days on Cashier Monitoring on `billing:read`) takes

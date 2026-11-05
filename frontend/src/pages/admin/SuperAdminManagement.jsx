@@ -5,6 +5,7 @@ import { ShieldCheck } from 'lucide-react';
 import RoleMatrix from '../../components/admin/RoleMatrix';
 import ElevatedAccountsPanel from '../../components/admin/ElevatedAccountsPanel';
 import PaymentMethodsPanel from '../../components/admin/PaymentMethodsPanel';
+import CashDrawersPanel from '../../components/admin/CashDrawersPanel';
 import PaymentMethodFormDialog from '../../components/admin/PaymentMethodFormDialog';
 import { ConfirmDialog } from '../../components/ui/confirm-dialog';
 import { useAccessControl } from '../../hooks/useAccessControl';
@@ -57,6 +58,7 @@ const SuperAdminManagement = ({ intent = null }) => {
         </TabsContent>
         <TabsContent value="payments" className="m-0">
           <PaymentMethodsPanel paymentMethods={paymentMethods} />
+          <CashDrawersPanel />
         </TabsContent>
       </Tabs>
 

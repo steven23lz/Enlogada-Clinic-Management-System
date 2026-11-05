@@ -133,6 +133,26 @@ class PatientRepository {
     return rows[0]?.id ?? null;
   }
 
+  /**
+   * Archives records with nothing on them for `years`: no visit, no edit, nothing booked ahead. [1.162.0]
+   * updated_at counts as activity, so a record someone restored or corrected is left alone.
+   */
+  async archiveDormant(years) {
+    const { rows } = await db.query(
+      `UPDATE patients p
+          SET archived_at = CURRENT_TIMESTAMP, archived_by = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE p.archived_at IS NULL
+          AND GREATEST(p.created_at, p.updated_at) < CURRENT_TIMESTAMP - make_interval(years => $1)
+          AND NOT EXISTS (SELECT 1 FROM patient_visits pv
+                           WHERE pv.patient_id = p.id AND pv.created_at >= CURRENT_TIMESTAMP - make_interval(years => $1))
+          AND NOT EXISTS (SELECT 1 FROM appointments a JOIN patient_visits pv ON pv.id = a.patient_visit_id
+                           WHERE pv.patient_id = p.id AND a.scheduled_date >= CURRENT_DATE)
+        RETURNING p.id, p.first_name, p.last_name`,
+      [years]
+    );
+    return rows;
+  }
+
   /** A profile on this account with the same name and birthdate, whatever its case or spacing. [1.160.0] */
   async findSameOnAccount(userId, { firstName, lastName, birthdate }) {
     const { rows } = await db.query(

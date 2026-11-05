@@ -92,9 +92,10 @@ export default function ClosedDaysPanel({ refreshKey = 0 }) {
                 </TableCell>
               </TableRow>
             ) : rows.map((d) => (
-              <TableRow key={d.date} data-testid="closed-day" data-date={d.date} data-outcome={d.count?.outcome || (d.beforeCounting ? 'before-counting' : 'not-counted')}>
+              <TableRow key={`${d.date}-${d.drawerKey}`} data-testid="closed-day" data-date={d.date} data-drawer={d.drawerName || undefined} data-outcome={d.count?.outcome || (d.beforeCounting ? 'before-counting' : 'not-counted')}>
                 <TableCell label="Day" className="whitespace-nowrap font-semibold text-slate-900">
                   {dayLabel(d.date)}
+                  {d.drawerName && <span className="block text-fine font-semibold text-brand-700">{d.drawerName}'s drawer</span>}
                   <span className="block text-meta font-normal text-slate-500">{d.receipts} receipt{d.receipts === 1 ? '' : 's'}</span>
                 </TableCell>
                 <TableCell label="Cash taken" className="tabular-nums">

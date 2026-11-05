@@ -2,6 +2,7 @@
 -- Database: PostgreSQL (Local/Supabase hosted)
 
 -- Drop existing tables to allow clean recreation
+DROP TABLE IF EXISTS clinic_settings CASCADE;
 DROP TABLE IF EXISTS cash_counts CASCADE;
 DROP TABLE IF EXISTS queue_calls CASCADE;
 DROP TABLE IF EXISTS daily_counters CASCADE;
@@ -1003,10 +1004,22 @@ CREATE TABLE cash_counts (
     counted_by INT,
     counted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     is_current BOOLEAN NOT NULL DEFAULT TRUE,
+    -- NULL: the clinic's one shared drawer. A user: that cashier's own. [1.162.0]
+    drawer_of INT,
+    CONSTRAINT fk_cash_counts_drawer_of FOREIGN KEY (drawer_of) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_cash_counts_counted_by FOREIGN KEY (counted_by) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT chk_cash_counts_amounts CHECK (change_fund >= 0 AND counted_cash >= 0)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_counts_current_per_day ON cash_counts (business_date) WHERE is_current;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_counts_current_per_day ON cash_counts (business_date, COALESCE(drawer_of, 0)) WHERE is_current;
+
+-- Settings the clinic changes itself, with no developer and no restart. [1.162.0]
+CREATE TABLE clinic_settings (
+    key VARCHAR(50) PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_by INT,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_clinic_settings_updated_by FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+);
 CREATE INDEX IF NOT EXISTS idx_cash_counts_date ON cash_counts (business_date, counted_at);
 
 -- Who each station has called. [1.149.0] One row per press of Call; the waiting-room screen shows

@@ -1,5 +1,16 @@
 # Database Migration & Schema History
 
+## [1.162.0] - 2026-11-06 (The clinic's answers: online, 10 years, ready for more than one drawer)
+
+`migrateCashDrawers.js`: `clinic_settings`, `cash_counts.drawer_of`; `uq_cash_counts_current_per_day` is now per day and drawer.
+
+- **Online.** Behind a host's proxy every patient looked like one address, so one person's failed sign-ins would have locked out everybody's: `trust proxy` (`TRUST_PROXY`, 1 in production).
+  The server warns at start-up about a local `FRONTEND_URL` and backups unencrypted or on one disk. `docs/DEPLOYMENT.md` is the checklist, the persistent disk for uploads first.
+- **10 years.** The retention pass archives a record with nothing on it for 10 years (`patient.auto_archived`), never deletes it. Archive by hand still works any time. The Activity Log keeps its
+  entries 10 years rather than 7, as long as the records they describe. PHI read entries stay at 2. The Privacy Policy says so.
+- **Future-ready drawers.** One shared drawer stays the default and nothing changes. Super Admin can switch to one per cashier without a developer: each counts only the cash they took,
+  and each day has a row per cashier on Cashier Monitoring. Two people working at once was already safe: tickets, receipts and check-ins come from locked counters and unique indexes.
+
 ## [1.161.0] - 2026-11-05 (Clicking every screen as a real user)
 
 `migrateRetirePrivate.js`. Steven: "self pay and private it doesnt matter cause the clinic accept without doctors note", and to click every screen like a real user. A temporary walker signed

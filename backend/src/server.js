@@ -3,7 +3,7 @@ const env = require('./config/environment');
 const logger = require('./config/logger');
 const db = require('./config/database');
 
-const { reportPendingRepairs, reportGatewayConfiguration, reportAccountMail } = require('./config/startupAdvisory');
+const { reportPendingRepairs, reportGatewayConfiguration, reportAccountMail, reportHosting } = require('./config/startupAdvisory');
 const reminderScheduler = require('./jobs/reminderScheduler');
 const unpaidExpiryScheduler = require('./jobs/unpaidExpiryScheduler');
 const patientMessageScheduler = require('./jobs/patientMessageScheduler');
@@ -17,6 +17,7 @@ const server = app.listen(env.PORT, () => {
   reportPendingRepairs();
   reportGatewayConfiguration();
   reportAccountMail();
+  reportHosting();
   // [1.130.0] Appointment reminders, sent by the server itself.
   reminderScheduler.start();
   // [1.131.0] Unpaid walk-ins and bookings whose time is up are removed.

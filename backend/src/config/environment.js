@@ -115,6 +115,12 @@ module.exports = {
   // [1.148.0] Old notifications, Activity Log entries and HMO card photos are removed on a schedule
   // (jobs/retentionScheduler.js), as the prune scripts do by hand. Off with RETENTION=off.
   RETENTION: process.env.RETENTION !== 'off',
+  // [1.162.0] A record with no activity for 10 years is archived, never deleted. Off with
+  // RECORD_AUTO_ARCHIVE=off, which leaves it to the Archive button on Patient Records.
+  RECORD_AUTO_ARCHIVE: process.env.RECORD_AUTO_ARCHIVE !== 'off',
+  // [1.162.0] Hosted online, the server sits behind a proxy, and without this every patient looks like
+  // one address: one person's failed sign-ins would lock out everybody's. How many proxies to trust.
+  TRUST_PROXY: process.env.TRUST_PROXY !== undefined ? Number(process.env.TRUST_PROXY) : (process.env.NODE_ENV === 'production' ? 1 : 0),
   // [1.148.0] A nightly backup of the database and the uploaded files (services/backupService.js,
   // docs/BACKUP_AND_RESTORE.md). Off with BACKUPS=off, which Today warns about; BACKUPS=host says
   // the hosting company backs the database up instead (a managed cloud database), and Today is quiet.

@@ -5,6 +5,8 @@ const auditRepository = require('../repositories/auditRepository');
 const hmoRepository = require('../repositories/hmoRepository');
 const queueCallRepository = require('../repositories/queueCallRepository');
 const auditService = require('./auditService');
+const patientRepository = require('../repositories/patientRepository');
+const env = require('../config/environment');
 const { HMO_CARD_UPLOAD_ROOT } = require('../config/upload');
 const logger = require('../config/logger');
 
@@ -21,7 +23,8 @@ const RETENTION = Object.freeze({
   notificationsReadDays: 30,
   notificationsUnreadDays: 90,
   auditPhiReadDays: 730,     // "who opened this patient's record?": 2 years
-  auditOtherDays: 2555,      // money, accounts, results: about 7 years, like the records they describe
+  auditOtherDays: 3650,      // money, accounts, results: 10 years, like the records they describe [1.162.0]
+  recordYears: 10,           // a patient record with nothing happening for this long is archived, never deleted
   hmoCardDays: 365,          // evidence for one claim, long settled by then
   queueCallDays: 30,         // a press of Call: of use on its day, and for a question soon after
 });
@@ -68,12 +71,32 @@ class RetentionService {
     return removed;
   }
 
+  /**
+   * The clinic keeps records for 10 years, then they are archived, automatically or by the Archive button.
+   * [1.162.0] Archived is still kept: out of the Desk's search, readable, and restorable on Patient Records.
+   * Restoring a record counts as activity, so the pass does not take it straight back.
+   */
+  async archiveDormantRecords({ years = RETENTION.recordYears } = {}) {
+    const archived = await patientRepository.archiveDormant(years);
+    for (const p of archived) {
+      await auditService.log({
+        actorName: 'System (retention)',
+        action: 'patient.auto_archived',
+        entityType: 'patient',
+        entityId: p.id,
+        description: `Archived ${p.first_name} ${p.last_name}'s record: nothing has happened on it for ${years} years. Nothing was deleted.`,
+      });
+    }
+    return archived.map((p) => p.id);
+  }
+
   /** The daily pass. One Activity Log line when it removed anything, so the removals are on record. */
   async runAll() {
     const notifications = await this.pruneNotifications();
     const auditRows = await this.pruneAuditLog();
     const hmoCards = await this.pruneHmoCards();
     const queueCalls = await queueCallRepository.pruneOlderThan(RETENTION.queueCallDays);
+    if (env.RECORD_AUTO_ARCHIVE) await this.archiveDormantRecords();
     const summary = { notifications, auditRows, hmoCards, queueCalls };
 
     const parts = [

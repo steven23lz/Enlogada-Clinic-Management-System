@@ -17,6 +17,7 @@ const app = express();
 // only ever returns JSON and file downloads — the CSP that matters belongs to the Vite app,
 // and a policy declared here would be both inert and misleading.
 app.use(helmet({ contentSecurityPolicy: false }));
+app.set('trust proxy', env.TRUST_PROXY);
 
 // 1. Cross-Origin Resource Sharing (CORS)
 //

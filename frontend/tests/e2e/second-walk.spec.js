@@ -7,6 +7,7 @@ import { signIn, signInTo } from './helpers/auth.js';
 import { openPortalTab } from './helpers/portal.js';
 import { appointmentForm } from './helpers/booking.js';
 import { nthWorkingDay } from './helpers/dates.js';
+import { runScript } from './helpers/backendScript.js';
 import { API, CREDS, loginAs } from './helpers/payments.js';
 
 /**
@@ -270,6 +271,106 @@ test.describe('A second walk through the combinations [1.160.0]', () => {
     const { report } = (await (await ctx.get(`${API}/reports/operations`, { headers: auth(su), params: { startDate: date, endDate: date } })).json()).data;
     const summed = report.billing.byService.reduce((total, r) => total + Number(r.net), 0);
     expect(Math.abs(summed - Number(report.billing.totals.collected))).toBeLessThan(1);
+  });
+
+  test('[1.162.0] two cashiers on one visit, and two desks on one booking: one wins, and nothing is doubled', async () => {
+    const second = await loginAs(ctx, { email: 'admin@enlogada.com', password: 'Password123!' });
+    const { visitId } = await patientAndVisit();
+    const body = { patientVisitId: visitId, paymentMethod: 'Cash', amount: Number((await billOf(visitId)).totalAmount) };
+    const both = await Promise.all([
+      ctx.post(`${API}/payments`, { headers: auth(cashier), data: body }),
+      ctx.post(`${API}/payments`, { headers: auth(second), data: body }),
+    ]);
+    expect(both.map((r) => r.status()).sort()).toEqual([201, 409]);
+    const receipts = (await (await ctx.get(`${API}/payments/visit/${visitId}`, { headers: auth(cashier) })).json()).data.payments;
+    expect(receipts.filter((p) => p.payment_status === 'Paid')).toHaveLength(1);
+
+    const made = await Promise.all([patientAndVisit(), patientAndVisit(), patientAndVisit()]);
+    expect(new Set(made.map((m) => m.ticket)).size, 'no ticket handed out twice').toBe(3);
+  });
+
+  test('[1.162.0] one drawer per cashier: each counts their own, and the setting is SuperAdmin\'s', async () => {
+    const su = await loginAs(ctx, CREDS.superadmin);
+    const setMode = (mode, token = su) => ctx.put(`${API}/admin/settings/cash-drawers`, { headers: auth(token), data: { mode } });
+    expect((await setMode('per_cashier', admin)).status(), 'not an Admin').toBe(403);
+    expect((await setMode('three_drawers')).status()).toBe(400);
+    const dayOf = async (token) => (await (await ctx.get(`${API}/cash-counts/day`, { headers: auth(token) })).json()).data;
+    const shared = await dayOf(cashier);
+    expect(shared.ownDrawer).toBe(false);
+
+    expect((await setMode('per_cashier')).status()).toBe(200);
+    try {
+      const { visitId } = await patientAndVisit();
+      const bill = await billOf(visitId);
+      const beforeMine = await dayOf(cashier);
+      const beforeTheirs = await dayOf(su);
+      expect(beforeMine.ownDrawer).toBe(true);
+      const paid = await ctx.post(`${API}/payments`, {
+        headers: auth(cashier), data: { patientVisitId: visitId, paymentMethod: 'Cash', amount: Number(bill.totalAmount) },
+      });
+      expect(paid.status(), await paid.text()).toBe(201);
+
+      const mine = await dayOf(cashier);
+      expect(money(mine.expected.cash - beforeMine.expected.cash), 'in the drawer of whoever took it').toBe(money(bill.totalAmount));
+      expect(money((await dayOf(su)).expected.cash), 'and nobody else').toBe(money(beforeTheirs.expected.cash));
+
+      const fund = 500;
+      const counted = await ctx.post(`${API}/cash-counts`, {
+        headers: auth(cashier),
+        data: { changeFund: fund, pieces: {}, loose: mine.expected.cash + fund, note: 'Own drawer, counted by the spec' },
+      });
+      expect(counted.status(), await counted.text()).toBe(201);
+      const after = (await counted.json()).data;
+      expect(after.current.difference).toBe(0);
+      expect(after.ownDrawer).toBe(true);
+      expect((await dayOf(su)).current, "someone else's drawer is not counted").toBeFalsy();
+
+      const list = (await (await ctx.get(`${API}/cash-counts`, { headers: auth(su), params: { limit: 100 } })).json()).data;
+      const today = list.days.filter((d) => d.date === mine.date);
+      expect(today.some((d) => d.drawerName && d.count), 'a row per cashier').toBe(true);
+    } finally {
+      expect((await setMode('shared')).status()).toBe(200);
+    }
+    expect((await dayOf(cashier)).ownDrawer).toBe(false);
+  });
+
+  test('[1.162.0] SuperAdmin finds the drawer setting beside the payment accounts, and an Admin does not', async ({ page }) => {
+    await signInTo(page, 'admin@enlogada.com', 'Super Admin');
+    await page.getByRole('tab', { name: 'Payment Methods', exact: true }).click();
+    const panel = page.getByTestId('cash-drawers');
+    await expect(panel.getByRole('radio', { name: /One shared drawer/ })).toBeChecked({ timeout: 15000 });
+    await expect(panel.getByRole('button', { name: 'Save', exact: true }), 'nothing to save yet').toBeDisabled();
+    await panel.getByRole('radio', { name: /One drawer per cashier/ }).check();
+    await expect(panel.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+    expect((await ctx.get(`${API}/admin/settings/cash-drawers`, { headers: auth(admin) })).status()).toBe(403);
+  });
+
+  test('[1.162.0] a record with nothing on it for 10 years is archived, not deleted; a recent one is left alone', async () => {
+    const su = await loginAs(ctx, CREDS.superadmin);
+    const fixture = async () => {
+      const person = fixturePerson();
+      return (await (await ctx.post(`${API}/patients`, {
+        headers: auth(desk),
+        data: { patientTypeId: await patientTypeId(ctx, API, desk, 'Self Pay'), firstName: person.firstName, lastName: person.lastName, birthdate: '1960-02-02', sex: 'Male', contactNumber: FIXTURE_CONTACT },
+      })).json()).data.patient;
+    };
+    const [old, recent, nearly] = [await fixture(), await fixture(), await fixture()];
+    runScript('e2eAgeRecord.js', [`--patient=${old.id}`, '--years=11'], 'age record');
+    runScript('e2eAgeRecord.js', [`--patient=${nearly.id}`, '--years=9'], 'age record');
+    const swept = JSON.parse(runScript('e2eAgeRecord.js', ['--sweep'], 'archive sweep').trim().split('\n').pop());
+    expect(swept).toContain(old.id);
+    expect(swept).not.toContain(recent.id);
+    expect(swept, 'nine years is not ten').not.toContain(nearly.id);
+
+    const read = (id) => ctx.get(`${API}/patients/${id}`, { headers: auth(su) });
+    expect((await read(old.id)).status(), 'still there').toBe(200);
+    expect((await (await read(old.id)).json()).data.patient.archived_at).toBeTruthy();
+    const log = await (await ctx.get(`${API}/admin/activity`, { headers: auth(su), params: { limit: 20 } })).text();
+    expect(log).toContain('Nothing was deleted');
+
+    // Restored by a person, it is not taken straight back.
+    expect((await ctx.patch(`${API}/patients/${old.id}/archive`, { headers: auth(su), data: { archived: false } })).status()).toBe(200);
+    expect(JSON.parse(runScript('e2eAgeRecord.js', ['--sweep'], 'archive sweep').trim().split('\n').pop())).not.toContain(old.id);
   });
 
   test('a name is a name, a phone has digits, and one account holds one of each person', async () => {

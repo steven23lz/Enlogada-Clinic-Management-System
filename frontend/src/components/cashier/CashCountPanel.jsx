@@ -265,7 +265,7 @@ export default function CashCountPanel({ count }) {
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
           <Panel className="lg:col-span-4 lg:self-start" data-testid="cash-count-expected">
-            <PanelHeader icon={Banknote} title="What the till recorded" description={dayLabel(count.date)} />
+            <PanelHeader icon={Banknote} title={day?.ownDrawer ? 'What you took' : 'What the till recorded'} description={dayLabel(count.date)} />
             <PanelBody>
               {!day ? <SkeletonList rows={3} /> : (
                 <div className="divide-y divide-line-soft">

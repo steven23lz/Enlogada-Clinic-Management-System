@@ -3,7 +3,24 @@ const cashCountService = require('../services/cashCountService');
 class CashCountController {
   async status(req, res, next) {
     try {
-      return res.status(200).json({ status: 'success', data: await cashCountService.status() });
+      return res.status(200).json({ status: 'success', data: await cashCountService.status(req.user) });
+    } catch (err) {
+      return next(err);
+    }
+  }
+
+  // [1.162.0] One shared drawer, or one per cashier. SuperAdmin chooses, on the route.
+  async getDrawers(req, res, next) {
+    try {
+      return res.status(200).json({ status: 'success', data: { mode: await cashCountService.drawerMode() } });
+    } catch (err) {
+      return next(err);
+    }
+  }
+
+  async setDrawers(req, res, next) {
+    try {
+      return res.status(200).json({ status: 'success', data: await cashCountService.setDrawerMode(req.body?.mode, req.user) });
     } catch (err) {
       return next(err);
     }
@@ -11,7 +28,7 @@ class CashCountController {
 
   async day(req, res, next) {
     try {
-      return res.status(200).json({ status: 'success', data: await cashCountService.day(req.query.date) });
+      return res.status(200).json({ status: 'success', data: await cashCountService.day(req.query.date, req.user) });
     } catch (err) {
       return next(err);
     }

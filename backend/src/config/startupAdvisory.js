@@ -46,6 +46,7 @@
  */
 const db = require('./database');
 const paymentGatewayService = require('../services/paymentGatewayService');
+const env = require('./environment');
 const logger = require('./logger');
 const { missingMailConfig, verifyMailLogin } = require('./email');
 
@@ -127,4 +128,22 @@ function reportAccountMail() {
   });
 }
 
-module.exports = { reportPendingRepairs, reportGatewayConfiguration, reportAccountMail };
+/**
+ * What running online needs, said at start-up. [1.162.0] Each of these looks fine until the day it is not:
+ * a QR on every report pointing at localhost, or backups nobody could restore after the host is lost.
+ * docs/DEPLOYMENT.md has the whole list.
+ */
+function reportHosting() {
+  if (process.env.NODE_ENV !== 'production') return;
+  if (!/^https:\/\//.test(env.FRONTEND_URL) || /localhost|127\.0\.0\.1/.test(env.FRONTEND_URL)) {
+    logger.warn(`[hosting] FRONTEND_URL is ${env.FRONTEND_URL}. Every report's QR code and every emailed link points there, so it has to be the public https address.`);
+  }
+  if (env.BACKUPS && !env.BACKUP_PASSPHRASE) {
+    logger.warn('[hosting] BACKUP_PASSPHRASE is not set, so backups of medical records are not encrypted.');
+  }
+  if (env.BACKUPS && !env.BACKUP_COPY_DIR) {
+    logger.warn('[hosting] BACKUP_COPY_DIR is not set, so the only backup is on this server: losing the server loses both.');
+  }
+}
+
+module.exports = { reportPendingRepairs, reportGatewayConfiguration, reportAccountMail, reportHosting };

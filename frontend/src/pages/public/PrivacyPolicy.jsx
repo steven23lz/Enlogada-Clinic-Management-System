@@ -35,12 +35,19 @@ const SECTIONS = [
       oversee the system for clinic operations, not to read individual results without cause.`,
   },
   {
+    id: 'how-long',
+    icon: ShieldCheck,
+    title: 'How Long We Keep It',
+    body: `We keep your patient record and results for 10 years. After that a record with no activity is
+      archived: it is taken out of daily use and kept secure, not deleted, and the clinic can restore it.`,
+  },
+  {
     id: 'your-rights',
     icon: Mail,
     title: 'Your Rights',
     body: `Under the Philippine Data Privacy Act of 2012, you may request access to, correction of, or
       deletion of your personal data, subject to our recordkeeping obligations as a healthcare provider.
-      To make a request, contact us using the details below.`,
+      To make a request, contact the clinic's Data Protection Officer using the details below.`,
   },
 ];
 
