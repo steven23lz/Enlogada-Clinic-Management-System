@@ -12,6 +12,8 @@
  *   OVERLAP       two boxes whose rectangles intersect, which is how labels end up on top of
  *                 each other.
  *   LONG LABEL    a label too long to read at a glance in a printed figure.
+ *   DFD LEVELS    a flow to or from the actor on one level of a DFD and not on the other. Level 1
+ *                 explodes Level 0, so the two must carry exactly the same flows.
  *
  * Exits non-zero if anything is found, so it can gate a rebuild.
  */
@@ -149,7 +151,28 @@ for (const file of FILES) {
   }
 }
 
-const order = ['DECISION', 'DEAD END', 'CROSSING', 'OVERLAP', 'LONG LABEL'];
+// Every flow touching the actor on each sheet of a DFD file, by sheet name.
+function actorFlows(file) {
+  const sheets = new Map();
+  for (const chunk of fs.readFileSync(path.join(__dirname, file), 'utf8').split('<diagram ').slice(1)) {
+    const name = /name="([^"]+)"/.exec(chunk)[1];
+    const { vertices, edges } = parsePage(chunk);
+    const actor = vertices.find((v) => v.value === unescapeXml(name) && v.parent === '1');
+    if (!actor) continue;
+    sheets.set(name, new Set(edges.filter((e) => e.source === actor.id || e.target === actor.id).map((e) => e.value)));
+  }
+  return sheets;
+}
+const level0 = actorFlows('dfd-level0.drawio');
+const level1 = actorFlows('dfd-level1.drawio');
+for (const [name, flows] of level1) {
+  const top = level0.get(name);
+  if (!top) { add('DFD LEVELS', name, 'has no Level 0 sheet'); continue; }
+  [...top].filter((f) => !flows.has(f)).forEach((f) => add('DFD LEVELS', name, `"${f}" is on Level 0 only`));
+  [...flows].filter((f) => !top.has(f)).forEach((f) => add('DFD LEVELS', name, `"${f}" is on Level 1 only`));
+}
+
+const order = ['DECISION', 'DEAD END', 'CROSSING', 'OVERLAP', 'LONG LABEL', 'DFD LEVELS'];
 order.forEach((kind) => {
   const found = problems.filter((p) => p.kind === kind);
   console.log(`${kind}: ${found.length}`);

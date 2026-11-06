@@ -331,7 +331,7 @@ const SUPER_ADMIN_FLOW = {
     [{ k: 'proc', l: 'Who Sees What' }, { k: 'proc', l: 'Edit role access' }, { k: 'proc', l: 'Review changes and save' }],
     [{ k: 'proc', l: 'One Person' }, { k: 'proc', l: 'Grant or revoke access' }, { k: 'proc', l: 'Change is audited' }],
     [{ k: 'proc', l: 'Staff and Elevated Accounts' }, { k: 'proc', l: 'Add or deactivate accounts' }],
-    [{ k: 'proc', l: 'Services Catalog' }, { k: 'proc', l: 'Edit tests, prices and packages' }],
+    [{ k: 'proc', l: 'Services Catalog' }, { k: 'proc', l: 'Edit tests, prices and packages' }, { k: 'proc', l: 'Add or edit HMO providers' }],
     [{ k: 'proc', l: 'Payment Methods' }, { k: 'proc', l: 'Publish GCash and QR' }, { k: 'proc', l: 'Set one or per-cashier drawer' }],
     [{ k: 'proc', l: 'Transaction History' }, { k: 'proc', l: 'Open a receipt' }, { k: 'proc', l: 'Refund: pick case and tests' },
       { k: 'proc', l: 'Record reason and money back' }, { k: 'proc', l: 'Patient emailed, receipt marked' }],
@@ -358,7 +358,7 @@ const ADMIN_FLOW = {
     [{ k: 'proc', l: 'Patient Records' }, { k: 'proc', l: 'Search, correct or archive' }, { k: 'proc', l: 'Invite or unlink portal access' }, { k: 'io', l: 'View or print a report' }],
     [{ k: 'proc', l: 'Cashier Monitoring' }, { k: 'proc', l: 'Review takings and cash counts' }],
     [{ k: 'proc', l: 'Staff Accounts' }, { k: 'proc', l: 'Add or update staff' }],
-    [{ k: 'proc', l: 'Services Catalog' }, { k: 'proc', l: 'Edit tests, prices and packages' }],
+    [{ k: 'proc', l: 'Services Catalog' }, { k: 'proc', l: 'Edit tests, prices and packages' }, { k: 'proc', l: 'Add or edit HMO providers' }],
     [{ k: 'proc', l: 'Clinic Schedule' }, { k: 'proc', l: 'Set hours and closures' }, { k: 'proc', l: 'Affected patients emailed' }],
     [{ k: 'proc', l: 'Reports' }, { k: 'proc', l: 'Generate report' }, { k: 'io', l: 'Print A4 or export Excel' }],
     [{ k: 'proc', l: 'Patient Feedback' }, { k: 'proc', l: 'Manage survey questions' }, { k: 'proc', l: 'Review visit feedback' }],
@@ -563,11 +563,11 @@ const departmentCases = (name, actor, worklist, upload, print) => ({
 
 const USE_CASES = [
   { name: 'Super Admin', actor: 'Super Admin',
-    cases: ['Login', 'View Today', 'Manage Roles and Permissions', 'Manage Per-Account Access', 'Manage Elevated Accounts', 'Manage Staff Accounts', 'Manage Services, Packages and Pricing', 'Publish Payment Channels', 'Set Cash Drawer Mode', 'Refund a Receipt', 'Manage Clinic Schedule', 'Generate Reports', 'View Patient Feedback', 'View Activity Log', 'Archive and Restore Patient Records', 'Logout'],
-    relations: [RESET, { from: 'Manage Roles and Permissions', to: 'Record Change in Activity Log', kind: 'include' }, { from: 'Refund a Receipt', to: 'Email Patient and Mark Receipt', kind: 'include' }, { from: 'Generate Reports', to: 'Print or Export Report', kind: 'extend' }, { from: 'View Patient Feedback', to: 'Manage Feedback Questions', kind: 'extend' }] },
+    cases: ['Login', 'View Today', 'Manage Roles and Permissions', 'Manage Per-Account Access', 'Manage Elevated Accounts', 'Manage Staff Accounts', 'Manage Services, Packages and Pricing', 'Publish Payment Channels', 'Set Cash Drawer Mode', 'Refund a Receipt', 'Manage Clinic Schedule', 'Receive No-Upload Alert', 'Generate Reports', 'View Patient Feedback', 'View Activity Log', 'Archive and Restore Patient Records', 'Logout'],
+    relations: [RESET, { from: 'Manage Roles and Permissions', to: 'Record Change in Activity Log', kind: 'include' }, { from: 'Manage Services, Packages and Pricing', to: 'Manage HMO Providers', kind: 'extend' }, { from: 'Refund a Receipt', to: 'Email Patient and Mark Receipt', kind: 'include' }, { from: 'Generate Reports', to: 'Print or Export Report', kind: 'extend' }, { from: 'View Patient Feedback', to: 'Manage Feedback Questions', kind: 'extend' }] },
   { name: 'Admin', actor: 'Admin',
     cases: ['Login', 'View Today', 'Decide HMO Claims', 'Manage Staff Accounts', 'Manage Services, Packages and Pricing', 'Manage Clinic Schedule', 'View Appointments', 'Manage Patient Records', 'Archive and Restore Patient Records', 'Monitor Cashier Transactions', 'Receive No-Upload Alert', 'Generate Reports', 'View Patient Feedback', 'View Activity Log', 'Logout'],
-    relations: [RESET, { from: 'Decide HMO Claims', to: 'Reprice Part-Covered Package', kind: 'include' }, { from: 'Monitor Cashier Transactions', to: 'View Daily Cash Counts', kind: 'extend' }, { from: 'Manage Patient Records', to: 'Print Records and Results', kind: 'extend' }, { from: 'Manage Patient Records', to: 'Invite or Unlink Portal Access', kind: 'extend' }, { from: 'Generate Reports', to: 'Print or Export Report', kind: 'extend' }, { from: 'View Patient Feedback', to: 'Manage Feedback Questions', kind: 'extend' }] },
+    relations: [RESET, { from: 'Decide HMO Claims', to: 'Reprice Part-Covered Package', kind: 'include' }, { from: 'Manage Services, Packages and Pricing', to: 'Manage HMO Providers', kind: 'extend' }, { from: 'Monitor Cashier Transactions', to: 'View Daily Cash Counts', kind: 'extend' }, { from: 'Manage Patient Records', to: 'Print Records and Results', kind: 'extend' }, { from: 'Manage Patient Records', to: 'Invite or Unlink Portal Access', kind: 'extend' }, { from: 'Generate Reports', to: 'Print or Export Report', kind: 'extend' }, { from: 'View Patient Feedback', to: 'Manage Feedback Questions', kind: 'extend' }] },
   { name: 'Receptionist', actor: 'Receptionist',
     cases: ['Login', 'View Today', 'Find Patient or Booking', 'Verify QR Code', 'Check In Patient', 'Undo Check-In', 'Register Walk-In', 'Assign Tests to a Visit', 'Raise HMO Claim', 'Reschedule Booking', 'View Patient Records', 'View Visit History', 'Logout'],
     relations: [RESET, { from: 'Check In Patient', to: 'Issue Queue Ticket', kind: 'include' }, { from: 'Register Walk-In', to: 'Create Patient Record', kind: 'include' }, { from: 'View Patient Records', to: 'Invite Patient to the Portal', kind: 'extend' }, { from: 'View Visit History', to: 'Record Paper Feedback', kind: 'extend' }] },
@@ -629,31 +629,33 @@ function dfd0(spec) {
   return p;
 }
 
+// A label is what actually crosses the line. "Reschedule request" read as if somebody had to approve
+// it: a patient moves their own booking, there and then, so what they send is the new time.
 const DFD0 = [
   { name: 'Super Admin',
-    inputs: ['Login details', 'Reset request and code', 'Role access', 'Elevated account', 'Services and prices', 'Payment channel', 'Cash drawer mode', 'Clinic hours', 'Refund request', 'Feedback questions', 'Report request'],
-    outputs: ['Account confirmed', 'Reset code', 'Updated access', 'Account saved', 'Updated services', 'Published channel', 'Published hours', 'Refund record', 'Reports', 'Patient feedback', 'Audit trail'] },
+    inputs: ['Login details', 'Reset request and code', 'Role access', 'Per-account access', 'Staff or elevated account', 'Services and prices', 'HMO provider', 'Payment channel', 'Cash drawer mode', 'Clinic hours', 'Refund request', 'Record update', 'Feedback questions', 'Report request'],
+    outputs: ['Account confirmed', 'Reset code', 'Updated access', 'Account saved', 'Updated services', 'Published channel', 'Published hours', 'Refund record', 'Patient records', 'Reports', 'Patient feedback', 'No-upload alert', 'Audit trail'] },
   { name: 'Admin',
-    inputs: ['Login details', 'Reset request and code', 'HMO decision', 'Staff account', 'Services and prices', 'Clinic hours', 'Record update', 'Portal access change', 'Feedback questions', 'Report request'],
-    outputs: ['Account confirmed', 'Reset code', 'HMO claims', 'Account saved', 'Updated services', 'Published hours', 'Patient records', 'Reports', 'Payments and cash counts', 'Patient feedback', 'No-upload alert', 'Audit trail'] },
+    inputs: ['Login details', 'Reset request and code', 'HMO decision', 'Staff account', 'Services and prices', 'HMO provider', 'Clinic hours', 'Record update', 'Portal access change', 'Feedback questions', 'Report request'],
+    outputs: ['Account confirmed', 'Reset code', 'HMO claims', 'Account saved', 'Updated services', 'Published hours', 'Bookings and moves', 'Patient records', 'Reports', 'Payments and cash counts', 'Patient feedback', 'No-upload alert', 'Audit trail'] },
   { name: 'Receptionist',
-    inputs: ['Login details', 'Reset request and code', 'Walk-in details', 'Scanned QR code', 'Undo check-in', 'Test request', 'HMO claim', 'Reschedule request', 'Portal invitation', 'Paper feedback'],
-    outputs: ['Account confirmed', 'Reset code', 'Booking details', 'Queue ticket', 'Billing request', 'HMO decision', 'Patient records'] },
+    inputs: ['Login details', 'Reset request and code', 'Walk-in details', 'Record correction', 'Scanned QR code', 'Undo check-in', 'Test request', 'HMO claim', 'New date, time and reason', 'Portal invitation', 'Paper feedback'],
+    outputs: ['Account confirmed', 'Reset code', 'Booking details', 'Queue ticket', 'Visit status', 'Visit history', 'HMO decision', 'Patient records'] },
   { name: 'Cashier',
-    inputs: ['Login details', 'Reset request and code', 'Confirmed tests', 'Payment details', 'Discount claim', 'Claim withdrawal', 'Proof decision', 'Cash count'],
-    outputs: ['Account confirmed', 'Reset code', 'Patients to bill', 'Receipt', 'Payment proofs', 'Takings', 'Count sheet'] },
+    inputs: ['Login details', 'Reset request and code', 'Confirmed tests', 'Payment details', 'Discount claim', 'Claim withdrawal', 'Proof decision', 'Date range', 'Cash count'],
+    outputs: ['Account confirmed', 'Reset code', 'Patients to bill', 'Receipt', 'Payment proofs', 'Takings', 'Count sheet', 'Patient records'] },
   { name: 'Laboratory Staff',
-    inputs: ['Login details', 'Reset request and code', 'Laboratory report file', 'Release authorisation', 'Withdrawal reason', 'Email request'],
-    outputs: ['Account confirmed', 'Reset code', 'Laboratory requests', 'Patient details', 'Released result', 'No-upload alert'] },
+    inputs: ['Login details', 'Reset request and code', 'Laboratory report file', 'Amendment reason', 'Release authorisation', 'Withdrawal reason', 'Email request'],
+    outputs: ['Account confirmed', 'Reset code', 'Laboratory requests', 'Released result', 'Patient details', 'No-upload alert'] },
   { name: 'Ultrasound Staff',
-    inputs: ['Login details', 'Reset request and code', 'Ultrasound report file', 'Release authorisation', 'Withdrawal reason', 'Email request'],
-    outputs: ['Account confirmed', 'Reset code', 'Ultrasound requests', 'Patient details', 'Released result', 'No-upload alert'] },
+    inputs: ['Login details', 'Reset request and code', 'Ultrasound report file', 'Amendment reason', 'Release authorisation', 'Withdrawal reason', 'Email request'],
+    outputs: ['Account confirmed', 'Reset code', 'Ultrasound requests', 'Released result', 'Patient details', 'No-upload alert'] },
   { name: 'Xray Staff',
-    inputs: ['Login details', 'Reset request and code', 'X-ray report file', 'Release authorisation', 'Withdrawal reason', 'Email request'],
-    outputs: ['Account confirmed', 'Reset code', 'X-ray requests', 'Patient details', 'Released result', 'No-upload alert'] },
+    inputs: ['Login details', 'Reset request and code', 'X-ray report file', 'Amendment reason', 'Release authorisation', 'Withdrawal reason', 'Email request'],
+    outputs: ['Account confirmed', 'Reset code', 'X-ray requests', 'Released result', 'Patient details', 'No-upload alert'] },
   { name: 'Client Patient',
-    inputs: ['Registration details', 'Verification code', 'Login details', 'Reset request and code', 'Patient profile', 'Invitation answer', 'Booking and doctor request', 'Discount ID', 'Reschedule request', 'Release request', 'Proof of payment', 'Visit feedback'],
-    outputs: ['Emailed code', 'Account confirmed', 'Portal invitation', 'Booking reference', 'QR booking pass', 'Reminder and status emails', 'Receipt', 'Digital copy of result'] },
+    inputs: ['Registration details', 'Verification code', 'Login details', 'Reset request and code', 'New sign-in email', 'Patient profile', 'Invitation answer', 'Booking and doctor request', 'HMO card and claim', 'Discount ID', 'New date, time and reason', 'Booking to release', 'Proof of payment', 'Visit feedback', 'Report code'],
+    outputs: ['Emailed code', 'Account confirmed', 'Portal invitation', 'Booking reference', 'QR booking pass', 'Reminder and status emails', 'Receipt', 'Digital copy of result', 'Verification answer'] },
 ];
 
 function dfd0Context() {
@@ -826,38 +828,47 @@ const P = {
   settings: { n: '27.0', name: 'Set Cash Drawer Mode' },
   channels: { n: '28.0', name: 'Publish Payment Channels' },
   hmoWithdraw: { n: '29.0', name: 'Withdraw HMO Claim' },
+  account: { n: '30.0', name: 'Change Sign-In Email' },
+  verify: { n: '31.0', name: 'Verify Report Code' },
 };
 const login = () => ({ ...P.login, in: ['Login details', 'Reset request and code'], out: ['Account confirmed', 'Reset code'], stores: [{ id: 'D1', to: 'Check credentials, save password', from: 'Account details' }] });
 
+// One catalogue process, because HMO providers are kept on the Services Catalog screen.
+const catalogue = () => ({ ...P.catalogue, in: ['Services and prices', 'HMO provider'], out: ['Updated services'], stores: [{ id: 'D5', to: 'Save service', from: 'Service list' }, { id: 'D7', to: 'Save provider' }] });
+const alert = () => ({ ...P.alert, out: ['No-upload alert'], stores: [{ id: 'D3', from: 'Tests with no report' }, { id: 'D9', to: 'Save notification' }] });
+
 const DFD1 = [
   { name: 'Super Admin', processes: [
-    login(), { ...P.rbac, in: ['Role access'], out: ['Updated access'], stores: [{ id: 'D1', to: 'Save access' }] },
-    { ...P.staff, in: ['Elevated account'], out: ['Account saved'], stores: [{ id: 'D1', to: 'Save account' }] },
-    { ...P.catalogue, in: ['Services and prices'], out: ['Updated services'], stores: [{ id: 'D5', to: 'Save service', from: 'Service list' }] },
+    login(), { ...P.rbac, in: ['Role access', 'Per-account access'], out: ['Updated access'], stores: [{ id: 'D1', to: 'Save access' }] },
+    { ...P.staff, in: ['Staff or elevated account'], out: ['Account saved'], stores: [{ id: 'D1', to: 'Save account' }] },
+    catalogue(),
     { ...P.channels, in: ['Payment channel'], out: ['Published channel'], stores: [{ id: 'D4', to: 'Save channel' }] },
     { ...P.settings, in: ['Cash drawer mode'], stores: [{ id: 'D11', to: 'Save mode' }] },
     { ...P.refund, in: ['Refund request'], out: ['Refund record'], stores: [{ id: 'D4', to: 'Save refund', from: 'Receipt' }, { id: 'D3', to: 'Close refunded tests' }] },
     { ...P.schedule, in: ['Clinic hours'], out: ['Published hours'], stores: [{ id: 'D8', to: 'Save hours' }, { id: 'D3', from: 'Affected bookings' }] },
+    { ...P.records, in: ['Record update'], out: ['Patient records'], stores: [{ id: 'D2', to: 'Update or archive', from: 'Patient details' }] },
     { ...P.reports, in: ['Report request'], out: ['Reports'], stores: [{ id: 'D4', from: 'Payments' }, { id: 'D3', from: 'Visits and tests' }] },
     { ...P.feedback, in: ['Feedback questions'], out: ['Patient feedback'], stores: [{ id: 'D10', to: 'Save questions', from: 'Feedback answers' }] },
+    alert(),
     { ...P.audit, out: ['Audit trail'], stores: [{ id: 'D9', from: 'Audit entries' }] }] },
   { name: 'Admin', processes: [
     login(), { ...P.hmoDecide, in: ['HMO decision'], out: ['HMO claims'], stores: [{ id: 'D7', to: 'Save decision', from: 'Pending claims' }, { id: 'D3', to: 'Keep slot, reprice package' }] },
     { ...P.staff, in: ['Staff account'], out: ['Account saved'], stores: [{ id: 'D1', to: 'Save account' }] },
-    { ...P.catalogue, in: ['Services and prices'], out: ['Updated services'], stores: [{ id: 'D5', to: 'Save service', from: 'Service list' }] },
+    catalogue(),
     { ...P.schedule, in: ['Clinic hours'], out: ['Published hours'], stores: [{ id: 'D8', to: 'Save hours' }, { id: 'D3', from: 'Affected bookings' }] },
+    { ...P.appts, out: ['Bookings and moves'], stores: [{ id: 'D3', from: 'Bookings' }] },
     { ...P.records, in: ['Record update'], out: ['Patient records'], stores: [{ id: 'D2', to: 'Update or archive', from: 'Patient details' }] },
     { ...P.portal, in: ['Portal access change'], stores: [{ id: 'D2', to: 'Save invitation or unlink' }, { id: 'D1', from: 'Account' }] },
     { ...P.reports, in: ['Report request'], out: ['Reports', 'Payments and cash counts'], stores: [{ id: 'D4', from: 'Payments, counts' }, { id: 'D3', from: 'Visits and tests' }] },
     { ...P.feedback, in: ['Feedback questions'], out: ['Patient feedback'], stores: [{ id: 'D10', to: 'Save questions', from: 'Feedback answers' }] },
-    { ...P.alert, out: ['No-upload alert'], stores: [{ id: 'D3', from: 'Tests with no report' }, { id: 'D9', to: 'Save notification' }] },
+    alert(),
     { ...P.audit, out: ['Audit trail'], stores: [{ id: 'D9', from: 'Audit entries' }] }] },
   { name: 'Receptionist', processes: [
-    login(), { ...P.profiles, in: ['Walk-in details'], out: ['Patient records'], stores: [{ id: 'D2', to: 'Save patient', from: 'Patient details' }] },
+    login(), { ...P.profiles, in: ['Walk-in details', 'Record correction'], out: ['Patient records'], stores: [{ id: 'D2', to: 'Save patient', from: 'Patient details' }] },
     { ...P.portal, in: ['Portal invitation'], stores: [{ id: 'D2', to: 'Save invitation' }] },
-    { ...P.appts, in: ['Reschedule request'], out: ['Booking details'], stores: [{ id: 'D3', to: 'Move booking', from: 'Bookings' }] },
+    { ...P.appts, in: ['New date, time and reason'], out: ['Booking details'], stores: [{ id: 'D3', to: 'Move booking', from: 'Bookings' }] },
     { ...P.checkin, in: ['Scanned QR code', 'Undo check-in'], out: ['Queue ticket'], stores: [{ id: 'D3', to: 'Save or undo arrival', from: "Today's bookings" }] },
-    { ...P.requests, in: ['Test request'], out: ['Billing request'], stores: [{ id: 'D3', to: 'Save visit tests' }, { id: 'D5', from: 'Services and packages' }] },
+    { ...P.requests, in: ['Test request'], out: ['Visit status', 'Visit history'], stores: [{ id: 'D3', to: 'Save visit tests', from: 'Visits and tests' }, { id: 'D5', from: 'Services and packages' }] },
     { ...P.hmoRaise, in: ['HMO claim'], out: ['HMO decision'], stores: [{ id: 'D7', to: 'Save claim and card', from: 'Decision' }] },
     { ...P.feedback, in: ['Paper feedback'], stores: [{ id: 'D10', to: 'Save paper feedback' }] }] },
   { name: 'Cashier', processes: [
@@ -865,30 +876,35 @@ const DFD1 = [
     { ...P.hmoWithdraw, in: ['Claim withdrawal'], stores: [{ id: 'D7', to: 'Close pending lines' }] },
     { ...P.proof, in: ['Proof decision'], out: ['Payment proofs'], stores: [{ id: 'D4', to: 'Save outcome', from: 'Uploaded proofs' }] },
     { ...P.release, stores: [{ id: 'D3', to: 'Set to processing' }] },
-    { ...P.reports, out: ['Takings'], stores: [{ id: 'D4', from: 'Payments' }] },
-    { ...P.cash, in: ['Cash count'], out: ['Count sheet'], stores: [{ id: 'D4', to: 'Save count', from: 'Expected cash' }] }] },
+    { ...P.reports, in: ['Date range'], out: ['Takings'], stores: [{ id: 'D4', from: 'Payments' }] },
+    { ...P.cash, in: ['Cash count'], out: ['Count sheet'], stores: [{ id: 'D4', to: 'Save count', from: 'Expected cash' }] },
+    { ...P.records, out: ['Patient records'], stores: [{ id: 'D2', from: 'Patient details' }] }] },
   ...['Laboratory', 'Ultrasound', 'Xray'].map((dept) => {
     const shown = dept === 'Xray' ? 'X-ray' : dept;
     return {
       name: `${dept} Staff`, processes: [
         login(),
-        { ...P.results, in: [`${shown} report file`], out: [`${shown} requests`, 'Patient details'], stores: [{ id: 'D6', to: 'Save report and version' }, { id: 'D3', from: 'Released tests' }] },
+        { ...P.results, in: [`${shown} report file`, 'Amendment reason'], out: [`${shown} requests`], stores: [{ id: 'D6', to: 'Save report and version' }, { id: 'D3', from: 'Released tests' }] },
         { ...P.deliver, in: ['Release authorisation'], out: ['Released result'], stores: [{ id: 'D6', to: 'Save release and code' }] },
         { ...P.withdraw, in: ['Withdrawal reason'], stores: [{ id: 'D6', to: 'Clear authorisation' }] },
         { ...P.notify, in: ['Email request'], stores: [{ id: 'D6', from: 'Report file' }] },
-        { ...P.alert, out: ['No-upload alert'], stores: [{ id: 'D3', from: 'Tests with no report' }, { id: 'D9', to: 'Save notification' }] }],
+        { ...P.records, out: ['Patient details'], stores: [{ id: 'D2', from: 'Patient details' }, { id: 'D6', from: 'Department results' }] },
+        alert()],
     };
   }),
   { name: 'Client Patient', processes: [
     { ...P.login, in: ['Registration details', 'Verification code', 'Login details', 'Reset request and code'], out: ['Emailed code', 'Account confirmed'], stores: [{ id: 'D1', to: 'Save account and code', from: 'Account details' }] },
+    { ...P.account, in: ['New sign-in email'], stores: [{ id: 'D1', to: 'Save new address' }] },
     { ...P.profiles, in: ['Patient profile', 'Invitation answer'], out: ['Portal invitation'], stores: [{ id: 'D2', to: 'Save profile, accept record', from: 'Profiles and invitations' }] },
-    { ...P.appts, in: ['Booking and doctor request', 'Discount ID', 'Reschedule request', 'Release request'], out: ['Booking reference'], stores: [{ id: 'D3', to: 'Save, move or release', from: 'Open slots' }, { id: 'D8', from: 'Clinic hours' }] },
+    { ...P.appts, in: ['Booking and doctor request', 'Discount ID', 'New date, time and reason', 'Booking to release'], out: ['Booking reference'], stores: [{ id: 'D3', to: 'Save, move or release', from: 'Open slots' }, { id: 'D8', from: 'Clinic hours' }] },
+    { ...P.hmoRaise, in: ['HMO card and claim'], stores: [{ id: 'D7', to: 'Save claim and card' }] },
     { ...P.proof, in: ['Proof of payment'], out: ['Receipt', 'QR booking pass'], stores: [{ id: 'D4', to: 'Save submission' }, { id: 'D3', from: 'Paid or HMO booking' }] },
     { ...P.deliver, out: ['Digital copy of result'], stores: [{ id: 'D6', from: 'Released results' }] },
+    { ...P.verify, in: ['Report code'], out: ['Verification answer'], stores: [{ id: 'D6', from: 'Report status' }] },
     // The server's own emails [1.130.0] [1.131.0] [1.148.0]: reminders read the bookings due one, and
     // an unpaid booking whose time is up is released and logged. Patient emails are not D9 rows; that
     // store's notifications are the staff bell.
-    { ...P.notify, out: ['Reminder and status emails'], stores: [{ id: 'D3', to: 'Release unpaid booking', from: 'Bookings due' }, { id: 'D9', to: 'Release logged' }] },
+    { ...P.notify, out: ['Reminder and status emails'], stores: [{ id: 'D3', to: 'Release unpaid booking', from: 'Bookings due' }, { id: 'D9', to: 'Moves and releases logged' }] },
     { ...P.feedback, in: ['Visit feedback'], stores: [{ id: 'D10', to: 'Save feedback', from: 'Survey questions' }] }] },
 ];
 

@@ -28,7 +28,7 @@ read from the live database, so it cannot drift from the schema: tables, columns
 nullability, primary keys and foreign keys are all queried, and the script fails loudly if a table
 is missing from one of the three sheets.
 
-Checking the diagrams for missing decision branches, dead ends, crossings, overlaps and long labels:
+Checking the diagrams for missing decision branches, dead ends, crossings, overlaps, long labels, and any flow on one DFD level and not the other:
 
     node docs/diagrams/checkDiagrams.cjs
 
@@ -52,6 +52,7 @@ Worth knowing before a panelist asks, because each one differs from the old figu
 - There is no veterinary branch anywhere. Pet patients were removed from the system.
 - A refused login asks **Forgot Password?** on all eight flowcharts: no tries again, yes resets by a code emailed to the address, and both return to Login. A patient logs in only on the way to booking, because the services are public, and a new account's emailed code finishes the sign-up already signed in.
 - A booking issues a reference and confirmation email first. A self-pay booking holds its slot for 60 minutes while the patient confirms final tests, pays via GCash or bank transfer, and uploads proof; an HMO booking holds its slot until its own start time while an Admin decides the claim (refused, the patient has 60 minutes to pay it). Neither paid nor approved in time, the slot is released and the patient emailed. The **QR booking pass** is issued only once the booking is paid or HMO-approved.
+- A patient **moves their own booking** with a reason, and it takes effect at once: no one approves it, and the desk is notified. They can do so until they check in. That is why the DFD flow reads "New date, time and reason", not a request.
 - The **queue ticket** is issued later, at check-in or walk-in registration at the Front Desk, once the visit's tests are chosen: a visit is never opened without them.
 - A visit reaches its department only once it is **paid**. An HMO patient still goes to the cashier, whose receipt covers the patient's share (₱0 when the HMO approved everything).
 - Before taking payment, the cashier confirms the final list of tests with the patient and issues the **receipt** (never the queue number). A pending HMO decision stops the till unless the claim is withdrawn and the bill charged in full.
