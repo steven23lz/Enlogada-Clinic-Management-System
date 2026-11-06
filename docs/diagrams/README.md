@@ -17,7 +17,8 @@ diagrams, and Workbench-style tables for the ERD. What changed is the content.
 | `dfd-level0.drawio` | 9 | the per-actor Level 0 sheets, plus a context diagram showing all eight entities |
 | `dfd-level1.drawio` | 8 | the per-actor Level 1 sheets |
 | `erd.drawio` | 3 | the single ERD, split because 38 tables do not read on one page |
-| `png/` | 36 | exports at scale 3 for placing in the paper |
+| `erd-overview.svg` | 1 | the ERD in the paper: every table on one page, key columns only (`node docs/diagrams/buildErdOverview.cjs`, also from the live database; it fails on a line through a table) |
+| `png/` | 37 | exports at scale 3 for placing in the paper |
 
 ## Regenerating
 
