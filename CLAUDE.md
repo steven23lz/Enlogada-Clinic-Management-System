@@ -1727,7 +1727,7 @@ Services Catalogue.
   any table missing from its sheets. `exportPng.ps1` exports every page (draw.io's `-p` is
   ONE-based; `0` silently exports the first page and shifts a whole run). Change what a diagram
   SAYS in the script, not in the `.drawio`, or the next regeneration discards it — hand-tuned
-  placement in the `.drawio` is fine and expected. The System Architecture figure is not generated.
+  placement in the `.drawio` is fine and expected. The System Architecture figure comes from `buildArchitecture.cjs`, which fails if a table, route file or job is missing from it.
   `checkDiagrams.cjs` reads the files back and fails on a decision with fewer than two exits, a
   dead end, a LINE THROUGH A BOX it is not attached to, overlapping boxes, or a label too long to
   read; run it after any change. It judges only the axis-aligned segments this script fixes —

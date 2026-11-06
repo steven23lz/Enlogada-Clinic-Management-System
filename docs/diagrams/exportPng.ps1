@@ -15,6 +15,7 @@ $groups = @{
   "dfd-level0.drawio"  = "dfd0"
   "dfd-level1.drawio"  = "dfd1"
   "erd.drawio"         = "erd"
+  "system-architecture.drawio" = "architecture"
 }
 
 foreach ($file in $groups.Keys) {

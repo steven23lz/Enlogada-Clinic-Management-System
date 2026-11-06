@@ -2,7 +2,7 @@
 
 The figures for *Design and Development of a Web-Based Clinic Management System for Enlogada
 Ultrasound and Diagnostic Clinic*, drawn to match what the system actually does. The System
-Architecture figure (Figure 2) is **not** here — it stays as it is in the paper.
+Architecture figure (Figure 2) keeps the layout and colours of the paper's first version.
 
 Drawn in the style of a printed figure: draw.io, default shapes, black ink on white, the actor
 icon for a flowchart header, a stick figure for a use case, nested flow corridors on the data flow
@@ -18,7 +18,8 @@ diagrams, and Workbench-style tables for the ERD. What changed is the content.
 | `dfd-level1.drawio` | 8 | the per-actor Level 1 sheets |
 | `erd.drawio` | 3 | the single ERD, split because 38 tables do not read on one page |
 | `erd-overview.svg` | 1 | the ERD in the paper: every table on one page, key columns only (`node docs/diagrams/buildErdOverview.cjs`, also from the live database; it fails on a line through a table) |
-| `png/` | 37 | exports at scale 3 for placing in the paper |
+| `system-architecture.drawio` | 1 | Figure 2 (`node docs/diagrams/buildArchitecture.cjs`; fails if a table, route file or job is left off) |
+| `png/` | 38 | exports at scale 3 for placing in the paper |
 
 ## Regenerating
 
