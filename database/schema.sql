@@ -685,10 +685,10 @@ CREATE TABLE test_results (
 
     -- Amendment chain. A released report may be corrected, and the version it replaces must stay
     -- readable: the patient may already have acted on it, and a referring physician certainly
-    -- may have. superseded_by points forward, version counts backward.
+    -- may have. version orders the chain; is_current marks the live one. [1.166.0] dropped the
+    -- superseded_by self-reference, which nothing read.
     version INT NOT NULL DEFAULT 1,
     is_current BOOLEAN NOT NULL DEFAULT TRUE,
-    superseded_by INT,
     amendment_reason TEXT,
 
     -- No critical (panic) value flag. [1.98.0] The clinic does not telephone results back: a
@@ -723,7 +723,6 @@ CREATE TABLE test_results (
         -- A withdrawn report keeps its code, so the public check can say it was withdrawn. [1.156.0]
         OR ((authorised_at IS NOT NULL OR withdrawn_at IS NOT NULL) AND verification_code ~ '^[0-9A-HJKMNP-TV-Z]{10}$')
     ),
-    CONSTRAINT fk_results_superseded_by FOREIGN KEY (superseded_by) REFERENCES test_results(id),
     CONSTRAINT fk_results_visit_test FOREIGN KEY (visit_test_id) REFERENCES visit_tests(id),
     CONSTRAINT fk_results_released_by FOREIGN KEY (released_by) REFERENCES users(id),
     CONSTRAINT fk_results_recorded_by FOREIGN KEY (recorded_by) REFERENCES users(id)
@@ -1168,7 +1167,6 @@ CREATE INDEX IF NOT EXISTS idx_patient_visits_created_by ON patient_visits(creat
 CREATE INDEX IF NOT EXISTS idx_patient_visits_discount_type ON patient_visits(discount_type_id);
 CREATE INDEX IF NOT EXISTS idx_patient_visits_discount_granted_by ON patient_visits(discount_granted_by);
 CREATE INDEX IF NOT EXISTS idx_patients_type ON patients(patient_type_id);
-CREATE INDEX IF NOT EXISTS idx_test_results_superseded_by ON test_results(superseded_by);
 CREATE INDEX IF NOT EXISTS idx_hmo_requests_provider ON hmo_requests(hmo_provider_id);
 CREATE INDEX IF NOT EXISTS idx_hmo_requests_decided_by ON hmo_requests(decided_by);
 CREATE INDEX IF NOT EXISTS idx_hmo_request_tests_decided_by ON hmo_request_tests(decided_by);

@@ -122,6 +122,7 @@ node src/scripts/migrateRetirePrivate.js         # [1.161.0] Private patients be
 node src/scripts/migrateCashDrawers.js           # [1.162.0] clinic_settings, cash_counts.drawer_of: one shared drawer until Super Admin says otherwise (--rollback reverses it)
 node src/scripts/migrateOverdueResults.js        # [1.163.0] visit_tests.overdue_notified_at: staff are told once when a patient passes the turnaround (--rollback reverses it)
 node src/scripts/migrateNotificationTargets.js   # [1.164.0] notification_events.target: clicking a notification opens what it is about (--rollback reverses it)
+node src/scripts/migrateRemoveSupersededBy.js    # [1.166.0] drops test_results.superseded_by, the table's link to itself, which nothing read (--rollback rebuilds it from version order)
 
 # Clear accumulated E2E/fixture traffic, keeping reference data and seeded accounts.
 # Dry-run by default; --confirm actually deletes. Refuses to run under NODE_ENV=production.
@@ -913,7 +914,7 @@ happens. With the file fetch ("Opened…"), the Activity Log says who opened, pr
 report of which patient. A cancelled print dialog still counts; a browser cannot prove the page
 came out.
 
-**`test_results` is versioned — always filter on `is_current`.** A test carries one row per version of its report (an amendment supersedes rather than overwrites; see [1.15.0]). A `LEFT JOIN test_results` without `AND tr.is_current` repeats the parent row once per amendment and shows superseded findings beside live ones, and an `UPDATE … WHERE visit_test_id = $1` without it rewrites the history. `findVersionHistoryByVisitTestId` is the only intentional reader of superseded rows.
+**`test_results` is versioned — always filter on `is_current`.** A test carries one row per version of its report (an amendment supersedes rather than overwrites; see [1.15.0]), ordered by `version`; `[1.166.0]` dropped the `superseded_by` self-reference. A `LEFT JOIN test_results` without `AND tr.is_current` repeats the parent row once per amendment and shows superseded findings beside live ones, and an `UPDATE … WHERE visit_test_id = $1` without it rewrites the history. `findVersionHistoryByVisitTestId` is the only intentional reader of superseded rows.
 
 **Never filter on `column::date`.** A B-tree index cannot serve a predicate on an expression, so `WHERE created_at::date = CURRENT_DATE` silently forces a sequential scan no matter what is indexed — `idx_patient_visits_created` existed for a year and was never used. Write half-open ranges on the raw column instead: `col >= $1::date AND col < ($2::date + 1)`. Measured at 219k rows: 50.7ms seq scan vs 0.84ms index scan. Casting in `SELECT`/`GROUP BY` is fine; only the filter matters.
 

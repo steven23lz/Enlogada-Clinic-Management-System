@@ -119,8 +119,8 @@ test.describe('Result versioning', () => {
     expect(original.findings).toContain('13.2');
     expect(original.is_current).toBe(false);
 
-    // And the chain is walkable forwards.
-    expect(original.superseded_by).toBe(v2.body.data.result.id);
+    // And the chain is in order: the correction is the next version. [1.166.0]
+    expect(v2.body.data.result.version).toBe(original.version + 1);
     expect(versions.find((v) => v.is_current).amendment_reason).toBe('Transcription error in original report');
   });
 

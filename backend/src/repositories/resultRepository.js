@@ -289,8 +289,8 @@ class ResultRepository {
     // report that is indefensible: the patient may have acted on the first version, and a
     // referring physician certainly may have.
     //
-    // Each save supersedes the current row and inserts the next version, so the chain is walkable
-    // in both directions (superseded_by forwards, version backwards). The partial unique index
+    // Each save supersedes the current row and inserts the next version, and `version` orders the
+    // chain. [1.166.0] The old row no longer points at its replacement. The partial unique index
     // uq_test_results_current_per_test keeps "exactly one current result per test" true, which is
     // the invariant the old UNIQUE was really protecting — so every reader that expects a single
     // row still gets one, as long as it filters on is_current. They all do.
@@ -344,15 +344,6 @@ class ResultRepository {
       );
       const current = inserted.rows[0];
 
-      // Point the old version at its replacement, so the history reads forwards as well as
-      // backwards. Done after the insert because it needs the new row's id.
-      if (previous) {
-        await db.query(`UPDATE test_results SET superseded_by = $2 WHERE id = $1`, [
-          previous.id,
-          current.id,
-        ]);
-      }
-
       return current;
     });
   }
@@ -371,7 +362,7 @@ class ResultRepository {
              -- have shown an empty expander — a history that cannot say what changed.
              tr.file_original_name, tr.file_path IS NOT NULL AS has_file,
              tr.amendment_reason,
-             tr.released_at, tr.authorised_at, tr.superseded_by,
+             tr.released_at, tr.authorised_at,
              tr.withdrawn_at, tr.withdrawn_reason,
              rec.first_name AS recorded_by_first_name, rec.last_name AS recorded_by_last_name,
              rel.first_name AS released_by_first_name,  rel.last_name AS released_by_last_name

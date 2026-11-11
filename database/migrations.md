@@ -1,5 +1,11 @@
 # Database Migration & Schema History
 
+## [1.166.0] - 2026-11-11 (test_results no longer points at itself)
+
+`migrateRemoveSupersededBy.js` drops `test_results.superseded_by`, its foreign key `fk_results_superseded_by` and its index. Steven: the paper's final ERD draws no table connected to itself, and the system should match it. The column was the amendment chain's forward link (an old version carried the id of the version that replaced it), and nothing read it: a test's versions are ordered by `version`, the live one is `is_current`, and the public check finds a replacement by the next authorised version. `resultRepository` stops writing it and the version history stops selecting it. Nothing is archived, because the value can be rebuilt exactly: `--rollback` adds the column back and fills it from version order.
+
+The same pass compared every table in the paper's ERD with the database (38 tables, every column, type, required/optional, primary and foreign key): this was the only difference. Every one of the 375 columns is written or read by the code, so nothing else was removed.
+
 ## [1.165.0] - 2026-11-06 (The waiting-room screen and Call become a future recommendation)
 
 `migrateRemoveQueueCalls.js` drops `queue_calls`. Steven: remove the screen feature and everything related to it, including the call, and put it in the paper's future recommendations. `?display=queue`, `GET /queue/now-serving`, `POST /queue/calls`, their limiter, the Desk's button and the Call button on the Desk, the Billing Queue and each worklist are gone. Nothing is archived: a press of Call says nothing about a patient's care, and was kept for 30 days. All of it is [1.149.0] in git history.

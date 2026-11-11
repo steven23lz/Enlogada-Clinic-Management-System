@@ -59,7 +59,7 @@ const ADD = [
   ['idx_patient_visits_discount_type', 'patient_visits(discount_type_id)', 'statutory discount reporting'],
   ['idx_patient_visits_discount_granted_by', 'patient_visits(discount_granted_by)', 'who granted a senior/PWD discount'],
   ['idx_patients_type', 'patients(patient_type_id)', 'joined on every patient list and queue row'],
-  ['idx_test_results_superseded_by', 'test_results(superseded_by)', 'walking an amendment chain'],
+  // idx_test_results_superseded_by went with its column in [1.166.0].
   ['idx_hmo_requests_provider', 'hmo_requests(hmo_provider_id)', 'joined on every claims worklist row'],
   ['idx_hmo_requests_decided_by', 'hmo_requests(decided_by)', 'who decided the claim [1.28.0]'],
   ['idx_hmo_request_tests_decided_by', 'hmo_request_tests(decided_by)', 'who decided the test [1.27.0]'],
