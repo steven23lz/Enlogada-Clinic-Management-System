@@ -1,7 +1,7 @@
 import React from 'react';
 
 const LIST_PAGE_SIZE = 8;
-import { AlertTriangle, CalendarClock, XCircle } from 'lucide-react';
+import { CalendarClock, ClipboardList, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { Panel, PanelBody } from '../ui/panel';
@@ -17,6 +17,13 @@ import DataBadge from '../ui/data-badge';
 import OriginBadge from './OriginBadge';
 import { formatDate, todayStr } from '../../lib/date';
 import { bookingDay } from '../../lib/portalSummary';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import PortalNote from './PortalNote';
+
+// [1.167.0] Below `sm` a booking is a section of the list, not a card inside it: no frame, split
+// from the next by a line. From `sm` it keeps its card. Desktop is unchanged.
+const CARD = 'flex flex-col gap-2 rounded-xl border border-line p-3 max-sm:gap-3 max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:px-0 max-sm:py-5 max-sm:first:pt-1 max-sm:last:pb-1';
+const LIST = 'space-y-3 max-sm:space-y-0 max-sm:divide-y max-sm:divide-line';
 
 /**
  * Bookings this patient has, and the pass they present.
@@ -25,6 +32,7 @@ import { bookingDay } from '../../lib/portalSummary';
  * a hero and four tab panels from one 1,044-line file. The props are the hooks it reads.
  */
 export default function AppointmentsTab({ bookings, visits = null }) {
+  const phone = useMediaQuery('(max-width: 639px)');
   // Open bookings first and soonest-first within them; everything finished falls below, newest
   // first. A patient opening this tab is almost always asking "what do I still have to attend".
   //
@@ -67,7 +75,7 @@ export default function AppointmentsTab({ bookings, visits = null }) {
       key={`walk-in-${v.id}`}
       data-testid="walk-in-visit"
       data-visit-id={v.id}
-      className="space-y-2 rounded-xl border border-line bg-surface p-3"
+      className={`${CARD} bg-surface`}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -76,7 +84,7 @@ export default function AppointmentsTab({ bookings, visits = null }) {
         </div>
         {v.queue_number && <DataBadge variant="queue" label="Queue ticket">{v.queue_number}</DataBadge>}
       </div>
-      <OriginBadge row={v} />
+      <OriginBadge row={v} className="self-start" />
       {v.tests?.length > 0 && (
         <p className="m-0 text-fine text-slate-600">{v.tests.map((t) => t.name).join(', ')}</p>
       )}
@@ -127,6 +135,8 @@ export default function AppointmentsTab({ bookings, visits = null }) {
     const heldUntilClock = isHeld ? heldUntil.toTimeString().slice(0, 5) : null;
     // Payment first [1.123.0]: an unpaid booking whose time to pay ran out has released its slot.
     const lapsed = Boolean(heldUntil) && !isHeld && !appt.is_paid;
+    // [1.148.0] Paid, and its day passed with nobody checked in.
+    const missed = appt.status === 'Pending' && appt.is_paid && bookingDay(appt) !== null && bookingDay(appt) < todayStr();
 
     return (
       <div
@@ -134,7 +144,7 @@ export default function AppointmentsTab({ bookings, visits = null }) {
         data-testid="appointment-card"
         data-reference={appt.appointment_reference}
         data-status={appt.status}
-        className="border border-line rounded-xl p-3 space-y-2 bg-slate-50/70"
+        className={`${CARD} bg-slate-50/70`}
       >
         {/* `min-w-0 flex-1` on the text and `flex-shrink-0` on the badge: on a 360px phone the
             badge was winning the width and "Please arrive by 7:45 AM" broke with "AM" alone. */}
@@ -157,10 +167,12 @@ export default function AppointmentsTab({ bookings, visits = null }) {
           <StatusBadge status={appt.status} className="flex-shrink-0" />
         </div>
         {/* Booked online by the patient, or booked by the clinic. [1.136.0] */}
-        <OriginBadge row={appt} />
+        <OriginBadge row={appt} className="self-start" />
 
+        {/* [1.167.0] On a phone the pass follows what the patient must do (a missed booking's
+            note and Reschedule), so the one action is not under the whole pass. */}
         {showPass ? (
-          <BookingPass
+          <div className="max-sm:order-2"><BookingPass
             reference={appt.appointment_reference}
             queueNumber={appt.queue_number}
             // Covered in full by the HMO: nothing to pay, and not "Paid" either.
@@ -171,9 +183,9 @@ export default function AppointmentsTab({ bookings, visits = null }) {
             estimatedWaitMinutes={appt.estimated_wait_minutes ?? null}
             patientsAhead={appt.patients_ahead ?? null}
             estimateIsCapped={appt.estimate_is_capped ?? false}
-          />
+          /></div>
         ) : (
-          <DataBadge variant="reference" label="Booking reference" copyable>{appt.appointment_reference}</DataBadge>
+          <span className="self-start"><DataBadge variant="reference" label="Booking reference" copyable>{appt.appointment_reference}</DataBadge></span>
         )}
 
 
@@ -183,22 +195,25 @@ export default function AppointmentsTab({ bookings, visits = null }) {
             for bookings still ahead — a preparation note on a completed visit is
             an instruction for something that already happened. */}
         {isOpen && appt.preparation_notes?.length > 0 && (
-          <div className="space-y-1 rounded-lg bg-amber-50 px-2.5 py-2 ring-1 ring-inset ring-amber-200">
-            <p className="m-0 flex items-center gap-1.5 text-fine font-semibold text-amber-900">
-              <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+          <div className="flex gap-2.5 max-sm:order-3 sm:block sm:space-y-1 sm:rounded-lg sm:bg-amber-50 sm:px-2.5 sm:py-2 sm:ring-1 sm:ring-inset sm:ring-amber-200">
+            <ClipboardList className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 sm:hidden" aria-hidden="true" />
+            <div className="min-w-0 sm:space-y-1">
+            <p className="m-0 flex items-center gap-1.5 text-fine font-semibold text-slate-900 sm:text-amber-900">
+              <ClipboardList className="hidden h-3 w-3 flex-shrink-0 sm:block" aria-hidden="true" />
               Before this appointment
             </p>
-            <ul className="m-0 list-disc space-y-0.5 pl-5 text-fine leading-relaxed text-amber-800">
+            <ul className="m-0 list-disc space-y-0.5 pl-5 text-fine leading-relaxed text-slate-700 max-sm:list-none max-sm:pl-0 sm:text-amber-800">
               {appt.preparation_notes.map((prep, i) => (
                 <li key={i}>{prep}</li>
               ))}
             </ul>
+            </div>
           </div>
         )}
 
         {/* Waiting on the HMO [1.132.0]: the slot is kept until the appointment's own time. */}
         {isOpen && hmoWaiting && (
-          <p data-testid="booking-hmo-waiting" className="m-0 rounded-lg border border-azure-200 bg-azure-50 p-2.5 text-fine text-azure-900">
+          <PortalNote tone="info" data-testid="booking-hmo-waiting">
             {isHeld || !heldUntil ? (
               <>
                 <strong>Waiting for your HMO&apos;s approval.</strong> Your slot is kept until your
@@ -211,21 +226,21 @@ export default function AppointmentsTab({ bookings, visits = null }) {
                 released.
               </>
             )}
-          </p>
+          </PortalNote>
         )}
         {payable && appt.hmo_status === 'Rejected' && (
-          <p data-testid="booking-hmo-refused" className="m-0 rounded-lg border border-line bg-slate-100 p-2.5 text-fine text-slate-700">
+          <PortalNote tone="neutral" data-testid="booking-hmo-refused">
             <strong>Your HMO did not approve this booking.</strong> You can still keep it by paying
             for it yourself.
-          </p>
+          </PortalNote>
         )}
 
         {/* [1.159.0] Why the figure is higher than the package they chose. */}
         {(appt.packages_at_own_price || []).length > 0 && (
-          <p data-testid="booking-package-own-price" className="m-0 rounded-lg border border-line bg-slate-100 p-2.5 text-fine text-slate-700">
+          <PortalNote tone="neutral" data-testid="booking-package-own-price">
             <strong>Your HMO covers only part of {appt.packages_at_own_price.join(', ')}.</strong> The package
             price no longer applies, so each test is charged at its own price.
-          </p>
+          </PortalNote>
         )}
 
         {/* A hold is live only while held_until is in the future. Compared against
@@ -242,16 +257,16 @@ export default function AppointmentsTab({ bookings, visits = null }) {
                 those patients about a deadline that does not apply to them would be
                 worse than saying nothing. */}
             {isHeld ? (
-              <p className="text-fine text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
+              <PortalNote tone="warning" className="sm:p-2 sm:text-amber-700">
                 <strong>Your slot is held until {formatTime12(heldUntilClock)}.</strong>{' '}
                 Pay before then to confirm it — after that the time goes back on offer
                 to other patients, and this booking is removed.
-              </p>
+              </PortalNote>
             ) : (
-              <p className="text-fine text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 m-0">
+              <PortalNote tone="warning" className="sm:p-2 sm:text-amber-700">
                 Payment is required before your visit. Once paid, your QR booking pass appears
                 here — show it at the front desk on arrival.
-              </p>
+              </PortalNote>
             )}
             <div className="flex gap-2">
               {bookings.gateway.methods.map((method) => (
@@ -276,18 +291,18 @@ export default function AppointmentsTab({ bookings, visits = null }) {
         {/* Payment first. [1.123.0] The deadline is said beside the payment, and once it has
             passed the booking says so rather than inviting a payment for a slot it no longer has. */}
         {showPayPanel && lapsed && (
-          <p data-testid="booking-lapsed" className="m-0 rounded-lg border border-line bg-slate-100 p-2.5 text-fine text-slate-700">
+          <PortalNote tone="neutral" data-testid="booking-lapsed">
             <strong>This booking wasn&apos;t paid in time</strong>, so its slot was released. Reschedule it
             to choose a time again, then pay before the new deadline shown here.
-          </p>
+          </PortalNote>
         )}
         {showPayPanel && !lapsed && (
           <>
             {isHeld && (
-              <p className="m-0 rounded-lg border border-amber-200 bg-amber-50 p-2 text-fine text-amber-800">
+              <PortalNote tone="warning" className="sm:p-2">
                 <strong>Pay by {formatTime12(heldUntilClock)} to keep this slot.</strong> After that it goes
                 back on offer to other patients.
-              </p>
+              </PortalNote>
             )}
             <PayBookingPanel
               visitId={appt.patient_visit_id}
@@ -301,10 +316,10 @@ export default function AppointmentsTab({ bookings, visits = null }) {
 
         {/* [1.148.0] Paid, and its day passed with nobody checked in. The payment stands; the
             booking only needs a new time, which the button below gives it. */}
-        {appt.status === 'Pending' && appt.is_paid && bookingDay(appt) !== null && bookingDay(appt) < todayStr() && (
-          <p data-testid="booking-missed" className="m-0 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-fine text-amber-800">
+        {missed && (
+          <PortalNote tone="warning" data-testid="booking-missed">
             <strong>You missed this visit.</strong> Your payment still stands: reschedule it to choose a new time.
-          </p>
+          </PortalNote>
         )}
 
         {/* Reschedule only while the booking is still Pending: once reception has checked
@@ -313,10 +328,11 @@ export default function AppointmentsTab({ bookings, visits = null }) {
             [1.146.0] An unpaid one may also be released by the patient, sooner, unless a payment
             for it is waiting to be checked. */}
         {appt.status === 'Pending' && (
-          <div className="flex flex-wrap gap-2 pt-0.5">
+          <div className={missed ? 'flex flex-wrap gap-2 pt-0.5' : 'flex flex-wrap gap-2 pt-0.5 max-sm:order-4'}>
             <Button
               type="button"
-              variant="outline"
+              // [1.167.0] On a phone, a missed booking's one way forward is the main button.
+              variant={missed && phone ? 'default' : 'outline'}
               onClick={() => bookings.openReschedule(appt)}
               className="flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-fine font-bold"
             >
@@ -344,7 +360,7 @@ export default function AppointmentsTab({ bookings, visits = null }) {
   // One plain panel with no heading of its own. [1.82.0] The band above already says Appointments,
   // and a "My Appointments" card title under it was the same name twice.
   return (
-          <Panel className="overflow-hidden">
+          <Panel className="overflow-hidden max-sm:-mx-4 max-sm:rounded-none max-sm:border-x-0">
             <PanelBody className="p-4">
               {bookings.payError && (
                 <div role="alert" className="alert alert-error mb-3">
@@ -384,7 +400,7 @@ export default function AppointmentsTab({ bookings, visits = null }) {
               ) : (
                 <>
                   {active.length > 0 && (
-                    <div data-testid="active-bookings" className="space-y-3">{active.map(renderItem)}</div>
+                    <div data-testid="active-bookings" className={LIST}>{active.map(renderItem)}</div>
                   )}
 
                   {/* Still on this tab, as asked — a cancellation is part of a patient's booking
@@ -397,7 +413,7 @@ export default function AppointmentsTab({ bookings, visits = null }) {
                         <span>Earlier visits</span>
                         <span className="h-px flex-1 bg-line" aria-hidden="true" />
                       </p>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-3 max-sm:gap-0 max-sm:divide-y max-sm:divide-line sm:grid-cols-2">
                         {earlier.map(renderItem)}
                       </div>
                     </div>

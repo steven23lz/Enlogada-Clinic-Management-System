@@ -74,7 +74,7 @@ const BookingPass = ({
       try {
         const { default: QRCode } = await import('qrcode');
         const url = await QRCode.toDataURL(reference, {
-          width: 220,
+          width: 280, // [1.167.0] shown at 224px on a phone, where the pass drops its frame
           margin: 1,
           errorCorrectionLevel: 'M',
           color: { dark: '#192534', light: '#ffffff' }
@@ -109,8 +109,11 @@ const BookingPass = ({
      *
      * Stacks on a phone. `sm:` is fine here rather than a container query: this renders in the
      * portal card and on the confirmation, and both are full-width at every breakpoint.
+     *
+     * [1.167.0] On a phone the pass has no frame of its own (the booking around it is the section)
+     * and the code is larger: it is the thing the desk scans.
      */
-    <div className="grid grid-cols-1 gap-4 rounded-xl border border-line bg-surface p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-5">
+    <div className="grid grid-cols-1 gap-4 rounded-xl border border-line bg-surface p-4 max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:px-0 max-sm:py-1 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-5">
       {/* ── The credential ─────────────────────────────────────────────────────────────────── */}
       <div className="flex flex-col items-center gap-2 sm:border-r sm:border-line-soft sm:pr-5">
         <span className="flex items-center gap-1.5 text-meta font-bold uppercase tracking-wider text-ink-muted">
@@ -122,12 +125,12 @@ const BookingPass = ({
           <img
             src={dataUrl}
             alt={`QR code for appointment reference ${reference}`}
-            className="h-40 w-40"
+            className="h-40 w-40 max-sm:h-56 max-sm:w-56"
           />
         ) : failed ? (
           <div
             role="alert"
-            className="flex h-40 w-40 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 p-2 text-center text-meta text-amber-700"
+            className="flex h-40 w-40 max-sm:h-56 max-sm:w-56 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 p-2 text-center text-meta text-amber-700"
           >
             <span className="flex flex-col items-center gap-1">
               <AlertCircle className="h-4 w-4" aria-hidden="true" />
@@ -135,7 +138,7 @@ const BookingPass = ({
             </span>
           </div>
         ) : (
-          <div className="h-40 w-40 animate-pulse rounded-lg bg-skeleton" aria-hidden="true" />
+          <div className="h-40 w-40 max-sm:h-56 max-sm:w-56 animate-pulse rounded-lg bg-skeleton" aria-hidden="true" />
         )}
 
         <DataBadge variant="reference" label="Booking reference" copyable>{reference}</DataBadge>

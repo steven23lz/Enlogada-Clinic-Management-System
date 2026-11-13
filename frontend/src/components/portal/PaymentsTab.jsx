@@ -29,9 +29,10 @@ export default function PaymentsTab({ payments }) {
           // and was doing it by walking up to the nearest element with a `rounded-2xl` class.
           // That coupled a passing test to a corner radius: changing the radius broke the
           // spec, and the spec's failure said nothing about payments.
-          <Panel data-testid="payment-history" className="max-w-2xl overflow-hidden">
-            <PanelHeader title="Payment History" icon={Receipt} />
-            <PanelBody className="space-y-2 p-4">
+          <Panel data-testid="payment-history" className="max-w-2xl overflow-hidden max-sm:-mx-4 max-sm:rounded-none max-sm:border-x-0">
+            <PanelHeader title="Payment History" icon={Receipt} iconClassName="max-sm:hidden" />
+            {/* [1.167.0] On a phone each receipt is a row split by a line, not a card inside the panel. */}
+            <PanelBody className="space-y-2 p-4 max-sm:space-y-0 max-sm:divide-y max-sm:divide-line max-sm:py-1">
               {payments.error ? (
                 <EmptyState
                   tone="error"
@@ -48,10 +49,11 @@ export default function PaymentsTab({ payments }) {
                   icon={Receipt}
                   title="No payments yet"
                   description="Receipts appear here once the clinic has settled a visit for you."
+                  iconClassName="max-sm:hidden"
                 />
               ) : (
                 paged.map((pay) => (
-                  <div key={pay.id} className="rounded-lg border border-line p-3">
+                  <div key={pay.id} className="rounded-lg border border-line p-3 max-sm:rounded-none max-sm:border-0 max-sm:px-0 max-sm:py-3.5">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <span className="block text-lead font-bold tabular-nums text-slate-900">{formatCurrency(pay.amount)}</span>

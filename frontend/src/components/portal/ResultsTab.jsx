@@ -49,8 +49,9 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
   const patientName = `${profiles.selected?.first_name || ''} ${profiles.selected?.last_name || ''}`.trim();
 
   return (
-        <div>
-          <Toolbar attached>
+        // [1.167.0] On a phone the search and the list run edge to edge as one section.
+        <div className="max-sm:-mx-4">
+          <Toolbar attached className="max-sm:rounded-none max-sm:border-x-0">
             <SearchInput
               placeholder="Search test..."
               value={results.search}
@@ -80,7 +81,7 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
             </div>
           </Toolbar>
 
-          <Panel className="overflow-hidden rounded-t-none">
+          <Panel className="overflow-hidden rounded-t-none max-sm:rounded-none max-sm:border-x-0">
             <PanelBody flush>
               {results.error ? (
                 // tone="error" looks deliberately unlike empty. A patient who has just been
@@ -100,6 +101,7 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
                   icon={FileText}
                   title="No tests yet"
                   description="Each test you book is listed here with its status, and its report once the clinic releases it."
+                  iconClassName="max-sm:hidden"
                 />
               ) : results.filtered.length === 0 ? (
                 <EmptyState
@@ -107,6 +109,7 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
                   icon={Search}
                   title="Nothing matches"
                   description="Try another department, or clear the search."
+                  iconClassName="max-sm:hidden"
                 />
               ) : (
                 <ul className="m-0 list-none divide-y divide-line p-0">
@@ -116,7 +119,7 @@ export default function ResultsTab({ profiles, results, onPreviewDocument }) {
                       className="flex flex-col items-start justify-between gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-5"
                     >
                       <div className="flex min-w-0 items-start gap-3.5">
-                        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-line bg-slate-50 text-brand-600">
+                        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-line bg-slate-50 text-brand-600 max-sm:hidden">
                           {CATEGORY_ICONS[item.category_name] || <FlaskConical className="w-5 h-5" />}
                         </span>
                         <div className="min-w-0 space-y-1">

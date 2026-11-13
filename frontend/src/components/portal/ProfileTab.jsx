@@ -65,6 +65,7 @@ export default function ProfileTab({ profiles, reference, invitations = null, on
                 title={`${patient.first_name} ${patient.last_name}`}
                 description="The patient whose bookings and results you are viewing."
                 icon={UserRound}
+                iconClassName="max-sm:hidden"
                 actions={
                   <Button type="button" variant="outline" size="sm" onClick={profiles.openEdit} aria-label="Edit patient profile">
                     <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
@@ -93,6 +94,7 @@ export default function ProfileTab({ profiles, reference, invitations = null, on
             <PanelHeader
               title="Family on this account"
               icon={Users}
+              iconClassName="max-sm:hidden"
               actions={
                 <Button type="button" size="sm" onClick={() => profiles.openAdd(true)}>
                   <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />

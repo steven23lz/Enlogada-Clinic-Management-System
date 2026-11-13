@@ -1,5 +1,14 @@
 # Database Migration & Schema History
 
+## [1.167.0] - 2026-11-13 (The patient portal on a phone: one box per section)
+
+No schema. Steven's adviser: too many containers. Measured at 360 px, the portal's Visits tab nested boxes four deep (the list panel, the booking card, the pass, then its chips and notes), so the QR code the desk scans got the least room on the screen; Home stacked about ten separate boxes; the booking dialog scrolled a box of tests inside its own scroll, each test a box inside a department box inside that box. Below `sm` only, so desktop and the paper's screenshots are unchanged:
+
+- **Visits, Payments and Results** run edge to edge as one section, rows split by a line. A booking has no card frame, the pass none of its own and a larger code (224 px), and its notes are a line with an icon (`components/portal/PortalNote.jsx`, the box it always was from `sm`). A missed paid booking puts its note and Reschedule, now the main button, above the pass.
+- **Home's four tiles** are one box split four ways; headings and empty states lose their icon squares (`iconClassName` on `PanelHeader` and `EmptyState`).
+- **Booking** fills the screen and scrolls once. The patient's `TestPicker` is one list with sticky department headings, and its running total is pinned to the bottom with "Next: HMO & Doctor's Notes" (`footerAction`); the step buttons keep their exact names on one line. Reception's picker is unchanged.
+- The pay panel's test check drops its frame inside the panel.
+
 ## [1.166.0] - 2026-11-11 (test_results no longer points at itself)
 
 `migrateRemoveSupersededBy.js` drops `test_results.superseded_by`, its foreign key `fk_results_superseded_by` and its index. Steven: the paper's final ERD draws no table connected to itself, and the system should match it. The column was the amendment chain's forward link (an old version carried the id of the version that replaced it), and nothing read it: a test's versions are ordered by `version`, the live one is `is_current`, and the public check finds a replacement by the next authorised version. `resultRepository` stops writing it and the version history stops selecting it. Nothing is archived, because the value can be rebuilt exactly: `--rollback` adds the column back and fills it from version order.

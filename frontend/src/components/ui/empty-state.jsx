@@ -28,6 +28,8 @@ const EmptyState = ({
   tone = 'default',
   compact = false,
   className,
+  // [1.167.0] e.g. "max-sm:hidden": the patient portal drops the icon square on a phone.
+  iconClassName,
 }) => {
   const isError = tone === 'error';
 
@@ -44,7 +46,8 @@ const EmptyState = ({
         className={cn(
           'mb-3 flex items-center justify-center rounded-xl',
           compact ? 'h-9 w-9' : 'h-11 w-11',
-          isError ? 'bg-rose-50 text-rose-500 ring-1 ring-rose-200' : 'bg-slate-100 text-slate-400'
+          isError ? 'bg-rose-50 text-rose-500 ring-1 ring-rose-200' : 'bg-slate-100 text-slate-400',
+          iconClassName
         )}
       >
         <Icon className={compact ? 'h-4 w-4' : 'h-5 w-5'} />

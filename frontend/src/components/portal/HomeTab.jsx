@@ -15,10 +15,10 @@ import { cn } from '../../lib/utils';
 // of the patient — but the shape says which, so the tone is never the only difference.
 const NEED_ICON = { error: AlertTriangle, amber: Wallet, prepare: ClipboardList, info: Info };
 const NEED_TONE = {
-  error: 'bg-rose-50 text-rose-700',
-  amber: 'bg-amber-50 text-amber-800',
-  prepare: 'bg-amber-50 text-amber-800',
-  info: 'bg-azure-50 text-azure-700',
+  error: 'sm:bg-rose-50 text-rose-700',
+  amber: 'sm:bg-amber-50 text-amber-800',
+  prepare: 'sm:bg-amber-50 text-amber-800',
+  info: 'sm:bg-azure-50 text-azure-700',
 };
 
 /** One of the four figures across the band's lower edge. Each opens the tab it summarises. */
@@ -29,7 +29,8 @@ function SummaryTile({ tile, label, icon: Icon, value, caption, onClick }) {
       data-testid="portal-tile"
       data-tile={tile}
       onClick={onClick}
-      className="flex min-w-0 cursor-pointer flex-col items-start gap-1 rounded-xl border border-line bg-surface p-3.5 text-left shadow-float transition-all hover:-translate-y-0.5 hover:shadow-overlay sm:p-4"
+      // [1.167.0] On a phone the four tiles are one box (see the grid below): no frame, shadow or lift of their own.
+      className="flex min-w-0 cursor-pointer flex-col items-start gap-1 rounded-xl border border-line bg-surface p-3.5 text-left shadow-float transition-all hover:-translate-y-0.5 hover:shadow-overlay max-sm:rounded-none max-sm:border-0 max-sm:shadow-none max-sm:hover:translate-y-0 max-sm:hover:shadow-none max-sm:active:bg-slate-50 sm:p-4"
     >
       <span className="flex items-center gap-1.5 text-micro font-semibold uppercase tracking-[0.08em] text-ink-muted">
         <Icon className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
@@ -81,7 +82,9 @@ export default function HomeTab({
         subtitle="Book Laboratory, Ultrasound and X-Ray visits, pay ahead, and read your reports."
         actions={bookButton}
       >
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {/* [1.167.0] On a phone, one box split four ways by hairlines, not four boxes: the
+            portal's adviser-flagged "too many containers". From sm, four tiles as before. */}
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 max-sm:gap-0 max-sm:overflow-hidden max-sm:rounded-xl max-sm:border max-sm:border-line max-sm:bg-surface max-sm:shadow-float max-sm:[&>*:nth-child(odd)]:border-r max-sm:[&>*:nth-child(-n+2)]:border-b max-sm:[&>*]:border-line-soft">
           <SummaryTile
             tile="next"
             label="Next visit"
@@ -131,7 +134,7 @@ export default function HomeTab({
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel data-testid="portal-attention" className="overflow-hidden">
-          <PanelHeader title="Needs your attention" icon={AlertTriangle} />
+          <PanelHeader title="Needs your attention" icon={AlertTriangle} iconClassName="max-sm:hidden" />
           <PanelBody flush>
             {(bookings.loading && !bookings.error) || invitations?.loading ? (
               <div className="p-4"><SkeletonList rows={2} /></div>
@@ -141,6 +144,7 @@ export default function HomeTab({
                 icon={CheckCircle}
                 title="Nothing needs you right now"
                 description="Anything to pay, to prepare for, or to rate shows up here."
+                iconClassName="max-sm:hidden"
               />
             ) : (
               <ul className="m-0 list-none divide-y divide-line p-0">
@@ -153,13 +157,13 @@ export default function HomeTab({
                       data-need={need.id}
                       className="flex flex-wrap items-center gap-3 px-4 py-3 sm:flex-nowrap"
                     >
-                      <span className={cn('flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg', NEED_TONE[need.tone])}>
+                      <span className={cn('flex h-5 w-5 flex-shrink-0 items-center justify-center self-start rounded-lg sm:h-8 sm:w-8 sm:self-center', NEED_TONE[need.tone])}>
                         <Icon className="h-4 w-4" aria-hidden="true" />
                       </span>
                       {/* On a phone the text claims the whole row beside the icon (2.75rem = the
                           h-8 icon plus gap-3), so the button wraps beneath it, indented to the
                           text's edge. Side by side, the button left the text about 130px. */}
-                      <span className="min-w-0 flex-1 basis-[calc(100%-2.75rem)] sm:basis-0">
+                      <span className="min-w-0 flex-1 basis-[calc(100%-2rem)] sm:basis-0">
                         <span className="block text-note font-semibold text-ink">{need.title}</span>
                         <span className="block text-fine leading-relaxed text-ink-muted">{need.detail}</span>
                       </span>
@@ -168,7 +172,7 @@ export default function HomeTab({
                           size="sm"
                           aria-label={need.acceptInvitation?.patientName ? `Review ${need.acceptInvitation.patientName}'s record` : undefined}
                           variant={need.id.startsWith('pay-') ? 'default' : 'outline'}
-                          className="ml-11 sm:ml-0"
+                          className="ml-8 sm:ml-0"
                           onClick={() => {
                             if (need.acceptInvitation) onAcceptInvitation?.(need.acceptInvitation);
                             else if (need.feedbackVisit) onRate?.(need.feedbackVisit);
@@ -187,7 +191,7 @@ export default function HomeTab({
         </Panel>
 
         <Panel data-testid="portal-latest-results" className="overflow-hidden">
-          <PanelHeader title="Latest results" icon={FileText} />
+          <PanelHeader title="Latest results" icon={FileText} iconClassName="max-sm:hidden" />
           <PanelBody flush>
             {results.error ? (
               <EmptyState
@@ -205,6 +209,7 @@ export default function HomeTab({
                 icon={FileText}
                 title="No results released yet"
                 description="A report appears here, and under Results, once the clinic releases it."
+                iconClassName="max-sm:hidden"
               />
             ) : (
               <ul className="m-0 list-none divide-y divide-line p-0">

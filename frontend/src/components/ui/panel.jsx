@@ -51,7 +51,7 @@ Panel.displayName = 'Panel';
  * same line down to `sm`, because a filter control that wraps under its own heading reads as
  * belonging to the content below it rather than to the panel.
  */
-export const PanelHeader = ({ title, description, icon: Icon, actions, className, children }) => (
+export const PanelHeader = ({ title, description, icon: Icon, iconClassName, actions, className, children }) => (
   <div
     className={cn(
       'flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3.5',
@@ -60,7 +60,7 @@ export const PanelHeader = ({ title, description, icon: Icon, actions, className
   >
     <div className="flex min-w-0 items-center gap-2.5">
       {Icon && (
-        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+        <span className={cn('flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600', iconClassName)}>
           <Icon className="h-3.5 w-3.5" />
         </span>
       )}

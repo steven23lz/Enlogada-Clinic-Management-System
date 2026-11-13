@@ -40,6 +40,9 @@ const TestPicker = ({
   onTogglePackage,
   disabled = false,
   maxHeight = 'max-h-72',
+  // [1.167.0] The button that moves the patient on (the booking dialog's Next). On a phone it rides
+  // in the running-total bar pinned to the bottom of the screen; from `sm` the dialog shows its own.
+  footerAction = null,
   /**
    * Who is reading the preparation notes. [1.80.0] At the desk the receptionist tells the
    * patient before they leave; in the portal the patient is reading them. The same notes,
@@ -161,6 +164,11 @@ const TestPicker = ({
     return [...byId.values()];
   }, [selected, selectedPackages]);
 
+  // [1.167.0] The patient's picker on a phone: one list, edge to edge, rows split by lines, and no
+  // box scrolling inside the dialog's own scroll. Reception's picker (and every picker from `sm`)
+  // is unchanged. Each piece below is `phone(...)`, which adds its classes only for the patient.
+  const phone = (cls) => (audience === 'patient' ? cls : '');
+
   return (
     <div className="space-y-2">
       {/* Only once the catalogue is long enough that scanning it is work. */}
@@ -186,6 +194,7 @@ const TestPicker = ({
               Packages that share tests cannot go together: each is one fixed price, and a test is sold under one of them only.
             </p>
           )}
+          <div className={phone('space-y-1.5 max-sm:-mx-4 max-sm:space-y-0 max-sm:divide-y max-sm:divide-line-soft max-sm:border-y max-sm:border-line-soft') || 'space-y-1.5'}>
           {packages.map((p) => {
             const block = blocked.get(p.id.toString());
             return (
@@ -193,7 +202,7 @@ const TestPicker = ({
               key={p.id}
               data-testid="picker-package"
               data-package-code={p.code}
-              className={`overflow-hidden rounded-lg border border-azure-200 transition-colors ${block ? 'bg-slate-50' : 'bg-azure-50/50 hover:border-azure-300'}`}
+              className={`overflow-hidden rounded-lg border border-azure-200 transition-colors ${block ? 'bg-slate-50' : 'bg-azure-50/50 hover:border-azure-300'} ${phone('max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent')}`}
             >
               {/* ONE row per bundle. [1.54.0] Spelling out every component inline, five packages
                   of six-to-nine tests each filled the picker before the individual list began —
@@ -210,8 +219,8 @@ const TestPicker = ({
                   bundle to "Package…", and five identical rows cannot be told apart. The count
                   takes its own line under the name; `items-start` keeps the checkbox, price and
                   chevron level with the first line when the name runs to two. */}
-              <div className="flex items-start gap-2 pr-2">
-                <label className={`flex min-w-0 flex-1 items-start gap-2 p-2.5 sm:gap-3 ${block ? 'cursor-default opacity-60' : 'cursor-pointer'}`}>
+              <div className={`flex items-start gap-2 pr-2 ${phone('max-sm:pr-3')}`}>
+                <label className={`flex min-w-0 flex-1 items-start gap-2 p-2.5 sm:gap-3 ${phone('max-sm:gap-3 max-sm:px-4 max-sm:py-3')} ${block ? 'cursor-default opacity-60' : 'cursor-pointer'}`}>
                   <input
                     type="checkbox"
                     checked={selectedPackageIds.includes(p.id.toString()) || block?.kind === 'on-visit'}
@@ -220,13 +229,13 @@ const TestPicker = ({
                     className="mt-0.5 rounded text-azure-600 focus:ring-azure-500"
                   />
                   <Package className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-azure-600" aria-hidden="true" />
-                  <span className="min-w-0 flex-1 break-words text-xs font-bold leading-snug text-slate-800">
+                  <span className={`min-w-0 flex-1 break-words text-xs font-bold leading-snug text-slate-800 ${phone('max-sm:text-sm')}`}>
                     {p.name}
                     <span className="block text-meta font-medium text-slate-500">
                       {(p.tests || []).length} tests
                     </span>
                   </span>
-                  <span className="flex-shrink-0 text-xs font-extrabold tabular-nums text-azure-700">
+                  <span className={`flex-shrink-0 text-xs font-extrabold tabular-nums text-azure-700 ${phone('max-sm:text-sm')}`}>
                     {formatCurrency(p.price)}
                   </span>
                 </label>
@@ -246,7 +255,7 @@ const TestPicker = ({
               {/* Says why, as a covered test does below: a control merely dead reads as broken. Under
                   the row rather than beside the price, so on a phone it is a line and not a column. */}
               {block && (
-                <p data-testid="package-blocked" className="m-0 px-2.5 pb-2 text-meta font-medium leading-snug text-slate-600">
+                <p data-testid="package-blocked" className={`m-0 px-2.5 pb-2 text-meta font-medium leading-snug text-slate-600 ${phone('max-sm:px-4 max-sm:pl-[3.25rem]')}`}>
                   {block.kind === 'on-visit' ? 'Already on this visit' : `Shares tests with ${block.withName}`}
                 </p>
               )}
@@ -254,7 +263,7 @@ const TestPicker = ({
                 <div>
                   <p
                     inert={!openPackages.has(p.id.toString())}
-                    className="m-0 border-t border-azure-200/70 px-2.5 py-1.5 text-fine leading-snug text-slate-600"
+                    className={`m-0 border-t border-azure-200/70 px-2.5 py-1.5 text-fine leading-snug text-slate-600 ${phone('max-sm:border-0 max-sm:px-4 max-sm:pb-3 max-sm:pl-[3.25rem] max-sm:pt-0')}`}
                   >
                     {(p.tests || []).map((t) => t.name).join(', ')}
                   </p>
@@ -263,10 +272,11 @@ const TestPicker = ({
             </div>
             );
           })}
+          </div>
         </div>
       )}
 
-      <div className={`${maxHeight} space-y-3 overflow-y-auto rounded-xl border border-line bg-slate-50/70 p-3`}>
+      <div className={`${maxHeight} space-y-3 overflow-y-auto rounded-xl border border-line bg-slate-50/70 p-3 ${phone('max-sm:-mx-4 max-sm:max-h-none max-sm:space-y-0 max-sm:overflow-visible max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0')}`}>
         {grouped.length === 0 ? (
           <p className="m-0 py-3 text-center text-fine text-slate-400">No test matches that.</p>
         ) : (
@@ -278,14 +288,15 @@ const TestPicker = ({
             const panelId = `testpicker-${category.replace(/\W+/g, '-').toLowerCase()}`;
 
             return (
-              <div key={category} className="overflow-hidden rounded-lg border border-line bg-surface">
+              <div key={category} className={`overflow-hidden rounded-lg border border-line bg-surface ${phone('max-sm:overflow-visible max-sm:rounded-none max-sm:border-0')}`}>
                 <button
                   type="button"
                   onClick={() => toggleCategory(category)}
                   aria-expanded={open}
                   aria-controls={panelId}
                   disabled={searching}
-                  className="flex w-full cursor-pointer items-center gap-2 border-0 bg-surface px-2.5 py-2 text-left transition-colors hover:bg-slate-50 disabled:cursor-default"
+                  // [1.167.0] On the patient's phone a department's heading stays at the top while its tests scroll under it.
+                  className={`flex w-full cursor-pointer items-center gap-2 border-0 bg-surface px-2.5 py-2 text-left transition-colors hover:bg-slate-50 disabled:cursor-default ${phone('max-sm:sticky max-sm:top-0 max-sm:z-10 max-sm:border-y max-sm:border-solid max-sm:border-line-soft max-sm:bg-sunken max-sm:px-4 max-sm:py-2.5')}`}
                 >
                   <ChevronRight
                     className={`h-3.5 w-3.5 flex-shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
@@ -313,7 +324,7 @@ const TestPicker = ({
                         `inert` leaves the layout intact and takes the checkboxes out of the tab
                         order and the accessibility tree, which is the part that actually matters
                         when a collapsed section is still in the DOM. */}
-                    <div id={panelId} inert={!open} className="space-y-1 border-t border-line p-2">
+                    <div id={panelId} inert={!open} className={`space-y-1 border-t border-line p-2 ${phone('max-sm:space-y-0 max-sm:divide-y max-sm:divide-line-soft max-sm:border-t-0 max-sm:p-0')}`}>
                     {items.map((t) => {
                       // The bundle that already covers it, if any — the chip's text and the reason
                       // the control is inert.
@@ -322,7 +333,7 @@ const TestPicker = ({
                       return (
                       <label
                         key={t.id}
-                        className={`flex items-center gap-3 rounded-lg border border-line bg-surface p-2 text-xs transition-colors ${
+                        className={`flex items-center gap-3 rounded-lg border border-line bg-surface p-2 text-xs transition-colors ${phone('max-sm:rounded-none max-sm:border-0 max-sm:px-4 max-sm:py-3 max-sm:text-sm')} ${
                           inPackage || onThisVisit
                             ? 'cursor-default opacity-60'
                             : 'cursor-pointer hover:border-brand-300 hover:bg-brand-50/40'
@@ -371,7 +382,9 @@ const TestPicker = ({
 
       {/* The running total. Reception can quote it across the desk rather than the patient
           discovering the number at the till. */}
-      <div className="flex items-center justify-between rounded-lg bg-sunken px-3 py-2">
+      {/* [1.167.0] On the patient's phone the total is pinned to the bottom of the screen, with
+          the button that moves on beside it, so neither is under the whole catalogue. */}
+      <div className={`flex items-center justify-between rounded-lg bg-sunken px-3 py-2 ${footerAction ? phone('max-sm:sticky max-sm:-bottom-4 max-sm:z-10 max-sm:-mx-4 max-sm:flex-wrap max-sm:gap-x-3 max-sm:gap-y-2.5 max-sm:rounded-none max-sm:border-t max-sm:border-line max-sm:bg-surface max-sm:px-4 max-sm:py-3') : ''}`}>
         <span className="text-fine font-medium text-slate-500">
           {billable.length === 0 && selectedPackages.length === 0
             ? 'Nothing selected'
@@ -385,6 +398,7 @@ const TestPicker = ({
               ].filter(Boolean).join(' + ') + ' selected'}
         </span>
         <span data-testid="picker-total" className="text-note font-extrabold tabular-nums text-slate-900">{formatCurrency(total)}</span>
+        {footerAction && <div className="hidden basis-full max-sm:block [&>button]:w-full">{footerAction}</div>}
       </div>
 
       {/* Preparation. At the desk, the person handing over the queue ticket saying "come back

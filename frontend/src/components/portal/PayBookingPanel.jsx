@@ -310,7 +310,8 @@ function ScanAssist({ scanning, scan, amountDue }) {
  */
 function FinalTestsCheck({ tests, amountDue, confirmed, onChange }) {
   return (
-    <div data-testid="final-tests-check" className="space-y-2 rounded-lg border border-line bg-surface p-3">
+    // [1.167.0] No frame of its own on a phone: it already sits inside the pay panel, and its list is the box.
+    <div data-testid="final-tests-check" className="space-y-2 rounded-lg border border-line bg-surface p-3 max-sm:border-0 max-sm:bg-transparent max-sm:p-0">
       <p className="m-0 text-fine font-semibold text-slate-900">Check your tests before you pay</p>
       {tests.length > 0 && (
         <ul className="m-0 list-none divide-y divide-line rounded-lg border border-line p-0 text-fine">

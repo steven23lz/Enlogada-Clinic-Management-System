@@ -287,7 +287,10 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                         Book a visit
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-xl">
+                    {/* [1.167.0] On a phone the booking fills the screen and scrolls once: a dialog floating
+                        over the portal, with the test list scrolling inside it, gave a thumb two
+                        scrolls to choose between. From `sm` it is the dialog it was. */}
+                    <DialogContent className="max-w-xl max-sm:inset-0 max-sm:left-0 max-sm:top-0 max-sm:h-[100dvh] max-sm:max-h-none max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:content-start max-sm:rounded-none max-sm:border-0 max-sm:p-4 max-sm:pt-5">
                       {selectedProfile?.archived_at && !bookingConfirmation ? (
                         // [1.154.0] Said before the form, as for a clinic with no payment account.
                         <div data-testid="booking-record-inactive" className="space-y-4">
@@ -333,8 +336,8 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                         />
                       ) : (
                         <>
-                      <DialogHeader>
-                        <DialogTitle className="text-lg font-bold text-slate-900">
+                      <DialogHeader className="max-sm:pr-8 max-sm:text-left">
+                        <DialogTitle className="text-lg font-bold text-slate-900 max-sm:text-base">
                           Book Diagnostic Appointment
                         </DialogTitle>
                         <DialogDescription>
@@ -366,7 +369,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                             type="button"
                             onClick={() => setBookingStep(1)}
                             aria-current={bookingStep === 1 ? 'step' : undefined}
-                            className={`text-xs font-bold leading-tight text-center px-3 py-1.5 rounded-xl border-0 cursor-pointer ${bookingStep === 1 ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-500'}`}
+                            className={`text-xs font-bold leading-tight text-center px-3 py-1.5 rounded-xl border-0 cursor-pointer max-sm:px-1 max-sm:py-2 max-sm:text-micro ${bookingStep === 1 ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-500'}`}
                           >
                             1. Schedule & Services
                           </button>
@@ -374,7 +377,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                             type="button"
                             onClick={() => setBookingStep(2)}
                             aria-current={bookingStep === 2 ? 'step' : undefined}
-                            className={`text-xs font-bold leading-tight text-center px-3 py-1.5 rounded-xl border-0 cursor-pointer ${bookingStep === 2 ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-500'}`}
+                            className={`text-xs font-bold leading-tight text-center px-3 py-1.5 rounded-xl border-0 cursor-pointer max-sm:px-1 max-sm:py-2 max-sm:text-micro ${bookingStep === 2 ? 'bg-primary text-primary-foreground' : 'bg-gray-100 text-gray-500'}`}
                           >
                             2. HMO &amp; Doctor&apos;s Notes
                           </button>
@@ -412,10 +415,16 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                                 onTogglePackage={handlePackageSelection}
                                 disabled={isBooking}
                                 audience="patient"
+                                footerAction={(
+                                  <Button type="button" onClick={() => setBookingStep(2)}>
+                                    Next: HMO &amp; Doctor&apos;s Notes &rarr;
+                                  </Button>
+                                )}
                               />
                             </div>
 
-                            <div className="flex justify-end pt-2">
+                            {/* On a phone this button rides in the picker's pinned total bar instead. */}
+                            <div className="flex justify-end pt-2 max-sm:hidden">
                               <Button type="button"  onClick={() => setBookingStep(2)}>
                                 Next: HMO &amp; Doctor&apos;s Notes &rarr;
                               </Button>
