@@ -1,7 +1,7 @@
 import React from 'react';
 
 const LIST_PAGE_SIZE = 8;
-import { CalendarClock, ClipboardList, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ClipboardList, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { ConfirmDialog } from '../ui/confirm-dialog';
 import { Panel, PanelBody } from '../ui/panel';
@@ -199,7 +199,7 @@ export default function AppointmentsTab({ bookings, visits = null }) {
             <ClipboardList className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 sm:hidden" aria-hidden="true" />
             <div className="min-w-0 sm:space-y-1">
             <p className="m-0 flex items-center gap-1.5 text-fine font-semibold text-slate-900 sm:text-amber-900">
-              <ClipboardList className="hidden h-3 w-3 flex-shrink-0 sm:block" aria-hidden="true" />
+              <AlertTriangle className="hidden h-3 w-3 flex-shrink-0 sm:block" aria-hidden="true" />
               Before this appointment
             </p>
             <ul className="m-0 list-disc space-y-0.5 pl-5 text-fine leading-relaxed text-slate-700 max-sm:list-none max-sm:pl-0 sm:text-amber-800">
