@@ -272,6 +272,24 @@ export function useResultEntry({ user, onOpened, onRecorded, onReleased } = {}) 
         released_by_last_name: user?.lastName,
       });
     } catch (err) {
+      // [1.171.0] No reply: the clinic may have released it before the connection dropped, and the
+      // technologist read "Couldn't release" over a report already in the patient's portal. Asked.
+      if (!err.response) {
+        const stored = await api.get(`/results/${activeTest.visit_test_id}`)
+          .then((res) => res.data?.data?.result || null)
+          .catch(() => null);
+        if (stored?.authorised_at) {
+          setConfirmingRelease(false);
+          setEmailState({ status: 'idle', message: '' });
+          setJustReleased({ ...activeTest, ...stored, patient_email: stored.patient_email ?? null, has_portal_account: Boolean(stored.has_portal_account) });
+          setReleasing(false);
+          onReleased?.();
+          return;
+        }
+        setError('The connection dropped before the clinic answered, so this report may not have been released. Check the connection and press Authorize & Release again: it is never released twice.');
+        setConfirmingRelease(false);
+        return;
+      }
       setError(err.response?.data?.message || 'Couldn’t release diagnostic result.');
       setConfirmingRelease(false);
       return;

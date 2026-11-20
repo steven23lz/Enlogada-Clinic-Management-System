@@ -1,5 +1,25 @@
 # Database Migration & Schema History
 
+## [1.171.0] - 2026-11-20 (When the connection drops)
+
+No schema. Steven: "before submitting the payment verification and get cut off like no internet... trying to stop booking... be QA and a tester". `connection-drops.spec.js` walks each role on the screen and cuts the connection two ways: before the request leaves (nothing saved, so the person must try again) and after the clinic saved it but before the answer arrived (the person must NOT be told it failed, or they pay, register or refund twice). Measured before:
+
+| Who | Cut after the clinic saved it | Shown |
+|---|---|---|
+| Cashier | Payment taken | "Couldn't process payment", no receipt; Take again said only "already paid" |
+| Front desk | Walk-in registered | "Couldn't register walk-in patient"; Register again asked to use the record on file, which could only be refused |
+| Technologist | Report released | "Couldn't release diagnostic result" over a report in the patient's portal |
+| Admin | Claim approved | "Couldn't approve request", the panel still offering Approve |
+| Cashier | Online payment verified | "Could not be verified", the dialog left open |
+| Super Admin | Refund recorded | "The refund could not be recorded. Nothing was changed." |
+| Patient | Payment proof received | "The payment could not be submitted. Please try again." |
+
+Each now asks the clinic what happened instead of guessing. The till reads the visit's payments and shows the receipt it finds (`useCheckout`); a 409 "already paid" does the same. The proof form reads the visit's proofs and, if this reference arrived, turns to "Payment sent for checking" (`usePaymentSubmission`). Releasing reads the result and shows the released panel if `authorised_at` is set (`useResultEntry`). A claim decision re-reads the claim on no reply or a 409 (`ServiceRequests`). Verifying or rejecting a proof closes the dialog and re-reads the list (`usePaymentReview`). A refund with no reply says it may have been recorded and refreshes the list (`RefundAction`). The walk-in's "already on file" answer now carries `details.waitingToday`, and the Desk says "already in today's queue with ticket N" with Done, instead of offering a record that would be refused (`already-waiting`). Cut before sending, each says the connection dropped and keeps what was typed; booking already did, and Submit again returns the same booking.
+
+Also: the sidebar's counts read again straight after any change saved in the tab (`data:changed` from `config/api.js`, heard by `useNavCounts`), not at their next minute: a verified payment left "Online Payments 1" beside "Nothing waiting". And a patient abandoning a booking halfway, by a refresh or by closing it, books nothing; a double-tapped Submit or Register makes one.
+
+In the suite: `helpers/people.js` keeps the names a run has handed out in `test-results/.e2e-names-used` beside the run's stamp. The worker restarts after any failed test and its Set restarted empty, so a later spec could take a name still in today's queue, and the till or Edit Tests found two rows for one name.
+
 ## [1.170.0] - 2026-11-20 (Every process, four ways)
 
 No schema. Steven: "triple or quadruple check every process". `four-passes.spec.js` goes over every door a record can be changed through four ways: timing (two things at once, beyond [1.169.0]), whose (one patient reaching for another's booking, bill, proof, report, receipt, record or feedback, and a patient trying staff actions), state (an action on something already paid, released, withdrawn, checked in or refunded) and input (doubled tests, negative or garbled amounts, impossible dates, unknown values, 5,000-character names, a name with ñ and an apostrophe). The code was then read for the shape behind every race so far, a check before the transaction and a write inside it.

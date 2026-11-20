@@ -77,6 +77,9 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
   // A record already on file for this name and birthdate. [1.129.0] The server refuses to make a
   // second one unless told this is a different person; the form asks the receptionist which.
   const [possibleDuplicate, setPossibleDuplicate] = useState(null);
+  // [1.171.0] The match is already in today's queue: usually this desk's own registration, whose
+  // reply was lost before it arrived.
+  const [alreadyWaiting, setAlreadyWaiting] = useState(null);
   const [repeatAsked, setRepeatAsked] = useState(null);
 
   const resetForm = () => {
@@ -149,10 +152,14 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
       const duplicate = err.response?.status === 409 && err.response?.data?.details?.possibleDuplicate;
       if (duplicate) {
         setPossibleDuplicate(duplicate);
+        setAlreadyWaiting(err.response?.data?.details?.waitingToday || null);
       } else if (err.response?.data?.details?.repeatTests) {
         // The record on file already has one of these tests today. [1.157.0]
         setPossibleDuplicate(null);
         setRepeatAsked({ message: err.response.data.message, asRecord });
+      } else if (!err.response) {
+        // [1.171.0] No reply: the clinic may have registered them before the connection dropped.
+        setRegistrationError('The connection dropped before the clinic answered, so this patient may already be registered. Check the connection and press Register again: if it went through, you will be told, and nothing is registered twice.');
       } else {
         setRegistrationError(err.response?.data?.message || 'Couldn’t register walk-in patient');
       }
@@ -166,6 +173,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
     setRegistrationSuccess('');
     setRegistrationError('');
     setPossibleDuplicate(null);
+    setAlreadyWaiting(null);
 
     const validationError = validatePatientProfile(newPatient);
     if (validationError) {
@@ -228,7 +236,28 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                   </div>
                 )}
 
-                {possibleDuplicate && (
+                {possibleDuplicate && alreadyWaiting && (
+                  <div data-testid="already-waiting" role="alert" className="mb-4 space-y-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5">
+                    <p className="m-0 text-note font-semibold text-emerald-900">
+                      {possibleDuplicate.first_name} {possibleDuplicate.last_name} is already in today&apos;s queue
+                      {alreadyWaiting.queueNumber ? ` with ticket ${alreadyWaiting.queueNumber}` : ''}, waiting to pay.
+                    </p>
+                    <p className="m-0 text-fine leading-relaxed text-emerald-800">
+                      If you just registered them and the connection dropped, it went through: send them to the cashier.
+                      To add a test, use Edit Tests on their row in the queue.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" size="sm" onClick={() => { setPossibleDuplicate(null); setAlreadyWaiting(null); resetForm(); onRegistered?.(); }}>
+                        Done
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" disabled={isRegistering} onClick={() => register({ confirmNew: true })}>
+                        No, this is someone new
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {possibleDuplicate && !alreadyWaiting && (
                   <div data-testid="possible-duplicate" role="alert" className="mb-4 space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
                     <p className="m-0 text-note font-semibold text-amber-900">
                       {possibleDuplicate.first_name} {possibleDuplicate.last_name}, born{' '}

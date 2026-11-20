@@ -156,6 +156,25 @@ export function usePaymentSubmission(visitId, { onSettled, onRefused } = {}) {
       toastSuccess('Payment sent for verification. Your pass appears once the cashier confirms it.');
       onSettled?.();
     } catch (err) {
+      // [1.171.0] No reply at all: the connection dropped, before or after the clinic received it.
+      // Asked rather than guessed. If it arrived, the panel turns to "Payment sent for checking" on
+      // its own after the re-read; if not, the patient is told plainly, and what they typed stays.
+      if (!err.response) {
+        const landed = await api.get(`/payment-submissions/visit/${visitId}`)
+          .then((res) => (res.data?.data?.submissions || []).some((x) => x.status === 'Pending' && x.reference_number === reference.trim()))
+          .catch(() => false);
+        if (landed) {
+          setReference('');
+          setProof(null);
+          setScan(null);
+          await reload();
+          toastSuccess('Your payment reached the clinic before the connection dropped. Your pass appears once the cashier confirms it.');
+          onSettled?.();
+          return;
+        }
+        setError("We couldn't reach the clinic, so your payment details were not sent. Check your connection and press Send for verification again. What you entered is kept.");
+        return;
+      }
       setError(err.response?.data?.message || 'The payment could not be submitted. Please try again.');
       // A 409 means the server knows something this mount does not: the visit is already paid, or a
       // claim is already awaiting review. Reachable now that payment lives in two places — the

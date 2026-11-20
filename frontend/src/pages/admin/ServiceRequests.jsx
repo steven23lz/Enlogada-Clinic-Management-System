@@ -115,6 +115,18 @@ const ServiceRequests = ({ intent = null }) => {
     fetchRequests();
   };
 
+  // [1.171.0] No reply, or the claim changed under this screen (409): the decision may already be
+  // recorded. The claim is read again, so the panel shows what the clinic holds rather than a
+  // "Couldn't approve" over an approval that went through.
+  const afterFailedDecision = async (err, fallback) => {
+    if (!err.response || err.response.status === 409) {
+      await refreshDetail(detailRequest.id).catch(() => {});
+    }
+    setDetailError(!err.response
+      ? 'The connection dropped before the clinic answered. The claim has been read again: its status below is what the clinic holds.'
+      : (err.response?.data?.message || fallback));
+  };
+
   const handleApproveRequest = async (e) => {
     e.preventDefault();
     if (!approvalCode.trim()) {
@@ -131,7 +143,7 @@ const ServiceRequests = ({ intent = null }) => {
       // the person deciding needs to know the decision was recorded, not just displayed.
       toastSuccess('Claim approved. The cashier will bill against it.');
     } catch (err) {
-      setDetailError(err.response?.data?.message || 'Couldn’t approve request.');
+      await afterFailedDecision(err, 'Couldn’t approve request.');
     } finally {
       setDetailSubmitting(false);
     }
@@ -150,7 +162,7 @@ const ServiceRequests = ({ intent = null }) => {
       await refreshDetail(detailRequest.id);
       toastSuccess('Claim refused, with your reason on the record. The patient will be billed.');
     } catch (err) {
-      setDetailError(err.response?.data?.message || 'Couldn’t record the refusal.');
+      await afterFailedDecision(err, 'Couldn’t record the refusal.');
     } finally {
       setDetailSubmitting(false);
     }
@@ -169,7 +181,7 @@ const ServiceRequests = ({ intent = null }) => {
           : 'Test refused, with your reason on the record.'
       );
     } catch (err) {
-      setDetailError(err.response?.data?.message || 'Couldn’t update test approval.');
+      await afterFailedDecision(err, 'Couldn’t update test approval.');
     }
   };
 

@@ -1353,6 +1353,11 @@ with a link to the printable document.
   new slot, the decision. A bare "Saved" on a list of forty records confirms nothing. Skip it where
   better feedback already exists (`BookingDialog` shows a reference code, `WalkInRegistration`
   prints the queue ticket) — a toast on top of those is noise.
+- **A request with no reply may have worked.** `[1.171.0]` When a save gets no answer (`!err.response`), the
+  clinic may have done it before the connection dropped. Never say it failed or that "nothing was changed": read
+  the record back and show what the clinic holds (the till's receipt, the proof as sent, the released report, the
+  decided claim), and say it plainly when it cannot be read. A 409 on a retry usually means the first one landed.
+  `connection-drops.spec.js` cuts each role's main action both before it leaves and after it is saved.
 - **A spinner is exempt from the reduced-motion kill, and must stay exempt.** `[1.39.0]` The
   blanket `prefers-reduced-motion` rule sets `animation-iteration-count: 1` at `0.01ms`, which does
   not slow a spinner — it stops it dead after one instant rotation, so every loading indicator in

@@ -114,6 +114,16 @@ export function usePaymentReview({ enabled = true } = {}) {
       // and the receipt number is what the cashier writes down.
       toastSuccess(`${name} — paid. Receipt ${receipt}.`);
     } catch (err) {
+      // [1.171.0] No reply, or already reviewed (409): the receipt may exist. The list is read again
+      // and the dialog closed, rather than left open over a payment that went through.
+      if (!err.response || err.response.status === 409) {
+        setVerifying(null);
+        await load();
+        toastError(!err.response
+          ? 'The connection dropped before the clinic answered. The list has been read again: if this payment is no longer waiting, it was verified and its receipt issued.'
+          : err.response.data?.message);
+        return;
+      }
       toastError(err.response?.data?.message || 'The payment could not be verified.');
     } finally {
       setActing(null);
@@ -143,6 +153,14 @@ export function usePaymentReview({ enabled = true } = {}) {
         ? `${name}'s payment rejected. Their appointment time had passed, so the booking was released.`
         : `${name}'s payment rejected, with your reason sent to them.`);
     } catch (err) {
+      if (!err.response || err.response.status === 409) {
+        setRejecting(null);
+        await load();
+        toastError(!err.response
+          ? 'The connection dropped before the clinic answered. The list has been read again: if this payment is no longer waiting, the rejection was recorded.'
+          : err.response.data?.message);
+        return;
+      }
       toastError(err.response?.data?.message || 'The payment could not be rejected.');
     } finally {
       setActing(null);

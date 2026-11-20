@@ -51,6 +51,10 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     const isGet = (response.config?.method || 'get').toLowerCase() === 'get';
+    // [1.171.0] A change was saved: whatever counts what is waiting (the sidebar) reads again now,
+    // rather than at its next minute. A payment verified left "Online Payments 1" beside a list
+    // that said "Nothing waiting" for up to a minute.
+    if (!isGet && typeof window !== 'undefined') window.dispatchEvent(new Event('data:changed'));
     if (!isGet || response.config?.responseType === 'blob') return response;
 
     if (response.status === 304) {

@@ -38,6 +38,10 @@
  * prefix is 0900), so cleanup can identify a test patient without reading its name, and a human
  * looking at the record can tell it is not a live one.
  */
+import fs from 'node:fs';
+import path from 'node:path';
+import { RUN_STAMP_FILE } from '../globalSetup.js';
+
 export const FIXTURE_CONTACT = '09000000000';
 
 const GIVEN = [
@@ -61,10 +65,34 @@ const SURNAME = [
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
-// Per-process, which is per-suite-run: the runner uses a single worker, so one Set covers every
-// spec in the run. Stale names from a PREVIOUS run are not a concern — the purge removes them,
-// and a spec looks up the name it just created rather than scanning for a shape.
-const handedOut = new Set();
+// The names this RUN has handed out. [1.171.0] It was one Set per process on the belief that a run
+// is one process; it is not, because the worker restarts after any failed test and the Set restarted
+// empty. A later spec could then take a name still sitting in today's queue, and a spec finding its
+// patient by name ("Fernando Macapagal") met two rows. So the names are also kept in a file beside
+// the run's start stamp, and a new run (a new stamp) starts empty. Stale names from a PREVIOUS run
+// are not a concern: the purge removes them.
+const NAMES_FILE = path.join(process.cwd(), 'test-results', '.e2e-names-used');
+const runStamp = () => { try { return fs.readFileSync(RUN_STAMP_FILE, 'utf8').trim(); } catch { return ''; } };
+function loadHandedOut() {
+  try {
+    const [stamp, ...names] = fs.readFileSync(NAMES_FILE, 'utf8').split('\n');
+    if (stamp && stamp === runStamp()) return new Set(names.filter(Boolean));
+  } catch { /* the first name of the run */ }
+  return new Set();
+}
+const handedOut = loadHandedOut();
+function remember(key) {
+  handedOut.add(key);
+  try {
+    const stamp = runStamp();
+    const current = fs.existsSync(NAMES_FILE) ? fs.readFileSync(NAMES_FILE, 'utf8').split('\n')[0] : null;
+    if (current !== stamp) {
+      fs.mkdirSync(path.dirname(NAMES_FILE), { recursive: true });
+      fs.writeFileSync(NAMES_FILE, `${stamp}\n`);
+    }
+    fs.appendFileSync(NAMES_FILE, `${key}\n`);
+  } catch { /* the in-memory Set still holds for this worker */ }
+}
 
 /**
  * A realistic, unused name.
@@ -78,7 +106,7 @@ export function fixturePerson() {
     const lastName = pick(SURNAME);
     const key = `${firstName} ${lastName}`;
     if (!handedOut.has(key)) {
-      handedOut.add(key);
+      remember(key);
       return { firstName, lastName, fullName: key };
     }
   }
@@ -91,7 +119,7 @@ export function fixturePerson() {
     const lastName = `${pick(SURNAME)}-${pick(SURNAME)}`;
     const key = `${firstName} ${lastName}`;
     if (!handedOut.has(key)) {
-      handedOut.add(key);
+      remember(key);
       return { firstName, lastName, fullName: key };
     }
   }

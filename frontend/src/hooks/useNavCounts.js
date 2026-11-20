@@ -70,6 +70,15 @@ export function useNavCounts(ids = []) {
 
   usePolling(load, 60000);
 
+  // [1.171.0] And straight after any change saved in this tab (config/api.js), a moment later so the
+  // screen that made it has re-read first. Several saves in a row ask once.
+  useEffect(() => {
+    let timer = null;
+    const soon = () => { clearTimeout(timer); timer = setTimeout(load, 400); };
+    window.addEventListener('data:changed', soon);
+    return () => { window.removeEventListener('data:changed', soon); clearTimeout(timer); };
+  }, [load]);
+
   return counts;
 }
 

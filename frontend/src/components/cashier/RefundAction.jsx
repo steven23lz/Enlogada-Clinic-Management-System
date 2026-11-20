@@ -8,7 +8,7 @@ import { LoadingState } from '../ui/loading-state';
 import { useAuth } from '../../contexts/AuthContext';
 import { COUNTER_PAYMENT_METHODS } from '../../lib/paymentMethods';
 import { formatCurrency } from '../../lib/currency';
-import { toastSuccess } from '../../lib/toast';
+import { toastError, toastSuccess } from '../../lib/toast';
 import api from '../../config/api';
 
 const MISTAKE = 'recorded_by_mistake';
@@ -80,7 +80,15 @@ export default function RefundAction({ transaction, onDone }) {
       toastSuccess(`${formatCurrency(res.data.data.amount)} refunded from receipt ${res.data.data.receiptNumber}.`);
       onDone?.();
     } catch (err) {
-      setError(err.response?.data?.message || 'The refund could not be recorded. Nothing was changed.');
+      if (!err.response) {
+        // [1.171.0] No reply: it may have been recorded. "Nothing was changed" would be a guess, and a
+        // wrong one invites a second refund. The list is read again, and the server refuses a repeat.
+        setOpen(false);
+        onDone?.();
+        toastError('The connection dropped before the clinic answered, so this refund may have been recorded. Check the receipt in the list before trying again: a receipt is never refunded twice.');
+      } else {
+        setError(err.response?.data?.message || 'The refund could not be recorded. Nothing was changed.');
+      }
     } finally {
       setBusy(false);
     }

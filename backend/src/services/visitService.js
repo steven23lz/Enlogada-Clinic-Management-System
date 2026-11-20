@@ -112,7 +112,14 @@ class VisitService {
             const error = new ConflictError(
               `${same.first_name} ${same.last_name}, born ${String(same.birthdate instanceof Date ? same.birthdate.toISOString() : same.birthdate).slice(0, 10)}, is already on file. Start the visit on that record, or confirm this is a different person.`
             );
-            error.details = { possibleDuplicate: same };
+            // [1.171.0] And whether they are already in today's queue: a registration whose reply
+            // was lost, pressed again, met this question, and "Use the record on file" could only be
+            // refused as a second unpaid visit. Told, the Desk says the first one went through.
+            const waiting = await visitRepository.findUnpaidWaitingToday(same.id);
+            error.details = {
+              possibleDuplicate: same,
+              waitingToday: waiting ? { visitId: waiting.id, queueNumber: waiting.queue_number } : null,
+            };
             throw error;
           }
         }

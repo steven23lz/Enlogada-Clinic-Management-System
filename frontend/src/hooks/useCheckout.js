@@ -252,9 +252,29 @@ export function useCheckout({ isAlreadyPaid, onPaid } = {}) {
       });
       payment = response.data.data.payment;
     } catch (err) {
-      setError(err.response?.data?.message || 'Couldn’t process payment');
-      setConfirming(false);
-      return;
+      // [1.171.0] The connection dropped, or the server says this visit is already paid. Either can
+      // mean the money WAS taken and only the reply went missing: measured, the cashier read
+      // "Couldn't process payment" over a receipt the server had issued, and pressing Take again
+      // only said "already paid". So the visit is asked, and a receipt on it is shown as the result.
+      const lost = !err.response;
+      const alreadyPaid = err.response?.status === 409 && /already been paid/i.test(err.response?.data?.message || '');
+      if (lost || alreadyPaid) {
+        try {
+          const res = await api.get(`/payments/visit/${selectedVisit.id}`);
+          const paid = (res.data?.data?.payments || []).find((p) => p.payment_status === 'Paid');
+          if (paid) payment = paid;
+        } catch {
+          /* still unreachable: said below */
+        }
+      }
+      if (!payment) {
+        setError(lost
+          ? 'The connection dropped before the clinic answered, so this payment may not have gone through. Check the connection, then press Take Payment again: a visit is never charged twice.'
+          : (err.response?.data?.message || 'Couldn’t process payment'));
+        setConfirming(false);
+        setSubmitting(false);
+        return;
+      }
     } finally {
       setSubmitting(false);
     }

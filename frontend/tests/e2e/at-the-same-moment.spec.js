@@ -265,7 +265,7 @@ test.describe('At the same moment [1.169.0]', () => {
     expect(codes.filter(ok), `answers: ${codes}`).toHaveLength(1);
     expect(codes.some((s) => s >= 500), 'never a server error').toBe(false);
     const options = (await (await ctx.get(`${API}/payments/${payment.id}/refund`, { headers: auth(superAdmin) })).json()).data;
-    expect((options.refunds || []).length, 'one refund on record').toBeLessThanOrEqual(1);
+    expect(Number(options.refunded), 'the receipt refunded once, not twice').toBeCloseTo(Number(payment.amount), 2);
   });
 
   // ── 3. HMO claims ──────────────────────────────────────────────────────────────────────────
