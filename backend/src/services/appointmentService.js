@@ -463,6 +463,13 @@ class AppointmentService {
         //    Everything from here to COMMIT runs while other bookings for this slot wait, so keep
         //    it short -- in particular, never put a file write or a network call in here.
         await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${scheduledDate}|${scheduledTime}`]);
+        // [1.170.0] The patient's lock, which archiving takes, and the record asked again.
+        await patientRepository.lockPatient(patientId);
+        if ((await patientRepository.findPatientById(patientId))?.archived_at) {
+          const error = new Error('This patient record was just archived, so it cannot be booked. Please contact the clinic.');
+          error.statusCode = 409;
+          throw error;
+        }
 
         // 3. Has this patient already booked this exact slot? Checked inside the lock, so it is
         //    race-free, and BEFORE the capacity check below -- which matters at the seeded
@@ -487,6 +494,8 @@ class AppointmentService {
           const packagesOnIt = new Set(lines.map((t) => t.package_id).filter(Boolean));
           const adding = packageIds.some((id) => !packagesOnIt.has(parseInt(id, 10)))
             || testIds.some((id) => !onIt.has(parseInt(id, 10)));
+          // [1.170.0] The visit's lock before asking whether it is paid, as taking payment does.
+          if (adding) await visitRepository.lockVisit(existing.patient_visit_id);
           if (adding && await paymentRepository.hasPaidPayment(existing.patient_visit_id)) {
             const error = new Error('This booking has already been paid, so its tests are final. Book another day for the extra tests.');
             error.statusCode = 409;
@@ -1171,6 +1180,11 @@ class AppointmentService {
     }
 
     const restored = await db.withTransaction(async () => {
+      // [1.170.0] The visit's lock, then the department's work asked again: undone while the
+      // department attached its report, both went through. Attaching a report takes this lock too.
+      await visitRepository.lockVisit(appointment.patient_visit_id);
+      const startedNow = await appointmentRepository.findWorkStartedOnVisit(appointment.patient_visit_id);
+      if (startedNow) throw refuse(409, `${startedNow.name} has already been started by its department, so this check-in can no longer be undone.`);
       const row = await appointmentRepository.undoCheckIn(id, { backToDate });
       if (!row) throw refuse(409, 'This booking changed while you were undoing it. Please reload and try again.');
       await visitRepository.leaveTodaysQueue(appointment.patient_visit_id, appointment.created_at);

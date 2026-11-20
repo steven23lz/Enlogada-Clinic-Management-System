@@ -177,6 +177,23 @@ class VisitService {
 
     // The ticket, the visit and its tests together: a visit is never in the queue empty.
     return await db.withTransaction(async () => {
+      // [1.170.0] Asked again under the patient's lock: two desks starting a visit for one patient at
+      // the same moment opened two unpaid visits, and a record archived meanwhile still got one.
+      await patientRepository.lockPatient(patientId);
+      const now = await patientRepository.findPatientById(patientId);
+      if (now?.archived_at) {
+        const error = new Error(`${now.first_name} ${now.last_name}'s record was just archived. Restore it on Patient Records before starting a visit.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      const waitingNow = await visitRepository.findUnpaidWaitingToday(patientId);
+      if (waitingNow) {
+        const error = new Error(
+          `${now.first_name} ${now.last_name} is already waiting${waitingNow.queue_number ? ` with ticket ${waitingNow.queue_number}` : ''} and has not paid yet. Add the tests to that visit instead.`
+        );
+        error.statusCode = 409;
+        throw error;
+      }
       const queueNumber = await visitRepository.getNextQueueNumber();
       const visit = await visitRepository.createVisit({
         patientId,

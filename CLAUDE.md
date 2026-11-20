@@ -1177,6 +1177,9 @@ of the transaction, then the checks, then the writes, reading the record again o
 adding or removing a test, a discount, a proof sent, verified or rejected, an HMO decision, releasing or checking in a
 booking all do. A check before the transaction and a write inside it is how eight races got through (migrations.md
 [1.169.0]); `at-the-same-moment.spec.js` fires each pair together. A new door that changes a visit does the same.
+`[1.170.0]` So do raising a claim, attaching or releasing a report (`lockStillWithDepartment`), undoing a check-in and a
+refund; a patient's record has `patientRepository.lockPatient` for archiving, starting a visit and booking; the unpaid
+sweep reads `FOR UPDATE … SKIP LOCKED`. `four-passes.spec.js` checks every process for timing, whose, state and input.
 
 **Numbers that must be unique** (queue tickets, receipt numbers) come from `daily_counters` via `INSERT … ON CONFLICT DO UPDATE … RETURNING`, never from `SELECT COUNT(*) + 1`. Counting rows is not a sequence: it races under concurrency, and it rewinds when a row is cancelled or refunded, reissuing a number already handed to a patient. Unique indexes back all three invariants. Core flow through the tables:
 

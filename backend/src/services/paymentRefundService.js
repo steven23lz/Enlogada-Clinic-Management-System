@@ -97,6 +97,9 @@ class PaymentRefundService {
     const outcome = await db.withTransaction(async () => {
       const locked = await paymentRefundRepository.lockPayment(paymentId);
       if (!locked) throw fail(404, 'Payment not found.');
+      // [1.170.0] And the visit's, which attaching a report takes: a test refunded as one the clinic
+      // could not do, while its report was being attached, ended cancelled with a report on it.
+      await visitRepository.lockVisit(locked.patient_visit_id);
       const blocked = this.whyNotAtAll(locked, user);
       if (blocked) throw fail(409, blocked);
       const visitId = locked.patient_visit_id;

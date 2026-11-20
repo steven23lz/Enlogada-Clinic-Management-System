@@ -106,6 +106,12 @@ class VisitRepository {
    * booking whose hold for it ran out. The HMO's decision is read the way the bill reads it
    * (hmoEffectiveStatus): a claim refused as a whole leaves its lines reading 'Pending'.
    */
+  /**
+   * [1.169.0] Locked as it is read, skipping any visit someone holds: a cashier taking payment, a
+   * proof being sent, an HMO decision. The sweep read a visit as unpaid while the payment on it was
+   * committing, then tried to delete a paid visit, and the whole sweep failed that run. A visit
+   * skipped here is looked at again five minutes later.
+   */
   async findExpiredUnpaid() {
     const HOLD_LAPSED = `(a.id IS NOT NULL AND a.status = 'Pending'
                           AND a.held_until IS NOT NULL AND a.held_until <= CURRENT_TIMESTAMP)`;
@@ -140,7 +146,8 @@ class VisitRepository {
                    (a.id IS NULL AND pv.created_at < CURRENT_DATE)
                 OR (a.id IS NOT NULL AND a.scheduled_date < CURRENT_DATE)))
           )
-        ORDER BY pv.id`
+        ORDER BY pv.id
+          FOR UPDATE OF pv SKIP LOCKED`
     );
     return rows;
   }

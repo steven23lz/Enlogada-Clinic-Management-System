@@ -278,6 +278,13 @@ class HmoService {
 
     const card = resolveCardEvidence(requestingUser, cardFile);
 
+    // Joins the caller's transaction when there is one (the booking flow), and opens its own when
+    // there is not (POST /hmo/request) — see db.withTransaction's nesting rule.
+    return await db.withTransaction(async () => {
+    // [1.170.0] Each visit's lock first, which taking payment holds too, then the visits read: a
+    // claim raised while the cashier took payment landed on a visit already paid in full.
+    const first = await hmoRepository.findVisitsForVisitTests([...new Set((visitTestIds || []).map(Number))]);
+    for (const id of [...new Set(first.map((v) => v.id))].sort((a, b) => a - b)) await visitRepository.lockVisit(id);
     // [1.124.0] A claim is for tests still to be paid for. A probe raised one on a PAID visit: the
     // patient had paid in full, and an approval would bill the insurer for the same tests.
     const visits = await hmoRepository.findVisitsForVisitTests([...new Set((visitTestIds || []).map(Number))]);
@@ -295,9 +302,6 @@ class HmoService {
       throw error;
     }
 
-    // Joins the caller's transaction when there is one (the booking flow), and opens its own when
-    // there is not (POST /hmo/request) — see db.withTransaction's nesting rule.
-    return await db.withTransaction(async () => {
       // The referring physician, checked here rather than only in the booking controller — for
       // the same reason the card rule lives in this service. POST /hmo/request reaches this too,
       // and reception filing a claim at the desk against a walk-in registered ten minutes ago is

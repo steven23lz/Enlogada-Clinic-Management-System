@@ -323,6 +323,10 @@ class PatientService {
     // Not while something is still open. [1.123.0] An archived record leaves the roster and the
     // Desk's search, so archiving a patient who is in the building, or booked, hid them from the
     // very people about to look for them.
+    const updated = await db.withTransaction(async () => {
+    // [1.170.0] Checked under the patient's lock, which starting a visit and booking take too:
+    // archived while the desk opened a visit, both went through.
+    await patientRepository.lockPatient(patientId);
     if (archived) {
       const open = await patientRepository.findOpenWork(patientId);
       const reason = open.in_progress
@@ -341,7 +345,6 @@ class PatientService {
       }
     }
 
-    const updated = await db.withTransaction(async () => {
       const row = await patientRepository.setPatientArchived(patientId, {
         archived: Boolean(archived),
         actorId: requestingUser?.userId ?? null,

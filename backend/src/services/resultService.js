@@ -121,6 +121,37 @@ async function assertStaffOwnsVisitTest(requestingUser, visitTestId) {
 }
 
 /**
+ * Inside a report write's transaction: the visit's lock, then the test read again. [1.170.0]
+ *
+ * A check-in undone, or a test refunded as one the clinic could not do, at the same moment as its
+ * report was attached: both answered yes, so a report sat on a visit sent back to waiting, or on a
+ * test cancelled and refunded. Both of those take the visit's lock too, so the second waits and
+ * then sees the first. A cancelled test takes no report at all, at any time.
+ */
+async function lockStillWithDepartment(visitTestId) {
+  const first = await resultRepository.findVisitReleaseStateByVisitTestId(visitTestId);
+  if (!first) {
+    const error = new Error('Visit test not found.');
+    error.statusCode = 404;
+    throw error;
+  }
+  await visitRepository.lockVisit(first.visit_id);
+  const now = await resultRepository.findVisitReleaseStateByVisitTestId(visitTestId);
+  if (now.test_status === 'Cancelled') {
+    const error = new Error('This test was cancelled, and the patient refunded for it, so it takes no report.');
+    error.statusCode = 409;
+    throw error;
+  }
+  if (now.visit_status !== 'Processing' && now.visit_status !== 'Completed') {
+    const error = new Error(
+      'This visit is no longer with your department: it is not paid, or its check-in was undone. Refresh the worklist.'
+    );
+    error.statusCode = 409;
+    throw error;
+  }
+}
+
+/**
  * Refuses report work on a department whose results are given outside this system. [1.129.0]
  * Upload, release and email all ask; such a department's exam is marked done on its worklist
  * instead. No department is named since [1.143.0] (`NO_REPORT_CATEGORIES`).
@@ -324,6 +355,7 @@ class ResultService {
     // fails with "No result found for this visit test", and nothing on any screen explains why a
     // ticket that says it is ready cannot be released.
     const result = await db.withTransaction(async () => {
+      await lockStillWithDepartment(visitTestId);
       // Recording findings is not the same event as releasing them. The ticket parks in
       // 'Waiting for Release' — visible as such to the front desk — until releaseResult below
       // authorises it and notifies the patient.
@@ -826,6 +858,7 @@ class ResultService {
     // waits for the first's row lock rather than interleaving with it.
     let released;
     await db.withTransaction(async () => {
+      await lockStillWithDepartment(visitTestId);
       await testRepository.updateVisitTestStatus(visitTestId, 'Completed');
 
       // Persist WHO authorised this. `releasedBy` was already being passed in from the controller

@@ -188,6 +188,15 @@ class PatientRepository {
     return result.rows;
   }
 
+  /**
+   * The patient's row lock, inside a transaction. [1.170.0] Archiving a record, starting a visit on
+   * it and booking it take it, so archived-while-booked and two desks opening two unpaid visits for
+   * one patient both take turns.
+   */
+  async lockPatient(id) {
+    await db.query('SELECT id FROM patients WHERE id = $1 FOR UPDATE', [id]);
+  }
+
   async findPatientById(id) {
     const queryText = `
       SELECT p.*, pt.name as patient_type_name

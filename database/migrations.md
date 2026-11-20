@@ -1,5 +1,24 @@
 # Database Migration & Schema History
 
+## [1.170.0] - 2026-11-20 (Every process, four ways)
+
+No schema. Steven: "triple or quadruple check every process". `four-passes.spec.js` goes over every door a record can be changed through four ways: timing (two things at once, beyond [1.169.0]), whose (one patient reaching for another's booking, bill, proof, report, receipt, record or feedback, and a patient trying staff actions), state (an action on something already paid, released, withdrawn, checked in or refunded) and input (doubled tests, negative or garbled amounts, impossible dates, unknown values, 5,000-character names, a name with ñ and an apostrophe). The code was then read for the shape behind every race so far, a check before the transaction and a write inside it.
+
+Found and fixed, each the same shape:
+
+| At the same moment | Before |
+|---|---|
+| A check-in undone while the department attached its report | Both yes: a report on a visit sent back to waiting |
+| A test refunded as one the clinic cannot do, while its report was attached | Both yes: a cancelled, refunded test with a report |
+| A record archived while the desk started a visit on it | Both yes |
+| Two desks starting a visit for one patient | Two unpaid visits |
+| An HMO claim raised while the cashier took payment | A claim on a visit paid in full |
+| The unpaid sweep and a payment on the same visit | The sweep tried to delete a paid visit and failed, removing nothing that run |
+
+And one that needed no race: a test cancelled by a refund still took a report. Attaching and releasing a report now call `lockStillWithDepartment` inside their transaction (the visit's lock, then the test read again: not cancelled, and its visit still paid and here). Undoing a check-in asks again under the lock whether a department has started. The refund takes the visit's lock after the payment's. Archiving, starting a visit and booking take the patient's (`patientRepository.lockPatient`), and starting a visit asks again whether the record was archived or the patient is already waiting. Raising a claim locks each visit before reading it. `findExpiredUnpaid` locks what it reads and skips any visit someone holds (`FOR UPDATE … SKIP LOCKED`), so a visit being paid is left for the next sweep. Re-sending a booking with an added test locks its visit before asking whether it is paid.
+
+What already held, among the rest: every "whose" probe (a stranger is refused 401, 403 or 404 on all twenty doors), a booking moved while checked in, one booking moved to two times, a release against a proof, a date closed while booked, a withdrawn report emailed, a report on an unpaid test, a checked-in booking moved, a second refund, a paid visit's discount, test change and proof, the same test twice on a visit, and every malformed input answering in words rather than 500.
+
 ## [1.169.0] - 2026-11-20 (Two people at the same moment)
 
 No schema. Steven: "check what ifs scenario like two people book the same time and many more". The suite already raced six things (two patients for a one-seat slot, two cashiers on one visit, two desks on one booking, one reference at two tills, two packages at once, one emailed code twice). `at-the-same-moment.spec.js` races 17 more, and eight came back wrong, each the same shape: a check read the record, a write followed later, and a second person's request passed between the two.
