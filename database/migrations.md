@@ -1,5 +1,12 @@
 # Database Migration & Schema History
 
+## [1.168.0] - 2026-11-20 (Clearer wording, and real photos where a placeholder showed)
+
+No schema. Steven: the public site's picture showed its placeholder, and words like "open terminal" read as the system talking to itself. Everything the paper's User's Guide quotes stays exactly as printed; `tests/unit/paperLabels.test.js` now holds all 109 of those labels to the source, so a later rewording cannot quietly break the guide.
+
+- **The clinic photo on Home and About Us** stood in front of an Aurora panel larger than the photo and offset below it, so an empty dark slab showed on three sides. `ClinicShowcase` now lays a second real photograph over the first one's corner (`inset`: the X-ray room on Home, the ultrasound room on About Us), framed in white, and the caption sits on the main photo.
+- **Wording.** The till: "Pick a patient from the queue to see their bill here" (was "open the billing terminal"), "Open bill" / "Bill open on the right" (was "Select for checkout" / "Open in terminal"). Success messages say what happened without "successfully!" ("Walk-in registered. Queue ticket: 0012.", "Report released.", "Your appointment is booked."). "Physical Queue Ticket" is "Queue ticket". Admin screens lose "RBAC administration", "Admin cannot transact", "pre-authorisation" and "Active (Live)"; "authorise" is "authorize", as the guide spells it. A fallback shown when the server sends no message says "Couldn't …", never "Failed to …". About Us said "HMO and private billing", though there has been no Private patient type since [1.161.0].
+
 ## [1.167.0] - 2026-11-13 (The patient portal on a phone: one box per section)
 
 No schema. Steven's adviser: too many containers. Measured at 360 px, the portal's Visits tab nested boxes four deep (the list panel, the booking card, the pass, then its chips and notes), so the QR code the desk scans got the least room on the screen; Home stacked about ten separate boxes; the booking dialog scrolled a box of tests inside its own scroll, each test a box inside a department box inside that box. Below `sm` only, so desktop and the paper's screenshots are unchanged:

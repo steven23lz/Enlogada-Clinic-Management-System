@@ -229,7 +229,7 @@ test.describe('Payment first, for every booking', () => {
     }
     const state = card.getByTestId('pass-paid');
     await expect(state.getByText('Paid', { exact: true })).toBeVisible();
-    await expect(state).toContainText('Please visit the clinic on the allotted appointment time.');
+    await expect(state).toContainText('Please come at your appointment time.');
   });
 
   test('the portal says a booking is waiting for the HMO, not that it must be paid', async ({ page }) => {

@@ -145,7 +145,7 @@ export default function ServicesTablePanel({ catalogue, packages = [] }) {
                               : 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-200'
                           }`}
                         >
-                          {test.is_active ? 'Active (Live)' : 'Inactive'}
+                          {test.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                       </button>
                     </TableCell>

@@ -429,8 +429,8 @@ export default function ClinicSchedule() {
               {!form.isOpen && (
                 <p className="mt-2 mb-0 flex items-start gap-1.5 text-micro leading-relaxed text-slate-500">
                   <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" aria-hidden="true" />
-                  A closed date with no reason shows the patient a bare &ldquo;closed&rdquo;, which
-                  reads as a fault in the website. Naming it reads as a clinic that is shut.
+                  Give a reason: patients see it on the booking calendar, and a date marked only
+                  &ldquo;closed&rdquo; looks like a fault in the website.
                 </p>
               )}
             </PanelBody>

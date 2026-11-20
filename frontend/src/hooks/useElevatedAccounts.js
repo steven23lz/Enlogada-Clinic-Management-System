@@ -75,7 +75,7 @@ export function useElevatedAccounts() {
       await api.post('/superadmin/accounts', form);
       setShowAdd(false);
     } catch (err) {
-      setFormError(err.response?.data?.message || 'Failed to create elevated account.');
+      setFormError(err.response?.data?.message || 'Couldn’t create elevated account.');
       return;
     } finally {
       setSubmitting(false);
@@ -102,7 +102,7 @@ export function useElevatedAccounts() {
       await api.patch(`/superadmin/accounts/${statusTarget.id}/status`, { status: !statusTarget.status });
       setStatusTarget(null);
     } catch (err) {
-      setStatusError(err.response?.data?.message || 'Failed to update account status.');
+      setStatusError(err.response?.data?.message || 'Couldn’t update account status.');
       return;
     } finally {
       setTogglingStatus(false);

@@ -139,7 +139,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
           : null,
       ].filter(Boolean);
       setRegistrationSuccess(
-        `Walk-In registered successfully! Physical Queue Ticket: ${visit.queue_number}. ${parts.join(' and ')} attached.`
+        `Walk-in registered. Queue ticket: ${visit.queue_number}. ${parts.join(' and ')} attached.`
       );
       const who = asRecord || newPatient;
       setRegistered({ patientId: visit.patient_id, name: `${who.first_name ?? who.firstName} ${who.last_name ?? who.lastName}` });
@@ -154,7 +154,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
         setPossibleDuplicate(null);
         setRepeatAsked({ message: err.response.data.message, asRecord });
       } else {
-        setRegistrationError(err.response?.data?.message || 'Failed to register walk-in patient');
+        setRegistrationError(err.response?.data?.message || 'Couldn’t register walk-in patient');
       }
     } finally {
       setIsRegistering(false);
@@ -188,7 +188,7 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                 <div className="border-b border-line pb-3 mb-4">
                   <h2 className="m-0 flex items-center gap-2 text-lead font-bold tracking-tight text-slate-900">
                     <UserPlus className="h-4 w-4 text-brand-600" />
-                    <span>Register Walk-In Patient & Generate Physical Ticket</span>
+                    <span>Register a walk-in patient and issue their queue ticket</span>
                   </h2>
                 </div>
                 )}

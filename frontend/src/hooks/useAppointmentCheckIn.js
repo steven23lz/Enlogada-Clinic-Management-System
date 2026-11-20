@@ -144,7 +144,7 @@ export function useAppointmentCheckIn({ onCheckedIn } = {}) {
       if (err.response?.data?.details?.repeatTests) {
         setRepeatMessage(err.response.data.message);
       } else {
-        setError(err.response?.data?.message || 'Failed to check in patient');
+        setError(err.response?.data?.message || 'Couldn’t check in patient');
       }
       return;
     } finally {

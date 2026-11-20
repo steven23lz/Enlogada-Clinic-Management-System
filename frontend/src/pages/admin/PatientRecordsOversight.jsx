@@ -176,7 +176,7 @@ const PatientRecordsOversight = ({ onSelectNav, intent = null }) => {
       setCanArchive(Boolean(d.canArchive));
       setDepartmentScope(d.departmentScope ?? null);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load patient records.');
+      setError(err.response?.data?.message || 'Couldn’t load patient records.');
       setResults(null);
     } finally {
       setSearching(false);

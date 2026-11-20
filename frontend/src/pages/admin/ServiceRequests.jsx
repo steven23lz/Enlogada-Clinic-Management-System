@@ -94,7 +94,7 @@ const ServiceRequests = ({ intent = null }) => {
       const res = await api.get(`/hmo/request/${requestId}`);
       setDetailRequest(res.data.data.request);
     } catch (err) {
-      setDetailError(err.response?.data?.message || 'Failed to load request details.');
+      setDetailError(err.response?.data?.message || 'Couldn’t load request details.');
     } finally {
       setDetailLoading(false);
     }
@@ -131,7 +131,7 @@ const ServiceRequests = ({ intent = null }) => {
       // the person deciding needs to know the decision was recorded, not just displayed.
       toastSuccess('Claim approved. The cashier will bill against it.');
     } catch (err) {
-      setDetailError(err.response?.data?.message || 'Failed to approve request.');
+      setDetailError(err.response?.data?.message || 'Couldn’t approve request.');
     } finally {
       setDetailSubmitting(false);
     }
@@ -150,7 +150,7 @@ const ServiceRequests = ({ intent = null }) => {
       await refreshDetail(detailRequest.id);
       toastSuccess('Claim refused, with your reason on the record. The patient will be billed.');
     } catch (err) {
-      setDetailError(err.response?.data?.message || 'Failed to record the refusal.');
+      setDetailError(err.response?.data?.message || 'Couldn’t record the refusal.');
     } finally {
       setDetailSubmitting(false);
     }
@@ -169,7 +169,7 @@ const ServiceRequests = ({ intent = null }) => {
           : 'Test refused, with your reason on the record.'
       );
     } catch (err) {
-      setDetailError(err.response?.data?.message || 'Failed to update test approval.');
+      setDetailError(err.response?.data?.message || 'Couldn’t update test approval.');
     }
   };
 
@@ -186,7 +186,7 @@ const ServiceRequests = ({ intent = null }) => {
       <PageHeader
         icon={ShieldCheck}
         title="Service Requests"
-        description="Review and approve HMO pre-authorisation logged by Reception. Approval is Admin-only — Reception can log a request but not clear it."
+        description="Decide the HMO claims the front desk logged. The front desk can log a claim, and only an Admin decides it."
         actions={
           <RefreshButton
             onRefresh={() => fetchRequests(page)}
@@ -306,7 +306,7 @@ const ServiceRequests = ({ intent = null }) => {
                       <EmptyState
                         icon={ShieldCheck}
                         title={statusFilter === 'All' ? 'No HMO requests logged' : `Nothing is ${statusFilter.toLowerCase()}`}
-                        description="Reception logs a pre-authorisation against a visit; it appears here for approval."
+                        description="When the front desk logs an HMO claim, it appears here for you to decide."
                       />
                     </TableCell>
                   </TableRow>

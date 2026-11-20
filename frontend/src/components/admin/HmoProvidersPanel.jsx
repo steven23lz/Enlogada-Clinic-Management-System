@@ -18,7 +18,7 @@ export default function HmoProvidersPanel({ hmoAdmin }) {
       <Panel className="overflow-hidden">
         <PanelHeader
           title="HMO Providers"
-          description="Accredited insurers whose pre-authorisations Reception can log against a visit"
+          description="The HMOs the clinic accepts. The front desk logs claims against these."
           icon={ShieldPlus}
           actions={
             <Button size="sm" onClick={hmoAdmin.openAdd}>

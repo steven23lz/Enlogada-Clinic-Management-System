@@ -44,7 +44,7 @@ const HmoClaimsReport = () => {
       setReport(res.data.data.report);
       setPeriod({ startDate: from, endDate: to });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load HMO claim figures.');
+      setError(err.response?.data?.message || 'Couldn’t load HMO claim figures.');
     } finally {
       setLoading(false);
     }

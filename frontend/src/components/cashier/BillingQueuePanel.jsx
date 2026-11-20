@@ -135,7 +135,7 @@ export default function BillingQueuePanel({ queue, checkout }) {
                       <span className="mt-2 flex items-center justify-between border-t border-line-soft pt-2 text-fine">
                         <span className="text-slate-500">{visit.tests?.length || 0} diagnostic item{visit.tests?.length === 1 ? '' : 's'}</span>
                         <span className={`font-semibold ${isSelected ? 'text-brand-700' : 'text-slate-400'}`}>
-                          {isSelected ? 'Open in terminal' : 'Select for checkout →'}
+                          {isSelected ? 'Bill open on the right' : 'Open bill →'}
                         </span>
                       </span>
                     </button>
@@ -153,7 +153,7 @@ export default function BillingQueuePanel({ queue, checkout }) {
                   title={(queue.searchQuery || queue.typeFilter !== 'All') ? 'No tickets match this filter' : 'Nothing awaiting payment'}
                   description={(queue.searchQuery || queue.typeFilter !== 'All')
                     ? 'Clear the search or choose All Types to see the whole queue.'
-                    : 'Visits appear here once Reception attaches tests to them.'}
+                    : 'A patient appears here once the front desk has added their tests.'}
                 />
               )}
             </div>

@@ -75,7 +75,7 @@ const BookingConfirmation = ({
       ) : (
         <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-700">
           <CheckCircle2 className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-          <span className="text-sm font-bold">Appointment booked successfully!</span>
+          <span className="text-sm font-bold">Your appointment is booked.</span>
         </div>
       )}
 

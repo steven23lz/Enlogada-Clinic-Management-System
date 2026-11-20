@@ -256,7 +256,7 @@ export default function ResultHistoryPanel({ worklist, entry, operations, onView
                             : worklist.deliveryFilter === 'sent'
                               ? 'Reports released before this was recorded show as unsent — that means unknown, not that the patient was never told.'
                               : reportsHere
-                                ? 'A result appears here once it has been authorised for release from the worklist.'
+                                ? 'A report appears here once it is authorized and released from the worklist.'
                                 : 'An exam appears here once it has been marked done on the worklist.'
                       }
                     />

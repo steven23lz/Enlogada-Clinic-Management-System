@@ -141,7 +141,7 @@ export function useTestAssignment({ onAssigned } = {}) {
       if (err.response?.data?.details?.repeatTests) {
         setRepeatMessage(err.response.data.message);
       } else {
-        toastError(err.response?.data?.message || 'Failed to assign tests to visit');
+        toastError(err.response?.data?.message || 'Couldn’t assign tests to visit');
       }
       return;
     } finally {

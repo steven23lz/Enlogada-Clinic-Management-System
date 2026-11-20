@@ -141,7 +141,7 @@ const StaffAccounts = () => {
       setShowAddModal(false);
       fetchStaff();
     } catch (err) {
-      setFormError(err.response?.data?.message || 'Failed to create staff account.');
+      setFormError(err.response?.data?.message || 'Couldn’t create staff account.');
     } finally {
       setSubmitting(false);
     }
@@ -183,7 +183,7 @@ const StaffAccounts = () => {
       setStatusTarget(null);
       fetchStaff();
     } catch (err) {
-      setStatusError(err.response?.data?.message || 'Failed to update staff account status.');
+      setStatusError(err.response?.data?.message || 'Couldn’t update staff account status.');
     } finally {
       setTogglingStatus(false);
     }
@@ -209,7 +209,7 @@ const StaffAccounts = () => {
       await api.patch(`/admin/staff/${resetPwdTarget.id}/password`, { newPassword });
       setResetPwdSuccess(true);
     } catch (err) {
-      setResetPwdError(err.response?.data?.message || 'Failed to reset password.');
+      setResetPwdError(err.response?.data?.message || 'Couldn’t reset password.');
     } finally {
       setResettingPwd(false);
     }
@@ -236,7 +236,7 @@ const StaffAccounts = () => {
       toastSuccess('Staff account details updated.');
       fetchStaff();
     } catch (err) {
-      setEditError(err.response?.data?.message || 'Failed to update staff account.');
+      setEditError(err.response?.data?.message || 'Couldn’t update staff account.');
     } finally {
       setSavingEdit(false);
     }
@@ -265,7 +265,7 @@ const StaffAccounts = () => {
       <PageHeader
         icon={Users}
         title="Staff Accounts"
-        description="Receptionist, Cashier and diagnostic staff logins. Admin and SuperAdmin accounts are managed separately under RBAC administration."
+        description="Logins for the front desk, the cashiers and the departments. Admin and Super Admin logins are under Super Admin, Elevated Accounts."
         actions={
         <>
         <RefreshButton onRefresh={fetchStaff} loading={loading} updatedAt={updatedAt} />
@@ -337,7 +337,7 @@ const StaffAccounts = () => {
           title={(loadError || loading) ? 'Staff accounts' : `${filteredStaff.length} staff account${filteredStaff.length === 1 ? '' : 's'}`}
           description={loadError
             ? 'The list below could not be loaded.'
-            : search ? `filtered from ${staff.length} total` : 'Select a status chip to activate or deactivate an account'}
+            : search ? `filtered from ${staff.length} total` : 'Click an account\'s status to switch it on or off'}
           icon={Users}
           actions={
             <SearchInput
@@ -468,7 +468,7 @@ const StaffAccounts = () => {
             <div className="space-y-4">
               <div role="status" className="alert alert-success">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                <span>Password reset successfully.</span>
+                <span>Password reset.</span>
               </div>
               <DialogFooter>
                 <Button type="button" onClick={() => setResetPwdTarget(null)} className="font-bold">Done</Button>

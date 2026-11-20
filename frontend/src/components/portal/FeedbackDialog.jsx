@@ -30,7 +30,7 @@ export default function FeedbackDialog({ visit, onOpenChange, onSent }) {
     setQuestions(null);
     api.get('/feedback/questions')
       .then((res) => { if (!cancelled) setQuestions(res.data.data.questions || []); })
-      .catch(() => { if (!cancelled) setError('The questions could not be loaded. Please try again later.'); });
+      .catch(() => { if (!cancelled) setError('The questions could not be loaded. Try again in a moment.'); });
     return () => { cancelled = true; };
   }, [open]);
 

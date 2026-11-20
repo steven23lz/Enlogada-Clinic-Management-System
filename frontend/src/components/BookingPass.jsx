@@ -190,7 +190,7 @@ const BookingPass = ({
             </span>
             {!queueNumber && (
               <span className="max-w-[16rem] text-center text-fine font-semibold text-ink sm:text-left">
-                Please visit the clinic on the allotted appointment time.
+                Please come at your appointment time.
               </span>
             )}
           </span>

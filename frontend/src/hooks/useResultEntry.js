@@ -208,7 +208,7 @@ export function useResultEntry({ user, onOpened, onRecorded, onReleased } = {}) 
       await submitReport();
       setOpen(false);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to record diagnostic result.');
+      setError(err.response?.data?.message || 'Couldn’t record diagnostic result.');
       return;
     } finally {
       setSaving(false);
@@ -272,7 +272,7 @@ export function useResultEntry({ user, onOpened, onRecorded, onReleased } = {}) 
         released_by_last_name: user?.lastName,
       });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to release diagnostic result.');
+      setError(err.response?.data?.message || 'Couldn’t release diagnostic result.');
       setConfirmingRelease(false);
       return;
     } finally {

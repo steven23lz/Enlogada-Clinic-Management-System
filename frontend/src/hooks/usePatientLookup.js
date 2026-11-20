@@ -37,7 +37,7 @@ export function usePatientLookup() {
       const response = await api.get('/patients/search', { params: { q: query.trim() } });
       setResults(response.data.data.patients);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to search patient records.');
+      setError(err.response?.data?.message || 'Couldn’t search patient records.');
       setResults(null);
     } finally {
       setSearching(false);
@@ -68,7 +68,7 @@ export function usePatientLookup() {
       if (id === latest.current) setResults(response.data.data.patients);
     } catch (err) {
       if (id === latest.current) {
-        setError(err.response?.data?.message || 'Failed to search patient records.');
+        setError(err.response?.data?.message || 'Couldn’t search patient records.');
         setResults(null);
       }
     } finally {

@@ -149,7 +149,7 @@ test.describe('A visit carries its tests from the start', () => {
     await expect(duplicate).toBeVisible({ timeout: 15000 });
     await expect(duplicate).toContainText(`born ${birthdate}`);
     await duplicate.getByRole('button', { name: 'Use the record on file' }).click();
-    await expect(panel.getByText(/Physical Queue Ticket/i)).toBeVisible({ timeout: 15000 });
+    await expect(panel.getByText(/Queue ticket: /i)).toBeVisible({ timeout: 15000 });
 
     expect(await search(person), 'no second record').toHaveLength(1);
     expect(await visitsOf(onFile.id), 'the visit is on the record on file').toHaveLength(1);

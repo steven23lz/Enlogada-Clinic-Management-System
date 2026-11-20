@@ -34,7 +34,7 @@ export default function ShiftSummaryPanel({ queue }) {
                 <div className="text-center space-y-2">
                   <Receipt className="w-10 h-10 text-gray-300 mx-auto" />
                   <p className="text-sm font-bold text-gray-500 m-0">
-                    Select a patient ticket from the queue to open the billing terminal.
+                    Pick a patient from the queue to see their bill here.
                   </p>
                   {queue.visits.length > 0 && (
                     <p className="text-xs text-gray-400 m-0">

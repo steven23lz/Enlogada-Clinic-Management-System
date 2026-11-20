@@ -99,12 +99,12 @@ export function useHmoLogging({ onLogged } = {}) {
         ...(needsPhysician ? { referringPhysician: physician.trim(), referringPhysicianPrc: physicianPrc.trim() } : {}),
       });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to log HMO authorization');
+      setError(err.response?.data?.message || 'Couldn’t log HMO authorization');
       return;
     }
 
     // Filed. Everything below is follow-up and must not be able to report it as failed.
-    toastSuccess('HMO Pre-authorization logged successfully!');
+    toastSuccess('HMO request logged. An Admin will decide it.');
     setOpen(false);
     setMemberNumber('');
     setApprovalCode('');

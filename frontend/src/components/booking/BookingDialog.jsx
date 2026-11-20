@@ -235,7 +235,7 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
       // [1.151.0] No answer at all is a connection, not a refusal, and pressing Submit again is
       // safe: the same patient, date and time finds the booking if it did go through.
       setBookingError(err.response?.data?.message || (err.response
-        ? 'Failed to book appointment'
+        ? 'Couldn’t book appointment'
         : "We couldn't reach the clinic. Check your connection and press Submit again."));
       if (err.response?.status === 409 && bookingData.scheduledDate) {
         setSlotsRefreshKey((k) => k + 1);

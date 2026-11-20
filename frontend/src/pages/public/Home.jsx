@@ -229,6 +229,11 @@ const Home = ({ onNavigate, section = null }) => {
               alt: "The fetal monitor beside the ultrasound machine in Enlogada's ultrasound room",
               position: '50% 55%',
             }}
+            inset={{
+              src: xrayRoom,
+              alt: "Enlogada's digital X-ray room",
+              position: '50% 50%',
+            }}
           />
           <div>
             <SectionHeading

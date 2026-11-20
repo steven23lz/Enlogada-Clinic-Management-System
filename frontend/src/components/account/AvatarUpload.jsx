@@ -70,7 +70,7 @@ const AvatarUpload = ({ children }) => {
       await fetchAvatar();
       toastSuccess('Profile photo updated.');
     } catch (err) {
-      toastError(err.response?.data?.message || 'Failed to upload photo.');
+      toastError(err.response?.data?.message || 'Couldn’t upload photo.');
     } finally {
       setUploading(false);
     }
@@ -87,7 +87,7 @@ const AvatarUpload = ({ children }) => {
       });
       toastSuccess('Profile photo removed.');
     } catch (err) {
-      toastError(err.response?.data?.message || 'Failed to remove photo.');
+      toastError(err.response?.data?.message || 'Couldn’t remove photo.');
     } finally {
       setUploading(false);
     }

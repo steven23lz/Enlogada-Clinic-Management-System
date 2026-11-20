@@ -33,7 +33,7 @@ const StaffWorkload = () => {
       setDiagnosticWorkload(res.data.data.workload?.diagnosticWorkload || []);
       setPeriod({ startDate: from, endDate: to });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load staff workload.');
+      setError(err.response?.data?.message || 'Couldn’t load staff workload.');
     } finally {
       setLoading(false);
     }

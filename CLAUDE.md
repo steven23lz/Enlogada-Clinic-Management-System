@@ -1514,6 +1514,9 @@ with a link to the printable document.
   runs edge to edge with rows split by lines, a note inside a booking is `PortalNote` (a line with an icon below
   `sm`, its box from `sm`), and booking is full screen with one scroll and the total pinned. Use `max-sm:` so
   desktop, which the paper's screenshots show, stays as it is; never put a box inside a box on a phone.
+- **The paper's User's Guide is held to the screens.** `[1.168.0]` `tests/unit/paperLabels.test.js` lists every
+  button, tab and screen name Appendix E quotes (109). Reword any sentence freely, but rename one of those only
+  with the paper. Success messages say what happened, never "successfully!"; a no-message fallback is "Couldn't …".
 - **The portal keeps up by itself.** `[1.161.0]` Quiet re-reads (`reload({ quiet: true })`: no skeleton, a failure changes nothing) on a tab change, on coming back to the
   window and every 90 seconds, at most every 15. A new portal data hook takes `quiet` too, and joins `keepUp` in `ClientDashboard`.
 - **A portal spec names a tab by what it is.** `[1.80.0]` `tests/e2e/helpers/portal.js` holds the

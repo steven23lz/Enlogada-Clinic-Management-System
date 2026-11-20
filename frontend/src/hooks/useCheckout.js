@@ -115,7 +115,7 @@ export function useCheckout({ isAlreadyPaid, onPaid } = {}) {
       // Drop the selection as well as the bill. A selected visit with no bill is the half-state
       // that invited the mismatch above.
       setSelectedVisit(null);
-      toastError('Failed to retrieve billing summary.');
+      toastError('Couldn’t retrieve billing summary.');
     }
   };
 
@@ -252,7 +252,7 @@ export function useCheckout({ isAlreadyPaid, onPaid } = {}) {
       });
       payment = response.data.data.payment;
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to process payment');
+      setError(err.response?.data?.message || 'Couldn’t process payment');
       setConfirming(false);
       return;
     } finally {

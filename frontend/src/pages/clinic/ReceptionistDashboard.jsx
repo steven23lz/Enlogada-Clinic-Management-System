@@ -117,7 +117,7 @@ const ReceptionistDashboard = ({ activeNav = 'reception-queue', onSelectNav, int
     onCheckedIn: ({ type, patient, visit }) => {
       if (type === 'walkin') {
         // The name stays in the box, so the queue below goes on showing the visit just opened.
-        lookup.noteCheckedIn(`${patient.first_name} ${patient.last_name} checked in! Physical Queue Ticket: ${visit.queue_number}`);
+        lookup.noteCheckedIn(`${patient.first_name} ${patient.last_name} checked in. Queue ticket: ${visit.queue_number}`);
       } else {
         arrivals.reload();
       }

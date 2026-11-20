@@ -483,6 +483,6 @@ test.describe('The same test twice [1.157.0]', () => {
 
     await confirm.click();
     await prompt.getByRole('button', { name: 'Yes, it is a repeat' }).click();
-    await expect(page.getByText(`${patient.person.fullName} checked in!`)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(`${patient.person.fullName} checked in.`)).toBeVisible({ timeout: 15000 });
   });
 });

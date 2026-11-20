@@ -77,7 +77,7 @@ export function useHmoProviderAdmin() {
       }
       setShowModal(false);
     } catch (err) {
-      setModalError(err.response?.data?.message || 'Failed to save HMO provider.');
+      setModalError(err.response?.data?.message || 'Couldn’t save HMO provider.');
       return;
     } finally {
       setSubmitting(false);
@@ -104,7 +104,7 @@ export function useHmoProviderAdmin() {
       await api.put(`/hmo/providers/${provider.id}`, { isActive: !provider.is_active });
       setConfirmTarget(null);
     } catch (err) {
-      setToggleError(err.response?.data?.message || 'Failed to update provider status.');
+      setToggleError(err.response?.data?.message || 'Couldn’t update provider status.');
       return;
     } finally {
       setToggling(false);

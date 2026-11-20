@@ -182,7 +182,7 @@ export default function WorklistPanel({ worklist, entry, examDone }) {
         {/* "—" on a failure, and the table below says why with its Try again — not a caption here too. */}
         <MetricCard label="Awaiting Exam" value={worklistFailed ? '—' : processingCount} caption="Paid and released to you" captionTone="slate" icon={Clock} tone="indigo" />
         {reportsHere && (
-          <MetricCard label="Awaiting Release" value={worklistFailed ? '—' : awaitingReleaseCount} caption="Report attached, not authorised" captionTone="slate" icon={FileText} tone="amber" />
+          <MetricCard label="Awaiting Release" value={worklistFailed ? '—' : awaitingReleaseCount} caption="Report attached, not yet released" captionTone="slate" icon={FileText} tone="amber" />
         )}
       </div>
 

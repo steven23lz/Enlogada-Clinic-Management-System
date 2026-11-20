@@ -118,7 +118,7 @@ export function usePatientProfiles() {
       // Jump to the profile just created — the reason someone added it is to use it.
       setSelectedId(created.id.toString());
     } catch (err) {
-      setAddError(err.response?.data?.message || 'Failed to create patient profile');
+      setAddError(err.response?.data?.message || 'Couldn’t create patient profile');
     } finally {
       setAdding(false);
     }
@@ -159,7 +159,7 @@ export function usePatientProfiles() {
       setShowEdit(false);
       await load();
     } catch (err) {
-      setEditError(err.response?.data?.message || 'Failed to update patient profile');
+      setEditError(err.response?.data?.message || 'Couldn’t update patient profile');
     } finally {
       setEditing(false);
     }

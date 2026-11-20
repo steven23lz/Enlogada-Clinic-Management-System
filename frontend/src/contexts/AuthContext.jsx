@@ -162,7 +162,7 @@ export const AuthProvider = ({ children }) => {
       setUser((prev) => ({ ...prev, ...updatedUser }));
       return updatedUser;
     } catch (err) {
-      throw err.response?.data?.message || 'Failed to update profile';
+      throw err.response?.data?.message || 'Couldn’t update profile';
     }
   };
 
@@ -179,7 +179,7 @@ export const AuthProvider = ({ children }) => {
 
       return response.data.message;
     } catch (err) {
-      throw err.response?.data?.message || 'Failed to change password';
+      throw err.response?.data?.message || 'Couldn’t change password';
     }
   };
 

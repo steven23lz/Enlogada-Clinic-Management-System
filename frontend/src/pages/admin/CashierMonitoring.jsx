@@ -105,7 +105,7 @@ const CashierMonitoring = () => {
       <PageHeader
         icon={Receipt}
         title="Cashier Monitoring"
-        description="Every payment taken across all cashiers, for reconciliation and the daily cash-up. Read-only — Admin cannot transact."
+        description="Every payment taken by every cashier, for checking the day's takings. You can see payments here but not take them."
       />
 
       <div>

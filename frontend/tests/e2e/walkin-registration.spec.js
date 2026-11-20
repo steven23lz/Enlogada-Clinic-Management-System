@@ -72,7 +72,7 @@ test('reception registers a walk-in and attaches tests in one pass', async ({ pa
   // The confirmation says both halves happened.
   // Scoped to the panel: the queue behind it has a "Queue Ticket" column header, which would
   // satisfy an unscoped check before anything had been registered.
-  await expect(panel.getByText(/Physical Queue Ticket/i)).toBeVisible({ timeout: 20000 });
+  await expect(panel.getByText(/Queue ticket: /i)).toBeVisible({ timeout: 20000 });
   await expect(panel.getByText(/test.*attached/i)).toBeVisible({ timeout: 10000 });
 
   // And the visit really carries them — the bill is what the cashier will see.

@@ -71,7 +71,7 @@ test.describe("The Desk's Who's here box", () => {
 
     // The ticket, announced where the receptionist is looking, and the visit in the queue below —
     // found by the same name, which the box leaves in place.
-    await expect(page.getByText(`${person.fullName} checked in!`)).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(`${person.fullName} checked in.`)).toBeVisible({ timeout: 15000 });
     await expect(page.locator('tbody tr', { hasText: person.fullName })).toBeVisible({ timeout: 15000 });
     await expect(match).toHaveCount(0);
   });

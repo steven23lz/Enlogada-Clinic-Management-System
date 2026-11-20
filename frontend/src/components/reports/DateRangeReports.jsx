@@ -47,7 +47,7 @@ const DateRangeReports = () => {
       setReport(res.data.data.report);
       setPeriod({ startDate: from, endDate: to });
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load report data.');
+      setError(err.response?.data?.message || 'Couldn’t load report data.');
     } finally {
       setLoading(false);
     }

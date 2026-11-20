@@ -8,6 +8,7 @@ import SectionHeading from '../../components/public/SectionHeading';
 import FeatureCard from '../../components/public/FeatureCard';
 import ClinicShowcase from '../../components/public/ClinicShowcase';
 import frontDesk from '../../assets/clinic/front-desk.webp';
+import ultrasoundRoom from '../../assets/clinic/ultrasound-room.webp';
 import ClinicHours from '../../components/public/ClinicHours';
 import CtaBand from '../../components/public/CtaBand';
 import DecorBlobs from '../../components/public/DecorBlobs';
@@ -55,7 +56,7 @@ const VALUES = [
   },
   {
     icon: Award,
-    title: 'HMO and private billing',
+    title: 'HMO and self-pay billing',
     body: 'Accredited HMO providers with the claim raised for you, straightforward self-pay billing, and the Senior Citizen and PWD discount at the counter.',
   },
   {
@@ -106,6 +107,11 @@ const AboutUs = ({ onNavigate }) => {
                 src: frontDesk,
                 alt: "Enlogada Clinic's lobby, with the lit clinic sign and the front desk",
                 position: '50% 58%',
+              }}
+              inset={{
+                src: ultrasoundRoom,
+                alt: "Enlogada's ultrasound room",
+                position: '50% 50%',
               }}
             />
             <div>

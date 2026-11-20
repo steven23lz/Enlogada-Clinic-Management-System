@@ -39,7 +39,7 @@ export default function ResultEntryDialog({ entry, patientHistory }) {
             <div className="space-y-4">
               <div className="flex items-center space-x-2 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
                 <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-                <span className="text-sm font-bold">Result released successfully.</span>
+                <span className="text-sm font-bold">Report released.</span>
               </div>
 
               {/* No generated certificate. [1.94.0] This used to render the clinic's own copy of

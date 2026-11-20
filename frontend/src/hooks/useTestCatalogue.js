@@ -133,7 +133,7 @@ export function useTestCatalogue({ onPackagesChanged } = {}) {
           isActive: form.isActive,
         });
         heard(res.data.data.test);
-        setModalSuccess('Service updated successfully! Live website catalog updated.');
+        setModalSuccess('Service saved. The website and the booking form show the change now.');
       } else {
         await api.post('/tests', {
           categoryId: parseInt(form.categoryId, 10),
@@ -141,10 +141,10 @@ export function useTestCatalogue({ onPackagesChanged } = {}) {
           price: numericPrice,
           preparation: form.preparation,
         });
-        setModalSuccess('New service added successfully! Now live on public Services page.');
+        setModalSuccess('Service added. It is on the website and the booking form now.');
       }
     } catch (err) {
-      setModalError(err.response?.data?.message || 'Failed to save service.');
+      setModalError(err.response?.data?.message || 'Couldn’t save service.');
       return;
     } finally {
       setSubmitting(false);
@@ -183,7 +183,7 @@ export function useTestCatalogue({ onPackagesChanged } = {}) {
       setConfirmTarget(null);
     } catch (err) {
       console.error(err);
-      setToggleError(err.response?.data?.message || 'Failed to update service status.');
+      setToggleError(err.response?.data?.message || 'Couldn’t update service status.');
       return;
     } finally {
       setToggling(false);

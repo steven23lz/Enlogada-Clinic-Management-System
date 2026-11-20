@@ -90,16 +90,21 @@ test("the clinic's own photographs load, and each card says what it shows", asyn
   await expect(heroPhotos).toHaveCount(3);
   await expect.poll(() => heroPhotos.evaluateAll(loaded), { timeout: 15000 }).toBe(3);
 
+  // [1.168.0] Two photographs each, the second laid over the first's corner, so no empty panel shows.
   const homeCard = page.locator('section[aria-labelledby="about-heading"] figure img');
-  await homeCard.scrollIntoViewIfNeeded();
-  await expect(homeCard).toHaveAttribute('alt', /fetal monitor/i);
-  await expect.poll(() => homeCard.evaluateAll(loaded), { timeout: 15000 }).toBe(1);
+  await homeCard.first().scrollIntoViewIfNeeded();
+  await expect(homeCard).toHaveCount(2);
+  await expect(homeCard.first()).toHaveAttribute('alt', /fetal monitor/i);
+  await expect(homeCard.nth(1)).toHaveAttribute('alt', /X-ray room/i);
+  await expect.poll(() => homeCard.evaluateAll(loaded), { timeout: 15000 }).toBe(2);
 
   await open(page, 'About Us');
   const aboutCard = page.locator('section[aria-labelledby="story-heading"] figure img');
-  await aboutCard.scrollIntoViewIfNeeded();
-  await expect(aboutCard).toHaveAttribute('alt', /lobby/i);
-  await expect.poll(() => aboutCard.evaluateAll(loaded), { timeout: 15000 }).toBe(1);
+  await aboutCard.first().scrollIntoViewIfNeeded();
+  await expect(aboutCard).toHaveCount(2);
+  await expect(aboutCard.first()).toHaveAttribute('alt', /lobby/i);
+  await expect(aboutCard.nth(1)).toHaveAttribute('alt', /ultrasound room/i);
+  await expect.poll(() => aboutCard.evaluateAll(loaded), { timeout: 15000 }).toBe(2);
 });
 
 test.describe('with reduced motion', () => {
