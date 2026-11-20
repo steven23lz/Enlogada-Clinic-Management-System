@@ -35,6 +35,16 @@ const SECTIONS = [
       oversee the system for clinic operations, not to read individual results without cause.`,
   },
   {
+    id: 'emails',
+    icon: Mail,
+    title: 'Emails We Send',
+    body: `We email you the codes that confirm your sign-up and password changes, your booking
+      confirmation and reminder, your payment confirmation, a note when your results are ready, a note
+      the morning after a paid booking nobody came for, one question about how your visit went, and a
+      report when you ask the clinic to send it. A results-ready note names no test and carries no
+      result. We do not send marketing email.`,
+  },
+  {
     id: 'how-long',
     icon: ShieldCheck,
     title: 'How Long We Keep It',

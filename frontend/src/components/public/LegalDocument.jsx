@@ -1,7 +1,6 @@
 import React from 'react';
 import PageShell from '../ui/page-shell';
 import DecorBlobs from './DecorBlobs';
-import Reveal from './Reveal';
 import { useClinic } from '../../lib/clinic';
 import { scrollToSection } from '../../lib/scroll';
 
@@ -48,13 +47,13 @@ export default function LegalDocument({ sections, contactPrompt }) {
           </nav>
 
           <div className="space-y-5">
-            {sections.map(({ id, icon: Icon, title, body }, i) => (
-              <Reveal
-                as="section"
+            {sections.map(({ id, icon: Icon, title, body }) => (
+              // [1.173.0] Shown at once, not revealed on scroll: on a phone the first screen is the
+              // heading alone, and a page someone is asked to agree to read as empty.
+              <section
                 key={id}
                 id={id}
                 aria-labelledby={`${id}-title`}
-                index={i < 2 ? i : 0}
                 // scroll-mt-28: where "On this page" lands it, clear of the floating header.
                 className="edge-gradient scroll-mt-28 rounded-2xl p-6 sm:p-8"
               >
@@ -70,10 +69,10 @@ export default function LegalDocument({ sections, contactPrompt }) {
                   </h2>
                 </div>
                 <p className="m-0 mt-4 text-sm leading-relaxed text-ink-soft sm:text-base">{body}</p>
-              </Reveal>
+              </section>
             ))}
 
-            <Reveal as="p" className="m-0 pt-2 text-center text-note text-ink-soft">
+            <p className="m-0 pt-2 text-center text-note text-ink-soft">
               {contactPrompt}{' '}
               <a
                 href={`mailto:${CLINIC.email}`}
@@ -82,7 +81,7 @@ export default function LegalDocument({ sections, contactPrompt }) {
                 {CLINIC.email}
               </a>
               .
-            </Reveal>
+            </p>
           </div>
         </div>
       </PageShell>

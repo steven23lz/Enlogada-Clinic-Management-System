@@ -63,6 +63,13 @@ export default function ProfileFormDialog({ profiles, mode }) {
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-4 pt-2">
+          {!editing && profiles.addPrefilled && (
+            <p data-testid="profile-prefilled" className="m-0 rounded-lg border border-line bg-sunken p-2.5 text-fine leading-relaxed text-ink-soft">
+              Filled in from your account. If this profile is for someone else, change the name. Add the
+              birthdate and sex, which your account doesn&apos;t have.
+            </p>
+          )}
+
           {identityLocked && (
             <p data-testid="identity-locked" className="m-0 rounded-lg border border-line bg-sunken p-2.5 text-fine leading-relaxed text-ink-soft">
               A report has been released under this name, so the name, birthdate and sex can only be

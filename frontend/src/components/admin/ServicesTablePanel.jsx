@@ -117,7 +117,7 @@ export default function ServicesTablePanel({ catalogue, packages = [] }) {
                           title={test.preparation}
                         >
                           <Info className="mt-px h-3 w-3 flex-shrink-0 text-brand-600" />
-                          <span className="line-clamp-1">{test.preparation}</span>
+                          <span className="lg:line-clamp-1">{test.preparation}</span>
                         </span>
                       )}
                       {/* [1.159.0] Which packages this test's retirement left waiting to be fixed. */}

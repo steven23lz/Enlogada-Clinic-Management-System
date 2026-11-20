@@ -72,8 +72,8 @@ export const PanelHeader = ({ title, description, icon: Icon, iconClassName, act
             the visual size is set by the class either way, so nothing moves. */}
         {/* Wrapped on a phone, one line from `sm`: truncated at 360px the subtitle lost the part
             that mattered ("…last 7 days", "Open a name…"). [1.142.0] */}
-        {title && <h2 className="m-0 break-words text-note font-semibold text-slate-900 sm:truncate">{title}</h2>}
-        {description && <p className="m-0 mt-0.5 break-words text-fine font-normal text-slate-500 sm:truncate">{description}</p>}
+        {title && <h2 className="m-0 break-words text-note font-semibold text-slate-900 lg:truncate">{title}</h2>}
+        {description && <p className="m-0 mt-0.5 break-words text-fine font-normal text-slate-500 lg:truncate">{description}</p>}
         {children}
       </div>
     </div>

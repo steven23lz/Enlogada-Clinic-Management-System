@@ -50,7 +50,7 @@ export default function HmoProvidersPanel({ hmoAdmin }) {
               action={<Button size="sm" variant="outline" onClick={hmoAdmin.openAdd}><Plus className="h-3.5 w-3.5" />Add Provider</Button>}
             />
           ) : (
-            <Table>
+            <Table stack>
               <TableHeader className="bg-slate-50/70">
                 <TableRow>
                   <TableHead className="text-xs font-bold uppercase">Provider Name</TableHead>
@@ -61,8 +61,8 @@ export default function HmoProvidersPanel({ hmoAdmin }) {
               <TableBody>
                 {hmoAdmin.providers.map(provider => (
                   <TableRow key={provider.id}>
-                    <TableCell className="font-semibold text-xs text-slate-800">{provider.name}</TableCell>
-                    <TableCell>
+                    <TableCell label="Provider" className="font-semibold text-xs text-slate-800">{provider.name}</TableCell>
+                    <TableCell label="Status">
                       {/* A real button around the badge, as Packages and Payment Methods do, so the
                           switch is reachable by keyboard. [1.128.0] */}
                       <button

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import api from '../config/api';
 import { validatePatientProfile } from '../validations/patientValidation';
+import { useAuth } from '../contexts/AuthContext';
 
 const BLANK_PROFILE = {
   firstName: '',
@@ -40,7 +41,27 @@ const toDateInputValue = (value) => {
  * patient record with it. Validation is the same `validatePatientProfile` reception uses, so a
  * patient and a receptionist cannot create records held to different standards.
  */
+/**
+ * What the account already knows, for its FIRST profile. [1.173.0] Sign-up asks for a name and a
+ * contact number, and Google gives the name on the Google account; the first profile then asked for
+ * all of it again. Only the first: an account's later profiles are family, whose names are their own.
+ * Google's stand-in ("Google User", when an account has no name) fills nothing.
+ */
+export function accountPrefill(user) {
+  if (!user) return null;
+  const first = String(user.firstName || '').trim();
+  const last = String(user.lastName || '').trim();
+  const placeholder = first === 'Google' && last === 'User';
+  const fill = {
+    firstName: placeholder ? '' : first,
+    lastName: placeholder ? '' : last,
+    contactNumber: String(user.contactNumber || '').trim(),
+  };
+  return fill.firstName || fill.lastName || fill.contactNumber ? fill : null;
+}
+
 export function usePatientProfiles() {
+  const { user } = useAuth();
   const [profiles, setProfiles] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -50,6 +71,7 @@ export function usePatientProfiles() {
   const [addDraft, setAddDraft] = useState(BLANK_PROFILE);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
+  const [addPrefilled, setAddPrefilled] = useState(false);
 
   const [showEdit, setShowEdit] = useState(false);
   const [editDraft, setEditDraft] = useState(BLANK_PROFILE);
@@ -95,6 +117,15 @@ export function usePatientProfiles() {
 
   const openAdd = (open = true) => {
     setAddError('');
+    // The first profile, opened untouched: start from what the account holds.
+    if (open && profiles.length === 0) {
+      const fill = accountPrefill(user);
+      const untouched = Object.keys(BLANK_PROFILE).every((k) => addDraft[k] === BLANK_PROFILE[k]);
+      if (fill && untouched) {
+        setAddDraft({ ...BLANK_PROFILE, ...fill });
+        setAddPrefilled(true);
+      }
+    }
     setShowAdd(open);
   };
 
@@ -113,6 +144,7 @@ export function usePatientProfiles() {
       const response = await api.post('/patients', addDraft);
       const created = response.data.data.patient;
       setAddDraft(BLANK_PROFILE);
+      setAddPrefilled(false);
       setShowAdd(false);
       await load();
       // Jump to the profile just created — the reason someone added it is to use it.
@@ -167,7 +199,7 @@ export function usePatientProfiles() {
 
   return {
     profiles, selectedId, setSelectedId, selected, loading,
-    showAdd, openAdd, addDraft, setAddDraft, adding, addError, add,
+    showAdd, openAdd, addDraft, setAddDraft, adding, addError, add, addPrefilled,
     showEdit, openEdit, closeEdit, editDraft, setEditDraft, editing, editError, edit,
     reload: load,
   };

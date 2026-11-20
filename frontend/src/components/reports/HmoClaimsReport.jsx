@@ -168,7 +168,7 @@ const HmoClaimsReport = () => {
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <Table>
+                <Table stack>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Provider</TableHead>
@@ -183,13 +183,13 @@ const HmoClaimsReport = () => {
                   <TableBody>
                     {providers.map((p) => (
                       <TableRow key={p.provider_name}>
-                        <TableCell className="font-semibold text-slate-900">{p.provider_name}</TableCell>
-                        <TableCell className="text-right tabular-nums">{p.visits}</TableCell>
-                        <TableCell className="text-right tabular-nums">{p.tests_claimed}</TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(p.approved)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-slate-600">{formatCurrency(p.pending)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-slate-600">{formatCurrency(p.refused)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-slate-600">{formatCurrency(p.collected)}</TableCell>
+                        <TableCell label="Provider" className="font-semibold text-slate-900">{p.provider_name}</TableCell>
+                        <TableCell label="Visits" className="text-right tabular-nums">{p.visits}</TableCell>
+                        <TableCell label="Tests" className="text-right tabular-nums">{p.tests_claimed}</TableCell>
+                        <TableCell label="Approved" className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(p.approved)}</TableCell>
+                        <TableCell label="Pending" className="text-right tabular-nums text-slate-600">{formatCurrency(p.pending)}</TableCell>
+                        <TableCell label="Refused" className="text-right tabular-nums text-slate-600">{formatCurrency(p.refused)}</TableCell>
+                        <TableCell label="At Counter" className="text-right tabular-nums text-slate-600">{formatCurrency(p.collected)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -207,7 +207,7 @@ const HmoClaimsReport = () => {
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <Table>
+                <Table stack>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Provider</TableHead>
@@ -222,13 +222,13 @@ const HmoClaimsReport = () => {
                   <TableBody>
                     {tests.map((r) => (
                       <TableRow key={`${r.provider_name}|${r.test_name}|${r.category_name}`}>
-                        <TableCell className="text-slate-600">{r.provider_name}</TableCell>
-                        <TableCell className="font-semibold text-slate-900">{r.test_name}</TableCell>
-                        <TableCell className="text-slate-600">{r.category_name}</TableCell>
-                        <TableCell className="text-right tabular-nums">{r.tests_claimed}</TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(r.approved)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-slate-600">{formatCurrency(r.pending)}</TableCell>
-                        <TableCell className="text-right tabular-nums text-slate-600">{formatCurrency(r.refused)}</TableCell>
+                        <TableCell label="Provider" className="text-slate-600">{r.provider_name}</TableCell>
+                        <TableCell label="Test" className="font-semibold text-slate-900">{r.test_name}</TableCell>
+                        <TableCell label="Department" className="text-slate-600">{r.category_name}</TableCell>
+                        <TableCell label="Claimed" className="text-right tabular-nums">{r.tests_claimed}</TableCell>
+                        <TableCell label="Approved" className="text-right font-semibold tabular-nums text-emerald-700">{formatCurrency(r.approved)}</TableCell>
+                        <TableCell label="Pending" className="text-right tabular-nums text-slate-600">{formatCurrency(r.pending)}</TableCell>
+                        <TableCell label="Refused" className="text-right tabular-nums text-slate-600">{formatCurrency(r.refused)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

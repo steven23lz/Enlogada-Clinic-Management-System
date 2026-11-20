@@ -87,7 +87,7 @@ export const SalesByServicePanel = ({ billing, loading, error, onRetry, limit })
         }
       />
       <PanelBody flush>
-        <Table>
+        <Table stack>
           <TableHeader sticky>
             <TableRow>
               <TableHead>Service</TableHead>
@@ -120,13 +120,13 @@ export const SalesByServicePanel = ({ billing, loading, error, onRetry, limit })
             ) : (
               shown.map((row) => (
                 <TableRow key={`${row.category_name}-${row.test_name}`}>
-                  {/* A floor under the name: the table scrolls on a phone, and without one the
-                      service was squeezed to three or four lines to make room for the figures. */}
-                  <TableCell className="min-w-[10rem] font-medium text-slate-900">{row.test_name}</TableCell>
-                  <TableCell className="text-slate-500">{row.category_name}</TableCell>
-                  <TableCell className="text-right tabular-nums">{row.sold}</TableCell>
-                  <TableCell className="text-right tabular-nums text-slate-500">{formatCurrency(row.gross)}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums text-emerald-700">
+                  {/* A floor under the name, so on a laptop the service is not squeezed to three or
+                      four lines to make room for the figures. Below 1024px the table is cards. [1.173.0] */}
+                  <TableCell label="Service" className="min-w-[10rem] font-medium text-slate-900">{row.test_name}</TableCell>
+                  <TableCell label="Department" className="text-slate-500">{row.category_name}</TableCell>
+                  <TableCell label="Sold" className="text-right tabular-nums">{row.sold}</TableCell>
+                  <TableCell label="Gross" className="text-right tabular-nums text-slate-500">{formatCurrency(row.gross)}</TableCell>
+                  <TableCell label="Net" className="text-right font-semibold tabular-nums text-emerald-700">
                     {formatCurrency(row.net)}
                   </TableCell>
                 </TableRow>
@@ -231,7 +231,7 @@ export const TurnaroundPanel = ({
         }
       />
       <PanelBody flush>
-        <Table>
+        <Table stack>
           <TableHeader sticky>
             <TableRow>
               <TableHead>Department</TableHead>
@@ -268,22 +268,22 @@ export const TurnaroundPanel = ({
                 const waiting = (backlog?.awaiting_exam || 0) + (backlog?.awaiting_release || 0);
                 return (
                   <TableRow key={row.category_name}>
-                    <TableCell className="font-medium text-slate-900">{row.category_name}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.released}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
+                    <TableCell label="Department" className="font-medium text-slate-900">{row.category_name}</TableCell>
+                    <TableCell label="Released" className="text-right tabular-nums">{row.released}</TableCell>
+                    <TableCell label="Typical" className="text-right font-semibold tabular-nums">
                       {formatDuration(row.median_turnaround_minutes)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-slate-500">
+                    <TableCell label="Mean" className="text-right tabular-nums text-slate-500">
                       {formatDuration(row.avg_turnaround_minutes)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell label="Outstanding" className="text-right tabular-nums">
                       {waiting > 0 ? (
                         <span className="font-semibold text-amber-700">{waiting}</span>
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell label="Amended" className="text-right">
                       <span className="inline-flex items-center justify-end gap-1.5">
                         {row.amended > 0 && (
                           <span

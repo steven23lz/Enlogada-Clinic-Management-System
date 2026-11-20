@@ -3,7 +3,7 @@ import PublicHeader from '../../components/PublicHeader';
 import PublicFooter from '../../components/PublicFooter';
 import PageHero from '../../components/public/PageHero';
 import LegalDocument from '../../components/public/LegalDocument';
-import { Calendar, CreditCard, FileCheck, AlertCircle } from 'lucide-react';
+import { Calendar, CreditCard, FileCheck, AlertCircle, Smartphone, MonitorSmartphone } from 'lucide-react';
 
 // The terms' words were unchanged by the [1.72.0] restyle. [1.151.0] Two sections brought into line
 // with how the clinic works: nothing is cancelled since [1.131.0], and a booking is paid first.
@@ -30,6 +30,16 @@ const SECTIONS = [
       pay. The clinic refunds a test it cannot perform, and a payment recorded by mistake.`,
   },
   {
+    id: 'paying-online',
+    icon: Smartphone,
+    title: 'Paying Online',
+    body: `To pay for a booking online, send the amount shown to the clinic's own GCash or bank account
+      listed in your account, then upload a screenshot of the transfer with its reference number. A cashier
+      checks it against the clinic's account, and your booking pass appears once it is confirmed. What you
+      are charged is your bill, never the figure in the screenshot. One transfer pays for one booking. A
+      Senior Citizen or PWD discount declared when booking is applied once the cashier has checked the ID.`,
+  },
+  {
     id: 'results',
     icon: FileCheck,
     title: 'Diagnostic Results',
@@ -37,6 +47,15 @@ const SECTIONS = [
       are provided for your own reference and for use by your attending physician — they are not a
       substitute for professional medical advice, diagnosis, or treatment, and should be discussed with
       your doctor.`,
+  },
+  {
+    id: 'results-online',
+    icon: MonitorSmartphone,
+    title: 'Results in Your Account',
+    body: `A released report appears in your account as a digital copy, marked DIGITAL COPY, to view. The
+      original, with the clinic's seal, is printed and handed to you at the clinic, and the clinic emails
+      you a copy when you ask. Every released report carries a verification code that anyone can check on
+      this website; the check shows only the clinic, the test, your initials and the release date.`,
   },
   {
     id: 'account',

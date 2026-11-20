@@ -1202,8 +1202,12 @@ body.printing-report {
  * Written as plain CSS on a data attribute rather than as Tailwind variants at forty call sites:
  * the rule is one shape applied to a whole table, and expressing it per-cell would mean every
  * future table remembering an incantation to look like the others.
+ *
+ * [1.173.0] Below `lg`, not `sm`: on a tablet the whole desktop table was squeezed into 768px, and
+ * the column a person acts from (Check in, Refund, Withdraw, Review) sat behind a sideways scroll.
+ * From 1024px up, where the desktop the paper shows begins, the table is unchanged.
  */
-@media (max-width: 639px) {
+@media (max-width: 1023px) {
   table[data-stack='true'] thead {
     /* Hidden from sight but not from a screen reader's table semantics. */
     position: absolute;
@@ -1260,6 +1264,8 @@ body.printing-report {
     max-width: none;
     white-space: normal;
     overflow: visible;
+    /* [1.173.0] An email address or a reference is one long word; on a 320px card it ran off the edge. */
+    overflow-wrap: anywhere;
   }
 
   table[data-stack='true'] td[data-label] {

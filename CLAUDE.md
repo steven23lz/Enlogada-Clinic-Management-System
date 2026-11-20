@@ -1229,7 +1229,7 @@ silently stopped updating is worse off than one on a slow connection.
 
 ### UI conventions
 
-**Every screen works at 360px.** `[1.142.0]` A row of controls wraps (`flex-wrap`, never
+**Every screen works at 360px.** `[1.142.0]` `[1.173.0]` A `<Table stack>` becomes cards below **1024px** (it was 640), so a tablet gets cards, not a squeezed desktop table; from 1024 up nothing changed. A report table stacks too. Anything that cannot be dismissed (the overdue banner) is one line per item on a phone. Check a change at 320, 768 and 1024 as well as 1280+. A row of controls wraps (`flex-wrap`, never
 `flex-shrink-0` on a box of buttons); a list table is `<Table stack>` with a `label` on each cell; a
 name, price or status is never `truncate`d on a phone; a date range is `grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]`
 below `sm`. An `m-0` paragraph inside `space-y-*` cancels the gap — use `flex flex-col gap-*` there.
