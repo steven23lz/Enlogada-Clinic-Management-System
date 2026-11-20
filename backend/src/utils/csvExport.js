@@ -122,8 +122,20 @@ const date = (value) => {
 /** A timestamp column. */
 const dateTime = (value) => localDateTimeStr(value);
 
-/** Plain text, trimmed. The default when a column names no formatter. */
-const text = (value) => (value === null || value === undefined ? '' : String(value).trim());
+/**
+ * Plain text, trimmed. The default when a column names no formatter.
+ *
+ * [1.172.0] Text that would start a formula is defused with a leading apostrophe: a patient's
+ * feedback comment `=HYPERLINK("…","Click")` became a live link in the Admin's spreadsheet, the
+ * formula injection OWASP names. Excel shows the apostrophe as nothing and the cell as text. Only
+ * for text: money, counts and dates have their own formatters, so a negative amount stays a number.
+ */
+const FORMULA_START = /^[=+\-@\t\r]/;
+const text = (value) => {
+  if (value === null || value === undefined) return '';
+  const trimmed = String(value).trim();
+  return FORMULA_START.test(trimmed) ? `'${trimmed}` : trimmed;
+};
 
 /**
  * Serialises `rows` into a CSV body using an explicit column list.

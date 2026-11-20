@@ -52,6 +52,24 @@ class OverdueResultService {
         byVisit.get(row.visit_id).tests.push(row.test_name);
       }
       const label = categoryLabel(department);
+      // [1.172.0] Several patients in one sweep ring the bell ONCE for the department. One per patient
+      // meant 100 notifications each, for the department's staff, the Admin and the Super Admin, on
+      // a busy day, burying everything else in the bell. One patient still reads as before.
+      if (byVisit.size > 1) {
+        const visits = [...byVisit.values()];
+        const named = visits.slice(0, 3).map((v) => `${v.queue_number ? `${v.queue_number} ` : ''}${v.first_name} ${v.last_name}`).join(', ');
+        const more = visits.length > 3 ? `, and ${visits.length - 3} more` : '';
+        await notificationService.notifyRoles([CATEGORY_TO_STAFF_ROLE[department], 'Admin', 'SuperAdmin'], {
+          title: `No test result uploaded for ${visits.length} patients in ${label}`,
+          target: { kind: 'worklist', departments: [department] },
+          message: window.inWindow
+            ? `${named}${more}. The clinic closes at ${formatTime12(window.closesAt)}.`
+            : `${named}${more}. ${minutes} minutes have passed since they joined the queue.`,
+          type: 'critical',
+        });
+        notified += visits.length;
+        continue;
+      }
       for (const visit of byVisit.values()) {
         const ticket = visit.queue_number ? `Ticket ${visit.queue_number}, ` : '';
         await notificationService.notifyRoles([CATEGORY_TO_STAFF_ROLE[department], 'Admin', 'SuperAdmin'], {

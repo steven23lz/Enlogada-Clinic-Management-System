@@ -11,6 +11,7 @@ import { SkeletonRows } from '../../components/ui/skeleton';
 import Pagination from '../../components/ui/pagination';
 import api from '../../config/api';
 import { todayStr } from '../../lib/date';
+import { useFollowingToday } from '../../hooks/useFollowingToday';
 import { formatCurrency } from '../../lib/currency';
 import { METHOD_FILTERS, METHOD_FILTER_ALL } from '../../lib/paymentMethods';
 import { ExternalLink, Receipt, RefreshCw, Banknote, Hash, UserCircle2, Undo2 } from 'lucide-react';
@@ -36,8 +37,9 @@ const CashierMonitoring = () => {
   // docstring says must never happen: a quiet clinic and a broken server call for opposite
   // responses, and one of them was being reported as the other.
   const [loadError, setLoadError] = useState('');
-  const [startDate, setStartDate] = useState(todayStr());
-  const [endDate, setEndDate] = useState(todayStr());
+  // [1.172.0] Today until someone picks a date, so a screen left open overnight moves to the new day.
+  const [startDate, setStartDate] = useFollowingToday();
+  const [endDate, setEndDate] = useFollowingToday();
   // The range currently ON SCREEN, as distinct from the one typed into the inputs above. The
   // dates are deferred behind Apply, so a method change must re-query the range the figures were
   // actually drawn from — using the input values would silently apply a half-typed date nobody

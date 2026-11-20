@@ -134,3 +134,14 @@ test('sendCsv writes a UTF-8 BOM, an attachment disposition and no-store', () =>
   // A point-in-time document of patient figures must never be revalidated or reused.
   assert.match(headers['cache-control'], /no-store/);
 });
+
+// [1.172.0] Formula injection: text that Excel would run is defused, numbers are not touched.
+test('a text cell that starts like a formula is kept as text', () => {
+  const { formatters } = require('../../src/utils/csvExport');
+  assert.equal(formatters.text('=HYPERLINK("http://x","Click")'), `'=HYPERLINK("http://x","Click")`);
+  assert.equal(formatters.text('+639171234567'), `'+639171234567`);
+  assert.equal(formatters.text('@SUM(A1)'), `'@SUM(A1)`);
+  assert.equal(formatters.text('-2+3'), `'-2+3`);
+  assert.equal(formatters.text('Maayo ang serbisyo'), 'Maayo ang serbisyo');
+  assert.equal(formatters.money(-50), '-50.00');
+});

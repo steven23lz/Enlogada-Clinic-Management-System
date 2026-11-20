@@ -408,16 +408,24 @@ test.describe('A second walk through the combinations [1.160.0]', () => {
     expect(sweep(), 'told once').toBeGreaterThanOrEqual(1);
     expect(sweep(), 'and not twice').toBe(0);
     const bell = await (await ctx.get(`${API}/notifications`, { headers: auth(labToken) })).text();
-    expect(bell).toContain(`No test result uploaded for: Ticket ${visit.queue_number}, ${person.firstName} ${person.lastName}`);
+    // [1.172.0] Alone in its sweep it is named; with others it is in the department's one notification.
+    expect(
+      bell.includes(`No test result uploaded for: Ticket ${visit.queue_number}, ${person.firstName} ${person.lastName}`)
+        || /No test result uploaded for \d+ patients in Laboratory/.test(bell),
+      'the bell rang for this patient',
+    ).toBe(true);
 
     await signInTo(page, 'lab@enlogada.com', 'Patient Records');
     const banner = page.getByTestId('overdue-results');
-    await expect(banner).toContainText(person.lastName, { timeout: 20000 });
+    // [1.172.0] The banner names the three longest waits; on a busy day this patient, newest at 70
+    // minutes, is counted in "and N more" instead (the API list above already holds them by id).
+    const onBanner = new RegExp(`${person.lastName}|and \\d+ more`);
+    await expect(banner).toContainText(onBanner, { timeout: 20000 });
     await expect(banner).toContainText('no test result uploaded');
     await expect(banner.getByRole('button', { name: /dismiss|close/i }), 'it cannot be waved away').toHaveCount(0);
     await banner.getByRole('button', { name: 'Go to the worklist' }).first().click();
     await expect(page.getByRole('heading', { name: 'Laboratory Worklist', exact: true, level: 1 })).toBeVisible({ timeout: 15000 });
-    await expect(banner, 'still there on the worklist').toContainText(person.lastName);
+    await expect(banner, 'still there on the worklist').toContainText(onBanner);
 
     const saved = await ctx.post(`${API}/results/${line.id}`, { headers: auth(labToken), multipart: { file: reportPart('overdue') } });
     expect(saved.status(), await saved.text()).toBeLessThan(300);

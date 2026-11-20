@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import api from '../config/api';
 import { todayStr, daysAgoStr } from '../lib/date';
+import { useFollowingToday } from './useFollowingToday';
 
 // Sent to the server as `limit` — this list pages at the database [1.29.0] rather than fetching
 // the whole date range and slicing it in the browser.
@@ -36,8 +37,9 @@ export function useTransactionHistory({ enabled = false, onRangeLoad } = {}) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [startDate, setStartDate] = useState(todayStr());
-  const [endDate, setEndDate] = useState(todayStr());
+  // [1.172.0] Today until someone picks a date, so a screen left open overnight moves to the new day.
+  const [startDate, setStartDate] = useFollowingToday();
+  const [endDate, setEndDate] = useFollowingToday();
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);

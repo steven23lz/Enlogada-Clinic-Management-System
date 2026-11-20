@@ -408,7 +408,7 @@ login, connection or quota answers "The clinic can't send email right now" (`isR
 
 **A notification opens what it is about.** `[1.164.0]` `notifyRoles` takes `target` (a kind and what identifies it, `notification_events.target`), and `lib/notificationTarget.js` picks the screen for whoever clicks, from what their sidebar offers, with the patient found. A new notification carries a target. Test contract: `notification-item` with `data-opens`.
 
-**No test result uploaded: a hard alert.** `[1.163.0]` Steven's rule, every department, each patient: 60 minutes from joining the queue (paid and here, whichever came last), and 15 minutes before that day's closing for every test still with no file, whatever its hour says (`utils/closingNotice.js`, `closing_notified_at`, once a day). `jobs/overdueResultScheduler.js` rings the bell once per patient and department (`overdue_notified_at`) for the department's staff, Admin and SuperAdmin; `OverdueResultsBanner` (`overdue-results`, `GET /results/overdue`) stays above every screen of whoever answers for it, with no dismiss, until the upload. `OVERDUE_ALERTS=off` stops the bell.
+**No test result uploaded: a hard alert.** `[1.163.0]` Steven's rule, every department, each patient: 60 minutes from joining the queue (paid and here, whichever came last), and 15 minutes before that day's closing for every test still with no file, whatever its hour says (`utils/closingNotice.js`, `closing_notified_at`, once a day). `jobs/overdueResultScheduler.js` rings the bell once per patient and department (`overdue_notified_at`) for the department's staff, Admin and SuperAdmin; `OverdueResultsBanner` (`overdue-results`, `GET /results/overdue`) stays above every screen of whoever answers for it, with no dismiss, until the upload. `OVERDUE_ALERTS=off` stops the bell. `[1.172.0]` More than one patient late in one department in the same sweep is ONE notification naming the first three ("No test result uploaded for 40 patients in Laboratory"), so a busy day does not bury the bell; one late patient still gets their own.
 
 `TURNAROUND_TARGETS` (optional; 60 minutes for every department without it, `off` judges nothing, e.g. `Laboratory:90,Xray:30`) sets the per-department turnaround
 benchmarks the Today screen's department table judges against (it reads "Not set" without one).
@@ -959,6 +959,7 @@ report endpoints serve the same figures as a file through `utils/csvExport.js` +
   and one lint rule away from vanishing). Without it Excel on Windows reads the file as the system
   codepage and every `ñ` and `₱` is mojibake. `charset=utf-8` in the header never reaches Excel;
   the file is opened from disk.
+- **Text that would start a formula is defused** `[1.172.0]`: the `text` formatter prefixes `'` to a cell starting with `= + - @`, a tab or a CR, so a patient's comment cannot become a live `=HYPERLINK` in the Admin's spreadsheet. Money keeps its own formatter, so a negative amount stays a number.
 - **A NULL money value is an EMPTY cell, not `0.00`.** `Number(null)` is 0 and passes
   `isFinite`, so the naive formatter states the clinic collected nothing rather than that nothing
   is recorded.
@@ -1156,6 +1157,8 @@ same zone to every connection (`-c timezone=…`). Both used to follow the host,
 the development PC and UTC on most hosting: there, "today" would turn over at 08:00 in Bugo and a
 JavaScript clock read against a stored timestamp would be eight hours out. Never set a time zone
 anywhere else.
+
+**A screen's default date follows the calendar.** `[1.172.0]` `useState(todayStr())` is read once, so a PC left on overnight showed yesterday as today. A date filter that starts as today uses `hooks/useFollowingToday.js`: it follows midnight until the person picks a date. `overnight.spec.js`.
 
 **Dates: never use `toISOString()` for "today".** It returns the **UTC** date, which in Philippine time (UTC+8) is *yesterday* between midnight and 08:00 — silently, with no error. Postgres `CURRENT_DATE` is the server's local date, so the two disagree every morning. Frontend code uses `frontend/src/lib/date.js` (`todayStr` / `daysAgoStr`, built from local getters); backend code derives date strings **in SQL** rather than in JavaScript. This bug shipped twice: in four dashboard `todayStr` helpers, and in the receipt-number generator.
 

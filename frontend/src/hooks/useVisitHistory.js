@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import api from '../config/api';
-import { todayStr } from '../lib/date';
+import { useFollowingToday } from './useFollowingToday';
 
 // Sent to the server as `limit`. This list pages at the database [1.29.0] — the screen used to
 // fetch every visit in the range and render all of them, no slice and no footer, straight into
@@ -28,8 +28,9 @@ export function useVisitHistory({ enabled = false } = {}) {
   // is a claim about the clinic's day rather than an apology for a broken request.
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [startDate, setStartDate] = useState(todayStr());
-  const [endDate, setEndDate] = useState(todayStr());
+  // [1.172.0] Today until someone picks a date, so a screen left open overnight moves to the new day.
+  const [startDate, setStartDate] = useFollowingToday();
+  const [endDate, setEndDate] = useFollowingToday();
   const [page, setPage] = useState(1);
   // 'All' is the absence of a filter, kept as a real value so the segmented control always has a
   // selected option — an empty string would render as nothing being chosen.
