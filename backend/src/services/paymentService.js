@@ -185,195 +185,204 @@ class PaymentService {
     // is made [1.132.0]); a notice written inside someone else's transaction could abort it.
     announce = true,
   }) {
-    // Recompute the authoritative bill server-side — also serves as the visit-exists check —
-    // rather than trusting the client-submitted amount outright.
-    const bill = await this.getBillingSummary(patientVisitId);
+    // [1.169.0] Every check below and every write after it is one transaction, behind a lock on the
+    // visit. They used to be checked first and written after, so a test added, a discount applied or
+    // a proof sent at the same moment passed between the two: a receipt for ₱190 on a visit that
+    // held ₱440 of tests, measured. Whatever else changes a visit's bill takes the same lock
+    // (`visitRepository.lockVisit`), so the second of two waits and then sees the first.
+    const { payment, bill, receiptNumber, authoritativeTotal } = await db.withTransaction(async () => {
+      await visitRepository.lockVisit(patientVisitId);
+      // Recompute the authoritative bill server-side — also serves as the visit-exists check —
+      // rather than trusting the client-submitted amount outright.
+      const bill = await this.getBillingSummary(patientVisitId);
 
-    const alreadyPaid = await paymentRepository.hasPaidPayment(patientVisitId);
-    if (alreadyPaid) {
-      const error = new Error('This visit has already been paid. Refresh the billing queue.');
-      error.statusCode = 409;
-      throw error;
-    }
-
-    // [1.124.0] A receipt is final, so it is never issued for nothing. A probe took payment for a
-    // CANCELLED visit (a receipt, money kept, no tests ever done) and a ₱0 receipt for a visit with
-    // no tests on it. A visit the HMO covers in full still has tests, and still gets its receipt.
-    if (bill.visitStatus === 'Cancelled') {
-      const error = new Error('This visit was cancelled, so it cannot be paid. Start a new visit for the patient.');
-      error.statusCode = 409;
-      throw error;
-    }
-    if (bill.items.length === 0) {
-      const error = new Error('This visit has no tests yet. Add the tests before taking payment.');
-      error.statusCode = 409;
-      throw error;
-    }
-
-    // [1.151.0] A booking whose time to pay ran out has released its slot, and someone else may hold
-    // that slot now. A proof and a check-in already refused it; a payment here took the money and
-    // made the old booking permanent on top of theirs. Checked in (Confirmed), the patient is at
-    // the clinic and has no slot left to lose, so that one still pays.
-    const hold = await appointmentRepository.findHoldByVisitId(patientVisitId);
-    if (hold?.lapsed && hold.status === 'Pending') {
-      const error = new Error('This booking was not paid in time, so its slot was released. Start a walk-in visit for the patient instead.');
-      error.statusCode = 409;
-      throw error;
-    }
-
-    const proof = await paymentSubmissionRepository.findPendingForVisit(patientVisitId);
-    if (proof && String(proof.id) !== String(fromSubmissionId)) {
-      const error = new Error(
-        `This patient has already sent an online payment (reference ${proof.reference_number}) that has not been checked. Check it in Online Payments first: taking money here as well would charge them twice.`
-      );
-      error.statusCode = 409;
-      throw error;
-    }
-
-    // [1.146.0] A Senior Citizen / PWD discount declared online is granted by whoever takes the
-    // money, once they have seen the ID: a receipt is final, so it is checked first, not after.
-    if (bill.discount?.declared && !discountIdChecked) {
-      const error = new Error(
-        `This visit has a ${bill.discount.name} discount the patient declared online (ID ${bill.discount.idNumber}). Check the ID first: if it is not valid, remove the discount, and the patient pays the full amount.`
-      );
-      error.statusCode = 409;
-      error.details = { discountDeclared: true };
-      throw error;
-    }
-
-    // [1.160.0] Asked again as the money is taken: a senior discount given, and the birthdate then
-    // corrected to someone of 31, still took 20% off a receipt that cannot be taken back.
-    if (bill.discount) {
-      const visit = await visitRepository.findVisitById(patientVisitId);
-      try {
-        discountService.assertEligible({ name: bill.discount.name }, await patientRepository.findPatientById(visit.patient_id));
-      } catch (err) {
-        err.message = `${err.message} Otherwise remove the discount.`;
-        throw err;
-      }
-    }
-
-    const undecided = Number(bill.hmoPendingCount) || 0;
-    if (undecided > 0 && !withdrawPendingClaims) {
-      const error = new Error(
-        `${undecided} test${undecided > 1 ? 's are' : ' is'} still waiting for the HMO's decision. Wait for it, or charge in full and withdraw the claim for ${undecided > 1 ? 'them' : 'it'}.`
-      );
-      error.statusCode = 409;
-      throw error;
-    }
-
-    const authoritativeTotal = parseFloat(bill.totalAmount);
-    const submittedAmount = parseFloat(amount);
-    if (isNaN(submittedAmount) || Math.abs(submittedAmount - authoritativeTotal) > 0.01) {
-      const error = new Error(`Submitted amount (₱${amount}) does not match the billed total (₱${authoritativeTotal.toFixed(2)}).`);
-      error.statusCode = 400;
-      throw error;
-    }
-
-    // [1.151.0] The till's form requires it, and without one the cash-up has no way to match the
-    // payment to a transfer. A proof always carries its own.
-    if (paymentMethod !== CASH_METHOD && !String(referenceNumber ?? '').trim()) {
-      const error = new Error(`Enter the ${paymentMethod} reference number.`);
-      error.statusCode = 400;
-      throw error;
-    }
-
-    // [1.152.0] One transfer pays for one visit. Steven's call: a reference already on another
-    // receipt, or waiting on another patient's proof, is refused rather than warned about. A receipt
-    // is final, so a second one on the same money could not be taken back.
-    const reference = String(referenceNumber ?? '').trim();
-    const assertReferenceFree = async () => {
-      if (!reference) return;
-      const used = await paymentRepository.findReferenceUse({
-        reference, method: paymentMethod, visitId: patientVisitId, paymentsOnly: Boolean(fromSubmissionId),
-      });
-      if (used) {
-        const error = new Error(used.receipt_number
-          ? `Reference ${reference} is already on receipt ${used.receipt_number}. One transfer pays for one visit: check the number, or ask for the transfer behind this one.`
-          : `Reference ${reference} is on another patient's online payment, waiting to be checked. One transfer pays for one visit: check the number.`);
+      const alreadyPaid = await paymentRepository.hasPaidPayment(patientVisitId);
+      if (alreadyPaid) {
+        const error = new Error('This visit has already been paid. Refresh the billing queue.');
         error.statusCode = 409;
         throw error;
       }
-    };
-    // Before a receipt number is drawn, so a refusal does not use one up.
-    await assertReferenceFree();
 
-    // Taking the money and releasing the visit is one event, so it commits as one.
-    //
-    // These were four independent auto-committed writes. Dying anywhere in the middle — deploy,
-    // process restart, OOM — left the clinic in a state no screen can explain and no user can
-    // repair:
-    //
-    //   payment written, visit not released:  the patient has paid, but the visit is still
-    //     'Pending' and its tests are still 'Pending', and every modality worklist filters on
-    //     pv.status = 'Processing'. The ticket is invisible to every department. The cashier
-    //     cannot retake the payment either — hasPaidPayment now returns true, so the retry is
-    //     rejected with "already been paid". The patient waits for an exam nobody can see.
-    //
-    //   payment written, stale gateway row not cancelled: an abandoned GCash session stays
-    //     'Pending' against a settled visit and keeps being offered back to the patient.
-    //
-    // releaseVisitIfReady is included deliberately: it is the step that makes the payment
-    // *mean* something operationally, and it is internally atomic already, so joining this
-    // transaction just extends the same guarantee across the pair.
-    const receiptNumber = await paymentRepository.getNextReceiptNumber();
-
-    const payment = await db.withTransaction(async () => {
-      // Again under a lock on the reference, so two cashiers approving the same one in the same
-      // instant cannot both pass the check above.
-      if (reference) {
-        await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`payment-reference|${paymentMethod}|${reference.toUpperCase()}`]);
-        await assertReferenceFree();
+      // [1.124.0] A receipt is final, so it is never issued for nothing. A probe took payment for a
+      // CANCELLED visit (a receipt, money kept, no tests ever done) and a ₱0 receipt for a visit with
+      // no tests on it. A visit the HMO covers in full still has tests, and still gets its receipt.
+      if (bill.visitStatus === 'Cancelled') {
+        const error = new Error('This visit was cancelled, so it cannot be paid. Start a new visit for the patient.');
+        error.statusCode = 409;
+        throw error;
       }
-      const created = await paymentRepository.createPayment({
-        patientVisitId,
-        processedBy,
-        paymentMethod,
-        referenceNumber,
-        receiptNumber,
-        amount: authoritativeTotal,
-        // Snapshotted from the bill just computed, so the receipt and the statutory register
-        // record what was actually deducted rather than re-deriving it later from a catalogue
-        // that may since have changed.
-        discountAmount: parseFloat(bill.discountAmount || 0),
-        discountTypeName: bill.discount?.name || null,
-        discountIdNumber: bill.discount?.idNumber || null,
-        // With this stored, the whole sale reconciles from the payment row alone:
-        //   amount + discount_amount + vat_amount = the original VAT-inclusive price.
-        vatAmount: parseFloat(bill.vatDeducted || 0)
-      });
-
-      // A counter payment supersedes any online checkout the patient started but never finished
-      // for this visit — otherwise an abandoned GCash/Maya session would linger as a 'Pending'
-      // payment row against an already-settled visit.
-      await paymentRepository.cancelPendingGatewayPayments(patientVisitId);
-
-      // The declared discount is granted in the cashier's name, now that the ID was checked. [1.146.0]
-      if (bill.discount?.declared) {
-        await discountRepository.markGranted(patientVisitId, processedBy);
+      if (bill.items.length === 0) {
+        const error = new Error('This visit has no tests yet. Add the tests before taking payment.');
+        error.statusCode = 409;
+        throw error;
       }
 
-      // Paid, so a booking that was holding its slot takes it for good. [1.123.0] Counter and proof
-      // payments never cleared the hold before: only the gateway did, so a booking paid at the desk
-      // would have stopped occupying its slot when the window ran out.
-      await appointmentRepository.confirmHold(patientVisitId);
+      // [1.151.0] A booking whose time to pay ran out has released its slot, and someone else may hold
+      // that slot now. A proof and a check-in already refused it; a payment here took the money and
+      // made the old booking permanent on top of theirs. Checked in (Confirmed), the patient is at
+      // the clinic and has no slot left to lose, so that one still pays.
+      const hold = await appointmentRepository.findHoldByVisitId(patientVisitId);
+      if (hold?.lapsed && hold.status === 'Pending') {
+        const error = new Error('This booking was not paid in time, so its slot was released. Start a walk-in visit for the patient instead.');
+        error.statusCode = 409;
+        throw error;
+      }
 
-      // Charged in full, so the claim for those tests is withdrawn with the payment. [1.123.0]
-      if (undecided > 0 && withdrawPendingClaims) {
-        await hmoRepository.withdrawPendingForVisit(patientVisitId, {
-          decidedBy: processedBy,
-          reason: 'Paid in full at the counter; the claim for this test was withdrawn.',
+      const proof = await paymentSubmissionRepository.findPendingForVisit(patientVisitId);
+      if (proof && String(proof.id) !== String(fromSubmissionId)) {
+        const error = new Error(
+          `This patient has already sent an online payment (reference ${proof.reference_number}) that has not been checked. Check it in Online Payments first: taking money here as well would charge them twice.`
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      // [1.146.0] A Senior Citizen / PWD discount declared online is granted by whoever takes the
+      // money, once they have seen the ID: a receipt is final, so it is checked first, not after.
+      if (bill.discount?.declared && !discountIdChecked) {
+        const error = new Error(
+          `This visit has a ${bill.discount.name} discount the patient declared online (ID ${bill.discount.idNumber}). Check the ID first: if it is not valid, remove the discount, and the patient pays the full amount.`
+        );
+        error.statusCode = 409;
+        error.details = { discountDeclared: true };
+        throw error;
+      }
+
+      // [1.160.0] Asked again as the money is taken: a senior discount given, and the birthdate then
+      // corrected to someone of 31, still took 20% off a receipt that cannot be taken back.
+      if (bill.discount) {
+        const visit = await visitRepository.findVisitById(patientVisitId);
+        try {
+          discountService.assertEligible({ name: bill.discount.name }, await patientRepository.findPatientById(visit.patient_id));
+        } catch (err) {
+          err.message = `${err.message} Otherwise remove the discount.`;
+          throw err;
+        }
+      }
+
+      const undecided = Number(bill.hmoPendingCount) || 0;
+      if (undecided > 0 && !withdrawPendingClaims) {
+        const error = new Error(
+          `${undecided} test${undecided > 1 ? 's are' : ' is'} still waiting for the HMO's decision. Wait for it, or charge in full and withdraw the claim for ${undecided > 1 ? 'them' : 'it'}.`
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const authoritativeTotal = parseFloat(bill.totalAmount);
+      const submittedAmount = parseFloat(amount);
+      if (isNaN(submittedAmount) || Math.abs(submittedAmount - authoritativeTotal) > 0.01) {
+        const error = new Error(`Submitted amount (₱${amount}) does not match the billed total (₱${authoritativeTotal.toFixed(2)}).`);
+        error.statusCode = 400;
+        throw error;
+      }
+
+      // [1.151.0] The till's form requires it, and without one the cash-up has no way to match the
+      // payment to a transfer. A proof always carries its own.
+      if (paymentMethod !== CASH_METHOD && !String(referenceNumber ?? '').trim()) {
+        const error = new Error(`Enter the ${paymentMethod} reference number.`);
+        error.statusCode = 400;
+        throw error;
+      }
+
+      // [1.152.0] One transfer pays for one visit. Steven's call: a reference already on another
+      // receipt, or waiting on another patient's proof, is refused rather than warned about. A receipt
+      // is final, so a second one on the same money could not be taken back.
+      const reference = String(referenceNumber ?? '').trim();
+      const assertReferenceFree = async () => {
+        if (!reference) return;
+        const used = await paymentRepository.findReferenceUse({
+          reference, method: paymentMethod, visitId: patientVisitId, paymentsOnly: Boolean(fromSubmissionId),
         });
-      }
+        if (used) {
+          const error = new Error(used.receipt_number
+            ? `Reference ${reference} is already on receipt ${used.receipt_number}. One transfer pays for one visit: check the number, or ask for the transfer behind this one.`
+            : `Reference ${reference} is on another patient's online payment, waiting to be checked. One transfer pays for one visit: check the number.`);
+          error.statusCode = 409;
+          throw error;
+        }
+      };
+      // Before a receipt number is drawn, so a refusal does not use one up.
+      await assertReferenceFree();
 
-      // Payment is one of the two release conditions. Attempting the release here — server-side,
-      // in the same call that took the money — replaces the CashierDashboard's separate follow-up
-      // PATCH, where a network blip between the two requests stranded a fully paid visit at
-      // 'Pending' with no ticket ever reaching a modality. A walk-in releases immediately; an
-      // appointment still waits for its QR check-in, and this is a no-op until then.
-      await visitService.releaseVisitIfReady(patientVisitId);
+      // Taking the money and releasing the visit is one event, so it commits as one.
+      //
+      // These were four independent auto-committed writes. Dying anywhere in the middle — deploy,
+      // process restart, OOM — left the clinic in a state no screen can explain and no user can
+      // repair:
+      //
+      //   payment written, visit not released:  the patient has paid, but the visit is still
+      //     'Pending' and its tests are still 'Pending', and every modality worklist filters on
+      //     pv.status = 'Processing'. The ticket is invisible to every department. The cashier
+      //     cannot retake the payment either — hasPaidPayment now returns true, so the retry is
+      //     rejected with "already been paid". The patient waits for an exam nobody can see.
+      //
+      //   payment written, stale gateway row not cancelled: an abandoned GCash session stays
+      //     'Pending' against a settled visit and keeps being offered back to the patient.
+      //
+      // releaseVisitIfReady is included deliberately: it is the step that makes the payment
+      // *mean* something operationally, and it is internally atomic already, so joining this
+      // transaction just extends the same guarantee across the pair.
+      const receiptNumber = await paymentRepository.getNextReceiptNumber();
 
-      return created;
+      const created = await (async () => {
+        // Again under a lock on the reference, so two cashiers approving the same one in the same
+        // instant cannot both pass the check above.
+        if (reference) {
+          await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`payment-reference|${paymentMethod}|${reference.toUpperCase()}`]);
+          await assertReferenceFree();
+        }
+        const created = await paymentRepository.createPayment({
+          patientVisitId,
+          processedBy,
+          paymentMethod,
+          referenceNumber,
+          receiptNumber,
+          amount: authoritativeTotal,
+          // Snapshotted from the bill just computed, so the receipt and the statutory register
+          // record what was actually deducted rather than re-deriving it later from a catalogue
+          // that may since have changed.
+          discountAmount: parseFloat(bill.discountAmount || 0),
+          discountTypeName: bill.discount?.name || null,
+          discountIdNumber: bill.discount?.idNumber || null,
+          // With this stored, the whole sale reconciles from the payment row alone:
+          //   amount + discount_amount + vat_amount = the original VAT-inclusive price.
+          vatAmount: parseFloat(bill.vatDeducted || 0)
+        });
+
+        // A counter payment supersedes any online checkout the patient started but never finished
+        // for this visit — otherwise an abandoned GCash/Maya session would linger as a 'Pending'
+        // payment row against an already-settled visit.
+        await paymentRepository.cancelPendingGatewayPayments(patientVisitId);
+
+        // The declared discount is granted in the cashier's name, now that the ID was checked. [1.146.0]
+        if (bill.discount?.declared) {
+          await discountRepository.markGranted(patientVisitId, processedBy);
+        }
+
+        // Paid, so a booking that was holding its slot takes it for good. [1.123.0] Counter and proof
+        // payments never cleared the hold before: only the gateway did, so a booking paid at the desk
+        // would have stopped occupying its slot when the window ran out.
+        await appointmentRepository.confirmHold(patientVisitId);
+
+        // Charged in full, so the claim for those tests is withdrawn with the payment. [1.123.0]
+        if (undecided > 0 && withdrawPendingClaims) {
+          await hmoRepository.withdrawPendingForVisit(patientVisitId, {
+            decidedBy: processedBy,
+            reason: 'Paid in full at the counter; the claim for this test was withdrawn.',
+          });
+        }
+
+        // Payment is one of the two release conditions. Attempting the release here — server-side,
+        // in the same call that took the money — replaces the CashierDashboard's separate follow-up
+        // PATCH, where a network blip between the two requests stranded a fully paid visit at
+        // 'Pending' with no ticket ever reaching a modality. A walk-in releases immediately; an
+        // appointment still waits for its QR check-in, and this is a no-op until then.
+        await visitService.releaseVisitIfReady(patientVisitId);
+
+        return created;
+      })();
+      return { payment: created, bill, receiptNumber, authoritativeTotal };
     });
 
     // Module 18 (Notification): Admin/SuperAdmin financial oversight, matching Reports/Cashier

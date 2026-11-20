@@ -1,3 +1,4 @@
+const db = require('../config/database');
 const discountRepository = require('../repositories/discountRepository');
 const visitRepository = require('../repositories/visitRepository');
 const patientRepository = require('../repositories/patientRepository');
@@ -120,61 +121,67 @@ class DiscountService {
    *   would otherwise disagree, and there is no re-bill path — a correction goes through a refund.
    */
   async applyToVisit(visitId, { discountTypeId, idNumber }, requestingUser) {
-    const visit = await visitRepository.findVisitById(visitId);
-    if (!visit) {
-      throw new NotFoundError('Visit not found');
-    }
+    // [1.169.0] Checked and written behind the visit's lock, which taking payment holds too: a
+    // discount applied while the cashier took payment landed on a visit already paid in full, so the
+    // bill said ₱352 under a receipt for ₱440.
+    return db.withTransaction(async () => {
+      await visitRepository.lockVisit(visitId);
+      const visit = await visitRepository.findVisitById(visitId);
+      if (!visit) {
+        throw new NotFoundError('Visit not found');
+      }
 
-    // Once money has changed hands the bill is settled. Changing the discount afterwards would
-    // silently disagree with the receipt already issued and with the statutory register, and
-    // there is no re-bill path to reconcile it — a correction has to go through the existing
-    // refund flow instead.
-    const alreadyPaid = await paymentRepository.hasPaidPayment(visitId);
-    if (alreadyPaid) {
-      throw new ConflictError(
-        'This visit has already been paid, so its discount can no longer change.'
-      );
-    }
-    await assertNoProofWaiting(visitId, 'its discount');
+      // Once money has changed hands the bill is settled. Changing the discount afterwards would
+      // silently disagree with the receipt already issued and with the statutory register, and
+      // there is no re-bill path to reconcile it — a correction has to go through the existing
+      // refund flow instead.
+      const alreadyPaid = await paymentRepository.hasPaidPayment(visitId);
+      if (alreadyPaid) {
+        throw new ConflictError(
+          'This visit has already been paid, so its discount can no longer change.'
+        );
+      }
+      await assertNoProofWaiting(visitId, 'its discount');
 
-    const discount = await discountRepository.findById(discountTypeId);
-    if (!discount) {
-      throw new ValidationError('Unknown discount type.');
-    }
-    if (!discount.is_active) {
-      throw new ValidationError(`The "${discount.name}" discount is not currently active.`);
-    }
+      const discount = await discountRepository.findById(discountTypeId);
+      if (!discount) {
+        throw new ValidationError('Unknown discount type.');
+      }
+      if (!discount.is_active) {
+        throw new ValidationError(`The "${discount.name}" discount is not currently active.`);
+      }
 
-    // The ID number is the evidence that the entitlement was checked. Without it a statutory
-    // discount is an unsupported deduction, which is precisely what an audit looks for.
-    const trimmedId = (typeof idNumber === 'string' ? idNumber : '').trim();
-    if (discount.requires_id && !trimmedId) {
-      throw new ValidationError(
-        `A ${discount.name} discount requires the holder's ID number (OSCA/PWD ID) to be recorded.`
-      );
-    }
+      // The ID number is the evidence that the entitlement was checked. Without it a statutory
+      // discount is an unsupported deduction, which is precisely what an audit looks for.
+      const trimmedId = (typeof idNumber === 'string' ? idNumber : '').trim();
+      if (discount.requires_id && !trimmedId) {
+        throw new ValidationError(
+          `A ${discount.name} discount requires the holder's ID number (OSCA/PWD ID) to be recorded.`
+        );
+      }
 
-    this.assertEligible(discount, await patientRepository.findPatientById(visit.patient_id));
+      this.assertEligible(discount, await patientRepository.findPatientById(visit.patient_id));
 
-    const applied = await discountRepository.applyToVisit(visitId, {
-      discountTypeId,
-      idNumber: trimmedId,
-      grantedBy: requestingUser?.userId,
+      const applied = await discountRepository.applyToVisit(visitId, {
+        discountTypeId,
+        idNumber: trimmedId,
+        grantedBy: requestingUser?.userId,
+      });
+
+      // Audit-logged like the other money-affecting actions (refunds, HMO approvals): a deduction
+      // that reduces what the clinic collects should name who authorised it.
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: 'discount.applied',
+        entityType: 'patient_visit',
+        entityId: visitId,
+        description: `Applied ${discount.name} (${discount.percentage}%) to visit #${visitId}${
+          trimmedId ? `, ID ${trimmedId}` : ''
+        }`,
+      });
+
+      return applied;
     });
-
-    // Audit-logged like the other money-affecting actions (refunds, HMO approvals): a deduction
-    // that reduces what the clinic collects should name who authorised it.
-    await auditService.log({
-      actorId: requestingUser?.userId,
-      action: 'discount.applied',
-      entityType: 'patient_visit',
-      entityId: visitId,
-      description: `Applied ${discount.name} (${discount.percentage}%) to visit #${visitId}${
-        trimmedId ? `, ID ${trimmedId}` : ''
-      }`,
-    });
-
-    return applied;
   }
 
   /**
@@ -225,33 +232,37 @@ class DiscountService {
   }
 
   async clearFromVisit(visitId, requestingUser, options = {}) {
-    const visit = await visitRepository.findVisitById(visitId);
-    if (!visit) {
-      throw new NotFoundError('Visit not found');
-    }
+    // [1.169.0] Behind the visit's lock, as applying one is.
+    const cleared = await db.withTransaction(async () => {
+      await visitRepository.lockVisit(visitId);
+      const visit = await visitRepository.findVisitById(visitId);
+      if (!visit) {
+        throw new NotFoundError('Visit not found');
+      }
 
-    const alreadyPaid = await paymentRepository.hasPaidPayment(visitId);
-    if (alreadyPaid) {
-      throw new ConflictError(
-        'This visit has already been paid, so its discount can no longer change.'
-      );
-    }
-    if (!options.afterRejectingProof) await assertNoProofWaiting(visitId, 'its discount');
+      const alreadyPaid = await paymentRepository.hasPaidPayment(visitId);
+      if (alreadyPaid) {
+        throw new ConflictError(
+          'This visit has already been paid, so its discount can no longer change.'
+        );
+      }
+      if (!options.afterRejectingProof) await assertNoProofWaiting(visitId, 'its discount');
 
-    const cleared = await discountRepository.clearFromVisit(visitId);
-    // A declared discount's ID photo goes with it. [1.146.0]
+      const row = await discountRepository.clearFromVisit(visitId);
+      await auditService.log({
+        actorId: requestingUser?.userId,
+        action: 'discount.removed',
+        entityType: 'patient_visit',
+        entityId: visitId,
+        description: `Removed the discount from visit #${visitId}`,
+      });
+      return row;
+    });
+
+    // A declared discount's ID photo goes with it [1.146.0], once the removal has committed.
     if (cleared?.old_id_file_path) {
       fs.unlink(path.join(DISCOUNT_ID_UPLOAD_ROOT, path.basename(cleared.old_id_file_path)), () => {});
     }
-
-    await auditService.log({
-      actorId: requestingUser?.userId,
-      action: 'discount.removed',
-      entityType: 'patient_visit',
-      entityId: visitId,
-      description: `Removed the discount from visit #${visitId}`,
-    });
-
     return cleared;
   }
 

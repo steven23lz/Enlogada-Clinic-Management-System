@@ -96,21 +96,26 @@ class VisitService {
         throw new ForbiddenError('Registering a new patient needs permission to create patient records.');
       }
       const record = patientService.prepareStaffRecord(newPatient);
-      if (!confirmNewPatient) {
-        const same = await patientRepository.findSameNameAndBirthdate(record.firstName, record.lastName, record.birthdate);
-        if (same) {
-          const error = new ConflictError(
-            `${same.first_name} ${same.last_name}, born ${String(same.birthdate instanceof Date ? same.birthdate.toISOString() : same.birthdate).slice(0, 10)}, is already on file. Start the visit on that record, or confirm this is a different person.`
-          );
-          error.details = { possibleDuplicate: same };
-          throw error;
-        }
-      }
       const typeName = await patientRepository.findPatientTypeName(record.patientTypeId);
       if (!typeName) throw new ValidationError('That patient type does not exist.');
       assertReferralIfRequired({ patientTypeName: typeName, hasHmoClaim: false, referringPhysician: referral.referringPhysician });
 
       return await db.withTransaction(async () => {
+        // [1.169.0] The same person registered at two desks at the same moment became two records:
+        // both looked for a match before either had written. The look and the write are one
+        // transaction now, and two registrations of one name and birthdate take turns.
+        const sameKey = `new-patient|${String(record.firstName).trim().toLowerCase().replace(/\s+/g, ' ')}|${String(record.lastName).trim().toLowerCase().replace(/\s+/g, ' ')}|${record.birthdate}`;
+        await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [sameKey]);
+        if (!confirmNewPatient) {
+          const same = await patientRepository.findSameNameAndBirthdate(record.firstName, record.lastName, record.birthdate);
+          if (same) {
+            const error = new ConflictError(
+              `${same.first_name} ${same.last_name}, born ${String(same.birthdate instanceof Date ? same.birthdate.toISOString() : same.birthdate).slice(0, 10)}, is already on file. Start the visit on that record, or confirm this is a different person.`
+            );
+            error.details = { possibleDuplicate: same };
+            throw error;
+          }
+        }
         const created = await patientRepository.createPatient(record);
         const queueNumber = await visitRepository.getNextQueueNumber();
         const visit = await visitRepository.createVisit({

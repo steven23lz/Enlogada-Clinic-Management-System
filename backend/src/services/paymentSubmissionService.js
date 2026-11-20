@@ -1,4 +1,5 @@
 const path = require('path');
+const db = require('../config/database');
 const fs = require('fs');
 const paymentSubmissionRepository = require('../repositories/paymentSubmissionRepository');
 const paymentMethodRepository = require('../repositories/paymentMethodRepository');
@@ -89,102 +90,110 @@ class PaymentSubmissionService {
     try {
       await this.assertClientOwnsVisit(user, patientVisitId);
 
-      // Already settled? Nothing to claim against. Checked before the unique index so the patient
-      // gets a sentence rather than a constraint violation.
-      if (await paymentRepository.hasPaidPayment(patientVisitId)) {
-        const error = new Error('This visit is already paid.');
-        error.statusCode = 409;
-        throw error;
-      }
-      // [1.124.0] Nor for a visit or booking that is over. A probe sent a proof for a CANCELLED
-      // booking, and a cashier verifying it would have issued a receipt for a visit with no exam.
-      const visit = await visitRepository.findVisitById(patientVisitId);
-      if (!visit) {
-        const error = new Error('Visit not found.');
-        error.statusCode = 404;
-        throw error;
-      }
-      const hold = await appointmentRepository.findHoldByVisitId(patientVisitId);
-      if (visit.status === 'Cancelled' || ['Cancelled', 'No Show'].includes(hold?.status)) {
-        const error = new Error('This booking was cancelled, so there is nothing to pay. Please book again.');
-        error.statusCode = 409;
-        throw error;
-      }
-      // Payment first [1.123.0]: a booking whose payment window ran out has released its slot.
-      if (hold?.lapsed) {
-        const error = new Error("This booking wasn't paid in time, so its slot was released. Please book again.");
-        error.statusCode = 409;
-        throw error;
-      }
-      const live = await paymentSubmissionRepository.findPendingForVisit(patientVisitId);
-      if (live) {
-        const error = new Error('A payment for this booking is already awaiting review.');
-        error.statusCode = 409;
-        throw error;
-      }
+      // [1.169.0] Checked and written behind the visit's lock, which the till holds while it takes
+      // payment: a proof sent while the cashier took cash at the counter was left waiting to be
+      // checked on a visit already paid.
+      const submission = await db.withTransaction(async () => {
+        await visitRepository.lockVisit(patientVisitId);
 
-      // [1.151.0] Nothing to pay yet, or nothing to pay at all. A proof sent while the HMO decides
-      // cleared the booking's hold for good and could never be approved (the till's own rule
-      // refuses a payment over a pending decision), so a rejection left the slot taken, unpaid and
-      // undecided, past the reach of the sweep. The portal offers no form here; the server says so too.
-      const bill = await paymentService.getBillingSummary(patientVisitId);
-      if (Number(bill.hmoPendingCount) > 0) {
-        const error = new Error('Your HMO is still deciding on this booking, so there is nothing to pay yet. We email you their answer.');
-        error.statusCode = 409;
-        throw error;
-      }
-      if (Number(bill.totalAmount) <= 0) {
-        const error = new Error('Your HMO covers this booking in full, so there is nothing to pay.');
-        error.statusCode = 409;
-        throw error;
-      }
+        // Already settled? Nothing to claim against. Checked before the unique index so the patient
+        // gets a sentence rather than a constraint violation.
+        if (await paymentRepository.hasPaidPayment(patientVisitId)) {
+          const error = new Error('This visit is already paid.');
+          error.statusCode = 409;
+          throw error;
+        }
+        // [1.124.0] Nor for a visit or booking that is over. A probe sent a proof for a CANCELLED
+        // booking, and a cashier verifying it would have issued a receipt for a visit with no exam.
+        const visit = await visitRepository.findVisitById(patientVisitId);
+        if (!visit) {
+          const error = new Error('Visit not found.');
+          error.statusCode = 404;
+          throw error;
+        }
+        const hold = await appointmentRepository.findHoldByVisitId(patientVisitId);
+        if (visit.status === 'Cancelled' || ['Cancelled', 'No Show'].includes(hold?.status)) {
+          const error = new Error('This booking was cancelled, so there is nothing to pay. Please book again.');
+          error.statusCode = 409;
+          throw error;
+        }
+        // Payment first [1.123.0]: a booking whose payment window ran out has released its slot.
+        if (hold?.lapsed) {
+          const error = new Error("This booking wasn't paid in time, so its slot was released. Please book again.");
+          error.statusCode = 409;
+          throw error;
+        }
+        const live = await paymentSubmissionRepository.findPendingForVisit(patientVisitId);
+        if (live) {
+          const error = new Error('A payment for this booking is already awaiting review.');
+          error.statusCode = 409;
+          throw error;
+        }
 
-      // [1.152.0] One transfer pays for one booking. Says nothing of whose it was. The same reference
-      // on this booking again is fine: that is a patient correcting a rejected proof.
-      const paidInto = paymentMethodId ? await paymentMethodRepository.findById(paymentMethodId) : null;
-      const used = await paymentRepository.findReferenceUse({
-        reference: referenceNumber.trim(), method: paidInto?.kind || 'GCash', visitId: patientVisitId,
+        // [1.151.0] Nothing to pay yet, or nothing to pay at all. A proof sent while the HMO decides
+        // cleared the booking's hold for good and could never be approved (the till's own rule
+        // refuses a payment over a pending decision), so a rejection left the slot taken, unpaid and
+        // undecided, past the reach of the sweep. The portal offers no form here; the server says so too.
+        const bill = await paymentService.getBillingSummary(patientVisitId);
+        if (Number(bill.hmoPendingCount) > 0) {
+          const error = new Error('Your HMO is still deciding on this booking, so there is nothing to pay yet. We email you their answer.');
+          error.statusCode = 409;
+          throw error;
+        }
+        if (Number(bill.totalAmount) <= 0) {
+          const error = new Error('Your HMO covers this booking in full, so there is nothing to pay.');
+          error.statusCode = 409;
+          throw error;
+        }
+
+        // [1.152.0] One transfer pays for one booking. Says nothing of whose it was. The same reference
+        // on this booking again is fine: that is a patient correcting a rejected proof.
+        const paidInto = paymentMethodId ? await paymentMethodRepository.findById(paymentMethodId) : null;
+        const used = await paymentRepository.findReferenceUse({
+          reference: referenceNumber.trim(), method: paidInto?.kind || 'GCash', visitId: patientVisitId,
+        });
+        if (used) {
+          const error = new Error('This reference number has already been used for another payment. Each booking needs its own transfer. Check the number on your confirmation, or contact the clinic.');
+          error.statusCode = 409;
+          throw error;
+        }
+
+        // The portal no longer asks the patient to type an amount. [1.105.0] The booking already
+        // states the figure, and an editable box beside it invited them to send something else. A
+        // claim that names no amount is a claim to have sent what was asked, so it records that
+        // figure. An explicit amount is still accepted, and still only evidence.
+        const stated = amountClaimed !== undefined && amountClaimed !== null && String(amountClaimed).trim() !== '';
+        if (stated && !Number.isFinite(Number(amountClaimed))) {
+          const error = new Error('The amount must be a number.');
+          error.statusCode = 400;
+          throw error;
+        }
+        // [1.146.0] The bill approval will record, discount included, not the gross of the tests.
+        const claimed = stated ? Number(amountClaimed) : Number(bill.totalAmount);
+
+        const created = await paymentSubmissionRepository.create({
+          patientVisitId,
+          paymentMethodId,
+          referenceNumber: referenceNumber.trim(),
+          amountClaimed: claimed,
+          submittedBy: user?.userId,
+          proof: {
+            filePath: path.basename(file.path),
+            originalName: file.originalname,
+            mimeType: file.mimetype,
+            sizeBytes: file.size,
+          },
+        });
+
+        // The cashier is told, because nothing else would tell them: a patient paying from home
+        // produces no queue ticket and no one at the counter. Without this the claim sits unseen
+        // until somebody happens to open the review screen.
+        // A proof sent in time keeps the slot while a cashier checks it. [1.123.0] Checking happens
+        // in opening hours, so the window must not run out while the proof waits; a rejection starts
+        // it again (reject, below).
+        await appointmentRepository.confirmHold(patientVisitId);
+        return created;
       });
-      if (used) {
-        const error = new Error('This reference number has already been used for another payment. Each booking needs its own transfer. Check the number on your confirmation, or contact the clinic.');
-        error.statusCode = 409;
-        throw error;
-      }
-
-      // The portal no longer asks the patient to type an amount. [1.105.0] The booking already
-      // states the figure, and an editable box beside it invited them to send something else. A
-      // claim that names no amount is a claim to have sent what was asked, so it records that
-      // figure. An explicit amount is still accepted, and still only evidence.
-      const stated = amountClaimed !== undefined && amountClaimed !== null && String(amountClaimed).trim() !== '';
-      if (stated && !Number.isFinite(Number(amountClaimed))) {
-        const error = new Error('The amount must be a number.');
-        error.statusCode = 400;
-        throw error;
-      }
-      // [1.146.0] The bill approval will record, discount included, not the gross of the tests.
-      const claimed = stated ? Number(amountClaimed) : Number(bill.totalAmount);
-
-      const submission = await paymentSubmissionRepository.create({
-        patientVisitId,
-        paymentMethodId,
-        referenceNumber: referenceNumber.trim(),
-        amountClaimed: claimed,
-        submittedBy: user?.userId,
-        proof: {
-          filePath: path.basename(file.path),
-          originalName: file.originalname,
-          mimeType: file.mimetype,
-          sizeBytes: file.size,
-        },
-      });
-
-      // The cashier is told, because nothing else would tell them: a patient paying from home
-      // produces no queue ticket and no one at the counter. Without this the claim sits unseen
-      // until somebody happens to open the review screen.
-      // A proof sent in time keeps the slot while a cashier checks it. [1.123.0] Checking happens
-      // in opening hours, so the window must not run out while the proof waits; a rejection starts
-      // it again (reject, below).
-      await appointmentRepository.confirmHold(patientVisitId);
 
       await notificationService.notifyRoles(['Cashier', 'Admin', 'SuperAdmin'], {
         title: 'Proof of payment to review',
@@ -238,98 +247,115 @@ class PaymentSubmissionService {
    * the recomputed bill, NOT `amount_claimed`.
    */
   async verify(id, actor, { discountIdChecked = false } = {}) {
-    const submission = await paymentSubmissionRepository.findById(id);
-    if (!submission) {
+    const found = await paymentSubmissionRepository.findById(id);
+    if (!found) {
       const error = new Error('Payment submission not found.');
       error.statusCode = 404;
       throw error;
     }
-    if (submission.status !== 'Pending') {
-      const error = new Error(`This submission was already ${submission.status.toLowerCase()}.`);
-      error.statusCode = 409;
-      throw error;
-    }
+    // [1.169.0] Taking the money and closing the proof are one transaction, behind the visit's lock,
+    // and the proof is read again once the lock is held. They were two steps, so a cashier rejecting
+    // the proof between them left it Rejected with a receipt issued on it.
+    const outcome = await db.withTransaction(async () => {
+      await visitRepository.lockVisit(found.patient_visit_id);
+      const submission = await paymentSubmissionRepository.findById(id);
+      if (!submission) {
+        const error = new Error('Payment submission not found.');
+        error.statusCode = 404;
+        throw error;
+      }
+      if (submission.status !== 'Pending') {
+        const error = new Error(`This submission was already ${submission.status.toLowerCase()}.`);
+        error.statusCode = 409;
+        throw error;
+      }
 
-    const method = submission.payment_method_id
-      ? await paymentMethodRepository.findById(submission.payment_method_id)
-      : null;
+      const method = submission.payment_method_id
+        ? await paymentMethodRepository.findById(submission.payment_method_id)
+        : null;
 
-    // ── A submission left Pending on a visit that IS paid ──────────────────────────────────────
-    //
-    // Taking the money and marking the submission are two writes and cannot be one: processPayment
-    // owns its own transaction, commits, and issues a receipt number from daily_counters. If the
-    // settle below fails after that commit — a dropped connection, a restart — the money is banked
-    // and the submission is still Pending.
-    //
-    // Nothing was lost when that happened, but nothing could fix it either. The row stayed in the
-    // cashier's queue forever, and every retry called processPayment, which correctly refused with
-    // "This visit has already been paid" — an error about the VISIT, on a screen about a
-    // SUBMISSION, with no action that would clear it.
-    //
-    // So reconcile instead of re-charging: adopt the payment that already exists and close the
-    // submission against it. This is the only branch that may settle without taking money, and it
-    // is safe precisely because it takes none — hasPaidPayment is the same guard processPayment
-    // would have used to refuse.
-    const existing = (await paymentRepository.findPaymentsByVisitId(submission.patient_visit_id))
-      .find((p) => p.payment_status === 'Paid');
-    if (existing) {
-      const reconciled = await paymentSubmissionRepository.settle(id, {
+      // ── A submission left Pending on a visit that IS paid ──────────────────────────────────────
+      //
+      // Taking the money and marking the submission are two writes and cannot be one: processPayment
+      // owns its own transaction, commits, and issues a receipt number from daily_counters. If the
+      // settle below fails after that commit — a dropped connection, a restart — the money is banked
+      // and the submission is still Pending.
+      //
+      // Nothing was lost when that happened, but nothing could fix it either. The row stayed in the
+      // cashier's queue forever, and every retry called processPayment, which correctly refused with
+      // "This visit has already been paid" — an error about the VISIT, on a screen about a
+      // SUBMISSION, with no action that would clear it.
+      //
+      // So reconcile instead of re-charging: adopt the payment that already exists and close the
+      // submission against it. This is the only branch that may settle without taking money, and it
+      // is safe precisely because it takes none — hasPaidPayment is the same guard processPayment
+      // would have used to refuse.
+      const existing = (await paymentRepository.findPaymentsByVisitId(submission.patient_visit_id))
+        .find((p) => p.payment_status === 'Paid');
+      if (existing) {
+        const reconciled = await paymentSubmissionRepository.settle(id, {
+          status: 'Verified',
+          reviewedBy: actor.userId,
+          reviewNote: null,
+          paymentId: existing.id,
+        });
+        if (reconciled) {
+          await auditService.log({
+            actorId: actor.userId,
+            action: 'payment_submission.reconciled',
+            entityType: 'payment_submission',
+            entityId: reconciled.id,
+            // Named distinctly from a normal verification: no money moved here, and a cash-up that
+            // cannot tell the two apart is a cash-up that cannot be checked.
+            description: `Ref ${reconciled.reference_number} matched to existing receipt ${existing.receipt_number} — no new payment taken`,
+          });
+          return { submission: reconciled, payment: existing, reconciled: true };
+        }
+      }
+
+      // The authoritative figure, recomputed from the visit.
+      const bill = await paymentService.getBillingSummary(submission.patient_visit_id);
+
+      const payment = await paymentService.processPayment({
+        patientVisitId: submission.patient_visit_id,
+        processedBy: actor.userId,
+        // The cash-up bucket, which is exactly why payment_methods.kind is constrained to the three
+        // values `payments` accepts. A method that was since retired still settles correctly.
+        paymentMethod: method?.kind || 'GCash',
+        referenceNumber: submission.reference_number,
+        amount: bill.totalAmount,
+        fromSubmissionId: submission.id,
+        discountIdChecked,
+      });
+
+      const settled = await paymentSubmissionRepository.settle(id, {
         status: 'Verified',
         reviewedBy: actor.userId,
         reviewNote: null,
-        paymentId: existing.id,
+        paymentId: payment.id,
       });
-      if (reconciled) {
-        await auditService.log({
-          actorId: actor.userId,
-          action: 'payment_submission.reconciled',
-          entityType: 'payment_submission',
-          entityId: reconciled.id,
-          // Named distinctly from a normal verification: no money moved here, and a cash-up that
-          // cannot tell the two apart is a cash-up that cannot be checked.
-          description: `Ref ${reconciled.reference_number} matched to existing receipt ${existing.receipt_number} — no new payment taken`,
-        });
-        this.notifyPatient(reconciled.id, { verified: true, payment: existing }).catch(() => {});
-        return { submission: reconciled, payment: existing, reconciled: true };
+      if (!settled) {
+        // Another cashier settled it between the read and the write. The payment above already
+        // happened, so this is reported rather than silently swallowed.
+        const error = new Error('Another cashier reviewed this submission first. Check the visit before retrying.');
+        error.statusCode = 409;
+        throw error;
       }
+
+      await auditService.log({
+        actorId: actor.userId,
+        action: 'payment_submission.verified',
+        entityType: 'payment_submission',
+        entityId: settled.id,
+        description: `Ref ${settled.reference_number} verified — receipt ${payment.receipt_number}`,
+      });
+      return { submission: settled, payment };
+    });
+    if (outcome.reconciled) {
+      this.notifyPatient(outcome.submission.id, { verified: true, payment: outcome.payment }).catch(() => {});
+      return outcome;
     }
-
-    // The authoritative figure, recomputed from the visit.
-    const bill = await paymentService.getBillingSummary(submission.patient_visit_id);
-
-    const payment = await paymentService.processPayment({
-      patientVisitId: submission.patient_visit_id,
-      processedBy: actor.userId,
-      // The cash-up bucket, which is exactly why payment_methods.kind is constrained to the three
-      // values `payments` accepts. A method that was since retired still settles correctly.
-      paymentMethod: method?.kind || 'GCash',
-      referenceNumber: submission.reference_number,
-      amount: bill.totalAmount,
-      fromSubmissionId: submission.id,
-      discountIdChecked,
-    });
-
-    const settled = await paymentSubmissionRepository.settle(id, {
-      status: 'Verified',
-      reviewedBy: actor.userId,
-      reviewNote: null,
-      paymentId: payment.id,
-    });
-    if (!settled) {
-      // Another cashier settled it between the read and the write. The payment above already
-      // happened, so this is reported rather than silently swallowed.
-      const error = new Error('Another cashier reviewed this submission first. Check the visit before retrying.');
-      error.statusCode = 409;
-      throw error;
-    }
-
-    await auditService.log({
-      actorId: actor.userId,
-      action: 'payment_submission.verified',
-      entityType: 'payment_submission',
-      entityId: settled.id,
-      description: `Ref ${settled.reference_number} verified — receipt ${payment.receipt_number}`,
-    });
+    const { submission: settled, payment } = outcome;
 
     // Told, rather than left to notice. The patient portal has no notification bell, so email is
     // the only channel that reaches them — and they are waiting on something only the clinic can
@@ -351,29 +377,35 @@ class PaymentSubmissionService {
       throw error;
     }
 
-    const submission = await paymentSubmissionRepository.findById(id);
-    if (!submission) {
+    const found = await paymentSubmissionRepository.findById(id);
+    if (!found) {
       const error = new Error('Payment submission not found.');
       error.statusCode = 404;
       throw error;
     }
-    if (submission.status !== 'Pending') {
-      const error = new Error(`This submission was already ${submission.status.toLowerCase()}.`);
-      error.statusCode = 409;
-      throw error;
-    }
+    // [1.169.0] Behind the visit's lock, as verifying is, and read again once it is held.
+    const settled = await db.withTransaction(async () => {
+      await visitRepository.lockVisit(found.patient_visit_id);
+      const submission = await paymentSubmissionRepository.findById(id);
+      if (submission.status !== 'Pending') {
+        const error = new Error(`This submission was already ${submission.status.toLowerCase()}.`);
+        error.statusCode = 409;
+        throw error;
+      }
 
-    const settled = await paymentSubmissionRepository.settle(id, {
-      status: 'Rejected',
-      reviewedBy: actor.userId,
-      reviewNote: reviewNote.trim(),
-      paymentId: null,
+      const row = await paymentSubmissionRepository.settle(id, {
+        status: 'Rejected',
+        reviewedBy: actor.userId,
+        reviewNote: reviewNote.trim(),
+        paymentId: null,
+      });
+      if (!row) {
+        const error = new Error('Another cashier reviewed this submission first.');
+        error.statusCode = 409;
+        throw error;
+      }
+      return row;
     });
-    if (!settled) {
-      const error = new Error('Another cashier reviewed this submission first.');
-      error.statusCode = 409;
-      throw error;
-    }
 
     await auditService.log({
       actorId: actor.userId,

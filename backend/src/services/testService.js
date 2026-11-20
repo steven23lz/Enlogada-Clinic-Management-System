@@ -282,73 +282,88 @@ class TestService {
 
     await assertClientOwnsVisit(requestingUser, line.patient_visit_id);
 
-    const refuse = (message) => {
-      const error = new Error(message);
-      error.statusCode = 409;
-      throw error;
-    };
-
-    if (line.visit_paid) {
-      refuse('This visit has already been paid, so its tests can no longer change: the patient holds a receipt for this bill.');
-    }
-    await assertNoProofWaiting(line.patient_visit_id, 'its tests');
-    if (line.has_result) {
-      refuse(`${line.test_name} already has a result recorded. A result is a clinical record and cannot be removed by taking the test off the visit.`);
-    }
-    if (line.status !== 'Pending') {
-      refuse(`${line.test_name} is already with the department (${line.status}), so it can no longer be taken off the visit.`);
-    }
-
-    // A bundle is removed whole. Every line in it must pass the same tests, or none moves.
-    let ids = [visitTestId];
-    let removedPackage = null;
-    if (line.package_id) {
-      const lines = await testRepository.findPackageLinesOnVisit(line.patient_visit_id, line.package_id);
-      const blocked = lines.find((l) => l.has_result || l.status !== 'Pending');
-      if (blocked) {
-        refuse(`${line.package_name || 'This package'} cannot be removed: ${blocked.test_name} is already ${blocked.has_result ? 'reported' : blocked.status.toLowerCase()}. A package is billed as one price, so it is removed as one thing.`);
+    // [1.169.0] Checked and removed in one transaction, behind the visit's lock: two desks each taking
+    // a different test off a two-test visit at the same moment both passed "not the last one" and left
+    // the visit with nothing on it. The line is read again once the lock is held.
+    const { removed, cards, removedPackage } = await db.withTransaction(async () => {
+      await visitRepository.lockVisit(line.patient_visit_id);
+      const now = await testRepository.findVisitTestForRemoval(visitTestId);
+      if (!now) {
+        const error = new Error('That test is not on this visit any more.');
+        error.statusCode = 404;
+        throw error;
       }
-      ids = lines.map((l) => l.id);
-      removedPackage = line.package_name;
-    }
+      Object.assign(line, now);
 
-    // [1.129.0] A visit is never left with nothing on it: an empty visit sat in the queue and at
-    // the till with nothing to do or pay for. To drop everything, cancel the visit or booking.
-    const removing = new Set(ids.map(Number));
-    const onVisit = await testRepository.findTestsByVisitId(line.patient_visit_id);
-    if (onVisit.filter((t) => !removing.has(Number(t.id)) && t.status !== 'Cancelled').length === 0) {
-      // [1.146.0] There is no cancel [1.131.0]: the old advice named a button that is gone.
-      refuse(`${removedPackage || line.test_name} is the only thing on this visit, and a visit needs at least one test. If the patient wants none of it, leave it unpaid: an unpaid walk-in is removed at the end of its day, and an unpaid booking when its time to pay runs out (the patient can also release it from their portal).`);
-    }
+      const refuse = (message) => {
+        const error = new Error(message);
+        error.statusCode = 409;
+        throw error;
+      };
 
-    // [1.158.0] A line on an HMO claim. The foreign key answered "This is still in use", for good,
-    // even once the HMO had refused: "my HMO said no, so I won't have that test" had no way through.
-    // A refusal is the one that may come off, and what it said goes on the Activity Log, because the
-    // claim line goes with it. Waiting or approved is the Admin's decision to change first.
-    const claims = await testRepository.findClaimsOnLines(ids);
-    const open = claims.find((c) => c.status !== 'Rejected');
-    if (open) {
-      refuse(open.status === 'Approved'
-        ? `${open.provider_name} approved ${open.test_name}, so it cannot be taken off here. If the patient no longer wants it, an Admin changes that decision on Service Requests first.`
-        : `${open.test_name} is waiting for ${open.provider_name}'s decision, so it cannot be taken off yet. An Admin records the HMO's answer on Service Requests first.`);
-    }
-    const refusedNote = claims.length
-      ? ` (refused by ${claims[0].provider_name}: ${claims[0].reason || 'no reason recorded'})`
-      : '';
+      if (line.visit_paid) {
+        refuse('This visit has already been paid, so its tests can no longer change: the patient holds a receipt for this bill.');
+      }
+      await assertNoProofWaiting(line.patient_visit_id, 'its tests');
+      if (line.has_result) {
+        refuse(`${line.test_name} already has a result recorded. A result is a clinical record and cannot be removed by taking the test off the visit.`);
+      }
+      if (line.status !== 'Pending') {
+        refuse(`${line.test_name} is already with the department (${line.status}), so it can no longer be taken off the visit.`);
+      }
 
-    const { removed, cards } = await db.withTransaction(async () => {
-      const cardFiles = await testRepository.removeClaimLines(ids);
-      const rows = await testRepository.deleteVisitTests(ids);
-      await auditService.log({
-        actorId: requestingUser?.userId,
-        action: 'visit_test.removed',
-        entityType: 'patient_visit',
-        entityId: line.patient_visit_id,
-        description: removedPackage
-          ? `Removed package ${removedPackage} (${rows.length} tests) from the visit${refusedNote}`
-          : `Removed ${line.test_name} from the visit${refusedNote}`,
-      });
-      return { removed: rows, cards: cardFiles };
+      // A bundle is removed whole. Every line in it must pass the same tests, or none moves.
+      let ids = [visitTestId];
+      let removedPackage = null;
+      if (line.package_id) {
+        const lines = await testRepository.findPackageLinesOnVisit(line.patient_visit_id, line.package_id);
+        const blocked = lines.find((l) => l.has_result || l.status !== 'Pending');
+        if (blocked) {
+          refuse(`${line.package_name || 'This package'} cannot be removed: ${blocked.test_name} is already ${blocked.has_result ? 'reported' : blocked.status.toLowerCase()}. A package is billed as one price, so it is removed as one thing.`);
+        }
+        ids = lines.map((l) => l.id);
+        removedPackage = line.package_name;
+      }
+
+      // [1.129.0] A visit is never left with nothing on it: an empty visit sat in the queue and at
+      // the till with nothing to do or pay for. To drop everything, cancel the visit or booking.
+      const removing = new Set(ids.map(Number));
+      const onVisit = await testRepository.findTestsByVisitId(line.patient_visit_id);
+      if (onVisit.filter((t) => !removing.has(Number(t.id)) && t.status !== 'Cancelled').length === 0) {
+        // [1.146.0] There is no cancel [1.131.0]: the old advice named a button that is gone.
+        refuse(`${removedPackage || line.test_name} is the only thing on this visit, and a visit needs at least one test. If the patient wants none of it, leave it unpaid: an unpaid walk-in is removed at the end of its day, and an unpaid booking when its time to pay runs out (the patient can also release it from their portal).`);
+      }
+
+      // [1.158.0] A line on an HMO claim. The foreign key answered "This is still in use", for good,
+      // even once the HMO had refused: "my HMO said no, so I won't have that test" had no way through.
+      // A refusal is the one that may come off, and what it said goes on the Activity Log, because the
+      // claim line goes with it. Waiting or approved is the Admin's decision to change first.
+      const claims = await testRepository.findClaimsOnLines(ids);
+      const open = claims.find((c) => c.status !== 'Rejected');
+      if (open) {
+        refuse(open.status === 'Approved'
+          ? `${open.provider_name} approved ${open.test_name}, so it cannot be taken off here. If the patient no longer wants it, an Admin changes that decision on Service Requests first.`
+          : `${open.test_name} is waiting for ${open.provider_name}'s decision, so it cannot be taken off yet. An Admin records the HMO's answer on Service Requests first.`);
+      }
+      const refusedNote = claims.length
+        ? ` (refused by ${claims[0].provider_name}: ${claims[0].reason || 'no reason recorded'})`
+        : '';
+
+      const done = await (async () => {
+        const cardFiles = await testRepository.removeClaimLines(ids);
+        const rows = await testRepository.deleteVisitTests(ids);
+        await auditService.log({
+          actorId: requestingUser?.userId,
+          action: 'visit_test.removed',
+          entityType: 'patient_visit',
+          entityId: line.patient_visit_id,
+          description: removedPackage
+            ? `Removed package ${removedPackage} (${rows.length} tests) from the visit${refusedNote}`
+            : `Removed ${line.test_name} from the visit${refusedNote}`,
+        });
+        return { removed: rows, cards: cardFiles, removedPackage };
+      })();
+      return done;
     });
     // After the commit: nothing refers to these now. A file left behind is only an orphan.
     for (const card of cards) {
@@ -360,6 +375,12 @@ class TestService {
 
   async addTestsToVisit(patientVisitId, testIds, requestingUser, packageIds = [], { confirmRepeatTests = false } = {}) {
     await assertClientOwnsVisit(requestingUser, patientVisitId);
+
+    // [1.169.0] Checked and written in one transaction, behind the visit's lock, which taking payment
+    // holds too: a test added while the cashier took payment went on after the bill was read, and the
+    // patient's receipt did not include it.
+    return await db.withTransaction(async () => {
+    await visitRepository.lockVisit(patientVisitId);
 
     // ── A settled visit takes no more work ──────────────────────────────────────────────────
     //
@@ -429,6 +450,7 @@ class TestService {
       // no loose tests, which for a package-only booking discarded the rows the line above had
       // just written and reported "0 test(s) added" for a visit carrying six.
       return await testRepository.findTestsByVisitId(patientVisitId);
+    });
     });
   }
 

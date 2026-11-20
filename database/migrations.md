@@ -1,5 +1,22 @@
 # Database Migration & Schema History
 
+## [1.169.0] - 2026-11-20 (Two people at the same moment)
+
+No schema. Steven: "check what ifs scenario like two people book the same time and many more". The suite already raced six things (two patients for a one-seat slot, two cashiers on one visit, two desks on one booking, one reference at two tills, two packages at once, one emailed code twice). `at-the-same-moment.spec.js` races 17 more, and eight came back wrong, each the same shape: a check read the record, a write followed later, and a second person's request passed between the two.
+
+| At the same moment | Before |
+|---|---|
+| The desk adds a test while the cashier takes payment | Both yes; a ₱190 receipt on a visit holding ₱440 of tests |
+| A discount is applied while the cashier takes payment | Both yes; the bill read ₱352 under a ₱440 receipt |
+| One Admin approves a claim while another refuses it | Both yes |
+| Two desks each take a different test off a two-test visit | The visit was left with none |
+| The patient releases a booking while the desk checks it in | Both yes; the booking was deleted under a ticket |
+| One cashier verifies a proof while another rejects it | Rejected, with a receipt issued on it |
+| The patient sends a proof while the cashier takes cash | A proof left waiting on a visit already paid |
+| The same new walk-in registered at two desks | Two records for one person |
+
+The fix is one rule: whatever changes a visit's bill, its tests, its booking or its money first takes the visit's row lock (`visitRepository.lockVisit`, `SELECT … FOR UPDATE`), and makes its checks and its writes in that one transaction, reading the record again once the lock is held. `paymentService.processPayment` (its checks used to run before its transaction), `testService.addTestsToVisit` / `removeTestFromVisit`, `discountService.applyToVisit` / `clearFromVisit`, `paymentSubmissionService.submit` / `verify` (the payment and the proof's settle are now one transaction) / `reject`, `hmoService.approveRequest` / `rejectRequest` / `updateTestApproval`, `appointmentService.releaseUnpaid` and the check-in in `updateStatus`. A new patient's duplicate check and the record it guards are one transaction under an advisory lock on the name and birthdate. The second of two now waits a few milliseconds and is refused in words (409) with what the first did. The nine that already held: two moves into a last seat, a move against a new booking, two cashiers verifying one proof, a refund pressed twice, an approval against a charge in full, two reports attached at once, Release pressed twice, six patients for two seats, a double-tapped Book.
+
 ## [1.168.0] - 2026-11-20 (Clearer wording, and real photos where a placeholder showed)
 
 No schema. Steven: the public site's picture showed its placeholder, and words like "open terminal" read as the system talking to itself. Everything the paper's User's Guide quotes stays exactly as printed; `tests/unit/paperLabels.test.js` now holds all 109 of those labels to the source, so a later rewording cannot quietly break the guide.

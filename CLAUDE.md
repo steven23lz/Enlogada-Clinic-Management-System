@@ -1172,6 +1172,12 @@ reader of the queue must too. When a booking was made stays in `appointments.cre
 booking, `patient_visits.created_at` now means arrival, so a wait measured from it leaves out a
 visit paid before it arrived (a booking paid from home). `booking-queue.spec.js` holds all of it.
 
+**Whatever changes a visit takes the visit's lock first.** `[1.169.0]` `visitRepository.lockVisit(visitId)` at the top
+of the transaction, then the checks, then the writes, reading the record again once the lock is held. Taking payment,
+adding or removing a test, a discount, a proof sent, verified or rejected, an HMO decision, releasing or checking in a
+booking all do. A check before the transaction and a write inside it is how eight races got through (migrations.md
+[1.169.0]); `at-the-same-moment.spec.js` fires each pair together. A new door that changes a visit does the same.
+
 **Numbers that must be unique** (queue tickets, receipt numbers) come from `daily_counters` via `INSERT … ON CONFLICT DO UPDATE … RETURNING`, never from `SELECT COUNT(*) + 1`. Counting rows is not a sequence: it races under concurrency, and it rewinds when a row is cancelled or refunded, reissuing a number already handed to a patient. Unique indexes back all three invariants. Core flow through the tables:
 
 `users` → `patients` (1:N via `user_id` — one account owns several profiles, e.g. a parent booking for dependents; `GET /patients/my-profiles` is plural for this reason, and ownership checks must compare per-patient rather than resolving a user to a single patient) → `patient_visits` (a clinic visit/queue entry) → `visit_tests` (tests attached to a visit, priced via `price_at_time`) → `test_results` (findings/file per visit_test, released by staff) and `payments` (billed against a visit). `appointments` link to a `patient_visit`. `hmo_requests` link a visit to an `hmo_providers` approval flow. `tests` belong to a `test_categories` row (Laboratory/Xray/Ultrasound, plus the retired 2D Echo/ECG that only history uses) and have an `is_active` flag that controls public visibility.

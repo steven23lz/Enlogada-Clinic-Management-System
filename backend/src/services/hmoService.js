@@ -439,31 +439,37 @@ class HmoService {
     }
     assertUndecided(request);
 
-    // Not on a visit already paid with tests still undecided. [1.123.0] Those tests were charged
-    // in full at the counter; approving now would bill the insurer for what the patient paid.
-    if (await paymentRepository.hasPaidPayment(request.patient_visit_id)) {
-      const tests = await hmoRepository.findTestsByRequestId(id);
-      if (tests.some((t) => t.approval_status === 'Pending')) {
-        const error = new Error(
-          'This visit was already paid in full at the counter, so this claim can no longer be approved: the insurer would be billed for tests the patient paid for.'
-        );
-        error.statusCode = 409;
-        throw error;
-      }
-    }
-
-    await assertNoProofWaiting(request.patient_visit_id, 'its HMO claims');
     const { approved, told, atOwnPrice } = await db.withTransaction(async () => {
-      const row = await hmoRepository.approveRequest(id, {
-        approvalCode,
-        decidedBy: requestingUser?.userId ?? null,
-      });
-      const priced = await packageService.repriceForHmo(request.patient_visit_id, requestingUser);
-      return {
-        approved: row,
-        atOwnPrice: priced.atOwnPrice,
-        told: await settleBookingAfterDecision(request.patient_visit_id, priced.atOwnPrice),
-      };
+        // [1.169.0] Decided behind the visit's lock, and the claim read again once it is held: one Admin
+        // approving while another refused the same claim both succeeded. Taking payment holds the
+        // same lock, so a decision and a payment at the same moment also take turns.
+        await visitRepository.lockVisit(request.patient_visit_id);
+        assertUndecided(await hmoRepository.findRequestById(id));
+
+      // Not on a visit already paid with tests still undecided. [1.123.0] Those tests were charged
+      // in full at the counter; approving now would bill the insurer for what the patient paid.
+      if (await paymentRepository.hasPaidPayment(request.patient_visit_id)) {
+        const tests = await hmoRepository.findTestsByRequestId(id);
+        if (tests.some((t) => t.approval_status === 'Pending')) {
+          const error = new Error(
+            'This visit was already paid in full at the counter, so this claim can no longer be approved: the insurer would be billed for tests the patient paid for.'
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
+      await assertNoProofWaiting(request.patient_visit_id, 'its HMO claims');
+        const row = await hmoRepository.approveRequest(id, {
+          approvalCode,
+          decidedBy: requestingUser?.userId ?? null,
+        });
+        const priced = await packageService.repriceForHmo(request.patient_visit_id, requestingUser);
+        return {
+          approved: row,
+          atOwnPrice: priced.atOwnPrice,
+          told: await settleBookingAfterDecision(request.patient_visit_id, priced.atOwnPrice),
+        };
     });
     tellPatientLater(told);
 
@@ -516,26 +522,32 @@ class HmoService {
       throw error;
     }
 
-    // [1.159.0] Refusing the claim would take back a test covered on a receipt already issued.
-    if (await paymentRepository.hasPaidPayment(request.patient_visit_id)) {
-      const lines = await hmoRepository.findTestsByRequestId(id);
-      if (lines.some((t) => t.approval_status === 'Approved')) {
-        const error = new Error('This visit has been paid, and its receipt was issued with this claim covering a test, so the claim can no longer be refused.');
-        error.statusCode = 409;
-        throw error;
-      }
-    }
-    await assertNoProofWaiting(request.patient_visit_id, 'its HMO claims');
     const { rejected, told } = await db.withTransaction(async () => {
-      const row = await hmoRepository.rejectRequest(id, {
-        decisionReason: reason,
-        decidedBy: requestingUser?.userId ?? null,
-      });
-      const priced = await packageService.repriceForHmo(request.patient_visit_id, requestingUser);
-      return {
-        rejected: row,
-        told: await settleBookingAfterDecision(request.patient_visit_id, priced.atOwnPrice),
-      };
+        // [1.169.0] Decided behind the visit's lock, and the claim read again once it is held: one Admin
+        // approving while another refused the same claim both succeeded. Taking payment holds the
+        // same lock, so a decision and a payment at the same moment also take turns.
+        await visitRepository.lockVisit(request.patient_visit_id);
+        assertUndecided(await hmoRepository.findRequestById(id));
+
+      // [1.159.0] Refusing the claim would take back a test covered on a receipt already issued.
+      if (await paymentRepository.hasPaidPayment(request.patient_visit_id)) {
+        const lines = await hmoRepository.findTestsByRequestId(id);
+        if (lines.some((t) => t.approval_status === 'Approved')) {
+          const error = new Error('This visit has been paid, and its receipt was issued with this claim covering a test, so the claim can no longer be refused.');
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+      await assertNoProofWaiting(request.patient_visit_id, 'its HMO claims');
+        const row = await hmoRepository.rejectRequest(id, {
+          decisionReason: reason,
+          decidedBy: requestingUser?.userId ?? null,
+        });
+        const priced = await packageService.repriceForHmo(request.patient_visit_id, requestingUser);
+        return {
+          rejected: row,
+          told: await settleBookingAfterDecision(request.patient_visit_id, priced.atOwnPrice),
+        };
     });
     tellPatientLater(told);
 
@@ -613,28 +625,31 @@ class HmoService {
     // A test the patient already paid for in full is not the insurer's to decide. [1.123.0]
     // [1.159.0] Nor a test already decided: refusing an approved one after payment left a receipt that
     // charged for it less than the bill now said, and the sales report ₱190 away from the cash taken.
-    const line = await hmoRepository.findRequestTestContext(hmoRequestTestId);
-    if (line && await paymentRepository.hasPaidPayment(line.patient_visit_id)) {
-      const error = new Error(
-        line.approval_status === 'Pending'
-          ? 'This test was already paid in full at the counter, so the HMO\'s decision no longer changes what anyone owes.'
-          : 'This visit has been paid, and its receipt was issued on this decision, so it can no longer change.'
-      );
-      error.statusCode = 409;
-      throw error;
-    }
-
-    if (line) await assertNoProofWaiting(line.patient_visit_id, 'its HMO claims');
+    const found = await hmoRepository.findRequestTestContext(hmoRequestTestId);
     const { updated, told } = await db.withTransaction(async () => {
-      const row = await hmoRepository.updateTestApprovalStatus(hmoRequestTestId, approvalStatus, {
-        // A reason on an approval would read as a caveat on cover the HMO did not attach; the field
-        // is cleared so the column holds refusals only, which is what anyone reading it expects.
-        decisionReason: approvalStatus === 'Rejected' ? reason : null,
-        decidedBy: requestingUser?.userId ?? null,
-      });
-      if (!row || !line) return { updated: row, told: null };
-      const priced = await packageService.repriceForHmo(line.patient_visit_id, requestingUser);
-      return { updated: row, told: await settleBookingAfterDecision(line.patient_visit_id, priced.atOwnPrice) };
+      // [1.169.0] Behind the visit's lock, as a whole claim's decision is, and read again once held.
+      if (found) await visitRepository.lockVisit(found.patient_visit_id);
+      const line = found ? await hmoRepository.findRequestTestContext(hmoRequestTestId) : null;
+      if (line && await paymentRepository.hasPaidPayment(line.patient_visit_id)) {
+        const error = new Error(
+          line.approval_status === 'Pending'
+            ? 'This test was already paid in full at the counter, so the HMO\'s decision no longer changes what anyone owes.'
+            : 'This visit has been paid, and its receipt was issued on this decision, so it can no longer change.'
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      if (line) await assertNoProofWaiting(line.patient_visit_id, 'its HMO claims');
+        const row = await hmoRepository.updateTestApprovalStatus(hmoRequestTestId, approvalStatus, {
+          // A reason on an approval would read as a caveat on cover the HMO did not attach; the field
+          // is cleared so the column holds refusals only, which is what anyone reading it expects.
+          decisionReason: approvalStatus === 'Rejected' ? reason : null,
+          decidedBy: requestingUser?.userId ?? null,
+        });
+        if (!row || !line) return { updated: row, told: null };
+        const priced = await packageService.repriceForHmo(line.patient_visit_id, requestingUser);
+        return { updated: row, told: await settleBookingAfterDecision(line.patient_visit_id, priced.atOwnPrice) };
     });
 
     if (!updated) {

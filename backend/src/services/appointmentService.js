@@ -767,22 +767,30 @@ class AppointmentService {
       throw error;
     };
     if (!Number.isInteger(id) || id <= 0) refuse(400, 'Invalid booking.');
-    const booking = await visitRepository.findUnpaidBooking({ appointmentId: id });
-    if (!booking) refuse(404, 'Booking not found.');
-    if (booking.user_id !== requestingUser?.userId) {
-      refuse(403, 'Access forbidden. This booking does not belong to your account.');
-    }
-    if (booking.paid) {
-      refuse(409, 'This booking is paid, so it stays yours. It can be moved to another time, but a payment is final.');
-    }
-    if (booking.appointment_status !== 'Pending') {
-      refuse(409, 'You have already checked in for this booking. Please speak to the front desk.');
-    }
-    if (booking.proof_waiting) {
-      refuse(409, 'Your payment for this booking is waiting to be checked by the clinic. If you do not want to go ahead, please call the clinic before it is confirmed.');
-    }
-    await unpaidExpiryService.removeNow(booking, { why: 'released_by_patient', actorId: requestingUser.userId });
-    return { reference: booking.appointment_reference, released: true };
+    const first = await visitRepository.findUnpaidBooking({ appointmentId: id });
+    if (!first) refuse(404, 'Booking not found.');
+    // [1.169.0] Checked and removed in one transaction, behind the visit's lock, and the booking read
+    // again once the lock is held: released while the desk checked it in, both answered yes and a
+    // patient standing at the desk with a ticket had their booking deleted.
+    return db.withTransaction(async () => {
+      await visitRepository.lockVisit(first.id);
+      const booking = await visitRepository.findUnpaidBooking({ appointmentId: id });
+      if (!booking) refuse(404, 'Booking not found.');
+      if (booking.user_id !== requestingUser?.userId) {
+        refuse(403, 'Access forbidden. This booking does not belong to your account.');
+      }
+      if (booking.paid) {
+        refuse(409, 'This booking is paid, so it stays yours. It can be moved to another time, but a payment is final.');
+      }
+      if (booking.appointment_status !== 'Pending') {
+        refuse(409, 'You have already checked in for this booking. Please speak to the front desk.');
+      }
+      if (booking.proof_waiting) {
+        refuse(409, 'Your payment for this booking is waiting to be checked by the clinic. If you do not want to go ahead, please call the clinic before it is confirmed.');
+      }
+      await unpaidExpiryService.removeNow(booking, { why: 'released_by_patient', actorId: requestingUser.userId });
+      return { reference: booking.appointment_reference, released: true };
+    });
   }
 
   async getClientBookings(userId) {
@@ -1091,6 +1099,9 @@ class AppointmentService {
     // appointment row.
     let joined = null;
     const updated = await db.withTransaction(async () => {
+      // [1.169.0] The visit's lock first, which releasing a booking holds too, so a check-in and a
+      // release at the same moment take turns and the second sees what the first did.
+      await visitRepository.lockVisit(appointment.patient_visit_id);
       const row = await appointmentRepository.updateAppointmentStatus(id, status, { expectedStatus: appointment.status });
       if (row && appointment.status !== 'Confirmed') {
         joined = await visitRepository.joinTodaysQueue(appointment.patient_visit_id);
