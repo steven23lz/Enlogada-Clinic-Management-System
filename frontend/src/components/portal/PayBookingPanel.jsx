@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Clock, AlertCircle, AlertTriangle, Upload, Copy, Check, QrCode, FileText, X, ScanLine, Download, ExternalLink } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -347,6 +347,15 @@ function FinalTestsCheck({ tests, amountDue, confirmed, onChange }) {
 
 export default function PayBookingPanel({ visitId, amountDue, tests = [], onSettled, onRefused }) {
   const pay = usePaymentSubmission(visitId, { onSettled, onRefused });
+  // [1.173.0] A refusal is said beside the button that was pressed, and brought into view. It sat at
+  // the top of the form, so on a phone, scrolled down to Send for verification, a missing reference
+  // or a dropped upload looked like a button that did nothing.
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (!pay.error || !errorRef.current) return;
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    errorRef.current.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+  }, [pay.error]);
   const [confirmed, setConfirmed] = useState(false);
   const selected = pay.methods.find((m) => String(m.id) === String(pay.methodId)) || pay.methods[0];
   // What goes into the banking app's amount box: digits, no peso sign or thousands separator.
@@ -503,13 +512,6 @@ export default function PayBookingPanel({ visitId, amountDue, tests = [], onSett
           )}
 
           <form onSubmit={pay.submit} className="space-y-2 border-t border-azure-200 pt-3">
-            {pay.error && (
-              <div role="alert" className="alert alert-error">
-                <AlertCircle />
-                <span>{pay.error}</span>
-              </div>
-            )}
-
             <div>
               <label htmlFor={`ref-${visitId}`} className="field-label">Reference number</label>
               <Input
@@ -544,6 +546,13 @@ export default function PayBookingPanel({ visitId, amountDue, tests = [], onSett
               <ProofPreview file={pay.proof} onClear={() => pay.chooseProof(null)} />
               <ScanAssist scanning={pay.scanning} scan={pay.scan} amountDue={amountDue} />
             </div>
+
+            {pay.error && (
+              <div ref={errorRef} role="alert" data-testid="pay-error" className="alert alert-error">
+                <AlertCircle />
+                <span>{pay.error}</span>
+              </div>
+            )}
 
             <Button type="submit" loading={pay.submitting} className="w-full">
               <Upload className="h-4 w-4" />

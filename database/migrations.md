@@ -1,5 +1,14 @@
 # Database Migration & Schema History
 
+## [1.173.0] - 2026-11-21 (On a real phone)
+
+No schema. Steven tried the patient side on his own Android phone, through VS Code's forwarded port, with his own Gmail. Signing up (the code arrived), adding a profile, booking, the booking and payment emails, choosing a GCash screenshot from the gallery and the reader getting its amount (₱439) all worked on the device.
+
+- **Send for verification looked like it did nothing.** Every refusal on the proof form (no reference number, an upload the connection dropped, a refusal from the clinic) was written at the TOP of the form, and on a phone the patient is at the bottom, on the button. Nothing reached the server and nothing on screen moved. The message now sits beside the button and is scrolled into view (`PayBookingPanel`, `data-testid="pay-error"`). The patient's profile form had the same shape, an error eight fields above Save, and has the same fix (`ProfileFormDialog`). The booking dialog already brought its error into view; Reschedule, Accept Record and Feedback already show theirs beside the button. `said-where-you-are.spec.js`, at 390 px, fails on the old panel.
+- **`npm run dev:tunnel`** serves the app to a phone through one forwarded port (5173, a `devtunnels.ms` address): the page calls `/api` on its own address (`.env.tunnel`, untracked: `VITE_API_BASE_URL=/api`) and Vite passes it to the backend on the PC, dropping the Origin header, so the backend needs no CORS entry for an address that changes with each tunnel. `vite.config.js` does this only in that mode; `npm run dev` is unchanged. Google sign-in refuses the tunnel's address: use email and password.
+
+A real GCash receipt is not to be edited into a proof for testing. A slip that is plainly a test (red "TEST ONLY" banners, an amount and a "Ref No." line) reads the same way and was used instead.
+
 ## [1.172.0] - 2026-11-20 (Eight checks before going online)
 
 No schema. Steven: "do everything", for eight checks I suggested: a full day's money, a security pass, time edges, phones and browsers, email, the notification bell on a busy day, a demo-day dry run, and going online. Three of them found something.

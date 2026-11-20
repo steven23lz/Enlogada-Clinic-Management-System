@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
@@ -39,6 +39,14 @@ export default function ProfileFormDialog({ profiles, mode }) {
   const set = (field) => (value) => setDraft({ ...draft, [field]: value });
   // [1.152.0] A report has gone out under this name, birthdate and sex. The server refuses too.
   const identityLocked = editing && Boolean(profiles.selected?.identity_locked);
+  // [1.173.0] The refusal is said beside Save and brought into view: at the top of eight fields it
+  // was out of sight on a phone, and Save looked like it did nothing.
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (!error || !errorRef.current) return;
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    errorRef.current.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+  }, [error]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -55,13 +63,6 @@ export default function ProfileFormDialog({ profiles, mode }) {
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-4 pt-2">
-          {error && (
-            <div role="alert" className="alert alert-error">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
           {identityLocked && (
             <p data-testid="identity-locked" className="m-0 rounded-lg border border-line bg-sunken p-2.5 text-fine leading-relaxed text-ink-soft">
               A report has been released under this name, so the name, birthdate and sex can only be
@@ -156,6 +157,13 @@ export default function ProfileFormDialog({ profiles, mode }) {
               disabled={busy}
             />
           </div>
+
+          {error && (
+            <div ref={errorRef} role="alert" className="alert alert-error">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 border-t border-line pt-3">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>

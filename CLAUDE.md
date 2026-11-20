@@ -38,6 +38,9 @@ npm run dev:lan           # the same, reachable from a phone on the Wi-Fi. Needs
                           # (VITE_API_BASE_URL=http://<PC's IP>:5000/api) and that page address in
                           # backend CORS_ORIGINS; both are local, untracked. Google sign-in does not
                           # work from an IP address — use email and password on the phone.
+npm run dev:tunnel        # the same, for a phone through VS Code's forwarded port 5173 (devtunnels.ms): one port,
+                          # /api passed to the backend by Vite. Needs frontend/.env.tunnel (VITE_API_BASE_URL=/api),
+                          # local and untracked. Port visibility Public; email and password, not Google. [1.173.0]
 npm run build
 npm run lint              # oxlint
 npm run preview
@@ -1356,6 +1359,7 @@ with a link to the printable document.
   new slot, the decision. A bare "Saved" on a list of forty records confirms nothing. Skip it where
   better feedback already exists (`BookingDialog` shows a reference code, `WalkInRegistration`
   prints the queue ticket) — a toast on top of those is noise.
+- **A refusal is said beside the button that was pressed.** `[1.173.0]` On a phone the person is at the bottom of a long form, so an error at its top reads as a button that did nothing. Put the alert just above the submit and scroll it into view on change (`PayBookingPanel`, `ProfileFormDialog`, `BookingDialog`). `said-where-you-are.spec.js`.
 - **A request with no reply may have worked.** `[1.171.0]` When a save gets no answer (`!err.response`), the
   clinic may have done it before the connection dropped. Never say it failed or that "nothing was changed": read
   the record back and show what the clinic holds (the till's receipt, the proof as sent, the released report, the

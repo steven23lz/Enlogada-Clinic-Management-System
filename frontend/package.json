@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:lan": "vite --mode lan --host",
+    "dev:tunnel": "vite --mode tunnel",
     "build": "vite build",
     "lint": "oxlint && node scripts/checkFillRoles.js && node scripts/checkContrast.js",
     "preview": "vite preview",
