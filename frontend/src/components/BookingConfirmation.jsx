@@ -79,7 +79,7 @@ const BookingConfirmation = ({
         </div>
       )}
 
-      <div className="print-area space-y-4 rounded-2xl border border-line bg-surface p-5 text-center">
+      <div className="print-area space-y-4 rounded-2xl border border-line bg-surface p-5 text-center max-sm:rounded-none max-sm:border-0 max-sm:p-0">
         <div className="space-y-0.5">
           <h3 className="m-0 text-sm font-extrabold uppercase tracking-wide text-slate-900">
             Enlogada Ultrasound &amp; Diagnostic Clinic
@@ -147,7 +147,7 @@ const BookingConfirmation = ({
             `no-print`: a QR to scan and a file picker are meaningless on paper. The sentence above
             stays printable, so a printed confirmation still says where to pay. */}
         {awaitingPayment && visitId && (
-          <div className="no-print">
+          <div className="no-print max-sm:text-left">
             <PayBookingPanel
               visitId={visitId}
               amountDue={owed}
@@ -158,7 +158,7 @@ const BookingConfirmation = ({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 border-t border-line pt-3">
+        <div className="grid grid-cols-2 gap-3 border-t border-line pt-3 max-sm:grid-cols-1">
           <div className="space-y-0.5">
             <span className="field-label">Reference Code</span>
             <DataBadge variant="reference" label="Reference code" copyable>{referenceCode}</DataBadge>

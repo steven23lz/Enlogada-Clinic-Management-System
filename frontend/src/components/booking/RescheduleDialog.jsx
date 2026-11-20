@@ -208,11 +208,11 @@ const RescheduleDialog = ({ open, onOpenChange, appointment, onRescheduled, onGo
             Your reference code and booking pass stay the same — only the date and time change.
           </p>
 
-          <div className="flex justify-end gap-2 border-t border-line pt-3">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+          <div className="flex justify-end gap-2 border-t border-line pt-3 max-sm:flex-col-reverse">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting} className="max-sm:w-full">
               Keep current time
             </Button>
-            <Button type="submit" loading={submitting} disabled={!time || unchanged || !reason}>
+            <Button type="submit" loading={submitting} disabled={!time || unchanged || !reason} className="max-sm:w-full">
               Confirm new time
             </Button>
           </div>

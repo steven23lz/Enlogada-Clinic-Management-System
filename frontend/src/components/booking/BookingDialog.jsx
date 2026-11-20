@@ -570,8 +570,8 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
                               <Button type="button" variant="outline" onClick={() => setBookingStep(1)}>
                                 &larr; Back
                               </Button>
-                              <Button type="submit" disabled={isBooking} className="font-bold">
-                                {isBooking ? 'Submitting…' : 'Submit Schedule Request'}
+                              <Button type="submit" loading={isBooking} className="font-bold">
+                                Submit Schedule Request
                               </Button>
                             </div>
                           </div>

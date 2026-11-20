@@ -220,7 +220,7 @@ const SlotPicker = ({
                   <span>{note}</span>
                 </div>
               )}
-              <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto p-0.5">
+              <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto p-0.5 max-sm:grid max-sm:max-h-none max-sm:grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] max-sm:gap-2 max-sm:overflow-visible">
                 {slots.map((slot) => {
                   const isHeldByUs = date === currentDate && slot.time === currentTime;
                   const selected = time === slot.time;
@@ -237,7 +237,7 @@ const SlotPicker = ({
                       onClick={() => onTimeChange(slot.time)}
                       aria-pressed={selected}
                       title={isHeldByUs ? 'Your current appointment time' : undefined}
-                      className={`cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${
+                      className={`cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-bold transition-all max-sm:py-2.5 ${
                         selected
                           ? 'border-primary bg-primary text-primary-foreground'
                           : isHeldByUs
