@@ -117,7 +117,7 @@ export default function OnlinePaymentsPanel({ review }) {
                         </p>
                       </div>
 
-                      <div className="flex flex-shrink-0 items-center gap-4 text-right">
+                      <div className="flex flex-shrink-0 items-center gap-4 text-right max-sm:min-w-0 max-sm:flex-shrink max-sm:flex-wrap">
                         <span>
                           <span className="block text-micro font-semibold uppercase tracking-[0.1em] text-slate-400">
                             Patient says
@@ -230,7 +230,7 @@ export default function OnlinePaymentsPanel({ review }) {
                       </span>
                     )}
                   </span>
-                  <span className="flex flex-shrink-0 items-center gap-2.5">
+                  <span className="flex flex-shrink-0 items-center gap-2.5 max-sm:min-w-0 max-sm:flex-shrink max-sm:flex-wrap">
                     {s.receipt_number && (
                       <span className="font-mono text-fine text-slate-500">{s.receipt_number}</span>
                     )}

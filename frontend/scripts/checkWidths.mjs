@@ -7,7 +7,8 @@
  * anything that makes the page scroll sideways or is clipped by its container. A dialog clips rather
  * than scrolls, so the page-level check in mobile-patient.spec.js cannot see a button cut in half
  * inside one: "Keep current time" was. "scrolls (intended)" marks a container meant to scroll sideways.
- * Takes about ten minutes; not part of `npm test`.
+ * Takes about ten minutes; not part of `npm test`. `WIDTHS=393 FONT=130` checks one width at a larger
+ * text size, as a phone's own font-size setting makes it.
  */
 import pw from 'playwright';
 const { chromium } = pw;
@@ -72,6 +73,13 @@ async function signIn(page, email) {
 const b = await chromium.launch();
 for (const scheme of ['light', 'dark']) {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: scheme });
+  // FONT=130: the phone's own font-size setting, which Android Chrome applies to the whole page.
+  if (process.env.FONT && process.env.FONT !== '100') {
+    await ctx.addInitScript((pct) => {
+      const put = () => { const st = document.createElement('style'); st.textContent = `html{font-size:${pct}% !important}`; document.head.appendChild(st); };
+      if (document.head) put(); else document.addEventListener('DOMContentLoaded', put);
+    }, process.env.FONT);
+  }
   const page = await ctx.newPage();
   page.setDefaultTimeout(8000);
   // Public pages.
