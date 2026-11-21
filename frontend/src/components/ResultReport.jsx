@@ -41,18 +41,23 @@ function Letterhead({ clinic, title }) {
   );
 }
 
-/** One label and value in the patient block. Declared outside it, so it is one component type. */
+/**
+ * One label and value in the patient block. Declared outside it, so it is one component type.
+ * [1.173.0] On a phone the value wraps instead of ending in "…": two columns at 393 px cut the
+ * patient's own name to "Elena Cabre…" on their own report. One column there; from 640 px up, as it
+ * always was.
+ */
 const Row = ({ label, value }) => (
   <div className="flex gap-1.5">
-    <span className="font-bold text-slate-700">{label}</span>
-    <span className="min-w-0 flex-1 truncate text-slate-900">{value || ''}</span>
+    <span className="flex-shrink-0 font-bold text-slate-700">{label}</span>
+    <span className="min-w-0 flex-1 text-slate-900 [overflow-wrap:anywhere] sm:truncate">{value || ''}</span>
   </div>
 );
 
 /** Name / Birthday / Sex on the left, Date / Patient Type / Physician on the right. */
 function PatientBlock({ result, name }) {
   return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 border-b border-slate-400 py-2 text-fine">
+    <div className="grid grid-cols-1 gap-x-6 gap-y-0.5 border-b border-slate-400 py-2 text-fine sm:grid-cols-2">
       <Row label="Name:" value={name} />
       <Row label="Date:" value={result.released_at ? formatDate(result.released_at) : formatDate(result.visit_date)} />
       <Row label="Birthday:" value={result.birthdate ? formatDate(result.birthdate) : ''} />

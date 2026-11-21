@@ -153,6 +153,9 @@ export function attentionItems({
       detail: 'A booking belongs to a patient: you, or someone in your family.',
       action: 'Add a profile',
       tab: 'profile',
+      // [1.173.0] The button opens the form, on the Profile tab, rather than only the tab: a new
+      // patient tapped "Add a profile", found a second "Add a profile", and had to tap again.
+      addProfile: true,
     }];
   }
   // Everything below is read from the bookings. When they did not load, that is the one thing

@@ -114,7 +114,7 @@ export default function PersonalDetailsPanel() {
               {isPatient ? (
                 <p className="m-0 mt-1 flex flex-wrap items-center gap-x-2 text-fine text-slate-500">
                   <span>This is how you sign in.</span>
-                  <Button type="button" variant="link" size="sm" className="h-auto p-0 text-fine" onClick={() => setChangingEmail(true)}>
+                  <Button type="button" variant="link" size="sm" className="h-auto p-0 text-fine max-sm:min-h-6" onClick={() => setChangingEmail(true)}>
                     Change email
                   </Button>
                 </p>

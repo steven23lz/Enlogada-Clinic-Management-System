@@ -30,8 +30,9 @@ const SearchInput = React.forwardRef(({ className, containerClassName, ...props 
           // Matches Input's geometry exactly (h-9, rounded-lg, 13px) so a search box and a date
           // field sitting in the same toolbar line up on both edges. They previously differed by
           // 6px of height and 4px of radius, which is enough to make a filter row look assembled
-          // rather than designed.
-          "h-9 w-full rounded-lg border border-slate-200 bg-surface pl-9 pr-3 text-note text-slate-900 transition-colors placeholder:text-slate-400 hover:border-slate-300 focus-visible:border-brand-400 disabled:cursor-not-allowed disabled:opacity-50",
+          // rather than designed. [1.173.0] And like Input, 16px below md: under 16px an iPhone zooms
+          // the whole page in when the box is tapped, and leaves it zoomed.
+          "h-9 w-full rounded-lg border border-slate-200 bg-surface pl-9 pr-3 text-base md:text-note text-slate-900 transition-colors placeholder:text-slate-400 hover:border-slate-300 focus-visible:border-brand-400 disabled:cursor-not-allowed disabled:opacity-50",
           className
         )}
         ref={ref}

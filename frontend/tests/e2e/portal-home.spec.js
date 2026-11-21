@@ -121,16 +121,14 @@ test('a new account adds its first patient from Profile, and the chip then shows
   await ctx.dispose();
   await signIn(page, email, PASSWORD);
 
-  // Home asks for a profile before anything else, and its button opens Profile.
+  // Home asks for a profile before anything else, and its button opens the form, on Profile.
+  // [1.173.0] It used to open only the tab, where the patient had to find "Add a profile" again.
   const need = page.locator('[data-testid="portal-need"][data-need="no-profile"]');
   await expect(need).toBeVisible({ timeout: 20000 });
   await need.getByRole('button', { name: 'Add a profile' }).click();
-  await expect(page.getByRole('tab', { name: PORTAL_TABS.profile, exact: true })).toHaveAttribute('aria-selected', 'true');
-
   // One form for adding and for correcting a profile (ProfileFormDialog). [1.82.0]
-  await page.getByTestId('portal-family').getByRole('button', { name: 'Add a profile' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
+  await expect(dialog, 'the form, not just the tab').toBeVisible();
   await dialog.getByLabel('First name').fill(person.firstName);
   await dialog.getByLabel('Last name').fill(person.lastName);
   await dialog.locator('#add-profile-birthdate').fill('1992-03-14');
@@ -138,6 +136,8 @@ test('a new account adds its first patient from Profile, and the chip then shows
   await dialog.getByRole('button', { name: 'Save profile' }).click();
 
   await expect(dialog).toBeHidden({ timeout: 15000 });
+  // Behind the form, the Profile tab, where the new profile is listed.
+  await expect(page.getByRole('tab', { name: PORTAL_TABS.profile, exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByTestId('portal-family')).toContainText(`${person.firstName} ${person.lastName}`);
   await expect(page.getByRole('combobox', { name: 'Active patient profile' })).toContainText(person.firstName);
 });

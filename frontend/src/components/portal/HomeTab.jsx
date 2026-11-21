@@ -53,7 +53,7 @@ function SummaryTile({ tile, label, icon: Icon, value, caption, onClick }) {
  * `bookButton` is the dashboard's one booking dialog, so Home and Appointments offer the same one.
  */
 export default function HomeTab({
-  profiles, results, bookings, payments, onOpenTab, refresh, bookButton, feedback = [], onRate,
+  profiles, results, bookings, payments, onOpenTab, onAddProfile, refresh, bookButton, feedback = [], onRate,
   invitations = null, onAcceptInvitation,
 }) {
   const { user } = useAuth();
@@ -176,6 +176,7 @@ export default function HomeTab({
                           onClick={() => {
                             if (need.acceptInvitation) onAcceptInvitation?.(need.acceptInvitation);
                             else if (need.feedbackVisit) onRate?.(need.feedbackVisit);
+                            else if (need.addProfile && onAddProfile) onAddProfile();
                             else onOpenTab(need.tab);
                           }}
                         >

@@ -197,7 +197,7 @@ const PatientEditDialog = ({ open, onOpenChange, patient, patientTypes = [], onS
 
           <div className="space-y-1">
             <label htmlFor="patienteditdialog-contact-number" className="field-label">Contact Number</label>
-            <Input id="patienteditdialog-contact-number" value={form.contactNumber} disabled={saving} onChange={(e) => set('contactNumber')(e.target.value)} placeholder="09171234567" />
+            <Input id="patienteditdialog-contact-number" type="tel" inputMode="tel" value={form.contactNumber} disabled={saving} onChange={(e) => set('contactNumber')(e.target.value)} placeholder="09171234567" />
           </div>
 
           <div className="space-y-1">

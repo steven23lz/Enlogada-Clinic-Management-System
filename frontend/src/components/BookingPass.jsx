@@ -216,7 +216,7 @@ const BookingPass = ({
             <button
               type="button"
               onClick={() => window.open(`?receipt=${encodeURIComponent(receiptNumber)}`, '_blank', 'noopener')}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent p-0 text-micro font-semibold text-azure-700 underline underline-offset-2 hover:text-azure-800"
+              className="inline-flex cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent p-0 max-sm:min-h-6 text-micro font-semibold text-azure-700 underline underline-offset-2 hover:text-azure-800"
             >
               <ExternalLink className="h-3 w-3" aria-hidden="true" />
               View / print receipt

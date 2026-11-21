@@ -83,7 +83,7 @@ export default function PaymentsTab({ payments }) {
                           href={`?receipt=${encodeURIComponent(pay.receipt_number)}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 font-mono font-semibold text-azure-700 underline underline-offset-2 hover:text-azure-800"
+                          className="inline-flex items-center gap-1 font-mono font-semibold text-azure-700 max-sm:min-h-6 underline underline-offset-2 hover:text-azure-800"
                         >
                           {pay.receipt_number}
                           <ExternalLink className="h-3 w-3" aria-hidden="true" />

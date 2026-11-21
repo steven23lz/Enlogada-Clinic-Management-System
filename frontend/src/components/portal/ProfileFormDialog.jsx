@@ -135,6 +135,10 @@ export default function ProfileFormDialog({ profiles, mode }) {
               <label htmlFor={id('contact-number')} className="field-label">Contact number</label>
               <Input
                 id={id('contact-number')}
+                // [1.173.0] The number pad on a phone, as sign-up and My Account already open.
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 placeholder="09171234567"
                 value={draft.contactNumber}
                 onChange={(e) => set('contactNumber')(e.target.value)}

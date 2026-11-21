@@ -169,8 +169,12 @@ const TestPicker = ({
   // is unchanged. Each piece below is `phone(...)`, which adds its classes only for the patient.
   const phone = (cls) => (audience === 'patient' ? cls : '');
 
+  // [1.173.0] On a phone the total bar is pinned, and the preparation note came after it: scrolled to
+  // the end, "Before your visit" sat below Next, the button a patient taps before reading on. There
+  // the note is ordered above the bar; the desktop order is unchanged.
+  const pinned = !!footerAction && audience === 'patient';
   return (
-    <div className="space-y-2">
+    <div className={pinned ? 'space-y-2 max-sm:flex max-sm:flex-col max-sm:gap-2 max-sm:space-y-0' : 'space-y-2'}>
       {/* Only once the catalogue is long enough that scanning it is work. */}
       {tests.length > 8 && (
         <SearchInput
@@ -384,7 +388,7 @@ const TestPicker = ({
           discovering the number at the till. */}
       {/* [1.167.0] On the patient's phone the total is pinned to the bottom of the screen, with
           the button that moves on beside it, so neither is under the whole catalogue. */}
-      <div className={`flex items-center justify-between rounded-lg bg-sunken px-3 py-2 ${footerAction ? phone('max-sm:sticky max-sm:-bottom-4 max-sm:z-10 max-sm:-mx-4 max-sm:flex-wrap max-sm:gap-x-3 max-sm:gap-y-2.5 max-sm:rounded-none max-sm:border-t max-sm:border-line max-sm:bg-surface max-sm:px-4 max-sm:py-3') : ''}`}>
+      <div className={`flex items-center justify-between rounded-lg bg-sunken px-3 py-2 ${pinned ? 'max-sm:order-2' : ''} ${footerAction ? phone('max-sm:sticky max-sm:-bottom-4 max-sm:z-10 max-sm:-mx-4 max-sm:flex-wrap max-sm:gap-x-3 max-sm:gap-y-2.5 max-sm:rounded-none max-sm:border-t max-sm:border-line max-sm:bg-surface max-sm:px-4 max-sm:py-3') : ''}`}>
         <span className="text-fine font-medium text-slate-500">
           {billable.length === 0 && selectedPackages.length === 0
             ? 'Nothing selected'
@@ -405,7 +409,7 @@ const TestPicker = ({
           fasting" lands far better than the same sentence in an email; in the portal the patient
           reads it themselves, so it is addressed to them. [1.80.0] */}
       {preparation.length > 0 && (
-        <div className="space-y-1 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-inset ring-amber-200">
+        <div className={`space-y-1 rounded-lg bg-amber-50 px-3 py-2 ring-1 ring-inset ring-amber-200 ${pinned ? 'max-sm:order-1' : ''}`}>
           <p className="m-0 flex items-center gap-1.5 text-fine font-semibold text-amber-900">
             <AlertTriangle className="h-3 w-3 flex-shrink-0" />
             {audience === 'patient' ? 'Before your visit' : 'Tell the patient before they leave'}

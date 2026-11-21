@@ -179,6 +179,7 @@ const ClientDashboard = ({ onNavigate, tab = 'home', onTabChange }) => {
           bookings={bookings}
           payments={payments}
           onOpenTab={onTabChange}
+          onAddProfile={() => { profiles.openAdd(true); onTabChange('profile'); }}
           refresh={refresh}
           bookButton={bookButton}
           feedback={feedback.visits}

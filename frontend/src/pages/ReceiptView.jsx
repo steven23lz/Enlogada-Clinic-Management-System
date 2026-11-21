@@ -64,7 +64,9 @@ export default function ReceiptView({ receiptNumber, onClose }) {
   const print = () => printElement(null, 'printing-receipt');
 
   return (
-    <div className="min-h-screen bg-slate-100 py-6">
+    // [1.173.0] px-4: at a phone's large text size the 22rem column is the whole screen, and the
+    // receipt and Print button touched both edges.
+    <div className="min-h-screen bg-slate-100 px-4 py-6">
       {/* no-print: the print rule reveals every descendant of .print-area, and hides everything
           else — but this toolbar sits OUTSIDE it, so it is marked anyway. Cheap insurance against
           the exact defect this component's ancestor shipped with, where the Print button printed

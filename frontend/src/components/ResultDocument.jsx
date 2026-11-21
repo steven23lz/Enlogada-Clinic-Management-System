@@ -212,9 +212,11 @@ const ResultDocument = ({
             ) : (
               <EmptyState
                 icon={FileText}
-                title="This browser can't display PDFs inline"
+                // [1.173.0] Every patient's copy is a PDF, and a phone's browser cannot show one
+                // inside a page, so on a phone this is what every patient sees. Said plainly.
+                title={isPatient ? 'Your report is ready to open' : "This browser can't display PDFs inline"}
                 description={isPatient
-                  ? 'The report loaded fine — your browser just has no built-in PDF viewer. Open it in a new tab to read it.'
+                  ? 'Your browser shows PDF reports on a page of their own. Tap Open in new tab to read it, then come back to this tab.'
                   : 'The report loaded fine — your browser just has no built-in PDF viewer. Open it in a new tab or download it.'}
                 action={
                   <div className="flex gap-2">

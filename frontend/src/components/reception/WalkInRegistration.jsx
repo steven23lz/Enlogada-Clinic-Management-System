@@ -368,6 +368,8 @@ const WalkInRegistration = ({ patientTypes, testCatalog, packages = [], onRegist
                       <label className="field-label" htmlFor="wi-contact">Contact Number</label>
                       <Input
                         id="wi-contact"
+                        type="tel"
+                        inputMode="tel"
                         placeholder="09171234567"
                         value={newPatient.contactNumber}
                         onChange={e => setNewPatient({...newPatient, contactNumber: e.target.value})}
