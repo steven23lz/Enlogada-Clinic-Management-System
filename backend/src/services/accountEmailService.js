@@ -229,6 +229,28 @@ class AccountEmailService {
     });
   }
 
+  /**
+   * Someone started a sign-up with an address that already has an account. [1.173.0] The page tells
+   * them a code was sent, as it tells everyone, so it cannot be used to find out who is a patient
+   * here; the owner of the address hears what happened instead, and how to get in.
+   */
+  sendAccountExists({ to, firstName }) {
+    return sendEmail({
+      to,
+      subject: `You already have a ${clinicName()} account`,
+      html: frame(`
+        ${greeting(firstName)}
+        <p style="margin:0 0 12px;">
+          Someone just tried to create a new account with this email address. You already have one, so no
+          new account was made and no code was sent.
+        </p>
+        <p style="margin:0;color:#475569;">
+          If it was you, sign in with this address, or choose "Forgot password" on the sign-in page to set a
+          new password. If it was not you, you can ignore this email: your account is unchanged.
+        </p>`),
+    });
+  }
+
   sendPasswordChanged({ to, firstName }) {
     const contact = [env.CLINIC_PHONE, env.CLINIC_EMAIL].filter(Boolean).map(escapeHtml).join(' or ');
     return sendEmail({

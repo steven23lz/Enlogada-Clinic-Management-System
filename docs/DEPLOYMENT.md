@@ -19,7 +19,8 @@ staff need internet to work. There is no offline mode: if the internet is down, 
 
 | Setting | Value |
 |---|---|
-| `NODE_ENV` | `production` |
+| `NODE_ENV` | `production`. The server assumes it when unset, and only `npm run dev` says `development`: strict sign-in and code limits, no stack traces or internal error messages |
+| `DATABASE_SSL` | optional. `true` or `false`; unset, production connects with SSL. A server beside a local PostgreSQL usually needs `false` |
 | `DATABASE_URL` | the clinic's database |
 | `JWT_SECRET` | `openssl rand -hex 32`, never reused |
 | `FRONTEND_URL` | the public website address, with `https://`. Every report's QR code points here |
@@ -35,6 +36,17 @@ The website needs `VITE_API_BASE_URL` and `VITE_GOOGLE_CLIENT_ID` set **before**
 setting them later does nothing. Add the public address to the Google sign-in client's allowed origins.
 
 The server says at start-up what it thinks is missing. Read that log once after the first deploy.
+
+**The website's host should send a Content-Security-Policy header.** The API sets its own security
+headers (helmet); the pages are served by whoever hosts the built `frontend/dist`, and only that host
+can add this one. It limits where scripts may come from, so even a script slipped into a page could
+not run or send the sign-in token anywhere. A starting point, with the API's address filled in:
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; frame-src https://accounts.google.com; connect-src 'self' https://<api-address> https://accounts.google.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; object-src 'self' blob:; base-uri 'self'; frame-ancestors 'none'
+```
+
+Open every screen once after adding it, with the browser's console open: a refused resource is named there.
 
 ## First deploy
 

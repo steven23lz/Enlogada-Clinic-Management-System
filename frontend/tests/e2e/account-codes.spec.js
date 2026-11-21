@@ -99,13 +99,27 @@ test.describe('Sign-up needs the emailed code', () => {
     expect((await verify(second, TEST_CODE)).status()).toBe(201);
   });
 
-  test('an address that already has an account is told to sign in, whatever the capitals', async () => {
+  // [1.173.0] It used to answer 409 "an account already uses this email", which let anyone find out
+  // whether a person is a patient of the clinic, one request per address. Now it answers as a new
+  // address does; the owner is emailed instead of sent a code, and nothing about the account changes.
+  test('an address that already has an account is answered as a new one is, and nothing changes', async () => {
     const email = address('taken');
     await registerClient(api, { ...fixturePerson(), email, password: PASSWORD });
+    const fresh = await start(address('fresh'));
 
     const res = await start(email.toUpperCase());
-    expect(res.status()).toBe(409);
-    expect((await res.json()).message).toMatch(/sign in/i);
+    expect(res.status(), 'the same answer as a new address').toBe(fresh.status());
+    const body = (await res.json());
+    expect(Object.keys(body.data).sort()).toEqual(Object.keys((await fresh.json()).data).sort());
+    expect(body.message).toMatch(/sent a 6-digit code/i);
+
+    // Even the right code, which only this test can know, makes no second account and no new password.
+    setAuthCode(email, 'signup');
+    expect((await verify(body.data.ticket, TEST_CODE)).status()).toBeGreaterThanOrEqual(400);
+    const signIn = await api.post(`${API}/auth/login`, { data: { email, password: PASSWORD } });
+    expect(signIn.status(), 'the original password still works').toBe(200);
+    const other = await api.post(`${API}/auth/login`, { data: { email, password: 'Different123!x' } });
+    expect(other.status()).toBe(401);
   });
 
   test('a new code can be sent after the wait, and it replaces the old one', async () => {

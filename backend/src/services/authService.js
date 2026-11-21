@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { createPhantomLockout } = require('../utils/phantomLockout');
 const fs = require('fs');
 const path = require('path');
 const userRepository = require('../repositories/userRepository');
@@ -46,6 +47,14 @@ const {
 // expires on its own, with no one needed to clear it.
 const FAILED_LOGIN_THRESHOLD = 10;
 const LOCK_DURATION_MINUTES = 15;
+
+// [1.173.0] An address with no account answers as an account does: the same lockout
+// (utils/phantomLockout.js) and the same bcrypt work, against a hash of nothing anyone knows, so
+// neither the message nor the time taken says whether that person has an account here.
+const phantomLockout = createPhantomLockout({ threshold: FAILED_LOGIN_THRESHOLD, lockMinutes: LOCK_DURATION_MINUTES });
+const NO_ACCOUNT_HASH = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 10);
+const lockedMessage = (minutesLeft) =>
+  `Too many failed sign-in attempts. This account is locked for another ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`;
 
 // Keyed from JWT_SECRET, so a copy of the database alone cannot turn a stored code hash back into
 // its six digits by trying all million. See utils/authCodes.js.
@@ -205,7 +214,6 @@ class AuthService {
    *
    * @returns {Promise<{ticket: string, email: string, expiresInSeconds: number, resendAfterSeconds: number}>}
    *   `ticket` is for the browser that asked: finishing needs it AND the code from the email.
-   * @throws {ConflictError} An account already uses the address (409).
    * @throws {ServiceUnavailableError} Email is not configured, so the code could not be sent (503).
    */
   async startSignup({ firstName, lastName, email, password, contactNumber }) {
@@ -218,14 +226,16 @@ class AuthService {
     if (first.length > 100 || last.length > 100) throw new ValidationError('A name can be at most 100 characters.');
     if (contact.length > 20) throw new ValidationError('That contact number is too long.');
 
-    // Says the account exists. The lockout message already does too (see login), and a person who
-    // forgot they signed up is far better told to sign in than sent a code that cannot help them.
-    if (await userRepository.findByEmail(address)) {
-      throw new ConflictError('An account already uses this email. Sign in, or reset your password if you have forgotten it.');
-    }
     if ((await authCodeRepository.countIssuedSince('signup', address, 60)) >= MAX_CODES_PER_EMAIL_PER_HOUR) {
       throw new AppError('Several sign-ups were started for this email in the last hour. Please wait a while, then try again.', 429);
     }
+    // [1.173.0] An address that already has an account is answered exactly as a new one is: a ticket
+    // and "we sent a code". Saying "an account already uses this email" let anyone find out whether a
+    // person is a patient of this clinic, one request per address. No code is sent for it; the owner
+    // is emailed that someone tried, and how to sign in or reset (accountEmailService.sendAccountExists).
+    // Same work on both paths (the hash, the row, the email), so the time taken does not tell either.
+    // A code for it can only be guessed, and completeSignup refuses an address that has an account.
+    const existing = await userRepository.findByEmail(address);
 
     // Outside any transaction: bcrypt is ~100ms of CPU and must not hold a pooled connection.
     const passwordHash = await bcrypt.hash(password, await bcrypt.genSalt(10));
@@ -245,7 +255,9 @@ class AuthService {
       ttlMinutes: CODE_TTL_MINUTES,
     });
 
-    const sent = await accountEmailService.sendSignupCode({ to: address, firstName: first, code });
+    const sent = existing
+      ? await accountEmailService.sendAccountExists({ to: address, firstName: existing.first_name })
+      : await accountEmailService.sendSignupCode({ to: address, firstName: first, code });
     try {
       assertDelivered(sent);
     } catch (err) {
@@ -354,7 +366,11 @@ class AuthService {
     if (!reissued) return generic;
 
     if (isSignup) {
-      assertDelivered(await accountEmailService.sendSignupCode({ to: row.email, firstName: row.first_name, code }));
+      // [1.173.0] A sign-up for an address that has an account resends the notice, never a code.
+      const owner = await userRepository.findByEmail(row.email);
+      assertDelivered(await (owner
+        ? accountEmailService.sendAccountExists({ to: row.email, firstName: owner.first_name })
+        : accountEmailService.sendSignupCode({ to: row.email, firstName: row.first_name, code })));
     } else if (row.purpose === 'email_verify') {
       const account = await userRepository.findById(row.user_id);
       assertDelivered(await accountEmailService.sendEmailCheckCode({ to: row.email, firstName: account?.first_name, code }));
@@ -382,8 +398,17 @@ class AuthService {
    */
   async login({ email, password }) {
     // 1. Find user by email, whatever capitals it was typed with.
-    const user = await userRepository.findByEmail(canonicalEmail(email));
+    const address = canonicalEmail(email);
+    const user = await userRepository.findByEmail(address);
     if (!user || !user.status) {
+      const minutesLeft = phantomLockout.lockedMinutes(address);
+      if (minutesLeft) {
+        const locked = new Error(lockedMessage(minutesLeft));
+        locked.statusCode = 423;
+        throw locked;
+      }
+      await bcrypt.compare(String(password ?? ''), NO_ACCOUNT_HASH);
+      phantomLockout.fail(address);
       const error = new Error('Invalid email or password');
       error.statusCode = 401;
       throw error;
@@ -402,9 +427,7 @@ class AuthService {
         1,
         Math.ceil((new Date(user.locked_until) - Date.now()) / 60000)
       );
-      const error = new Error(
-        `Too many failed sign-in attempts. This account is locked for another ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}.`
-      );
+      const error = new Error(lockedMessage(minutesLeft));
       error.statusCode = 423; // Locked
       throw error;
     }

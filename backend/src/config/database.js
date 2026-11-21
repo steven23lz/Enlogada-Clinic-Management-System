@@ -5,7 +5,10 @@ const logger = require('./logger');
 
 const pool = new Pool({
   connectionString: env.DATABASE_URL,
-  ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  // [1.173.0] DATABASE_SSL=true|false decides; unset, production uses SSL. Its own setting, because a
+  // clinic running the server beside a local database has no SSL to offer.
+  ssl: (process.env.DATABASE_SSL ? process.env.DATABASE_SSL === 'true' : env.NODE_ENV === 'production')
+    ? { rejectUnauthorized: false } : false,
 
   // Sizing and timeouts. Without these the pool is unbounded in wait time and a single
   // pathological query pins a connection until the process restarts.

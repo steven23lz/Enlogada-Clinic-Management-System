@@ -492,6 +492,8 @@ This layering is enforced convention in this codebase (checked by the "Project A
   that used the old address follow it, the old address is told (a hint of the new one only), and a
   staff address is refused (403: Staff Accounts changes it). A Google-only account sets a password
   first with "Forgot password".
+- **The server is production unless told otherwise.** `[1.173.0]` `server.js` sets `NODE_ENV=production` when unset (after reading `.env`); `npm run dev` sets development through `nodemon.json`. Never key a security limit on `NODE_ENV !== 'production'` being the safe side. `DATABASE_SSL` decides SSL on its own.
+- **Nothing says whether an address has an account.** `[1.173.0]` Sign-in, sign-up and forgot-password answer every address alike: sign-up sends the owner of a taken address `sendAccountExists` instead of a code, an unknown address is locked like a real one (`utils/phantomLockout.js`) and costs the same bcrypt time. A new auth endpoint keeps it so. `node src/scripts/probeRouteGates.js` (every route as everyone who should be refused) and `bypass-attempts.spec.js` are the checks.
 - Frontend session handling: `frontend/src/config/api.js` (Axios) fires a global `auth:unauthorized` window event on HTTP 401; `AuthContext.jsx` listens for it to clear user state without breaking SPA navigation — follow this pattern rather than throwing/catching 401s locally in components.
 
 ### Where a file goes

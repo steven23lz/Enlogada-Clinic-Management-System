@@ -1,3 +1,12 @@
+// [1.173.0] The server is in production unless it is told otherwise. Express, and every limit in
+// app.js, read an unset NODE_ENV as development: a deployment that forgot the one setting would
+// have allowed 2,000 wrong passwords a window instead of 10, shown stack traces and internal error
+// messages to the public, and lifted the invitation caps. `npm run dev` says development
+// (nodemon.json). Set before anything is required, because express() reads it when the app is made.
+// Only the server: the scripts that delete data refuse an explicit 'production' and run unset.
+require('dotenv').config(); // .env first: a NODE_ENV written there is honoured, not overridden
+if (!process.env.NODE_ENV) process.env.NODE_ENV = 'production';
+
 const app = require('./app');
 const env = require('./config/environment');
 const logger = require('./config/logger');
