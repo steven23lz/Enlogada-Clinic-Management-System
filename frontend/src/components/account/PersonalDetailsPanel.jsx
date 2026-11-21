@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { useAuth } from '../../contexts/AuthContext';
 import { toastSuccess } from '../../lib/toast';
 import ChangeEmailDialog from './ChangeEmailDialog';
+import { readCodeDraft, DRAFT_KEYS } from '../../lib/formDraft';
 
 const fromUser = (user) => ({
   firstName: user?.firstName || '',
@@ -24,7 +25,8 @@ export default function PersonalDetailsPanel() {
   const { user, updateProfile, hasRole } = useAuth();
   // [1.147.0] A patient changes their own sign-in email; a staff address is the clinic's to change.
   const isPatient = hasRole?.('Client');
-  const [changingEmail, setChangingEmail] = useState(false);
+  // [1.173.0] Reopened after a reload on its code step (ChangeEmailDialog).
+  const [changingEmail, setChangingEmail] = useState(() => Boolean(readCodeDraft(DRAFT_KEYS.emailChange)));
   const [form, setForm] = useState(() => fromUser(user));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

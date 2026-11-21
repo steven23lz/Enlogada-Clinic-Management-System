@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toastSuccess, toastError } from '../../lib/toast';
 import { Button } from '../ui/button';
 import { Camera, Trash2 } from 'lucide-react';
+import { prepareCardImage } from '../../lib/cardImage';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3MB, matches backend/src/config/upload.js
@@ -56,13 +57,23 @@ const AvatarUpload = ({ children }) => {
       toastError('Please choose a JPEG, PNG, or WebP image.');
       return;
     }
-    if (file.size > MAX_SIZE_BYTES) {
+    // [1.173.0] A phone camera's photo is 4-12 MB; it is made smaller here rather than refused at 3 MB.
+    let upload = file;
+    if (file.size > MAX_SIZE_BYTES / 3) {
+      try {
+        upload = await prepareCardImage(file, { name: 'profile-photo.jpg', maxEdge: 800 });
+      } catch (err) {
+        toastError(err.message);
+        return;
+      }
+    }
+    if (upload.size > MAX_SIZE_BYTES) {
       toastError('Image must be 3MB or smaller.');
       return;
     }
 
     const formData = new FormData();
-    formData.append('avatar', file);
+    formData.append('avatar', upload);
     setUploading(true);
     try {
       await api.post('/auth/me/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -123,7 +134,7 @@ const AvatarUpload = ({ children }) => {
           </Button>
         )}
       </div>
-      <p className="m-0 text-meta text-slate-500">JPEG, PNG or WebP, up to 3 MB.</p>
+      <p className="m-0 text-meta text-slate-500">JPEG, PNG or WebP. A large photo is made smaller for you.</p>
       <input
         ref={fileInputRef}
         type="file"

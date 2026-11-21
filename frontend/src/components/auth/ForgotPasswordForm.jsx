@@ -10,6 +10,10 @@ import ResendCode from './ResendCode';
 import { MIN_PASSWORD_LENGTH } from '../../lib/passwordStrength';
 import { cn } from '../../lib/utils';
 import { AlertCircle, ArrowRight, Info, Lock, Mail } from 'lucide-react';
+import { readDraft, writeDraft, clearDraft } from '../../lib/formDraft';
+
+const DRAFT_KEY = 'password-reset';
+const DRAFT_LIFETIME_MS = 30 * 60 * 1000;
 
 /**
  * Forgot password, on the back of the sign-in card: the address, then the emailed code with a new
@@ -25,9 +29,21 @@ import { AlertCircle, ArrowRight, Info, Lock, Mail } from 'lucide-react';
  */
 const ForgotPasswordForm = ({ onBackToSignIn, notice }) => {
   const { forgotPassword, resendCode, resetPassword } = useAuth();
-  const [step, setStep] = useState('email'); // 'email' → 'reset' → 'done'
-  const [email, setEmail] = useState('');
-  const [request, setRequest] = useState(null); // { ticket, resendAfterSeconds }
+  // [1.173.0] A patient leaves for their email app to read the code, and Android may discard the page
+  // meanwhile; the ticket was only in memory, so they came back to step one holding a code that
+  // matched nothing. Kept in this tab, as sign-up's is, for as long as a code lasts. Never the code or
+  // the new password.
+  const [saved] = useState(() => {
+    const draft = readDraft(DRAFT_KEY);
+    return draft && Date.now() - (draft.savedAt || 0) < DRAFT_LIFETIME_MS ? draft : null;
+  });
+  const [step, setStep] = useState(saved?.request ? 'reset' : 'email'); // 'email' → 'reset' → 'done'
+  const [email, setEmail] = useState(saved?.email || '');
+  const [request, setRequest] = useState(saved?.request || null); // { ticket, resendAfterSeconds }
+  useEffect(() => {
+    if (step === 'reset' && request) writeDraft(DRAFT_KEY, { email, request, savedAt: saved?.request === request ? saved.savedAt : Date.now() });
+    else clearDraft(DRAFT_KEY);
+  }, [step, email, request, saved]);
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');

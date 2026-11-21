@@ -356,7 +356,7 @@ export default function PayBookingPanel({ visitId, amountDue, tests = [], onSett
     const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     errorRef.current.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
   }, [pay.error]);
-  const [confirmed, setConfirmed] = useState(false);
+  const { confirmed, setConfirmed } = pay;
   const selected = pay.methods.find((m) => String(m.id) === String(pay.methodId)) || pay.methods[0];
   // What goes into the banking app's amount box: digits, no peso sign or thousands separator.
   const due = Number(amountDue);

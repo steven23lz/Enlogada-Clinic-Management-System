@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../config/api';
+import { prepareCardImage, DOCUMENT_MAX_EDGE } from '../lib/cardImage';
+import { readDraft, writeDraft, clearDraft, fileToStored, storedToFile } from '../lib/formDraft';
 import { toastSuccess } from '../lib/toast';
+
+const SHRINK_ABOVE_BYTES = 2 * 1024 * 1024;
+const PDF_LIMIT_BYTES = 8 * 1024 * 1024;
 
 /**
  * A patient settling a booking by paying into the clinic's own account. [1.48.0]
@@ -26,11 +31,17 @@ export function usePaymentSubmission(visitId, { onSettled, onRefused } = {}) {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // [1.173.0] What the patient entered survives the page reloading under them (lib/formDraft.js):
+  // choosing the screenshot sends a phone's browser to the background, where Android may discard it.
+  const draftKey = `pay:${visitId}`;
+  const [draft] = useState(() => readDraft(draftKey));
   const [methodId, setMethodId] = useState('');
-  const [reference, setReference] = useState('');
+  const [reference, setReference] = useState(() => draft?.reference || '');
+  // "These are the tests I want", ticked before the account is shown. [1.122.0]
+  const [confirmed, setConfirmed] = useState(() => Boolean(draft?.confirmed));
   // No amount. [1.105.0] The booking states what is owed, and a box the patient could edit invited
   // them to send something else. The server records the amount due when none is sent.
-  const [proof, setProof] = useState(null);
+  const [proof, setProof] = useState(() => storedToFile(draft?.files?.proof));
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -113,11 +124,51 @@ export function usePaymentSubmission(visitId, { onSettled, onRefused } = {}) {
     }
   }, []);
 
-  /** Replaces `setProof` at the call site, so choosing a file always triggers a scan. */
-  const chooseProof = useCallback((file) => {
-    setProof(file);
-    scanProof(file);
+  /**
+   * Replaces `setProof` at the call site, so choosing a file always triggers a scan.
+   *
+   * [1.173.0] A photo over 2 MB is made smaller first, as the booking dialog's photos are: a phone
+   * camera's 8-12 MB went past the 8 MB limit and was slow on mobile data. A screenshot is far under
+   * it and is sent as it is, so the reference number stays as sharp as GCash drew it.
+   */
+  const chooseProof = useCallback(async (file) => {
+    // A PDF cannot be made smaller here, so one over the server's 8 MB is said at once, not after a
+    // whole upload on mobile data.
+    if (file && file.type === 'application/pdf' && file.size > PDF_LIMIT_BYTES) {
+      setProof(null);
+      setScan(null);
+      setError('That PDF is larger than 8 MB. Attach a screenshot of the payment instead.');
+      return;
+    }
+    let chosen = file;
+    if (file && String(file.type || '').startsWith('image/') && file.size > SHRINK_ABOVE_BYTES) {
+      try {
+        chosen = await prepareCardImage(file, { name: 'payment-proof.jpg', maxEdge: DOCUMENT_MAX_EDGE });
+      } catch (err) {
+        setProof(null);
+        setScan(null);
+        setError(err.message);
+        return;
+      }
+    }
+    setError('');
+    setProof(chosen);
+    scanProof(chosen);
   }, [scanProof]);
+
+  // A restored screenshot is read again, so its amount check shows as it did.
+  const restoredProof = useState(proof)[0];
+  useEffect(() => { if (restoredProof) scanProof(restoredProof); }, [restoredProof, scanProof]);
+
+  useEffect(() => {
+    if (!visitId) return undefined;
+    let current = true;
+    const timer = setTimeout(async () => {
+      const stored = await fileToStored(proof);
+      if (current) writeDraft(draftKey, { reference, confirmed, files: { proof: stored } });
+    }, 300);
+    return () => { current = false; clearTimeout(timer); };
+  }, [visitId, draftKey, reference, confirmed, proof]);
 
   const submit = async (e) => {
     e?.preventDefault();
@@ -152,6 +203,7 @@ export function usePaymentSubmission(visitId, { onSettled, onRefused } = {}) {
       setReference('');
       setProof(null);
       setScan(null);
+      clearDraft(draftKey);
       await reload();
       toastSuccess('Payment sent for verification. Your pass appears once the cashier confirms it.');
       onSettled?.();
@@ -167,6 +219,7 @@ export function usePaymentSubmission(visitId, { onSettled, onRefused } = {}) {
           setReference('');
           setProof(null);
           setScan(null);
+          clearDraft(draftKey);
           await reload();
           toastSuccess('Your payment reached the clinic before the connection dropped. Your pass appears once the cashier confirms it.');
           onSettled?.();
@@ -196,7 +249,7 @@ export function usePaymentSubmission(visitId, { onSettled, onRefused } = {}) {
   };
 
   return {
-    methods, submissions, loading, reload,
+    methods, submissions, loading, reload, confirmed, setConfirmed,
     methodId, setMethodId, reference, setReference, proof, setProof,
     error, submitting, submit,
     latest, pending, rejected, verified,

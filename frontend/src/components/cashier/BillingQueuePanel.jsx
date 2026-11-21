@@ -42,9 +42,9 @@ export default function BillingQueuePanel({ queue, checkout }) {
                 onChange={e => queue.setSearchQuery(e.target.value)}
               />
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Select value={queue.typeFilter} onValueChange={queue.setTypeFilter}>
-                  <SelectTrigger className="flex-1" aria-label="Filter the billing queue by patient type">
+                  <SelectTrigger className="min-w-[8rem] flex-1" aria-label="Filter the billing queue by patient type">
                     <SelectValue placeholder="Patient Type" />
                   </SelectTrigger>
                   <SelectContent>

@@ -5,6 +5,9 @@ import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { useAuth } from '../../contexts/AuthContext';
 import { toastSuccess } from '../../lib/toast';
+import { writeDraft, clearDraft, readCodeDraft, DRAFT_KEYS } from '../../lib/formDraft';
+
+const EMAIL_CHANGE_DRAFT = DRAFT_KEYS.emailChange;
 
 /**
  * A patient changes their sign-in email. [1.147.0]
@@ -26,13 +29,22 @@ export default function ChangeEmailDialog({ open, onOpenChange }) {
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
 
-  // Each opening starts again: a half-finished change is not carried over.
+  // Each opening starts again: a half-finished change is not carried over. [1.173.0] Except across a
+  // reload on the code step: the patient was in their email app reading the code, and Android may
+  // discard the page meanwhile. Closing the dialog drops it; the password is never kept.
   useEffect(() => {
     if (open) {
-      setStep('details'); setNewEmail(''); setPassword(''); setCode(''); setTicket(''); setSentTo('');
+      const saved = readCodeDraft(EMAIL_CHANGE_DRAFT);
+      setStep(saved ? 'code' : 'details'); setNewEmail(''); setPassword(''); setCode('');
+      setTicket(saved?.ticket || ''); setSentTo(saved?.sentTo || '');
       setError(''); setNote('');
+    } else {
+      clearDraft(EMAIL_CHANGE_DRAFT);
     }
   }, [open]);
+  useEffect(() => {
+    if (open && step === 'code' && ticket) writeDraft(EMAIL_CHANGE_DRAFT, { ticket, sentTo, savedAt: Date.now() });
+  }, [open, step, ticket, sentTo]);
 
   const sendCode = async (e) => {
     e.preventDefault();
@@ -65,6 +77,7 @@ export default function ChangeEmailDialog({ open, onOpenChange }) {
     setBusy(true);
     try {
       const changed = await confirmEmailChange(ticket, code.trim());
+      clearDraft(EMAIL_CHANGE_DRAFT);
       toastSuccess('Sign-in email changed', `You now sign in with ${changed.email}.`);
       onOpenChange(false);
     } catch (err) {

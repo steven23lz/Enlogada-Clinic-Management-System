@@ -1203,11 +1203,12 @@ body.printing-report {
  * the rule is one shape applied to a whole table, and expressing it per-cell would mean every
  * future table remembering an incantation to look like the others.
  *
- * [1.173.0] Below `lg`, not `sm`: on a tablet the whole desktop table was squeezed into 768px, and
- * the column a person acts from (Check in, Refund, Withdraw, Review) sat behind a sideways scroll.
- * From 1024px up, where the desktop the paper shows begins, the table is unchanged.
+ * [1.173.0] Below `xl`, not `sm`: on a tablet and a small laptop the whole desktop table was
+ * squeezed into the space beside the sidebar, and the column a person acts from (Check in, Refund,
+ * Withdraw, Review) sat behind a sideways scroll. Measured: from 1100px down most list tables hid
+ * that column; at 1366 none did. From 1280px up the table is unchanged.
  */
-@media (max-width: 1023px) {
+@media (max-width: 1279px) {
   table[data-stack='true'] thead {
     /* Hidden from sight but not from a screen reader's table semantics. */
     position: absolute;
@@ -1319,6 +1320,21 @@ body.printing-report {
      edge. */
   table[data-stack='true'] tbody {
     padding: 0.5rem 0.5rem 0;
+  }
+
+  /* [1.173.0] Where two cards fit side by side (a tablet, a small laptop), they do: one column of
+     cards across 900px is a long scroll beside empty space. Not a worklist: its tests are indented
+     under their patient's card, and a grid would put them in the next column. */
+  @media (min-width: 640px) {
+    table[data-stack='true']:not(:has(tr[data-subrow])) tbody {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+      column-gap: 0.625rem;
+      align-items: start;
+    }
+    table[data-stack='true']:not(:has(tr[data-subrow])) tr:has(td[colspan]) {
+      grid-column: 1 / -1;
+    }
   }
 
   /* An empty-state or error row is a panel, not a card: it must not get the row chrome. */

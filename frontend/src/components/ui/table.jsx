@@ -87,11 +87,14 @@ const TableRow = React.forwardRef(({ className, ...props }, ref) => (
 ))
 TableRow.displayName = "TableRow"
 
+// [1.173.0] A heading may wrap. It only does when its table is short of room: a table that fits lays
+// every column at its widest content, headings on one line. Held to one line, "DIAGNOSTIC
+// EXAMINATION" and "SENT TO PATIENT" kept a department's History 15px too wide for a 1280px screen.
 const TableHead = React.forwardRef(({ className, ...props }, ref) => (
   <th
     ref={ref}
     className={cn(
-      "h-9 whitespace-nowrap px-4 text-left align-middle text-micro font-semibold uppercase tracking-[0.1em] text-slate-500 [&:has([role=checkbox])]:pr-0",
+      "h-9 py-1.5 px-4 text-left align-middle text-micro font-semibold uppercase tracking-[0.1em] text-slate-500 [&:has([role=checkbox])]:pr-0",
       className
     )}
     {...props} />

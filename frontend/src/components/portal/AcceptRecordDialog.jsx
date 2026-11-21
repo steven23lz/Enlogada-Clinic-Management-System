@@ -8,6 +8,7 @@ import CodeInput, { CODE_LENGTH } from '../auth/CodeInput';
 import api from '../../config/api';
 import { formatDate, todayStr } from '../../lib/date';
 import { toastSuccess } from '../../lib/toast';
+import { writeDraft, clearDraft, readCodeDraft, DRAFT_KEYS } from '../../lib/formDraft';
 
 /**
  * Accepting a record the clinic invited this account to. [1.136.0]
@@ -20,6 +21,8 @@ import { toastSuccess } from '../../lib/toast';
  * `invitation` is one from GET /patients/invitations/mine, or `{ emailCheck: true }` for step 1 on
  * its own. A duplicate of a profile already on the account is said, and can be added anyway.
  */
+const ACCEPT_DRAFT = DRAFT_KEYS.acceptRecord;
+
 export default function AcceptRecordDialog({ invitation, onOpenChange, onAccepted, onChanged }) {
   const open = Boolean(invitation);
   const emailOnly = Boolean(invitation?.emailCheck);
@@ -31,14 +34,21 @@ export default function AcceptRecordDialog({ invitation, onOpenChange, onAccepte
   const [duplicate, setDuplicate] = useState(null);
   const [declining, setDeclining] = useState(false);
 
+  // [1.173.0] The code is read in the email app, and Android may discard the page meanwhile: the
+  // ticket for THIS invitation is put back after a reload, for as long as a code lasts.
+  const draftFor = invitation ? (invitation.emailCheck ? 'email' : String(invitation.id)) : null;
   useEffect(() => {
     if (!open) return;
+    const saved = readCodeDraft(ACCEPT_DRAFT);
     setBirthdate('');
-    setTicket(null);
+    setTicket(saved && saved.for === draftFor ? saved.ticket : null);
     setCode('');
     setError('');
     setDuplicate(null);
-  }, [open, invitation?.id]);
+  }, [open, invitation?.id, draftFor]);
+  useEffect(() => {
+    if (open && ticket) writeDraft(ACCEPT_DRAFT, { for: draftFor, ticket, savedAt: Date.now() });
+  }, [open, ticket, draftFor]);
 
   const sendCode = async () => {
     setBusy('code');
@@ -63,6 +73,7 @@ export default function AcceptRecordDialog({ invitation, onOpenChange, onAccepte
     setError('');
     try {
       await api.post('/auth/email-check/confirm', { ticket, code: value });
+      clearDraft(ACCEPT_DRAFT);
       toastSuccess('Your email address is confirmed');
       onChanged?.();
       onOpenChange(false);
@@ -115,7 +126,7 @@ export default function AcceptRecordDialog({ invitation, onOpenChange, onAccepte
 
   return (
     <>
-      <Dialog open={open && !declining} onOpenChange={(o) => !busy && onOpenChange(o)}>
+      <Dialog open={open && !declining} onOpenChange={(o) => { if (busy) return; if (!o) clearDraft(ACCEPT_DRAFT); onOpenChange(o); }}>
         <DialogContent className="max-w-md" data-testid="accept-record">
           {emailOnly ? (
             <>

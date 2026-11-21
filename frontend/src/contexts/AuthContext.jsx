@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import api from '../config/api';
 import { clearRevalidationCache } from '../config/revalidationCache';
+import { clearAllDrafts } from '../lib/formDraft';
 import { toastInfo } from '../lib/toast';
 
 const AuthContext = createContext(null);
@@ -211,6 +212,10 @@ export const AuthProvider = ({ children }) => {
     // naming patients. Signing out has to empty it, or the next person at this terminal can
     // revalidate straight into the previous account's data. [1.26.0]
     clearRevalidationCache();
+    // [1.173.0] And whatever a form kept across a reload: a doctor's request or an ID photo must not
+    // wait in this tab for the next person. An expired session keeps them (the 401 path): the same
+    // patient signs back in to finish, and a draft only fills that patient's own profile or visit.
+    clearAllDrafts();
     setUser(null);
   };
 

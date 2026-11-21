@@ -1229,7 +1229,7 @@ silently stopped updating is worse off than one on a slow connection.
 
 ### UI conventions
 
-**Every screen works at 360px.** `[1.142.0]` `[1.173.0]` A `<Table stack>` becomes cards below **1024px** (it was 640), so a tablet gets cards, not a squeezed desktop table; from 1024 up nothing changed. A report table stacks too. Anything that cannot be dismissed (the overdue banner) is one line per item on a phone. Check a change at 320, 768 and 1024 as well as 1280+. A row of controls wraps (`flex-wrap`, never
+**Every screen works at 360px.** `[1.142.0]` `[1.173.0]` A `<Table stack>` becomes cards below **1280px** (it was 640), two to a row from 640 where they fit (one column on a worklist, whose tests sit under their patient), so a tablet or small laptop gets cards, not a squeezed desktop table; from 1280 up nothing changed. A report table stacks too. A table heading may wrap, which it does only when its table is short of room. A class that should change with the cards uses `xl:` / `max-xl:`, not `lg:`. Anything that cannot be dismissed (the overdue banner) is one line per item on a phone. Check a change at 320, 768, 1024 and 1100 as well as 1280+ (`npm run check:widths`, `WIDTHS=…`, `FONT=130` for a phone's large text). A row of controls wraps (`flex-wrap`, never
 `flex-shrink-0` on a box of buttons); a list table is `<Table stack>` with a `label` on each cell; a
 name, price or status is never `truncate`d on a phone; a date range is `grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]`
 below `sm`. An `m-0` paragraph inside `space-y-*` cancels the gap — use `flex flex-col gap-*` there.
@@ -1360,6 +1360,7 @@ with a link to the printable document.
   better feedback already exists (`BookingDialog` shows a reference code, `WalkInRegistration`
   prints the queue ticket) — a toast on top of those is noise.
 - **A refusal is said beside the button that was pressed.** `[1.173.0]` On a phone the person is at the bottom of a long form, so an error at its top reads as a button that did nothing. Put the alert just above the submit and scroll it into view on change (`PayBookingPanel`, `ProfileFormDialog`, `BookingDialog`). `said-where-you-are.spec.js`.
+- **A form a patient fills on a phone survives a reload.** `[1.173.0]` Choosing a photo sends the browser to the background, where Android may discard the page. The booking dialog and the payment form keep what was entered, photos included, in this tab's `sessionStorage` (`lib/formDraft.js`), cleared when finished and on sign-out. A new patient form with a photo does the same, and a photo goes through `prepareCardImage` before it is sent. `survives-reload.spec.js`.
 - **A request with no reply may have worked.** `[1.171.0]` When a save gets no answer (`!err.response`), the
   clinic may have done it before the connection dropped. Never say it failed or that "nothing was changed": read
   the record back and show what the clinic holds (the till's receipt, the proof as sent, the released report, the

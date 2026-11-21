@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -15,9 +15,13 @@ import { DOCUMENT_MAX_EDGE } from '../../lib/cardImage';
 import { useEvidenceFile } from '../../hooks/useEvidenceFile';
 import { useScrollIntoViewOnSet } from '../../hooks/useScrollIntoViewOnSet';
 import { PlusCircle, AlertCircle } from 'lucide-react';
+import { readDraft, writeDraft, clearDraft, fileToStored, storedToFile } from '../../lib/formDraft';
 
 const DOCTOR_REQUEST_IMAGE = { name: 'doctor-request.jpg', maxEdge: DOCUMENT_MAX_EDGE };
 const DISCOUNT_ID_IMAGE = { name: 'discount-id.jpg', maxEdge: DOCUMENT_MAX_EDGE };
+
+// [1.173.0] Where a booking in progress is kept across a reload (lib/formDraft.js).
+const DRAFT_KEY = 'booking';
 
 const EMPTY_BOOKING = {
   scheduledDate: '',
@@ -102,12 +106,54 @@ const BookingDialog = ({ selectedProfileId, selectedProfile, testCatalog, packag
   // [1.151.0] And everything else typed for the last one. Only the files used to go, so a booking
   // started for a parent reopened for a child with the parent's date, tests, HMO, and the Senior
   // discount with their OSCA number, the box blank because the child may not choose it.
+  //
+  // [1.173.0] Then whatever this patient had entered before the page reloaded is put back, photos and
+  // step included, and the dialog reopens if it was open: choosing a photo on a phone can send the
+  // browser to the background, where Android may discard the page.
+  const restoreCard = cardPhoto.restore;
+  const restoreDoctorRequest = doctorRequest.restore;
+  const restoreDiscountId = discountId.restore;
+  const hydratedFor = useRef(null);
   useEffect(() => {
     clearEvidence();
     setBookingData(EMPTY_BOOKING);
     setBookingStep(1);
     setBookingError('');
-  }, [selectedProfileId, clearEvidence]);
+    const draft = readDraft(DRAFT_KEY);
+    if (selectedProfileId && draft && String(draft.profileId) === String(selectedProfileId)) {
+      setBookingData({ ...EMPTY_BOOKING, ...draft.data });
+      setBookingStep(draft.step === 2 ? 2 : 1);
+      restoreCard(storedToFile(draft.files?.card));
+      restoreDoctorRequest(storedToFile(draft.files?.doctor));
+      restoreDiscountId(storedToFile(draft.files?.discount));
+      if (draft.open) setShowBooking(true);
+    }
+    hydratedFor.current = selectedProfileId;
+  }, [selectedProfileId, clearEvidence, restoreCard, restoreDoctorRequest, restoreDiscountId]);
+
+  // Kept as it is entered. A finished booking leaves nothing behind.
+  const cardFile = cardPhoto.file;
+  const doctorFile = doctorRequest.file;
+  const discountFile = discountId.file;
+  useEffect(() => {
+    if (!selectedProfileId || hydratedFor.current !== selectedProfileId) return undefined;
+    if (bookingConfirmation) {
+      clearDraft(DRAFT_KEY);
+      return undefined;
+    }
+    let current = true;
+    const timer = setTimeout(async () => {
+      const [card, doctor, discount] = await Promise.all([
+        fileToStored(cardFile), fileToStored(doctorFile), fileToStored(discountFile),
+      ]);
+      if (!current) return;
+      writeDraft(DRAFT_KEY, {
+        profileId: selectedProfileId, open: showBooking, step: bookingStep, data: bookingData,
+        files: { card, doctor, discount },
+      });
+    }, 300);
+    return () => { current = false; clearTimeout(timer); };
+  }, [selectedProfileId, showBooking, bookingStep, bookingData, cardFile, doctorFile, discountFile, bookingConfirmation]);
 
   // The Self-Pay option carries the string 'none' rather than an empty value, so a bare
   // truthiness check treated self-pay as an HMO selection. Nothing chosen is self-pay too.

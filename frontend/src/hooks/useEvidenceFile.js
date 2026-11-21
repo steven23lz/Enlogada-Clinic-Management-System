@@ -56,5 +56,16 @@ export function useEvidenceFile(options) {
     }
   };
 
-  return { file, preview, error, preparing, pick, clear };
+  /** [1.173.0] Puts back a file kept across a reload (lib/formDraft.js). It was prepared when picked. */
+  const restore = useCallback((saved) => {
+    if (!saved) return;
+    setError('');
+    setFile(saved);
+    setPreview((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return saved.type === 'application/pdf' ? '' : URL.createObjectURL(saved);
+    });
+  }, []);
+
+  return { file, preview, error, preparing, pick, clear, restore };
 }

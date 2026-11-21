@@ -56,7 +56,7 @@ export default function OverdueResultsBanner({ activeNav, onSelectNav }) {
               {d.label}: no test result uploaded for {d.patients.length} {d.patients.length === 1 ? 'test' : 'tests'}
               {d.closesAt ? `, and the clinic closes at ${d.closesAt}` : ` after ${d.minutes} minutes`}
             </p>
-            <p className="m-0 max-sm:hidden">
+            <p className="m-0 max-sm:hidden max-xl:line-clamp-1">
               {d.patients.slice(0, SHOWN).map((p) => `${p.ticket ? `${p.ticket} ` : ''}${p.name}, ${p.test} (${p.waited} min)`).join(' · ')}
               {d.patients.length > SHOWN && ` · and ${d.patients.length - SHOWN} more`}
             </p>

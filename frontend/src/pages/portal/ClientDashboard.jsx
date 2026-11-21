@@ -12,6 +12,7 @@ import { useMyPendingFeedback } from '../../hooks/useMyPendingFeedback';
 import { useMyInvitations } from '../../hooks/useMyInvitations';
 import { useMyVisits } from '../../hooks/useMyVisits';
 import AcceptRecordDialog from '../../components/portal/AcceptRecordDialog';
+import { readCodeDraft, DRAFT_KEYS } from '../../lib/formDraft';
 import FeedbackDialog from '../../components/portal/FeedbackDialog';
 import { useClinicReferenceData } from '../../hooks/useClinicReferenceData';
 import PortalLayout from '../../components/portal/PortalLayout';
@@ -51,6 +52,18 @@ const ClientDashboard = ({ onNavigate, tab = 'home', onTabChange }) => {
   // walk-in visits of every profile on the account.
   const invitations = useMyInvitations();
   const [accepting, setAccepting] = useState(null);
+  // [1.173.0] A record being accepted when the page reloaded, waiting on its emailed code, opens
+  // again once the invitations are read (AcceptRecordDialog keeps the ticket).
+  const resumedAccept = useRef(false);
+  useEffect(() => {
+    if (resumedAccept.current || invitations.loading) return;
+    resumedAccept.current = true;
+    const saved = readCodeDraft(DRAFT_KEYS.acceptRecord);
+    if (!saved) return;
+    if (saved.for === 'email') { if (invitations.needsEmailCheck) setAccepting({ emailCheck: true }); return; }
+    const match = (invitations.invitations || []).find((i) => String(i.id) === saved.for);
+    if (match) setAccepting(match);
+  }, [invitations.loading, invitations.invitations, invitations.needsEmailCheck]);
   const visits = useMyVisits(profiles.profiles);
 
   // Returning from the provider's hosted page. The URL flag is presentational only — it says
