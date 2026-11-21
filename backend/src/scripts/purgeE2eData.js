@@ -207,6 +207,11 @@ async function main() {
     LEFT JOIN users u ON u.id = p.user_id
     WHERE u.email LIKE $1
        OR pv.created_at >= $2::timestamptz
+       -- [1.173.0] A visit a spec moved to an earlier day (e2eBackdateVisit) falls outside the
+       -- window, and kept its patient with it: a fixture left over from an earlier run then shared
+       -- a name with the next run's, and visit-needs-tests found two. A patient the run created is
+       -- the run's, whatever day its visit now claims.
+       OR p.created_at >= $2::timestamptz
   `;
   const visitIds = (await db.query(visitScope, [E2E_EMAIL_PATTERN, since])).rows.map((r) => r.id);
   const userIds = (await db.query('SELECT id FROM users WHERE email LIKE $1', [E2E_EMAIL_PATTERN])).rows.map((r) => r.id);
