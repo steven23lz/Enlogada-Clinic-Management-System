@@ -25,6 +25,10 @@ const path = require('path');
 const db = require('../config/database');
 const logger = require('../config/logger');
 
+// The reserved contact number every suite fixture carries (frontend tests/e2e/helpers/people.js); no real
+// or demo patient has it. A constant, not input, so it is written into the SQL.
+const FIXTURE_CONTACT = '09000000000';
+
 const E2E_EMAIL_PATTERN = '%@enlogada-e2e.test';
 
 function arg(name) {
@@ -52,6 +56,26 @@ function arg(name) {
  * the transaction referencing it commits; this one runs after every test has finished, so an
  * unreferenced file from inside the window has nothing still coming for it.
  */
+// Walk-in patients left parentless by the visit deletion, created in the run's window or carrying the
+// fixture number. [1.173.0] A function, because the early return for "no visits, no accounts" skipped
+// it, and an aged record (e2eAgeRecord) has neither.
+const FIXTURE_PATIENTS_SQL = `
+  FROM patients p
+  WHERE p.user_id IS NULL
+    -- Or carrying the fixture number, whatever date it claims: a spec ages a record ten years
+    -- (e2eAgeRecord) to test the archive rule, which put it outside the window for good.
+    AND (p.created_at >= $1::timestamptz OR p.contact_number = '${FIXTURE_CONTACT}')
+    AND NOT EXISTS (SELECT 1 FROM patient_visits pv WHERE pv.patient_id = p.id)`;
+
+async function purgeFixturePatients(since, dryRun = false) {
+  if (dryRun) {
+    const { rows } = await db.query(`SELECT COUNT(*)::int AS n ${FIXTURE_PATIENTS_SQL}`, [since]);
+    logger.info(`E2E purge: ${rows[0].n} parentless fixture patient(s) (DRY RUN)`);
+    return;
+  }
+  await db.query(`DELETE ${FIXTURE_PATIENTS_SQL}`, [since]);
+}
+
 async function purgeOrphanedUploads(since, dryRun) {
   const targets = [
     { dir: 'hmo-cards', sql: 'SELECT card_file_path AS p FROM hmo_requests WHERE card_file_path IS NOT NULL' },
@@ -212,12 +236,14 @@ async function main() {
        -- a name with the next run's, and visit-needs-tests found two. A patient the run created is
        -- the run's, whatever day its visit now claims.
        OR p.created_at >= $2::timestamptz
+       OR p.contact_number = '${FIXTURE_CONTACT}'
   `;
   const visitIds = (await db.query(visitScope, [E2E_EMAIL_PATTERN, since])).rows.map((r) => r.id);
   const userIds = (await db.query('SELECT id FROM users WHERE email LIKE $1', [E2E_EMAIL_PATTERN])).rows.map((r) => r.id);
 
   logger.info(`E2E purge: ${visitIds.length} visit(s), ${userIds.length} throwaway account(s)${dryRun ? ' (DRY RUN)' : ''}`);
   if (dryRun) {
+    await purgeFixturePatients(since, true);
     await purgeOrphanedUploads(since, true);
     process.exit(0);
   }
@@ -234,6 +260,7 @@ async function main() {
     // leaves one behind with nothing in the database pointing at it.
     // The name-scoped fixtures still have to go. They are not tied to a visit or an account, so
     // "no visits" never meant "nothing was created" — it only meant nothing the window can see.
+    await purgeFixturePatients(since);
     await purgeNameScopedFixtures();
     await purgeOrphanedUploads(since, false);
     logger.info('Nothing to purge beyond fixtures.');
@@ -284,15 +311,7 @@ async function main() {
     await db.query('DELETE FROM users WHERE id = ANY($1)', u);
   }
 
-  // Walk-in patients left parentless by the visit deletion above. Restricted to the run window so
-  // a demo dataset seeded before the run survives.
-  await db.query(
-    `DELETE FROM patients p
-     WHERE p.user_id IS NULL
-       AND p.created_at >= $1::timestamptz
-       AND NOT EXISTS (SELECT 1 FROM patient_visits pv WHERE pv.patient_id = p.id)`,
-    [since]
-  );
+  await purgeFixturePatients(since);
 
   await purgeNameScopedFixtures();
 
