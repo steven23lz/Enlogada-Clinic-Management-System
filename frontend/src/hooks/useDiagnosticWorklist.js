@@ -64,8 +64,16 @@ export function useDiagnosticWorklist({ activeNav, roles, mode, paused = false }
   const [worklistError, setWorklistError] = useState('');
   const [historyError, setHistoryError] = useState('');
 
-  const [category, setCategory] = useState('Laboratory');
-  const [categoryResolved, setCategoryResolved] = useState(false);
+  // [1.173.0] When the sidebar names the department (`ultrasound-ops`), it is read in the same render
+  // as the mode, never one render later through an effect. In between, the hook was "worklist,
+  // Laboratory" for a render on the way from Laboratory History to the Ultrasound Worklist, and the
+  // request that render sent could be the one left on screen. The role decides only when the nav
+  // does not say.
+  const [roleCategory, setRoleCategory] = useState('Laboratory');
+  const [roleResolved, setRoleResolved] = useState(false);
+  const navCategory = NAV_TO_CATEGORY[activeNav];
+  const category = navCategory || roleCategory;
+  const categoryResolved = Boolean(navCategory) || roleResolved;
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('All');
@@ -113,19 +121,30 @@ export function useDiagnosticWorklist({ activeNav, roles, mode, paused = false }
     return () => clearTimeout(timer);
   }, [search]);
 
+  // [1.173.0] Only the newest request's answer is shown. From one department's History to another's
+  // worklist, the mode changes in the same render and the department one render later, so a request
+  // for the OLD department's worklist went out first; when it answered last, the laboratory's
+  // patients sat under "Ultrasound Worklist" until the next poll. Each answer checks it is still
+  // the latest asked for.
+  const pendingSeq = useRef(0);
+  const releasedSeq = useRef(0);
+
   const fetchPending = useCallback(async (catName) => {
+    const seq = ++pendingSeq.current;
     setWorklistError('');
     try {
       const responses = await Promise.all(
         categoriesFor(catName).map((c) => api.get(`/results/pending/${c}`))
       );
+      if (seq !== pendingSeq.current) return;
       setPending(responses.flatMap((r) => r.data.data.pending || []));
     } catch (err) {
+      if (seq !== pendingSeq.current) return;
       console.error('Failed to fetch pending diagnostics:', err);
       setWorklistError('Could not load the worklist. Please try again.');
       setPending([]);
     } finally {
-      setLoading(false);
+      if (seq === pendingSeq.current) setLoading(false);
     }
   }, []);
 
@@ -137,6 +156,7 @@ export function useDiagnosticWorklist({ activeNav, roles, mode, paused = false }
    * every report is reachable, the total is the real one, and the search covers all of it.
    */
   const fetchReleased = useCallback(async (catName, { delivery = 'all', page = 1, term = '' } = {}) => {
+    const seq = ++releasedSeq.current;
     setHistoryError('');
     try {
       const res = await api.get(`/results/released/${categoriesFor(catName)[0]}`, {
@@ -147,33 +167,30 @@ export function useDiagnosticWorklist({ activeNav, roles, mode, paused = false }
           ...(term ? { search: term } : {}),
         },
       });
+      if (seq !== releasedSeq.current) return;
       const data = res.data.data;
       setReleased(data.released || []);
       setReleasedTotal(data.total ?? (data.released || []).length);
       setReleasedPages(data.totalPages || 1);
     } catch (err) {
+      if (seq !== releasedSeq.current) return;
       console.error('Failed to fetch released diagnostics:', err);
       setHistoryError('Could not load result history. Please try again.');
       setReleased([]);
       setReleasedTotal(0);
       setReleasedPages(1);
     } finally {
-      setLoading(false);
+      if (seq === releasedSeq.current) setLoading(false);
     }
   }, []);
 
   // Which department this console is for. The nav says so directly when it can; otherwise the
   // account's role does.
   useEffect(() => {
-    const fromNav = NAV_TO_CATEGORY[activeNav];
-    if (fromNav) {
-      setCategory(fromNav);
-      setCategoryResolved(true);
-    } else if (roles) {
-      const match = ROLE_TO_CATEGORY.find(([role]) => roles.includes(role));
-      setCategory(match ? match[1] : 'Laboratory');
-      setCategoryResolved(true);
-    }
+    if (NAV_TO_CATEGORY[activeNav] || !roles) return;
+    const match = ROLE_TO_CATEGORY.find(([role]) => roles.includes(role));
+    setRoleCategory(match ? match[1] : 'Laboratory');
+    setRoleResolved(true);
   }, [activeNav, roles]);
 
   /** Re-read whichever list the current mode is showing. */

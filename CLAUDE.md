@@ -188,7 +188,7 @@ current date) and with both servers running. It runs `resetDemoData.js --confirm
 with ordinary names and Bugo / Cagayan de Oro addresses, one record each, with every result form
 filled inside the clinic's printed ranges and the day spread across clinic hours; no patient has an
 email address. `seedUsers.js` renames any demo account still carrying a placeholder name. Keep new
-seed data looking real: no "Test", "E2E" or joke names, no shared phone number, no empty forms.
+seed data looking real: no "Test", "E2E" or joke names, no shared phone number, no empty forms. `[1.173.0]` And the times real: unfinished work recent (nobody past the 60-minute alert when the seed ends), every Activity Log line and receipt at its record's time (`retimeActivity`), feedback spread through the 30-day view, and the demo patient (Elena, with Noah) a returning patient with released reports. Seed on the day: run the night before, its open visits become yesterday's.
 `[1.125.0]` Every report is drawn on the clinic's own form (`scripts/demoReportPdf.js`, from their
 photographed CBC: letterhead, patient block, TEST / RESULT / UNIT / REFERENCE RANGE, the seal note
 and the department's signatories from `constants/labResultForms.js`), with a small foot line saying

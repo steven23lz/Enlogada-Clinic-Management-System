@@ -443,6 +443,8 @@ const dateStr = (d) =>
 
 async function main() {
   logger.info(`Seeding demo data against ${API}`);
+  // The database's clock as the run starts, so the Activity Log lines it writes can be found below.
+  const seedStartedAt = (await db.query('SELECT clock_timestamp() AS t')).rows[0].t;
   // Where this run starts, so the file check at the end judges only the rows it creates.
   const before = (await db.query(`
     SELECT (SELECT COALESCE(MAX(id), 0) FROM test_results)::int AS result_id,
@@ -979,6 +981,50 @@ async function main() {
     }
   }
 
+  // [1.173.0] The demo patient's own family, as a returning patient's portal looks. Elena Cabrera
+  // (client@enlogada.com) had two upcoming bookings and nothing finished, so her Results held two
+  // tests marked Pending and no report to open, and her son Noah had nothing at all. They now have
+  // past visits through the same path as everyone (paid, a report on the clinic's form, released),
+  // backdated with the rest below, on days the clinic is open.
+  {
+    const familyToken = await login('client@enlogada.com');
+    const family = (await call('/patients/my-profiles', { token: familyToken })).data.patients || [];
+    const openDay = (wanted) => {
+      for (let ago = wanted; ; ago++) {
+        const d = new Date(); d.setDate(d.getDate() - ago);
+        if (d.getDay() !== 0) return { daysAgo: ago, saturday: d.getDay() === 6 };
+      }
+    };
+    const localDate = (value) => {
+      const d = new Date(value);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const visitsFor = [
+      { who: 0, ago: 12, notes: 'Annual physical exam', tests: [CBC, FBS, LIPID, UA, ['Ultrasound', 'Pelvic Ultrasound']], pay: 'GCash' },
+      { who: 0, ago: 36, notes: 'Cholesterol follow-up', tests: [LIPID, FBS], pay: CASH_METHOD },
+      { who: 1, ago: 20, notes: 'School requirement', tests: [CBC, UA], pay: CASH_METHOD },
+    ];
+    for (const [n, plan] of visitsFor.entries()) {
+      const prof = family[plan.who];
+      if (!prof) continue;
+      const birthdate = localDate(prof.birthdate);
+      const key = `${prof.first_name} ${prof.last_name}`;
+      if (!records.has(key)) records.set(key, { patient: prof, sex: prof.sex, seed: 900 + n, birthdate });
+      try {
+        // The visit's own day goes on its reports too, or a report from two weeks ago says today.
+        const when = openDay(plan.ago);
+        const day = new Date(); day.setDate(day.getDate() - when.daysAgo);
+        const v = await makeVisit({ person: [prof.first_name, prof.last_name, prof.sex, birthdate], tests: plan.tests, notes: plan.notes, date: day });
+        await payFor(v, plan.pay);
+        await recordVisit(v);
+        await releaseVisit(v);
+        historical.push({ ...v, ...when, slot: n });
+      } catch (err) {
+        logger.warn(`  ${key}'s past visit skipped: ${err.message}`);
+      }
+    }
+  }
+
   // Backdate in one transaction. Everything above was created "now" by the API; this is the only
   // step that cannot go through it, because no endpoint legitimately says "this happened last
   // Tuesday" — and rightly so.
@@ -1082,7 +1128,14 @@ async function main() {
     { ratings: [3, 3, 3, 3], comment: 'Paspas ang X-ray ug buotan ang radtech.' },
   ];
   const feedbackQuestions = (await call('/feedback/questions', { token: tok.receptionist })).data.questions;
-  const rated = historical.filter((_, i) => i % 3 !== 2).slice(0, FEEDBACK.length);
+  // [1.173.0] Spread through the recent weeks, as forms come in. The first eighteen of the history
+  // were its oldest fortnight, so Patient Feedback, which opens on the last 30 days, read "0 forms".
+  // The demo family's visits stay unrated, so the portal still asks Elena how her visit went.
+  const rateable = [...historical]
+    .filter((h) => !h.patient.user_id)
+    .sort((a, b) => a.daysAgo - b.daysAgo);
+  const rateStep = Math.max(1, Math.floor((rateable.length * 0.6) / FEEDBACK.length));
+  const rated = rateable.filter((_, i) => i % rateStep === 0).slice(0, FEEDBACK.length);
   for (const [i, h] of rated.entries()) {
     const f = FEEDBACK[i];
     const answers = Object.fromEntries(
@@ -1097,6 +1150,15 @@ async function main() {
   await db.query(
     `UPDATE patient_visits SET feedback_submitted_at = created_at + INTERVAL '3 hours'
       WHERE id = ANY($1::int[])`,
+    [rated.map((h) => h.visit.id)]
+  );
+  // [1.173.0] And its Activity Log line with it: eighteen forms "typed" in the minute the seed ran
+  // topped the log, which no front desk does.
+  await db.query(
+    `UPDATE audit_log al SET created_at = pv.feedback_submitted_at
+       FROM patient_visits pv
+      WHERE al.action = 'feedback.paper_recorded' AND al.entity_type = 'patient_visit'
+        AND al.entity_id = pv.id AND pv.id = ANY($1::int[])`,
     [rated.map((h) => h.visit.id)]
   );
 
@@ -1253,6 +1315,20 @@ async function main() {
           at,
         ]);
       }
+      // [1.173.0] Paid as it was made, so its receipt is dated with it. Left at the seed's minute,
+      // every booking's receipt read "today, 1:38 PM", in a row, on Transaction History.
+      await db.query(`UPDATE payments SET paid_at = $2::timestamp WHERE patient_visit_id = $1`, [b.patient_visit_id, at]);
+    }
+    // A booking for later today was made this morning, each at its own time, not all at the seed's.
+    for (const [i, b] of bookings.filter((row) => !row.ahead).entries()) {
+      const { rows: [{ at }] } = await db.query(
+        `SELECT to_char(GREATEST(CURRENT_DATE + interval '8 hours 10 minutes',
+                                 NOW() - make_interval(mins => 70 + $1::int * 35)), 'YYYY-MM-DD HH24:MI:SS') AS at`,
+        [i]
+      );
+      await db.query(`UPDATE patient_visits SET created_at = $2::timestamp, updated_at = $2::timestamp WHERE id = $1`, [b.patient_visit_id, at]);
+      if (stampAppointment) await db.query(`UPDATE appointments SET created_at = $2::timestamp WHERE patient_visit_id = $1`, [b.patient_visit_id, at]);
+      await db.query(`UPDATE payments SET paid_at = $2::timestamp WHERE patient_visit_id = $1`, [b.patient_visit_id, at]);
     }
   });
 
@@ -1264,6 +1340,7 @@ async function main() {
   ]);
 
   await seedCashCounts();
+  await retimeActivity(seedStartedAt);
 
   // ── Summary ──────────────────────────────────────────────────────────────────────────────
   const counts = await db.query(`
@@ -1308,11 +1385,49 @@ async function main() {
 }
 
 /**
+ * Dates each Activity Log line this run wrote to the moment of the record it is about. [1.173.0]
+ *
+ * The API logs an action when it happens, which for a seed is the minute it ran, so the Activity Log
+ * opened on fifty lines at "2:01 PM": discounts given and HMO claims approved two months ago. Run
+ * last, once every visit, claim and report has its final time; a line with no record to follow keeps
+ * its own.
+ */
+async function retimeActivity(since) {
+  await db.withTransaction(async () => {
+    await db.query(
+      `UPDATE audit_log al SET created_at = COALESCE(pay.paid_at - interval '1 minute', pv.created_at + interval '3 minutes')
+         FROM patient_visits pv
+         LEFT JOIN payments pay ON pay.patient_visit_id = pv.id
+        WHERE al.created_at >= $1 AND al.action = 'discount.applied'
+          AND al.entity_type = 'patient_visit' AND al.entity_id = pv.id`,
+      [since]
+    );
+    await db.query(
+      `UPDATE audit_log al
+          SET created_at = CASE WHEN al.action = 'hmo_request.approved'
+                                THEN COALESCE(hr.approved_date, hr.created_at + interval '2 minutes')
+                                ELSE hr.created_at END
+         FROM hmo_requests hr
+        WHERE al.created_at >= $1 AND al.action LIKE 'hmo_request.%'
+          AND al.entity_type = 'hmo_request' AND al.entity_id = hr.id`,
+      [since]
+    );
+    await db.query(
+      `UPDATE audit_log al SET created_at = COALESCE(tr.authorised_at, tr.released_at, al.created_at)
+         FROM test_results tr
+        WHERE al.created_at >= $1 AND al.action LIKE 'result.%'
+          AND al.entity_type = 'test_result' AND al.entity_id = tr.id`,
+      [since]
+    );
+  });
+}
+
+/**
  * Sets today's arrival, payment and result times across the clinic's day so far. [1.89.0]
  *
- * Visits were created in arrival order, so the queue and receipt numbers already rise with these
- * times. The day runs from 08:00 to now (or to 17:00, if the seed runs after closing); with less
- * than an hour of it behind us there is nothing to spread and the API's own times stand.
+ * The day runs from 08:00 to now (or to 17:00, if the seed runs after closing); with less than an
+ * hour of it behind us there is nothing to spread and the API's own times stand. Queue tickets and
+ * receipts are renumbered afterwards in the order these times give (renumberSeeded).
  */
 async function retimeToday(visits) {
   const now = new Date();
@@ -1323,13 +1438,33 @@ async function retimeToday(visits) {
   if (span < 60 * 60000 || visits.length === 0) return;
 
   const TURNAROUND = { Laboratory: 40, Xray: 30, Ultrasound: 45 };
-  const step = span / (visits.length + 1);
   const at = (ms) => new Date(Math.min(ms, end.getTime()));
+
+  // [1.173.0] Finished work through the morning, and only recent work still waiting. Spread evenly,
+  // a test still with its department could land at 08:15, so a seed run at 13:40 opened on a clinic
+  // with patients five hours past the 60-minute alert, red on every staff screen. Now nobody is past
+  // it when the seed ends; a demo that runs on sees the alert arrive as it would.
+  const RECENT = 50 * 60000;
+  const finishedEnd = Math.max(open.getTime() + 10 * 60000, end.getTime() - RECENT);
+  const windows = {
+    released: [open.getTime(), finishedEnd],
+    // A report attached and waiting for release is recent too: its wait badge counts from arrival,
+    // and from the morning it read "3h 18m waiting, over the 60-min target".
+    recorded: [end.getTime() - RECENT, end.getTime() - 15 * 60000],
+    paid: [end.getTime() - RECENT, end.getTime() - 4 * 60000],
+    waiting: [end.getTime() - 40 * 60000, end.getTime() - 2 * 60000],
+  };
+  const slotOf = new Map();
+  for (const stage of Object.keys(windows)) {
+    const group = visits.filter((v) => (windows[v.stage] ? v.stage : 'released') === stage);
+    const [from, to] = windows[stage];
+    group.forEach((v, k) => slotOf.set(v, from + ((to - from) * (k + 0.5)) / Math.max(group.length, 1)));
+  }
 
   await db.withTransaction(async () => {
     for (const [i, v] of visits.entries()) {
-      const arrival = at(open.getTime() + step * (i + 0.4));
-      const paid = at(arrival.getTime() + Math.min(8 * 60000, step * 0.25));
+      const arrival = at(Math.max(open.getTime(), slotOf.get(v)));
+      const paid = at(arrival.getTime() + 4 * 60000);
       const turnaround = (TURNAROUND[v.category] ?? 40) * 60000 * (0.8 + ((i * 7) % 5) / 10);
       const reported = at(paid.getTime() + turnaround);
 

@@ -33,7 +33,10 @@ export function useMyResultHistory({ patientId } = {}) {
     }
     try {
       const response = await api.get(`/results/history/${id}`);
-      setHistory(response.data.data.results);
+      // [1.173.0] Not a test of a booking still to come: it has no queue ticket until check-in and no
+      // report, and it is on Visits, with its pass and the payment. Listed here it read "Pending" under
+      // the day it was booked, as if a result were overdue, and Home counted it "not released yet".
+      setHistory((response.data.data.results || []).filter((item) => item.queue_number || item.result_id));
     } catch (err) {
       if (quiet) return;
       console.error('Failed to fetch diagnostic history:', err);

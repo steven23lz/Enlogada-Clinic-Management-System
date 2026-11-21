@@ -367,8 +367,10 @@ class HmoRepository {
     const queryText = `
       SELECT hr.*, hp.name as provider_name,
              COUNT(hrt.id) as test_count,
-             COUNT(hrt.id) FILTER (WHERE hrt.approval_status = 'Approved') as approved_test_count,
-             COUNT(hrt.id) FILTER (WHERE hrt.approval_status = 'Rejected') as rejected_test_count,
+             -- [1.173.0] By the one rule (hmoEffectiveStatus), not the test's own column: a claim
+             -- approved as a whole read "0 of 2" beside its green Approved.
+             COUNT(hrt.id) FILTER (WHERE ${hmoEffectiveStatus('hr', 'hrt')} = 'Approved') as approved_test_count,
+             COUNT(hrt.id) FILTER (WHERE ${hmoEffectiveStatus('hr', 'hrt')} = 'Rejected') as rejected_test_count,
              MIN(p.first_name) AS patient_first_name,
              MIN(p.last_name) AS patient_last_name,
              MIN(pv.queue_number) AS queue_number,
