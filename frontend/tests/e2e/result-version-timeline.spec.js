@@ -32,11 +32,20 @@ test.describe('Result version history', () => {
 
   test.afterAll(async () => { await ctx.dispose(); });
 
-  /** The first released Laboratory result carrying more than one version, or null. */
+  /**
+   * A released Laboratory result carrying more than one version, or null. [1.173.0] Preferring one
+   * whose replaced version has findings to strike through (the seeded amendment): a report is a
+   * file since [1.94.0], so another spec's amended fixture has none, and when it was the newest the
+   * timeline had nothing to mark.
+   */
   const findAmended = async () => {
     const res = await ctx.get(`${API}/results/released/Laboratory`, { headers: auth() });
-    const rows = (await res.json()).data.released || [];
-    return rows.find((r) => Number(r.version || 1) > 1) || null;
+    const rows = ((await res.json()).data.released || []).filter((r) => Number(r.version || 1) > 1);
+    for (const r of rows) {
+      const chain = (await (await ctx.get(`${API}/results/${r.visit_test_id}/versions`, { headers: auth() })).json()).data?.versions || [];
+      if (chain.some((v) => !v.is_current && v.findings)) return r;
+    }
+    return rows[0] || null;
   };
 
   test('the chain comes back newest-first with exactly one current version', async () => {
@@ -58,8 +67,9 @@ test.describe('Result version history', () => {
     expect(versions.filter((v) => v.is_current)).toHaveLength(1);
     expect(versions[0].is_current, 'the newest version is the current one').toBeTruthy();
 
-    // The superseded rows still carry their findings — that is the point of keeping them.
-    expect(versions.some((v) => !v.is_current && v.findings)).toBeTruthy();
+    // The superseded rows keep what they said, findings or the report file: that is the point of
+    // keeping them.
+    expect(versions.some((v) => !v.is_current && (v.findings || v.has_file))).toBeTruthy();
   });
 
   test('the versions endpoint surfaces the reason, and never puts one on the original', async () => {

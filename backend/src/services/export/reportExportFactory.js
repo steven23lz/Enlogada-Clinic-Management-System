@@ -1,5 +1,6 @@
 const { csvFilename, sendCsv } = require('../../utils/csvExport');
 const { XLSX_MIME } = require('../../utils/xlsxWriter');
+const { ValidationError } = require('../../errors');
 
 /**
  * Chooses how a report leaves the building. [1.63.0]
@@ -99,8 +100,10 @@ const csvSerializer = {
 const xlsxSerializer = {
   format: 'xlsx',
   send(res, report, { name, xlsxName, startDate, endDate, toXlsx }) {
+    // [1.173.0] A report with no Excel layout (analytics feeds only the Today screen) answers the
+    // caller who asked for one with a 400, not a 500: the request is the mistake, not the server.
     if (typeof toXlsx !== 'function') {
-      throw new Error(`No Excel renderer was provided for the "${name}" report.`);
+      throw new ValidationError(`The "${name}" report is not available as an Excel file. Ask for JSON or CSV.`);
     }
     const file = toXlsx(report, startDate, endDate);
     const filename = csvFilename(xlsxName || name, startDate, endDate).replace(/\.csv$/, '.xlsx');

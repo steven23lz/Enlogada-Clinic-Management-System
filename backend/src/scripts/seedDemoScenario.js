@@ -717,6 +717,9 @@ async function main() {
     const v = await makeVisit({ person: TODAY_POOL.borja, category: 'Xray', test: /chest/i, referrerIndex: 2, notes: 'Cough for two weeks' });
     await payFor(v, 'GCash');
     await recordFindings(v);
+    // [1.173.0] The first report goes out, as it did in the clinic, before the correction: it has its
+    // own verification code, so a patient holding that printout is told "replaced", not "not found".
+    await release(v);
     await amend(v, {
       findings: para('Minimal linear densities are seen in the left lung base. The rest of the lung fields are clear.',
         'The heart is not enlarged. The hemidiaphragms and the costophrenic sulci are intact.',
@@ -740,6 +743,7 @@ async function main() {
     // `findings`): the superseded version keeps its findings, which is what
     // result-version-timeline.spec reads back and strikes through.
     await recordFindings(v, { values: { cholesterol: 286 }, findings: 'Elevated total cholesterol.' });
+    await release(v);
     await amend(v, {
       findings: 'Total cholesterol within the desirable level.',
       values: { cholesterol: 186 },
@@ -1072,7 +1076,8 @@ async function main() {
         `UPDATE test_results
             SET released_at    = (CURRENT_DATE - $2::interval) + make_interval(hours => $3, mins => $4),
                 authorised_at  = (CURRENT_DATE - $2::interval) + make_interval(hours => $3, mins => $4)
-          WHERE visit_test_id IN (SELECT id FROM visit_tests WHERE patient_visit_id = $1)`,
+          WHERE visit_test_id IN (SELECT id FROM visit_tests WHERE patient_visit_id = $1)
+            AND authorised_at IS NOT NULL`,
         [h.visit.id, shift, arrival, waitToPay + releaseAfter]
       );
       // An HMO claim is filed at the desk and approved before the patient reaches the till.
@@ -1475,8 +1480,14 @@ async function retimeToday(visits) {
         await db.query('UPDATE payments SET paid_at = $2 WHERE patient_visit_id = $1', [v.visit.id, paid]);
       }
       if (v.stage === 'released') {
+        // Only what was released (authorised_at; released_at is set on every save), and an earlier
+        // version 15 minutes before the one that replaced it. [1.173.0] It stamped every version, so an
+        // amended report's draft read as released, with no verification code.
         await db.query(
-          'UPDATE test_results SET released_at = $2, authorised_at = $2 WHERE visit_test_id = $1 AND released_at IS NOT NULL',
+          `UPDATE test_results tr
+              SET authorised_at = $2::timestamp - ((SELECT MAX(version) FROM test_results t2 WHERE t2.visit_test_id = $1) - tr.version) * interval '15 minutes',
+                  released_at   = $2::timestamp - ((SELECT MAX(version) FROM test_results t2 WHERE t2.visit_test_id = $1) - tr.version) * interval '15 minutes'
+            WHERE tr.visit_test_id = $1 AND tr.authorised_at IS NOT NULL`,
           [v.visitTestId, reported]
         );
       }
